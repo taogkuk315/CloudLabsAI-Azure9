@@ -1,0 +1,93 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXFileReference section */
+		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
+		B27BBD2E1A65927E00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = httpd/Makefile; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
+		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		B27BBD1F1A65757700C58A41 = {
+			isa = PBXGroup;
+			children = (
+				B27BBD311A65928A00C58A41 /* htppd */,
+				B27BBD2D1A6575C200C58A41 /* README */,
+			);
+			sourceTree = "<group>";
+		};
+		B27BBD2F1A65927E00C58A41 /* packages */ = {
+			isa = PBXGroup;
+			children = (
+				B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */,
+			);
+			name = packages;
+			path = httpd/packages;
+			sourceTree = "<group>";
+		};
+		B27BBD311A65928A00C58A41 /* htppd */ = {
+			isa = PBXGroup;
+			children = (
+				B27BBD2F1A65927E00C58A41 /* packages */,
+				B27BBD2E1A65927E00C58A41 /* Makefile */,
+			);
+			name = htppd;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXProject section */
+		B27BBD201A65757700C58A41 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0600;
+			};
+			buildConfigurationList = B27BBD231A65757700C58A41 /* Build configuration list for PBXProject "mod-h2" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = B27BBD1F1A65757700C58A41;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+			);
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		B27BBD241A65757700C58A41 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		B27BBD251A65757700C58A41 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B27BBD231A65757700C58A41 /* Build configuration list for PBXProject "mod-h2" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B27BBD241A65757700C58A41 /* Debug */,
+				B27BBD251A65757700C58A41 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B27BBD201A65757700C58A41 /* Project object */;
+}
