@@ -15,6 +15,16 @@ HTTPD_DIR = httpd-$(HTTPD_VERSION)
 HTTPD_TAR = httpd-$(HTTPD_VERSION).tar.gz
 HTTPD_URL = https://archive.apache.org/dist/httpd/$(HTTPD_TAR)
 
+PCRE_VERSION = 8.36
+PCRE_DIR = pcre-$(PCRE_VERSION)
+PCRE_TAR = $(PCRE_DIR).tar.gz
+PCRE_URL = http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VERSION)/$(PCRE_TAR)
+
+OPENSSL_DIR = openssl-1.0.2-beta3
+OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
+OPENSSL_URL = https://www.openssl.org/source/$(OPENSSL_TAR)
+
+
 GEN = gen
 
 CURL_OPTS=--progress-bar
@@ -33,10 +43,6 @@ ifeq ($(OS),Darwin)
 	HTTPD_DEPS     += $(GEN)/$(HTTPD_DIR)/.apr-extracted
 	HTTPD_CONF     += --with-included-apr --with-crypto
 	# we need our own pcre
-	PCRE_VERSION = 8.36
-	PCRE_DIR = pcre-$(PCRE_VERSION)
-	PCRE_TAR = $(PCRE_DIR).tar.gz
-	PCRE_URL = http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VERSION)/$(PCRE_TAR)
 	HTTPD_DEPS     += $(GEN)/$(BLD_DIR)/.pcre-installed
 	HTTPD_CONF     += --with-pcre=$(BLD_PREFIX)
 endif
@@ -45,9 +51,6 @@ OPENSSL_VERSION = $(shell openssl version -v | sed -e 's/OpenSSL *//g' -e 's/[a-
 
 ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0))
 	# Very old openssl without alpn or npn support installed, need a newer one
-	OPENSSL_DIR = openssl-1.0.2-beta3
-	OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
-	OPENSSL_URL = https://www.openssl.org/source/$(OPENSSL_TAR)
 	HTTPD_DEPS     += $(GEN)/$(BLD_DIR)/.openssl-installed
 	HTTPD_CONF     += --with-ssl=$(BLD_PREFIX)
 	ifeq ($(OS),Darwin)
