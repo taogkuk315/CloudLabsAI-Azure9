@@ -60,12 +60,12 @@ endif
 
 
 BLD_DIR    = build
-BLD_PREFIX = $(shell PWD)/$(GEN)/$(BLD_DIR)
+BLD_PREFIX = $(PWD)/$(GEN)/$(BLD_DIR)
 
 HTTP_PORT = 12345
 HTTPS_PORT = 12346
 
-all: $(GEN)/mod_ssl.so
+all: install
 
 dirs:
 	@mkdir -p $(GEN)/build
