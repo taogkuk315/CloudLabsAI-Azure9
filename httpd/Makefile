@@ -89,6 +89,10 @@ stop:
 openssl:
 	echo $(OPENSSL_VERSION) $(OPENSSL_URL)
 
+copy-mod_ssl:
+	@cp mod_ssl/*.[ch] $(GEN)/$(HTTPD_DIR)/modules/ssl
+	@rm -f $(GEN)/$(HTTPD_DIR)/.httpd-built
+
 ################################################################################
 # Test the local httpd
 #
@@ -180,6 +184,7 @@ $(GEN)/$(HTTPD_DIR)/.httpd-patched: \
 		$(GEN)/$(HTTPD_DIR)/.httpd-extracted
 	@echo applying patches...
 	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/npn-2.4.x.unified.diff.patch
+	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/alpn-2.4.10.unified.diff.patch
 	@echo httpd patched.
 	@touch $(GEN)/$(HTTPD_DIR)/.httpd-patched
 

@@ -10,6 +10,41 @@
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27BBD2E1A65927E00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = httpd/Makefile; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
+		B27BBD341A690C9800C58A41 /* httpd.conf */ = {isa = PBXFileReference; lastKnownFileType = text; path = httpd.conf; sourceTree = "<group>"; };
+		B27BBD351A690C9800C58A41 /* modules.conf */ = {isa = PBXFileReference; lastKnownFileType = text; path = modules.conf; sourceTree = "<group>"; };
+		B27BBD371A690C9800C58A41 /* test.local.conf */ = {isa = PBXFileReference; lastKnownFileType = text; path = test.local.conf; sourceTree = "<group>"; };
+		B27BBD381A690C9800C58A41 /* x509.input */ = {isa = PBXFileReference; lastKnownFileType = text; path = x509.input; sourceTree = "<group>"; };
+		B27BBD3A1A690C9800C58A41 /* npn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "npn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
+		B27BBD541A690FCE00C58A41 /* config.m4 */ = {isa = PBXFileReference; lastKnownFileType = text; path = config.m4; sourceTree = "<group>"; };
+		B27BBD551A690FCE00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		B27BBD561A690FCE00C58A41 /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
+		B27BBD571A690FCE00C58A41 /* mod_ssl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mod_ssl.c; sourceTree = "<group>"; };
+		B27BBD591A690FCE00C58A41 /* mod_ssl.dsp */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod_ssl.dsp; sourceTree = "<group>"; };
+		B27BBD5A1A690FCE00C58A41 /* mod_ssl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mod_ssl.h; sourceTree = "<group>"; };
+		B27BBD5B1A690FCE00C58A41 /* mod_ssl.la */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod_ssl.la; sourceTree = "<group>"; };
+		B27BBD5C1A690FCE00C58A41 /* modules.mk */ = {isa = PBXFileReference; lastKnownFileType = text; path = modules.mk; sourceTree = "<group>"; };
+		B27BBD5D1A690FCE00C58A41 /* NWGNUmakefile */ = {isa = PBXFileReference; lastKnownFileType = text; path = NWGNUmakefile; sourceTree = "<group>"; };
+		B27BBD5E1A690FCE00C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
+		B27BBD5F1A690FCE00C58A41 /* README.dsov.fig */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.dsov.fig; sourceTree = "<group>"; };
+		B27BBD601A690FCE00C58A41 /* README.dsov.ps */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.dsov.ps; sourceTree = "<group>"; };
+		B27BBD611A690FCE00C58A41 /* ssl_engine_config.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_config.c; sourceTree = "<group>"; };
+		B27BBD621A690FCE00C58A41 /* ssl_engine_init.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_init.c; sourceTree = "<group>"; };
+		B27BBD641A690FCE00C58A41 /* ssl_engine_io.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_io.c; sourceTree = "<group>"; };
+		B27BBD651A690FCE00C58A41 /* ssl_engine_kernel.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_kernel.c; sourceTree = "<group>"; };
+		B27BBD671A690FCE00C58A41 /* ssl_engine_log.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_log.c; sourceTree = "<group>"; };
+		B27BBD681A690FCE00C58A41 /* ssl_engine_mutex.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_mutex.c; sourceTree = "<group>"; };
+		B27BBD691A690FCE00C58A41 /* ssl_engine_ocsp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_ocsp.c; sourceTree = "<group>"; };
+		B27BBD6A1A690FCE00C58A41 /* ssl_engine_pphrase.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_pphrase.c; sourceTree = "<group>"; };
+		B27BBD6B1A690FCE00C58A41 /* ssl_engine_rand.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_rand.c; sourceTree = "<group>"; };
+		B27BBD6C1A690FCE00C58A41 /* ssl_engine_vars.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_vars.c; sourceTree = "<group>"; };
+		B27BBD6D1A690FCE00C58A41 /* ssl_private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ssl_private.h; sourceTree = "<group>"; };
+		B27BBD6F1A690FCE00C58A41 /* ssl_scache.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_scache.c; sourceTree = "<group>"; };
+		B27BBD701A690FCE00C58A41 /* ssl_util.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util.c; sourceTree = "<group>"; };
+		B27BBD711A690FCE00C58A41 /* ssl_util_ocsp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util_ocsp.c; sourceTree = "<group>"; };
+		B27BBD721A690FCE00C58A41 /* ssl_util_ssl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util_ssl.c; sourceTree = "<group>"; };
+		B27BBD731A690FCE00C58A41 /* ssl_util_ssl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ssl_util_ssl.h; sourceTree = "<group>"; };
+		B27BBD741A690FCE00C58A41 /* ssl_util_stapling.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util_stapling.c; sourceTree = "<group>"; };
+		B27BBD841A696C0D00C58A41 /* alpn-2.4.10.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.10.unified.diff.patch"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -33,10 +68,80 @@
 		B27BBD311A65928A00C58A41 /* htppd */ = {
 			isa = PBXGroup;
 			children = (
+				B27BBD3B1A690FCD00C58A41 /* mod_ssl */,
+				B27BBD331A690C9800C58A41 /* conf */,
+				B27BBD391A690C9800C58A41 /* patches */,
 				B27BBD2F1A65927E00C58A41 /* packages */,
 				B27BBD2E1A65927E00C58A41 /* Makefile */,
 			);
 			name = htppd;
+			sourceTree = "<group>";
+		};
+		B27BBD331A690C9800C58A41 /* conf */ = {
+			isa = PBXGroup;
+			children = (
+				B27BBD341A690C9800C58A41 /* httpd.conf */,
+				B27BBD351A690C9800C58A41 /* modules.conf */,
+				B27BBD361A690C9800C58A41 /* sites */,
+				B27BBD381A690C9800C58A41 /* x509.input */,
+			);
+			name = conf;
+			path = httpd/conf;
+			sourceTree = "<group>";
+		};
+		B27BBD361A690C9800C58A41 /* sites */ = {
+			isa = PBXGroup;
+			children = (
+				B27BBD371A690C9800C58A41 /* test.local.conf */,
+			);
+			path = sites;
+			sourceTree = "<group>";
+		};
+		B27BBD391A690C9800C58A41 /* patches */ = {
+			isa = PBXGroup;
+			children = (
+				B27BBD841A696C0D00C58A41 /* alpn-2.4.10.unified.diff.patch */,
+				B27BBD3A1A690C9800C58A41 /* npn-2.4.x.unified.diff.patch */,
+			);
+			name = patches;
+			path = httpd/patches;
+			sourceTree = "<group>";
+		};
+		B27BBD3B1A690FCD00C58A41 /* mod_ssl */ = {
+			isa = PBXGroup;
+			children = (
+				B27BBD541A690FCE00C58A41 /* config.m4 */,
+				B27BBD551A690FCE00C58A41 /* Makefile */,
+				B27BBD561A690FCE00C58A41 /* Makefile.in */,
+				B27BBD571A690FCE00C58A41 /* mod_ssl.c */,
+				B27BBD591A690FCE00C58A41 /* mod_ssl.dsp */,
+				B27BBD5A1A690FCE00C58A41 /* mod_ssl.h */,
+				B27BBD5B1A690FCE00C58A41 /* mod_ssl.la */,
+				B27BBD5C1A690FCE00C58A41 /* modules.mk */,
+				B27BBD5D1A690FCE00C58A41 /* NWGNUmakefile */,
+				B27BBD5E1A690FCE00C58A41 /* README */,
+				B27BBD5F1A690FCE00C58A41 /* README.dsov.fig */,
+				B27BBD601A690FCE00C58A41 /* README.dsov.ps */,
+				B27BBD611A690FCE00C58A41 /* ssl_engine_config.c */,
+				B27BBD621A690FCE00C58A41 /* ssl_engine_init.c */,
+				B27BBD641A690FCE00C58A41 /* ssl_engine_io.c */,
+				B27BBD651A690FCE00C58A41 /* ssl_engine_kernel.c */,
+				B27BBD671A690FCE00C58A41 /* ssl_engine_log.c */,
+				B27BBD681A690FCE00C58A41 /* ssl_engine_mutex.c */,
+				B27BBD691A690FCE00C58A41 /* ssl_engine_ocsp.c */,
+				B27BBD6A1A690FCE00C58A41 /* ssl_engine_pphrase.c */,
+				B27BBD6B1A690FCE00C58A41 /* ssl_engine_rand.c */,
+				B27BBD6C1A690FCE00C58A41 /* ssl_engine_vars.c */,
+				B27BBD6D1A690FCE00C58A41 /* ssl_private.h */,
+				B27BBD6F1A690FCE00C58A41 /* ssl_scache.c */,
+				B27BBD701A690FCE00C58A41 /* ssl_util.c */,
+				B27BBD711A690FCE00C58A41 /* ssl_util_ocsp.c */,
+				B27BBD721A690FCE00C58A41 /* ssl_util_ssl.c */,
+				B27BBD731A690FCE00C58A41 /* ssl_util_ssl.h */,
+				B27BBD741A690FCE00C58A41 /* ssl_util_stapling.c */,
+			);
+			name = mod_ssl;
+			path = httpd/mod_ssl;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
