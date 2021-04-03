@@ -31,7 +31,7 @@ CURL_OPTS=--progress-bar
 
 OS=$(shell uname -s)
 
-HTTPD_CONF =
+HTTPD_CONF = --enable-mpms-shared=all
 HTTPD_DEPS =
 
 # For OS X, we drag our own APR and PCRE lib in as the one installed is not
