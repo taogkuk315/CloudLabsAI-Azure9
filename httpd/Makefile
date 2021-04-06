@@ -90,7 +90,7 @@ openssl:
 	echo $(OPENSSL_VERSION) $(OPENSSL_URL)
 
 copy-mod_ssl:
-	@cp mod_ssl/*.[ch] $(GEN)/$(HTTPD_DIR)/modules/ssl
+	@cp mod_ssl-alpn/*.[ch] $(GEN)/$(HTTPD_DIR)/modules/ssl
 	@rm -f $(GEN)/$(HTTPD_DIR)/.httpd-built
 
 ################################################################################
@@ -128,6 +128,7 @@ $(GEN)/$(BLD_DIR)/.httpd-setup: \
 		$(GEN)/$(BLD_DIR)/conf/test.local.pem
 	@echo -n setup httpd locally...
 	@mkdir -p $(GEN)/$(BLD_DIR)/conf/sites
+	@mkdir -p $(GEN)/$(BLD_DIR)/conf/mods
 	@for file in $(SETUP_FILES); do \
 		sed -e "s,SUBST_SERVER_ROOT_SUBST,$(BLD_PREFIX),g" \
 			-e "s,SUBST_PORT_HTTP_SUBST,$(HTTP_PORT),g" \
