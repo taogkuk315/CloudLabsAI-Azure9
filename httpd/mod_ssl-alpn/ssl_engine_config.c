@@ -1867,8 +1867,7 @@ const char *ssl_cmd_SSLAlpnPreference(cmd_parms *cmd, void *dcfg,
                                       const char *protocol)
 {
     SSLSrvConfigRec *sc = mySrvConfig(cmd->server);
-    const char *s = apr_array_push(sc->server->ssl_alpn_pref);
-    s = protocol;
+    APR_ARRAY_PUSH(sc->server->ssl_alpn_pref, const char *) = protocol;
     return NULL;
 }
 #endif

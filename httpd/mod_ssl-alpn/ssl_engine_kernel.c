@@ -2131,8 +2131,6 @@ int ssl_callback_SessionTicket(SSL *ssl,
 }
 #endif /* HAVE_TLS_SESSION_TICKETS */
 
-#ifdef HAVE_TLS_ALPN
-
 static int ssl_array_index(apr_array_header_t *array,
                            const unsigned char *s)
 {
@@ -2146,6 +2144,7 @@ static int ssl_array_index(apr_array_header_t *array,
     return -1;
 }
 
+#ifdef HAVE_TLS_ALPN
 /*
  * Compare to ALPN protocol proposal. Result is similar to strcmp():
  * 0 gives same precedence, >0 means proto1 is prefered.
@@ -2324,6 +2323,8 @@ int ssl_callback_AdvertiseNextProtos(SSL *ssl, const unsigned char **data_out,
     }
     num_protos = protos->nelts;
 
+    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, c, APLOGNO(02306)
+                  "alpn protos %d to advertise, %d in pref config", num_protos, mctx->ssl_alpn_pref->nelts );
 	if (num_protos > 1 && mctx->ssl_alpn_pref && mctx->ssl_alpn_pref->nelts > 0) {
 		/* Sort the protocol names according to our configured preferences. */
 		int insert_idx = 0;
@@ -2333,9 +2334,9 @@ int ssl_callback_AdvertiseNextProtos(SSL *ssl, const unsigned char **data_out,
 			if (idx > insert_idx) {
 				/* bubble found protocol up */
 				for (j = idx; j > insert_idx; --j) {
-					protos->elts[j] = protos->elts[j-1];
+       ((const char **)protos->elts)[j] = ((const char **)protos->elts)[j-1];
 				}
-				protos->elts[insert_idx] = proto;
+				((const char **)protos->elts)[insert_idx] = proto;
 				++insert_idx;
 			}
 		}
