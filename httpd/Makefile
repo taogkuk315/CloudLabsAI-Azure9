@@ -10,7 +10,7 @@ APR-UTIL_DIR = apr-util-$(APR-UTIL_VERSION)
 APR-UTIL_TAR = $(APR-UTIL_DIR).tar.gz
 APR-UTIL_URL = http://apache.mirror.iphh.net//apr/$(APR-UTIL_TAR)
 
-HTTPD_VERSION = 2.4.10
+HTTPD_VERSION = 2.4.x
 HTTPD_DIR = httpd-$(HTTPD_VERSION)
 HTTPD_TAR = httpd-$(HTTPD_VERSION).tar.gz
 HTTPD_URL = https://archive.apache.org/dist/httpd/$(HTTPD_TAR)
@@ -32,7 +32,7 @@ CURL_OPTS=--progress-bar
 OS=$(shell uname -s)
 
 HTTPD_CONF = --enable-mpms-shared=all
-HTTPD_DEPS =
+HTTPD_DEPS = $(GEN)/$(HTTPD_DIR)/.apr-extracted
 
 # For OS X, we drag our own APR and PCRE lib in as the one installed is not
 # recognized by the httpd configure (and pbly rightly so).
@@ -169,8 +169,12 @@ $(GEN)/$(HTTPD_DIR)/.httpd-built: \
 ################################################################################
 # Configure the local httpd sources
 #
+$(GEN)/$(HTTPD_DIR)/configure: 
+	cd $(GEN)/$(HTTPD_DIR)/ && ./buildconf
+
 $(GEN)/$(HTTPD_DIR)/.httpd-configured: \
 		$(HTTPD_DEPS) \
+		$(GEN)/$(HTTPD_DIR)/configure \
 		$(GEN)/$(HTTPD_DIR)/.httpd-patched
 	@echo -n configuring httpd...
 	cd $(GEN)/$(HTTPD_DIR)/ && \
@@ -184,8 +188,7 @@ $(GEN)/$(HTTPD_DIR)/.httpd-configured: \
 $(GEN)/$(HTTPD_DIR)/.httpd-patched: \
 		$(GEN)/$(HTTPD_DIR)/.httpd-extracted
 	@echo applying patches...
-	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/npn-2.4.x.unified.diff.patch
-	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/alpn-2.4.10.unified.diff.patch
+	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/alpn-2.4.x.unified.diff.patch
 	@echo httpd patched.
 	@touch $(GEN)/$(HTTPD_DIR)/.httpd-patched
 
