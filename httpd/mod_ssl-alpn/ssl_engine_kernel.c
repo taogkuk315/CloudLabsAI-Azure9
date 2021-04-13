@@ -2333,10 +2333,10 @@ int ssl_callback_AdvertiseNextProtos(SSL *ssl, const unsigned char **data_out,
 			int idx = ssl_array_index(protos, proto);
 			if (idx > insert_idx) {
 				/* bubble found protocol up */
-				for (j = idx; j > insert_idx; --j) {
-       ((const char **)protos->elts)[j] = ((const char **)protos->elts)[j-1];
-				}
-				((const char **)protos->elts)[insert_idx] = proto;
+                for (j = idx; j > insert_idx; --j) {
+                    ((const char **)protos->elts)[j] = ((const char **)protos->elts)[j-1];
+                }
+                ((const char **)protos->elts)[insert_idx] = proto;
 				++insert_idx;
 			}
 		}
