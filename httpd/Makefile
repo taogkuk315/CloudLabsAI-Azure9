@@ -1,9 +1,9 @@
 
 
-APR_VERSION = 1.5.1
-APR_DIR = apr-$(APR_VERSION)
-APR_TAR = $(APR_DIR).tar.gz
-APR_URL = http://apache.mirror.iphh.net//apr/$(APR_TAR)
+APR_VERSION  = 1.5.1
+APR_DIR      = apr-$(APR_VERSION)
+APR_TAR      = $(APR_DIR).tar.gz
+APR_URL      = http://apache.mirror.iphh.net//apr/$(APR_TAR)
 
 APR-UTIL_VERSION = 1.5.4
 APR-UTIL_DIR = apr-util-$(APR-UTIL_VERSION)
@@ -11,28 +11,30 @@ APR-UTIL_TAR = $(APR-UTIL_DIR).tar.gz
 APR-UTIL_URL = http://apache.mirror.iphh.net//apr/$(APR-UTIL_TAR)
 
 HTTPD_VERSION = 2.4.10
-HTTPD_DIR = httpd-$(HTTPD_VERSION)
-HTTPD_TAR = httpd-$(HTTPD_VERSION).tar.gz
-HTTPD_URL = https://archive.apache.org/dist/httpd/$(HTTPD_TAR)
+HTTPD_DIR    = httpd-$(HTTPD_VERSION)
+HTTPD_TAR    = httpd-$(HTTPD_VERSION).tar.gz
+HTTPD_URL    = https://archive.apache.org/dist/httpd/$(HTTPD_TAR)
 
 PCRE_VERSION = 8.36
-PCRE_DIR = pcre-$(PCRE_VERSION)
-PCRE_TAR = $(PCRE_DIR).tar.gz
-PCRE_URL = http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VERSION)/$(PCRE_TAR)
+PCRE_DIR     = pcre-$(PCRE_VERSION)
+PCRE_TAR     = $(PCRE_DIR).tar.gz
+PCRE_URL     = http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VERSION)/$(PCRE_TAR)
 
-OPENSSL_DIR = openssl-1.0.2-beta3
-OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
-OPENSSL_URL = https://www.openssl.org/source/$(OPENSSL_TAR)
+OPENSSL_DIR  = openssl-1.0.2-beta3
+OPENSSL_TAR  = $(OPENSSL_DIR).tar.gz
+OPENSSL_URL  = https://www.openssl.org/source/$(OPENSSL_TAR)
 
 
-GEN = gen
+GEN          = gen
+INST_DIR     = ../gen/install
+BLD_PREFIX   = $(shell dirname $$PWD)/gen/install
 
-CURL_OPTS=--progress-bar
+CURL_OPTS    = --progress-bar
 
-OS=$(shell uname -s)
+OS           = $(shell uname -s)
 
-HTTPD_CONF = --enable-mpms-shared=all
-HTTPD_DEPS = $(GEN)/$(HTTPD_DIR)/.apr-extracted
+HTTPD_CONF   = --enable-mpms-shared=all
+HTTPD_DEPS   = $(GEN)/$(HTTPD_DIR)/.apr-extracted
 
 # For OS X, we drag our own APR and PCRE lib in as the one installed is not
 # recognized by the httpd configure (and pbly rightly so).
@@ -40,27 +42,24 @@ HTTPD_DEPS = $(GEN)/$(HTTPD_DIR)/.apr-extracted
 #
 ifeq ($(OS),Darwin)
 	# we need our own apr + apr-util
-	HTTPD_DEPS     += $(GEN)/$(HTTPD_DIR)/.apr-extracted
-	HTTPD_CONF     += --with-included-apr --with-crypto
+	HTTPD_DEPS  += $(GEN)/$(HTTPD_DIR)/.apr-extracted
+	HTTPD_CONF  += --with-included-apr --with-crypto
 	# we need our own pcre
-	HTTPD_DEPS     += $(GEN)/$(BLD_DIR)/.pcre-installed
-	HTTPD_CONF     += --with-pcre=$(BLD_PREFIX)
+	HTTPD_DEPS  += $(INST_DIR)/.pcre-installed
+	HTTPD_CONF  += --with-pcre=$(BLD_PREFIX)
 endif
 
 OPENSSL_VERSION = $(shell openssl version -v | sed -e 's/OpenSSL *//g' -e 's/[a-z]* .*//g')
 
 ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0))
 	# Very old openssl without alpn or npn support installed, need a newer one
-	HTTPD_DEPS     += $(GEN)/$(BLD_DIR)/.openssl-installed
-	HTTPD_CONF     += --with-ssl=$(BLD_PREFIX)
+	HTTPD_DEPS  += $(INST_DIR)/.openssl-installed
+	HTTPD_CONF  += --with-ssl=$(BLD_PREFIX)
 	ifeq ($(OS),Darwin)
-	OPENSSL_CONF    = debug-darwin64-x86_64-cc
+	OPENSSL_CONF = debug-darwin64-x86_64-cc
 	endif
 endif
 
-
-BLD_DIR    = build
-BLD_PREFIX = $(PWD)/$(GEN)/$(BLD_DIR)
 
 HTTP_PORT = 12345
 HTTPS_PORT = 12346
@@ -76,84 +75,28 @@ clean:
 distclean:
 	@rm -rf $(GEN)
 
-install:  $(GEN)/$(BLD_DIR)/.httpd-installed
+install:  $(INST_DIR)/.httpd-installed
 
-setup: $(GEN)/$(BLD_DIR)/.httpd-setup
+setup: $(INST_DIR)/.httpd-setup
 
-start: $(GEN)/$(BLD_DIR)/.httpd-setup
-	@$(GEN)/$(BLD_DIR)/bin/apachectl restart
+start: $(INST_DIR)/.httpd-setup
+	@$(INST_DIR)/bin/apachectl restart
 
 stop:
-	@$(GEN)/$(BLD_DIR)/bin/apachectl stop
-
-openssl:
-	echo $(OPENSSL_VERSION) $(OPENSSL_URL)
+	@$(INST_DIR)/bin/apachectl stop
 
 copy-mod_ssl:
 	@cp mod_ssl-alpn/*.[ch] $(GEN)/$(HTTPD_DIR)/modules/ssl
 	@rm -f $(GEN)/$(HTTPD_DIR)/.httpd-built
 
 ################################################################################
-# Test the local httpd
+# Install the local httpd
 #
-test: \
-		$(GEN)/$(BLD_DIR)/.httpd-setup
-	@rm -rf $(GEN)/test/tmp
-	@mkdir -p $(GEN)/test/tmp
-	@$(GEN)/$(BLD_DIR)/bin/apachectl restart
-	@echo -n checking index.html over http...
-	@curl -sk --resolv test.local:$(HTTP_PORT):127.0.0.1 http://test.local:$(HTTP_PORT)/index.html > $(GEN)/test/tmp/http_index.html
-	@diff  $(GEN)/$(BLD_DIR)/htdocs/index.html $(GEN)/test/tmp/http_index.html
-	@echo ok.
-	@echo -n checking index.html over https with HTTP/1...
-	@curl -sk --http1.1 --resolv test.local:$(HTTPS_PORT):127.0.0.1 https://test.local:$(HTTPS_PORT)/index.html > $(GEN)/test/tmp/https_index.html
-	@diff  $(GEN)/$(BLD_DIR)/htdocs/index.html $(GEN)/test/tmp/https_index.html
-	@echo ok.
-	@echo -n checking index.html over https with h2...
-	@curl -sk --http2.0 --resolv test.local:$(HTTPS_PORT):127.0.0.1 https://test.local:$(HTTPS_PORT)/index.html > $(GEN)/test/tmp/h2_index.html || bash -c "echo -n failed as expected..."
-	@echo ok.
-	@$(GEN)/$(BLD_DIR)/bin/apachectl stop
-
-
-################################################################################
-# Setup the local httpd for our tests
-#
-SETUP_FILES = $(wildcard conf/*.conf) $(wildcard conf/sites/*.conf)
-
-$(GEN)/$(BLD_DIR)/.httpd-setup: \
-		$(GEN)/$(BLD_DIR)/.httpd-installed \
-		conf/httpd.conf conf/modules.conf \
-		$(wildcard conf/sites/*.conf) \
-		$(GEN)/$(BLD_DIR)/conf/test.local.key \
-		$(GEN)/$(BLD_DIR)/conf/test.local.pem
-	@echo -n setup httpd locally...
-	@mkdir -p $(GEN)/$(BLD_DIR)/conf/sites
-	@mkdir -p $(GEN)/$(BLD_DIR)/conf/mods
-	@for file in $(SETUP_FILES); do \
-		sed -e "s,SUBST_SERVER_ROOT_SUBST,$(BLD_PREFIX),g" \
-			-e "s,SUBST_PORT_HTTP_SUBST,$(HTTP_PORT),g" \
-			-e "s,SUBST_PORT_HTTPS_SUBST,$(HTTPS_PORT),g" \
-			< $$file > $(GEN)/$(BLD_DIR)/$$file; \
-	done
-	@echo done.
-	@touch $(GEN)/$(BLD_DIR)/.httpd-setup
-
-$(GEN)/$(BLD_DIR)/conf/test.local.key:
-	openssl genrsa -out $(GEN)/$(BLD_DIR)/conf/test.local.key 4096
-
-$(GEN)/$(BLD_DIR)/conf/test.local.pem: \
-		$(GEN)/$(BLD_DIR)/conf/test.local.key \
-		conf/x509.input
-	openssl req -new -x509 -key $(GEN)/$(BLD_DIR)/conf/test.local.key -out $(GEN)/$(BLD_DIR)/conf/test.local.pem -days 1095 < conf/x509.input
-
-################################################################################
-# Install the local httpd for our tests
-#
-$(GEN)/$(BLD_DIR)/.httpd-installed:  $(GEN)/$(HTTPD_DIR)/.httpd-built
+$(INST_DIR)/.httpd-installed:  $(GEN)/$(HTTPD_DIR)/.httpd-built
 	@echo -n installing httpd locally...
 	@cd $(GEN)/$(HTTPD_DIR)/ && make install >> ../build.log
 	@echo done.
-	@touch $(GEN)/$(BLD_DIR)/.httpd-installed
+	@touch $(INST_DIR)/.httpd-installed
 
 
 ################################################################################
@@ -234,12 +177,12 @@ $(GEN)/$(APR-UTIL_TAR):
 ################################################################################
 # Build + install a local opensll library (if needed)
 #
-$(GEN)/$(BLD_DIR)/.openssl-installed: \
+$(INST_DIR)/.openssl-installed: \
 		$(GEN)/$(OPENSSL_DIR)/.openssl-built
 	@echo -n installing openssl locally, may take some time...
 	@cd $(GEN)/$(OPENSSL_DIR) && make install_sw >> ../build.log
 	@echo done.
-	@touch $(GEN)/$(BLD_DIR)/.openssl-installed
+	@touch $(INST_DIR)/.openssl-installed
 
 $(GEN)/$(OPENSSL_DIR)/.openssl-built: \
 		$(GEN)/$(OPENSSL_DIR)/.openssl-configured
@@ -263,12 +206,12 @@ $(GEN)/$(OPENSSL_TAR):
 ################################################################################
 # Build + install a local pcre library (if needed)
 #
-$(GEN)/$(BLD_DIR)/.pcre-installed: \
+$(INST_DIR)/.pcre-installed: \
 		$(GEN)/$(PCRE_DIR)/.pcre-built
 	@echo -n installing pcre locally...
 	@cd $(GEN)/$(PCRE_DIR) && make install >> ../build.log
 	@echo done.
-	@touch $(GEN)/$(BLD_DIR)/.pcre-installed
+	@touch $(INST_DIR)/.pcre-installed
 
 $(GEN)/$(PCRE_DIR)/.pcre-built: \
 		$(GEN)/$(PCRE_DIR)/.pcre-configured
