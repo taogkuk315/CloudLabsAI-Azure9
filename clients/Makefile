@@ -25,6 +25,8 @@ distclean:
 
 install-curl:  $(INST_DIR)/.curl-installed
 
+x:
+	echo $(PKG_CONFIG)
 
 ################################################################################
 # Install the local curl our tests
@@ -59,7 +61,7 @@ $(GEN)/$(CURL_DIR)/.curl-configured: \
         $(INST_DIR)/.nghttp2-installed \
 		$(GEN)/$(CURL_DIR)/.curl-extracted
 	@echo -n configuring curl...
-	@if test ! -x "$(shell type -p pkg-config)"; then echo $(PKG_CONF_MSG); exit 1; fi
+	if test ! -x $$( type -p pkg-config ); then echo $(PKG_CONF_MSG); exit 1; fi
 	cd $(GEN)/$(CURL_DIR)/ && \
 	PKG_CONFIG_LIBDIR=$(BLD_PREFIX)/lib/pkgconfig ./configure --prefix=$(BLD_PREFIX) $(CURL_CONF)
 	@echo done.

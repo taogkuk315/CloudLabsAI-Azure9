@@ -74,5 +74,6 @@ $(GEN)/$(NGHTTP2_DIR)/.nghttp2-extracted: \
 #
 $(GEN)/$(NGHTTP2_TAR):
 	@mkdir -p $(GEN)
-	curl $(CURL_OPTS) $(NGHTTP2_URL) > $(GEN)/$(NGHTTP2_TAR)
+	@cp $(NGHTTP2_TAR) $(GEN)
+	#curl $(CURL_OPTS) $(NGHTTP2_URL) > $(GEN)/$(NGHTTP2_TAR)
 
