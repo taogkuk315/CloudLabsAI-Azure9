@@ -13,6 +13,10 @@
 		B22549071A6E8949004BDEC9 /* test.local.conf */ = {isa = PBXFileReference; lastKnownFileType = text; path = test.local.conf; sourceTree = "<group>"; };
 		B22549081A6E8949004BDEC9 /* x509.input */ = {isa = PBXFileReference; lastKnownFileType = text; path = x509.input; sourceTree = "<group>"; };
 		B22549091A6E8AF9004BDEC9 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		B225490B1A6EAAA3004BDEC9 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		B225490C1A6EAC37004BDEC9 /* mod_h2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mod_h2.c; sourceTree = "<group>"; };
+		B225490D1A6EAE9F004BDEC9 /* h2_config.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_config.c; sourceTree = "<group>"; };
+		B225490E1A6EAE9F004BDEC9 /* h2_config.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_config.h; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27BBD2E1A65927E00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = httpd/Makefile; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = "<none>"; };
 		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
@@ -80,12 +84,24 @@
 			path = sites;
 			sourceTree = "<group>";
 		};
+		B225490A1A6EAAA3004BDEC9 /* mod_h2 */ = {
+			isa = PBXGroup;
+			children = (
+				B225490D1A6EAE9F004BDEC9 /* h2_config.c */,
+				B225490E1A6EAE9F004BDEC9 /* h2_config.h */,
+				B225490B1A6EAAA3004BDEC9 /* Makefile */,
+				B225490C1A6EAC37004BDEC9 /* mod_h2.c */,
+			);
+			path = mod_h2;
+			sourceTree = "<group>";
+		};
 		B27BBD1F1A65757700C58A41 = {
 			isa = PBXGroup;
 			children = (
 				B2E5BADB1A6E65F80031CBD8 /* clients */,
 				B27BBD311A65928A00C58A41 /* htppd */,
 				B22549011A6E85CF004BDEC9 /* Makefile */,
+				B225490A1A6EAAA3004BDEC9 /* mod_h2 */,
 				B2E5BADD1A6E69810031CBD8 /* nghttp2 */,
 				B27BBD2D1A6575C200C58A41 /* README */,
 				B22549021A6E8949004BDEC9 /* test */,
