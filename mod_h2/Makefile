@@ -22,7 +22,9 @@ BLD_PREFIX   = $(shell dirname $$PWD)/gen/install
 APXS    = $(INST_DIR)/bin/apxs
 LIBTOOL = libtool
 
-C_SRC   = h2_config.c
+C_SRC   = h2_config.c \
+        h2_ctx.c \
+        h2_tls.c
 
 CPP_SRC =
 

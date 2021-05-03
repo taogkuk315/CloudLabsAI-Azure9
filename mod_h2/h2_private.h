@@ -14,27 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_config_h__
-#define __mod_h2__h2_config_h__
+#ifndef mod_h2_h2_private_h
+#define mod_h2_h2_private_h
 
-#include <http_config.h>
+extern module AP_MODULE_DECLARE_DATA h2_module;
 
-typedef struct {
-    const char *name;
-    int h2_enabled;
-    int h2_set;
-} h2_config;
+APLOG_USE_MODULE(h2);
 
+#define PROTO_H2_14     "h2-14"
+#define PROTO_H2C_14    "h2c-14"
 
-void *h2_config_create_svr(apr_pool_t *pool, server_rec *s);
-void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv);
-
-apr_status_t h2_config_apply_header(h2_config *config, request_rec *r);
-
-extern const command_rec h2_cmds[];
-
-h2_config *h2_config_get(conn_rec *c);
-h2_config *h2_config_sget(server_rec *s);
-
-#endif /* __mod_h2__h2_config_h__ */
-
+#endif

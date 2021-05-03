@@ -25,44 +25,30 @@
 #include <apr_strings.h>
 
 #include "h2_config.h"
+#include "h2_private.h"
 
-APLOG_USE_MODULE(h2);
-
-void *h2_config_create_svr( apr_pool_t *pool, server_rec *s ) {
-  	//ap_log_error( APLOG_MARK, APLOG_DEBUG, 0, s, "create server config: %s", s->defn_name );
-    h2_svr_cfg *conf = (h2_svr_cfg *) apr_pcalloc( pool, sizeof( h2_svr_cfg ) );
+void *h2_config_create_svr(apr_pool_t *pool, server_rec *s)
+{
+    h2_config *conf = (h2_config *)apr_pcalloc(pool, sizeof(h2_config));
 
     const char *sname = s->defn_name? s->defn_name : "unknown";
-    char *name = (char *)apr_pcalloc( pool, strlen(sname) + 20);
+    char *name = (char *)apr_pcalloc(pool, strlen(sname) + 20);
     strcpy(name, "server[");
     strcat(name, sname);
     strcat(name, "]");
     conf->name = name;
 
-	ap_log_error( APLOG_MARK, APLOG_INFO, 0, s, "created h2 config: %s", conf->name );
     return conf;
 }
 
-void *h2_config_create_dir( apr_pool_t *pool, char *dir ) {
-    h2_svr_cfg *conf = (h2_svr_cfg *) apr_pcalloc( pool, sizeof( h2_svr_cfg ) );
+void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
+{
+    h2_config *base = (h2_config *)basev;
+    h2_config *add = (h2_config *)addv;
+    h2_config *n = (h2_config *)apr_pcalloc(pool, sizeof(h2_config));
 
-    const char *dname = dir? dir : "unknown";
-    char *name = (char *)apr_pcalloc( pool, strlen(dname) + 20);
-    strcpy(name, "dir[");
-    strcat(name, dname);
-    strcat(name, "]");
-    conf->name = name;
-
-	ap_log_perror( APLOG_MARK, APLOG_DEBUG, 0, pool, "created h2 config: %s", conf->name );
-    return conf;
-}
-
-void *h2_config_merge( apr_pool_t *pool, void *basev, void *addv ) {
-    h2_svr_cfg *base = (h2_svr_cfg *)basev;
-    h2_svr_cfg *add = (h2_svr_cfg *)addv;
-    h2_svr_cfg *n = (h2_svr_cfg *)apr_pcalloc( pool, sizeof(h2_svr_cfg) );
-
-    char *name = (char *)apr_pcalloc( pool, 20 + strlen(add->name) + strlen(base->name) );
+    char *name = (char *)apr_pcalloc(pool,
+        20 + strlen(add->name) + strlen(base->name));
     strcpy(name, "merged[");
     strcat(name, add->name);
     strcat(name, ", ");
@@ -75,21 +61,31 @@ void *h2_config_merge( apr_pool_t *pool, void *basev, void *addv ) {
     return n;
 }
 
-static const char *set_h2(cmd_parms *parms, void *arg, const char *value) {
-    server_rec *server = parms->server;
-    h2_svr_cfg *config = (h2_svr_cfg *)ap_get_module_config(server->module_config, &h2_module);
-    
-    config->h2_enabled = !strcasecmp(value, "on");
-    config->h2_set = 1;
+static const char *h2_conf_engine_set(cmd_parms *parms, void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    cfg->h2_enabled = !strcasecmp(value, "On");
+    cfg->h2_set = 1;
     
     return NULL;
 }
 
 const command_rec h2_cmds[] = {
-    AP_INIT_TAKE1(
-    "H2", set_h2, NULL,
-        RSRC_CONF, "on to enable HTTP/2 protocol handling" ),
+    AP_INIT_TAKE1("H2Engine", h2_conf_engine_set, NULL,
+        RSRC_CONF, "on to enable HTTP/2 protocol handling"),
     {NULL}
 };
 
+
+h2_config *h2_config_sget(server_rec *s)
+{
+    h2_config *cfg = (h2_config *)ap_get_module_config(s->module_config, &h2_module);
+    assert(cfg);
+    return cfg;
+}
+
+h2_config *h2_config_get(conn_rec *c)
+{
+    return h2_config_sget(c->base_server);
+}
 

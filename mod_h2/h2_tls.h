@@ -14,27 +14,30 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_config_h__
-#define __mod_h2__h2_config_h__
 
-#include <http_config.h>
+#ifndef __mod_h2__h2_tls__
+#define __mod_h2__h2_tls__
 
-typedef struct {
-    const char *name;
-    int h2_enabled;
-    int h2_set;
-} h2_config;
+/**
+ * One time, post config intialization.
+ */
+void h2_tls_init(apr_pool_t *pool, server_rec *s);
+
+/**
+ * Once per child process initialization.
+ */
+void h2_tls_child_init(apr_pool_t *pool, server_rec *s);
+
+/**
+ * hooks for processing incoming connections.
+ */
+int h2_tls_pre_conn(conn_rec* c, void *arg);
+int h2_tls_process_conn(conn_rec* c);
+
+/**
+ * Is the connection a TLS connection?
+ */
+int h2_tls_is_tls(conn_rec *c);
 
 
-void *h2_config_create_svr(apr_pool_t *pool, server_rec *s);
-void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv);
-
-apr_status_t h2_config_apply_header(h2_config *config, request_rec *r);
-
-extern const command_rec h2_cmds[];
-
-h2_config *h2_config_get(conn_rec *c);
-h2_config *h2_config_sget(server_rec *s);
-
-#endif /* __mod_h2__h2_config_h__ */
-
+#endif /* defined(__mod_h2__h2_tls__) */

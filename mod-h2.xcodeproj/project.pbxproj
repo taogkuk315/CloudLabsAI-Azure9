@@ -17,6 +17,12 @@
 		B225490C1A6EAC37004BDEC9 /* mod_h2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mod_h2.c; sourceTree = "<group>"; };
 		B225490D1A6EAE9F004BDEC9 /* h2_config.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_config.c; sourceTree = "<group>"; };
 		B225490E1A6EAE9F004BDEC9 /* h2_config.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_config.h; sourceTree = "<group>"; };
+		B225491E1A6FB8DF004BDEC9 /* h2_tls.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_tls.c; sourceTree = "<group>"; };
+		B225491F1A6FB8DF004BDEC9 /* h2_tls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_tls.h; sourceTree = "<group>"; };
+		B22549331A6FBEF1004BDEC9 /* h2_ctx.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_ctx.c; sourceTree = "<group>"; };
+		B22549341A6FBEF1004BDEC9 /* h2_ctx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_ctx.h; sourceTree = "<group>"; };
+		B22549361A6FCCAA004BDEC9 /* mod_h2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mod_h2.h; sourceTree = "<group>"; };
+		B22549371A6FCE13004BDEC9 /* h2_private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_private.h; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27BBD2E1A65927E00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = httpd/Makefile; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = "<none>"; };
 		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
@@ -89,8 +95,14 @@
 			children = (
 				B225490D1A6EAE9F004BDEC9 /* h2_config.c */,
 				B225490E1A6EAE9F004BDEC9 /* h2_config.h */,
+				B22549331A6FBEF1004BDEC9 /* h2_ctx.c */,
+				B22549341A6FBEF1004BDEC9 /* h2_ctx.h */,
+				B225491E1A6FB8DF004BDEC9 /* h2_tls.c */,
+				B225491F1A6FB8DF004BDEC9 /* h2_tls.h */,
 				B225490B1A6EAAA3004BDEC9 /* Makefile */,
 				B225490C1A6EAC37004BDEC9 /* mod_h2.c */,
+				B22549361A6FCCAA004BDEC9 /* mod_h2.h */,
+				B22549371A6FCE13004BDEC9 /* h2_private.h */,
 			);
 			path = mod_h2;
 			sourceTree = "<group>";

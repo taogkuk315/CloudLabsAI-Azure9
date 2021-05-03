@@ -25,7 +25,7 @@ BLD_PREFIX   = $(shell dirname $$PWD)/gen/install
 
 OS           = $(shell uname -s)
 
-CURL_CONF    = --with-nghttp2=$(BLD_PREFIX)
+CURL_CONF    = --with-nghttp2=$(BLD_PREFIX) --with-ssl=$(BLD_PREFIX)
 
 all: install-curl
 
@@ -37,6 +37,8 @@ clean:
 
 distclean:
 	@rm -rf $(GEN)
+
+install: install-curl
 
 install-curl:  $(INST_DIR)/.curl-installed
 

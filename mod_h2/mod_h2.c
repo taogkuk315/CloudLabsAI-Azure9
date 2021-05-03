@@ -16,6 +16,7 @@
 
 
 #include <apr_optional.h>
+#include <apr_optional_hooks.h>
 #include <apr_strings.h>
 #include <apr_tables.h>
 #include <apr_want.h>
@@ -24,20 +25,24 @@
 #include <http_core.h>
 #include <http_config.h>
 #include <http_log.h>
+#include <http_connection.h>
 #include <http_protocol.h>
 #include <http_request.h>
 
-#include <nghttp2/nghttp2.h>
+#include "mod_h2.h"
 
 #include "h2_config.h"
+#include "h2_ctx.h"
+#include "h2_tls.h"
 
 
-static void h2_hooks( apr_pool_t *pool );
+
+static void h2_hooks(apr_pool_t *pool);
 
 AP_DECLARE_MODULE(h2) = {
     STANDARD20_MODULE_STUFF,
-    h2_config_create_dir, /* func to create per dir config */
-    h2_config_merge,      /* func to merge per dir config */
+    NULL,
+    NULL,
     h2_config_create_svr, /* func to create per server config */
     h2_config_merge,      /* func to merge per server config */
     h2_cmds,              /* command handlers */
@@ -59,7 +64,8 @@ static void (*ap_request_remove_filter_fn) (request_rec * r) = NULL;
  * happen and this might even eat threads. So, better init on the real invocation,
  * for now at least.
  */
-static int h2_post_config( apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s ) {
+static int h2_post_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s)
+{
     void *data = NULL;
     const char *mod_h2_init_key = "mod_h2_init_counter";
     apr_pool_userdata_get(&data, mod_h2_init_key, s->process->pool);
@@ -71,84 +77,62 @@ static int h2_post_config( apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, s
     }
     ap_log_error( APLOG_MARK, APLOG_INFO, 0, s, "initializing post config for real");
     
-    nghttp2_session_callbacks *callbacks;
-    int rv = nghttp2_session_callbacks_new(&callbacks);
-    if (rv != 0) {
-        ap_log_error( APLOG_MARK, APLOG_ERR, 0, s, "nghttp2_session_callbacks_new: %s", nghttp2_strerror(rv));
-        return APR_EGENERAL;
-    }
-
-    nghttp2_session *session = NULL;
-    rv = nghttp2_session_server_new(&session, callbacks, NULL);
-    if (rv != 0) {
-        ap_log_error( APLOG_MARK, APLOG_ERR, 0, s, "nghttp2_session_server_new: %s", nghttp2_strerror(rv));
-        return APR_EGENERAL;
-    }
-    // OK, that was just a test
-    nghttp2_session_del( session );
+    h2_tls_init( p, s );
     
     return APR_SUCCESS;
-}
-
-static void h2_core_init( apr_pool_t *p, server_rec *s ) {
-    // TODO
 }
 
 /* Runs once per created child process. Perform any process related initionalization here.
  */
-static void h2_child_init( apr_pool_t *p, server_rec *s ) {
-    ap_log_error( APLOG_MARK, APLOG_DEBUG, 0, s, "initializing child process");
-    h2_core_init( p, s );
+static void h2_child_init(apr_pool_t *pool, server_rec *s)
+{
 }
 
-static int h2_handler( request_rec *r ) {
-    if ( !r->handler || strcmp( r->handler, "h2" )) {
-        return DECLINED;
-    }
-    
-    if ( r->method_number != M_GET ) {
-        return HTTP_METHOD_NOT_ALLOWED;
-    }
-    
-    ap_log_rerror( APLOG_MARK, APLOG_DEBUG, 0, r, "answering GET /h2");
-    ap_set_content_type( r, "text/html; charset=utf-8" );
-    ap_rputs( "<html><head></head><body><h1>Hello from mod_h2!</h1></body></html>", r );
-    return APR_SUCCESS;
-}
-
-static void *h2_core_inspect( request_rec *r ) {
+static void *h2_core_inspect(request_rec *r)
+{
     // TODO: Are we interested in this request? Returns NULL if not.
     return NULL;
 }
 
-static void h2_insert_module_filters( request_rec *r ) {
-    void *ctx = h2_core_inspect( r );
-    if ( ctx ) {
-        ap_log_rerror( APLOG_MARK, APLOG_DEBUG, 0, r, "h2 installing filters for %s", r->uri );
-        ap_add_input_filter( "h2_IN", ctx, r, r->connection );
-        ap_add_output_filter( "h2_OUT", ctx, r, r->connection );
-    }
+const char *h2_get_protocol(conn_rec *c)
+{
+    return h2_ctx_get_protocol(c);
 }
 
-/* Install this module into the apache2 infrstructure.
+/* Install this module into the apache2 infrastructure.
  */
-static void h2_hooks( apr_pool_t *pool ) {
-    ap_log_perror( APLOG_MARK, APLOG_INFO, 0, pool, "installing hooks");
+static void h2_hooks(apr_pool_t *pool)
+{
+    ap_log_perror(APLOG_MARK, APLOG_INFO, 0, pool, "installing hooks");
     
-    /* Run once after configuration is set, but before mpm children initialize
-     */
-    ap_hook_post_config( h2_post_config, NULL, NULL, APR_HOOK_MIDDLE);
-    /* Run once after a child process has been created
-     */
-    static const char *const aszPred[] = { "mod_proxy.c", NULL};
-    ap_hook_child_init( h2_child_init, aszPred, NULL, APR_HOOK_MIDDLE);
+    static const char *const pred[] = { "mod_ssl.c", NULL};
+    static const char *const succ[] = { "core.c", NULL};
     
-    /* Request handler installed just our of curiosity for now. We might
-     * want to use this for generating a dynamic stat page in the future.
+    /* Run once after configuration is set, but before mpm children initialize.
      */
-    ap_hook_handler( h2_handler, NULL, NULL, APR_HOOK_MIDDLE );
+    ap_hook_post_config(h2_post_config, pred, NULL, APR_HOOK_MIDDLE);
     
-    ap_hook_insert_filter( h2_insert_module_filters, NULL, NULL, APR_HOOK_MIDDLE ) ;
+    /* Run once after a child process has been created.
+     */
+    ap_hook_child_init(h2_child_init, NULL, NULL, APR_HOOK_MIDDLE);
+    
+    /* When httpd accepts a connection, but before processing it:
+     * a) on a master connection, we need to check if TLS is used and, if so, 
+     *    add our ALPN registration to mod_ssl.
+     * b) on a slave connection, whose master is using h2*, we need to prevent
+     *    httpd core from inserting its filters, since we handle this ourself.
+     */
+    ap_hook_pre_connection(h2_tls_pre_conn, pred, succ, APR_HOOK_LAST);
+    
+    /* When the connection processing actually starts, we might to
+     * take over, if h2* was selected by ALPN on a TLS connection.
+     */
+    ap_hook_process_connection(h2_tls_process_conn, NULL, NULL, APR_HOOK_FIRST);
+    
+    /* We offer a function to other modules that lets them retrieve
+     * the h2 protocol used on a connection (if any).
+     */
+    APR_REGISTER_OPTIONAL_FN(h2_get_protocol);
 }
 
 
