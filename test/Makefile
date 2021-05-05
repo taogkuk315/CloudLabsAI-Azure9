@@ -61,13 +61,15 @@ test: \
 ################################################################################
 # Setup the local httpd for our tests
 #
-SETUP_FILES = $(wildcard conf/*.conf) $(wildcard conf/sites/*.conf)
+SETUP_FILES = $(wildcard conf/*.conf) $(wildcard conf/sites/*.conf) \
+    $(wildcard conf/mods/*.conf) $(wildcard conf/mods/*.load)
 
 $(INST_DIR)/.httpd-setup: \
 		$(INST_DIR)/.httpd-installed \
 		conf/httpd.conf \
 		conf/modules.conf \
 		$(wildcard conf/sites/*.conf) \
+        $(wildcard conf/mods/*.*) \
 		$(INST_DIR)/conf/test.local.key \
 		$(INST_DIR)/conf/test.local.pem
 	@echo -n setup httpd locally...
@@ -75,6 +77,7 @@ $(INST_DIR)/.httpd-setup: \
 	@mkdir -p $(INST_DIR)/conf/mods
 	@for file in $(SETUP_FILES); do \
 		sed -e "s,SUBST_SERVER_ROOT_SUBST,$(BLD_PREFIX),g" \
+			-e "s,SUBST_SERVER_NAME_SUBST,$(shell hostname -f),g" \
 			-e "s,SUBST_PORT_HTTP_SUBST,$(HTTP_PORT),g" \
 			-e "s,SUBST_PORT_HTTPS_SUBST,$(HTTPS_PORT),g" \
 			< $$file > $(INST_DIR)/$$file; \

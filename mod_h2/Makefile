@@ -17,7 +17,6 @@
 
 
 INST_DIR     = ../gen/install
-BLD_PREFIX   = $(shell dirname $$PWD)/gen/install
 
 APXS    = $(INST_DIR)/bin/apxs
 LIBTOOL = libtool
@@ -34,7 +33,7 @@ LOBJ    = $(OBJ:%.o=%.lo)
 
 INCLUDES=-I.
 
-LIBS    = -L$(BLD_PREFIX)/lib -lnghttp2
+LIBS    = -L$(INST_DIR)/lib -lnghttp2
 
 # use the following rules in order to build .o files from .c and .cpp files
 .cc.o : *.h
