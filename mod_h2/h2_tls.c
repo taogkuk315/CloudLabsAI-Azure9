@@ -21,12 +21,11 @@
 #include <http_config.h>
 #include <http_log.h>
 
-#include <nghttp2/nghttp2.h>
-
 #include "h2_private.h"
 
 #include "h2_config.h"
 #include "h2_ctx.h"
+#include "h2_nghttp2.h"
 #include "h2_tls.h"
 
 
@@ -200,32 +199,8 @@ int h2_tls_process_conn(conn_rec* c)
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_tls, connection, start");
     if (h2_ctx_is_active(c)) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_tls, connection, h2 active");
-        // TODO: are we really doing h2* on this connection?
-        
-        nghttp2_session_callbacks *callbacks;
-        int rv = nghttp2_session_callbacks_new(&callbacks);
-        if (rv != 0) {
-            ap_log_cerror( APLOG_MARK, APLOG_ERR, 0, c,
-                          "nghttp2_session_callbacks_new: %s",
-                          nghttp2_strerror(rv));
-            return APR_EGENERAL;
-        }
-        
-        nghttp2_session *session = NULL;
-        rv = nghttp2_session_server_new(&session, callbacks, NULL);
-        if (rv != 0) {
-            ap_log_cerror( APLOG_MARK, APLOG_ERR, 0, c,
-                          "nghttp2_session_server_new: %s",
-                          nghttp2_strerror(rv));
-            return APR_EGENERAL;
-        }
 
-        // Now we need to handle the traffic
-        
-        nghttp2_session_del( session );
-        nghttp2_session_callbacks_del( callbacks );
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_tls, connection, end");
-        return DONE;
+        return h2_nghttp2_serve(c);
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_tls, connection, declined");
     return DECLINED;

@@ -14,26 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_ctx__
-#define __mod_h2__h2_ctx__
+#ifndef __mod_h2__h2_io__
+#define __mod_h2__h2_io__
 
 typedef struct {
-    int is_h2;
-    const char *protocol;
-    int is_slave;
-    int is_negotiated;
-    void *userp;
-} h2_ctx;
+    conn_rec *connection;
+    apr_bucket_brigade *input_brigade;
+    apr_bucket_brigade *output_brigade;
+} h2_io_ctx;
 
-h2_ctx *h2_ctx_create(conn_rec *c);
-h2_ctx *h2_ctx_get(conn_rec *c);
+int h2_io_init(conn_rec *c, h2_io_ctx *io);
 
-const char *h2_ctx_get_protocol(conn_rec* c);
-h2_ctx *h2_ctx_set_protocol(conn_rec* c, const char *proto);
-int h2_ctx_is_negotiated(conn_rec * c);
+apr_status_t h2_io_read(h2_io_ctx *io, unsigned char *buf, size_t length, size_t *read);
+apr_status_t h2_io_write(h2_io_ctx *io, const unsigned char *buf, size_t length, size_t *written);
 
-int h2_ctx_is_master(conn_rec * c);
-int h2_ctx_is_slave(conn_rec * c);
-int h2_ctx_is_active(conn_rec * c);
-
-#endif /* defined(__mod_h2__h2_ctx__) */
+#endif /* defined(__mod_h2__h2_io__) */

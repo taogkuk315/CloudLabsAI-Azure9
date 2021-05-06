@@ -14,26 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_ctx__
-#define __mod_h2__h2_ctx__
+#include <assert.h>
 
-typedef struct {
-    int is_h2;
-    const char *protocol;
-    int is_slave;
-    int is_negotiated;
-    void *userp;
-} h2_ctx;
+#include <httpd.h>
+#include <http_core.h>
+#include <http_log.h>
 
-h2_ctx *h2_ctx_create(conn_rec *c);
-h2_ctx *h2_ctx_get(conn_rec *c);
+#include "h2_private.h"
+#include "h2_util.h"
 
-const char *h2_ctx_get_protocol(conn_rec* c);
-h2_ctx *h2_ctx_set_protocol(conn_rec* c, const char *proto);
-int h2_ctx_is_negotiated(conn_rec * c);
-
-int h2_ctx_is_master(conn_rec * c);
-int h2_ctx_is_slave(conn_rec * c);
-int h2_ctx_is_active(conn_rec * c);
-
-#endif /* defined(__mod_h2__h2_ctx__) */

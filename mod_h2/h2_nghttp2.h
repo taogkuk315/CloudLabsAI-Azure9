@@ -14,26 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_ctx__
-#define __mod_h2__h2_ctx__
+
+#ifndef __mod_h2__h2_nghttp2__
+#define __mod_h2__h2_nghttp2__
+
+#include <nghttp2/nghttp2.h>
+
+#include "h2_io.h"
 
 typedef struct {
-    int is_h2;
-    const char *protocol;
-    int is_slave;
-    int is_negotiated;
-    void *userp;
-} h2_ctx;
+    conn_rec *connection;
+    nghttp2_session *session;
+    h2_io_ctx io;
+} h2_nghttp2_ctx;
 
-h2_ctx *h2_ctx_create(conn_rec *c);
-h2_ctx *h2_ctx_get(conn_rec *c);
+apr_status_t h2_nghttp2_serve(conn_rec *c);
 
-const char *h2_ctx_get_protocol(conn_rec* c);
-h2_ctx *h2_ctx_set_protocol(conn_rec* c, const char *proto);
-int h2_ctx_is_negotiated(conn_rec * c);
-
-int h2_ctx_is_master(conn_rec * c);
-int h2_ctx_is_slave(conn_rec * c);
-int h2_ctx_is_active(conn_rec * c);
-
-#endif /* defined(__mod_h2__h2_ctx__) */
+#endif /* defined(__mod_h2__h2_nghttp2__) */

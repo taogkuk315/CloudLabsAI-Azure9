@@ -23,7 +23,10 @@ LIBTOOL = libtool
 
 C_SRC   = h2_config.c \
         h2_ctx.c \
-        h2_tls.c
+        h2_io.c \
+        h2_nghttp2.c \
+        h2_tls.c \
+        h2_util.c \
 
 CPP_SRC =
 
