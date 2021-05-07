@@ -22,7 +22,6 @@
 
 #include "h2_private.h"
 #include "h2_io.h"
-#include "h2_util.h"
 
 static const apr_off_t BLOCKSIZE = 4 * 1024;
 
@@ -35,7 +34,7 @@ int h2_io_init(conn_rec *c, h2_io_ctx *io)
 }
 
 apr_status_t h2_io_bucket_read(apr_bucket_brigade *input,
-                               unsigned char *buf, size_t length,
+                               char *buf, size_t length,
                                size_t *read)
 {
     *read = 0;
@@ -77,7 +76,7 @@ apr_status_t h2_io_bucket_read(apr_bucket_brigade *input,
     return APR_SUCCESS;
 }
 
-apr_status_t h2_io_read(h2_io_ctx *io, unsigned char *buf, size_t length,
+apr_status_t h2_io_read(h2_io_ctx *io, char *buf, size_t length,
                         size_t *read)
 {
     apr_status_t status;
@@ -115,7 +114,7 @@ apr_status_t h2_io_read(h2_io_ctx *io, unsigned char *buf, size_t length,
     return status;
 }
 
-apr_status_t h2_io_write(h2_io_ctx *io, const unsigned char *buf, size_t length,
+apr_status_t h2_io_write(h2_io_ctx *io, const char *buf, size_t length,
                          size_t *written)
 {
     *written = 0;

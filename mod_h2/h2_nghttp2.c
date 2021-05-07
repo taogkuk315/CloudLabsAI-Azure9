@@ -50,7 +50,8 @@ static ssize_t send_cb(nghttp2_session *session,
 {
     h2_nghttp2_ctx *ctx = (h2_nghttp2_ctx *)userp;
     size_t written = 0;
-    apr_status_t status = h2_io_write(&ctx->io, data, length, &written);
+    apr_status_t status = h2_io_write(&ctx->io, (const char*)data,
+                                      length, &written);
     if (status == APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
                       "h2_nghttp2: callback send write %d bytes", (int)written);
@@ -70,7 +71,8 @@ static ssize_t recv_cb(nghttp2_session *session,
 {
     h2_nghttp2_ctx *ctx = (h2_nghttp2_ctx *)userp;
     size_t read = 0;
-    apr_status_t status = h2_io_read(&ctx->io, buf, length, &read);
+    apr_status_t status = h2_io_read(&ctx->io, (char *)buf,
+                                     length, &read);
     if (status == APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
                       "h2_nghttp2: callback recv %d bytes", (int)read);
@@ -94,9 +96,11 @@ static int on_frame_recv_cb(nghttp2_session *session,
                             void *userp)
 {
     h2_nghttp2_ctx *ctx = (h2_nghttp2_ctx *)userp;
+    char buffer[256];
+    
+    h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
-                  "h2_nghttp2: callback on_frame_rcv, type=%d",
-                  frame->hd.type);
+                  "h2_nghttp2: callback on_frame_rcv %s", buffer);
     return 0;
 }
 
@@ -105,9 +109,12 @@ static int on_invalid_frame_recv_cb(nghttp2_session *session,
                                     uint32_t error_code, void *userp)
 {
     h2_nghttp2_ctx *ctx = (h2_nghttp2_ctx *)userp;
+    char buffer[256];
+    
+    h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
-                  "h2_nghttp2: callback on_invalid_frame_recv, type=%d",
-                  frame->hd.type);
+                  "h2_nghttp2: callback on_invalid_frame_recv error=%d %s",
+                  (int)error_code, buffer);
     return 0;
 }
 
@@ -127,9 +134,11 @@ static int before_frame_send_cb(nghttp2_session *session,
                                 void *userp)
 {
     h2_nghttp2_ctx *ctx = (h2_nghttp2_ctx *)userp;
+    char buffer[256];
+    
+    h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
-                  "h2_nghttp2: before_frame_send, type=%d",
-                  frame->hd.type);
+                  "h2_nghttp2: before_frame_send %s", buffer);
     return 0;
 }
 
@@ -138,9 +147,11 @@ static int on_frame_send_cb(nghttp2_session *session,
                             void *userp)
 {
     h2_nghttp2_ctx *ctx = (h2_nghttp2_ctx *)userp;
+    char buffer[256];
+    
+    h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
-                  "h2_nghttp2: callback on_frame_send, type=%d",
-                  frame->hd.type);
+                  "h2_nghttp2: callback on_frame_send %s", buffer);
     return 0;
 }
 
@@ -149,9 +160,12 @@ static int on_frame_not_send_cb(nghttp2_session *session,
                                 int lib_error_code, void *userp)
 {
     h2_nghttp2_ctx *ctx = (h2_nghttp2_ctx *)userp;
+    char buffer[256];
+    
+    h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
-                  "h2_nghttp2: callback on_frame_not_send, error=%d",
-                  lib_error_code);
+                  "h2_nghttp2: callback on_frame_not_send error=%d %s",
+                  lib_error_code, buffer);
     return 0;
 }
 
@@ -169,9 +183,12 @@ static int on_begin_headers_cb(nghttp2_session *session,
                                const nghttp2_frame *frame, void *userp)
 {
     h2_nghttp2_ctx *ctx = (h2_nghttp2_ctx *)userp;
+    char buffer[256];
+    
+    h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
-                  "h2_nghttp2: callback on_begin_headers, type=%d",
-                  frame->hd.type);
+                  "h2_nghttp2: callback on_begin_headers %s",
+                  buffer);
     return 0;
 }
 
@@ -182,16 +199,20 @@ static int on_header_cb(nghttp2_session *session, const nghttp2_frame *frame,
                         void *userp)
 {
     h2_nghttp2_ctx *ctx = (h2_nghttp2_ctx *)userp;
+    char buffer[256];
+    
+    h2_util_header_print(buffer, sizeof(buffer)/sizeof(buffer[0]),
+                         (const char*)name, namelen,
+                         (const char*)value, valuelen);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
-                  "h2_nghttp2: callback on_header, namelen=%d",
-                  (int)namelen);
+                  "h2_nghttp2: recv header %s", buffer);
     return 0;
 }
 
 #define NGH2_SET_CALLBACK(callbacks, name, fn)\
 nghttp2_session_callbacks_set_##name##_callback(callbacks, fn)
 
-static int init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
+static apr_status_t init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
 {
     int rv = nghttp2_session_callbacks_new(pcb);
     if (rv != 0) {
@@ -202,7 +223,7 @@ static int init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
     }
     
     NGH2_SET_CALLBACK(*pcb, send, send_cb);
-    /*NGH2_SET_CALLBACK(*pcb, recv, recv_cb);*/
+    NGH2_SET_CALLBACK(*pcb, recv, recv_cb);
     NGH2_SET_CALLBACK(*pcb, on_frame_recv, on_frame_recv_cb);
     NGH2_SET_CALLBACK(*pcb, on_invalid_frame_recv, on_invalid_frame_recv_cb);
     NGH2_SET_CALLBACK(*pcb, on_data_chunk_recv, on_data_chunk_recv_cb);
@@ -213,15 +234,14 @@ static int init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
     NGH2_SET_CALLBACK(*pcb, on_begin_headers, on_begin_headers_cb);
     NGH2_SET_CALLBACK(*pcb, on_header, on_header_cb);
     
-    return OK;
+    return APR_SUCCESS;
 }
 
-apr_status_t h2_nghttp2_serve(conn_rec *c)
+static apr_status_t h2_nghttp2_ctx_create(conn_rec *c, h2_nghttp2_ctx **pctx)
 {
-    apr_status_t status = APR_SUCCESS;
-    nghttp2_session * session = NULL;
     nghttp2_session_callbacks *callbacks = NULL;
-    
+    nghttp2_option *options = NULL;
+
     h2_ctx *ctx = h2_ctx_get(c);
     if (!ctx) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c,
@@ -229,18 +249,41 @@ apr_status_t h2_nghttp2_serve(conn_rec *c)
         return APR_EGENERAL;
     }
     
-    int rv = init_callbacks(c, &callbacks);
-    if (rv != 0) {
-        return rv;
-    }
-    
+    /* Set up our own context for keeping state of this connection.
+     * - initialize the nghttp2 session, with callbacks and options
+     * - register the session in our nghttp2_ctx
+     */
     h2_nghttp2_ctx *h2ng_ctx = apr_pcalloc(c->pool, sizeof(h2_nghttp2_ctx));
     h2ng_ctx->connection = c;
     h2ng_ctx->session = NULL;
     h2_io_init(c, &h2ng_ctx->io);
     
-    rv = nghttp2_session_server_new(&h2ng_ctx->session, callbacks, h2ng_ctx);
+    apr_status_t status = init_callbacks(c, &callbacks);
+    if (status != APR_SUCCESS) {
+        return status;
+    }
+    
+    int rv = nghttp2_option_new(&options);
+    if (rv != 0) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, c,
+                      "nghttp2_option_new: %s", nghttp2_strerror(rv));
+        return APR_EGENERAL;
+    }
+    
+    /* Our server nghttp2 options
+     * TODO: some should come from config
+     */
+    nghttp2_option_set_recv_client_preface(options, 1);
+    nghttp2_option_set_peer_max_concurrent_streams(options, 100);
+    
+    rv = nghttp2_session_server_new2(&h2ng_ctx->session, callbacks,
+                                     h2ng_ctx, options);
     nghttp2_session_callbacks_del(callbacks);
+    nghttp2_option_del(options);
+
+    // REALLY?
+    *pctx = h2ng_ctx;
+    ctx->userp = h2ng_ctx;
     
     if (rv != 0) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EGENERAL, c,
@@ -248,13 +291,24 @@ apr_status_t h2_nghttp2_serve(conn_rec *c)
                       nghttp2_strerror(rv));
         return APR_EGENERAL;
     }
+    return APR_SUCCESS;
+}
+
+apr_status_t h2_nghttp2_serve(conn_rec *c)
+{
+    h2_nghttp2_ctx *h2ng_ctx = NULL;
+    int rv;
     
-    // Now we need to handle the traffic
-    ctx->userp = h2ng_ctx;
+    apr_status_t status = h2_nghttp2_ctx_create(c, &h2ng_ctx);
+    if (status != APR_SUCCESS) {
+        return status;
+    }
+    
     ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, c,
                   "h2_nghttp2: new TLS session");
     
-    //rv = nghttp2_submit_settings(h2ng_ctx->session, NGHTTP2_FLAG_NONE, NULL, 0);
+    /* Start the conversation by submitting our SETTINGS frame */
+    rv = nghttp2_submit_settings(h2ng_ctx->session, NGHTTP2_FLAG_NONE, NULL, 0);
     if (rv != 0) {
         status = APR_EGENERAL;
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, c,
@@ -262,10 +316,13 @@ apr_status_t h2_nghttp2_serve(conn_rec *c)
     }
     else {
         // Receive frames from client
-        unsigned char buffer[16 * 1024];
+        char buffer[16 * 1024];
         size_t length = sizeof(buffer)/sizeof(buffer[0]);
+        size_t read, offset;
+        apr_status_t status;
+        int done = 0;
         
-        while (!nghttp2_is_fatal(rv)) {
+        while (!done && !nghttp2_is_fatal(rv)) {
             if (nghttp2_session_want_write(h2ng_ctx->session)) {
                 rv = nghttp2_session_send(h2ng_ctx->session);
                 if (rv != 0) {
@@ -274,24 +331,46 @@ apr_status_t h2_nghttp2_serve(conn_rec *c)
                 }
             }
             
-            size_t read = 0;
-            apr_status_t status = h2_io_read(&h2ng_ctx->io, buffer, length,
-                                             &read);
-            if (read > 0) {
-                ssize_t processed =
-                    nghttp2_session_mem_recv(h2ng_ctx->session,
-                                             (const uint8_t *)buffer, read);
-                if (processed < 0) {
-                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
-                        "h2_nghttp2: recv error %d", rv);
-                }
-                else if (processed < read) {
-                    ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c,
-                        "h2_nghttp2: recv has not processed all bytes");
+            if (read <= offset) {
+                read = offset = 0;
+                status = h2_io_read(&h2ng_ctx->io, buffer, length, &read);
+                switch (status) {
+                    case APR_SUCCESS:
+                    case APR_EAGAIN:
+                        break;
+                    case APR_EOF:
+                        done = 1;
+                        break;
+                    default:
+                        ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,
+                                      "h2_nghttp2: error reading");
+                        done = 1;
+                        break;
                 }
             }
-            else if (status == APR_EOF) {
-                break;
+        
+            if (read > offset) {
+                /*char scratch[256];
+                h2_util_hex_dump(scratch, sizeof(scratch)/sizeof(scratch[0]),
+                                 buffer, read);
+                ap_log_cerror( APLOG_MARK, APLOG_TRACE2, 0, c,
+                              "h2_nghttp2: read %d bytes [%s]",
+                              (int)read, scratch);
+                 */
+                ssize_t n = nghttp2_session_mem_recv(h2ng_ctx->session,
+                                                     (const uint8_t *)buffer+offset,
+                                                     read-offset);
+                if (n < 0) {
+                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_EGENERAL, c,
+                        "h2_nghttp2: recv error %d", (int)n);
+                    rv = n;
+                }
+                else if (n < read) {
+                    offset += n;
+                }
+                else {
+                    offset = read = 0;
+                }
             }
         }
         
