@@ -558,6 +558,7 @@
 		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
 		B27BBD3A1A690C9800C58A41 /* npn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "npn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
 		B27BBD841A696C0D00C58A41 /* alpn-2.4.10.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.10.unified.diff.patch"; sourceTree = "<group>"; };
+		B2C16D221A778E78000B2297 /* alpn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
 		B2D05D421A6D11C0004DF5C0 /* config.m4 */ = {isa = PBXFileReference; lastKnownFileType = text; path = config.m4; sourceTree = "<group>"; };
 		B2D05D431A6D11C0004DF5C0 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2D05D441A6D11C0004DF5C0 /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
@@ -1458,6 +1459,7 @@
 		B27BBD391A690C9800C58A41 /* patches */ = {
 			isa = PBXGroup;
 			children = (
+				B2C16D221A778E78000B2297 /* alpn-2.4.x.unified.diff.patch */,
 				B27BBD841A696C0D00C58A41 /* alpn-2.4.10.unified.diff.patch */,
 				B27BBD3A1A690C9800C58A41 /* npn-2.4.x.unified.diff.patch */,
 			);

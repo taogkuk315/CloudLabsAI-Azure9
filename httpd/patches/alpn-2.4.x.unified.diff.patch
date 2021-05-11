@@ -250,7 +250,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
  #include "util_md5.h"
  
  static void ssl_configure_env(request_rec *r, SSLConnRec *sslconn);
-@@ -2136,6 +2131,267 @@
+@@ -2136,6 +2131,270 @@
  }
  #endif /* HAVE_TLS_SESSION_TICKETS */
  
@@ -443,6 +443,9 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 +        
 +        if (fn(c, NULL, protos) == DONE)
 +            break;
++    }
++    if (ssl_array_index(ssl_alpn_propose_protos, "http/1.1") < 0) {
++		APR_ARRAY_PUSH(ssl_alpn_propose_protos, const unsigned char*) = "http/1.1";
 +    }
 +    num_protos = protos->nelts;
 +
