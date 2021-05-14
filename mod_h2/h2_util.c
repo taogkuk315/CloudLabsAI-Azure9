@@ -57,9 +57,11 @@ int h2_util_frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen)
         }
         case NGHTTP2_HEADERS: {
             return apr_snprintf(buffer, maxlen,
-                                "HEADERS[length=%d, flags=%d, stream=%d]",
+                                "HEADERS[length=%d, hend=%d, stream=%d, eos=%d]",
                                 (int)frame->hd.length,
-                                frame->hd.flags, frame->hd.stream_id);
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
+                                frame->hd.stream_id,
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
         }
         case NGHTTP2_PRIORITY: {
             return apr_snprintf(buffer, maxlen,
@@ -74,22 +76,28 @@ int h2_util_frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen)
                                 frame->hd.flags, frame->hd.stream_id);
         }
         case NGHTTP2_SETTINGS: {
+            if (frame->hd.flags & NGHTTP2_FLAG_ACK) {
+                return apr_snprintf(buffer, maxlen,
+                                    "SETTINGS[ack=1, stream=%d]",
+                                    frame->hd.stream_id);
+            }
             return apr_snprintf(buffer, maxlen,
-                                "SETTINGS[length=%d, flags=%d, stream=%d]",
-                                (int)frame->hd.length,
-                                frame->hd.flags, frame->hd.stream_id);
+                                "SETTINGS[length=%d, stream=%d]",
+                                (int)frame->hd.length, frame->hd.stream_id);
         }
         case NGHTTP2_PUSH_PROMISE: {
             return apr_snprintf(buffer, maxlen,
-                                "PUSH_PROMISE[length=%d, flags=%d, stream=%d]",
+                                "PUSH_PROMISE[length=%d, hend=%d, stream=%d]",
                                 (int)frame->hd.length,
-                                frame->hd.flags, frame->hd.stream_id);
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
+                                frame->hd.stream_id);
         }
         case NGHTTP2_PING: {
             return apr_snprintf(buffer, maxlen,
-                                "PING[length=%d, flags=%d, stream=%d]",
+                                "PING[length=%d, ack=%d, stream=%d]",
                                 (int)frame->hd.length,
-                                frame->hd.flags, frame->hd.stream_id);
+                                frame->hd.flags&NGHTTP2_FLAG_ACK,
+                                frame->hd.stream_id);
         }
         case NGHTTP2_GOAWAY: {
             size_t len = (frame->goaway.opaque_data_len < s_len)?
@@ -101,15 +109,15 @@ int h2_util_frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen)
         }
         case NGHTTP2_WINDOW_UPDATE: {
             return apr_snprintf(buffer, maxlen,
-                                "WINDOW_UPDATE[length=%d, flags=%d, stream=%d]",
-                                (int)frame->hd.length,
-                                frame->hd.flags, frame->hd.stream_id);
+                                "WINDOW_UPDATE[length=%d, stream=%d]",
+                                (int)frame->hd.length, frame->hd.stream_id);
         }
         case NGHTTP2_CONTINUATION: {
             return apr_snprintf(buffer, maxlen,
-                                "CONTINUATION[length=%d, flags=%d, stream=%d]",
+                                "CONTINUATION[length=%d, hend=%dm, stream=%d]",
                                 (int)frame->hd.length,
-                                frame->hd.flags, frame->hd.stream_id);
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
+                                frame->hd.stream_id);
         }
         default:
             return apr_snprintf(buffer, maxlen,

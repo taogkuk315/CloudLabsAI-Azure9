@@ -25,7 +25,7 @@
 
 #include "h2_config.h"
 #include "h2_ctx.h"
-#include "h2_nghttp2.h"
+#include "h2_session.h"
 #include "h2_tls.h"
 
 
@@ -200,7 +200,7 @@ int h2_tls_process_conn(conn_rec* c)
     if (h2_ctx_is_active(c)) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_tls, connection, h2 active");
 
-        return h2_nghttp2_serve(c);
+        return h2_session_serve(c);
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_tls, connection, declined");
     return DECLINED;

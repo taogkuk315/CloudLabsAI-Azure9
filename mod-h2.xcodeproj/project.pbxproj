@@ -23,8 +23,8 @@
 		B22549341A6FBEF1004BDEC9 /* h2_ctx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_ctx.h; sourceTree = "<group>"; };
 		B22549361A6FCCAA004BDEC9 /* mod_h2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mod_h2.h; sourceTree = "<group>"; };
 		B22549371A6FCE13004BDEC9 /* h2_private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_private.h; sourceTree = "<group>"; };
-		B22549381A710329004BDEC9 /* h2_nghttp2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_nghttp2.c; sourceTree = "<group>"; };
-		B22549391A710329004BDEC9 /* h2_nghttp2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_nghttp2.h; sourceTree = "<group>"; };
+		B22549381A710329004BDEC9 /* h2_session.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_session.c; sourceTree = "<group>"; };
+		B22549391A710329004BDEC9 /* h2_session.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_session.h; sourceTree = "<group>"; };
 		B225493A1A711985004BDEC9 /* h2_io.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_io.c; sourceTree = "<group>"; };
 		B225493B1A711985004BDEC9 /* h2_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_io.h; sourceTree = "<group>"; };
 		B225493C1A713D18004BDEC9 /* h2_util.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_util.c; sourceTree = "<group>"; };
@@ -559,6 +559,10 @@
 		B27BBD3A1A690C9800C58A41 /* npn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "npn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
 		B27BBD841A696C0D00C58A41 /* alpn-2.4.10.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.10.unified.diff.patch"; sourceTree = "<group>"; };
 		B2C16D221A778E78000B2297 /* alpn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
+		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
+		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
+		B2C16D2C1A77CAED000B2297 /* h2_stream_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream_input.c; sourceTree = "<group>"; };
+		B2C16D2D1A77CAED000B2297 /* h2_stream_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream_input.h; sourceTree = "<group>"; };
 		B2D05D421A6D11C0004DF5C0 /* config.m4 */ = {isa = PBXFileReference; lastKnownFileType = text; path = config.m4; sourceTree = "<group>"; };
 		B2D05D431A6D11C0004DF5C0 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2D05D441A6D11C0004DF5C0 /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
@@ -630,16 +634,20 @@
 				B22549341A6FBEF1004BDEC9 /* h2_ctx.h */,
 				B225493A1A711985004BDEC9 /* h2_io.c */,
 				B225493B1A711985004BDEC9 /* h2_io.h */,
-				B22549381A710329004BDEC9 /* h2_nghttp2.c */,
-				B22549391A710329004BDEC9 /* h2_nghttp2.h */,
 				B22549371A6FCE13004BDEC9 /* h2_private.h */,
+				B22549381A710329004BDEC9 /* h2_session.c */,
+				B22549391A710329004BDEC9 /* h2_session.h */,
+				B2C16D2C1A77CAED000B2297 /* h2_stream_input.c */,
+				B2C16D2D1A77CAED000B2297 /* h2_stream_input.h */,
+				B2C16D251A779C55000B2297 /* h2_stream.c */,
+				B2C16D261A779C55000B2297 /* h2_stream.h */,
 				B225491E1A6FB8DF004BDEC9 /* h2_tls.c */,
 				B225491F1A6FB8DF004BDEC9 /* h2_tls.h */,
+				B225493C1A713D18004BDEC9 /* h2_util.c */,
+				B225493D1A713D18004BDEC9 /* h2_util.h */,
 				B225490B1A6EAAA3004BDEC9 /* Makefile */,
 				B225490C1A6EAC37004BDEC9 /* mod_h2.c */,
 				B22549361A6FCCAA004BDEC9 /* mod_h2.h */,
-				B225493C1A713D18004BDEC9 /* h2_util.c */,
-				B225493D1A713D18004BDEC9 /* h2_util.h */,
 			);
 			path = mod_h2;
 			sourceTree = "<group>";

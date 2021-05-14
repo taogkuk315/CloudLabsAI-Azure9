@@ -24,7 +24,9 @@ LIBTOOL = libtool
 C_SRC   = h2_config.c \
         h2_ctx.c \
         h2_io.c \
-        h2_nghttp2.c \
+        h2_session.c \
+        h2_stream.c \
+        h2_stream_input.c \
         h2_tls.c \
         h2_util.c \
 

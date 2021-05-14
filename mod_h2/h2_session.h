@@ -15,19 +15,19 @@
  */
 
 
-#ifndef __mod_h2__h2_nghttp2__
-#define __mod_h2__h2_nghttp2__
+#ifndef __mod_h2__h2_session__
+#define __mod_h2__h2_session__
 
 #include <nghttp2/nghttp2.h>
 
 #include "h2_io.h"
 
-typedef struct {
+typedef struct h2_session {
     conn_rec *connection;
     nghttp2_session *session;
     h2_io_ctx io;
-} h2_nghttp2_ctx;
+} h2_session;
 
-apr_status_t h2_nghttp2_serve(conn_rec *c);
+apr_status_t h2_session_serve(conn_rec *c);
 
-#endif /* defined(__mod_h2__h2_nghttp2__) */
+#endif /* defined(__mod_h2__h2_session__) */
