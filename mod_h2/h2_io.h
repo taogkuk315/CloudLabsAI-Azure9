@@ -25,8 +25,24 @@ typedef struct {
 
 int h2_io_init(conn_rec *c, h2_io_ctx *io);
 
-apr_status_t h2_io_read(h2_io_ctx *io, char *buf, size_t length, size_t *read);
-apr_status_t h2_io_write(h2_io_ctx *io, const char *buf, size_t length,
+typedef apr_status_t (*h2_io_on_read_cb)(const char *data, apr_size_t len,
+                                         apr_size_t *readlen, int *done,
+                                         void *puser);
+
+
+apr_status_t h2_io_read(h2_io_ctx *io,
+                        apr_read_type_e block,
+                        h2_io_on_read_cb on_read_cb,
+                        void *puser);
+
+apr_status_t h2_io_read_copy(h2_io_ctx *io,
+                             apr_read_type_e block,
+                             char *buf, size_t length,
+                             size_t *read);
+
+apr_status_t h2_io_write(h2_io_ctx *io,
+                         const char *buf,
+                         size_t length,
                          size_t *written);
 
 #endif /* defined(__mod_h2__h2_io__) */

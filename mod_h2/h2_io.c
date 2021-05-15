@@ -33,12 +33,42 @@ int h2_io_init(conn_rec *c, h2_io_ctx *io)
     return OK;
 }
 
-apr_status_t h2_io_bucket_read(apr_bucket_brigade *input,
-                               char *buf, size_t length,
-                               size_t *read)
+typedef struct {
+    char *buf;
+    apr_size_t buflen;
+    apr_size_t readlen;
+} io_copy_ctx;
+
+static apr_status_t on_read_copy(const char *data, apr_size_t len,
+                                 apr_size_t *readlen, int *done, void *puser)
 {
-    *read = 0;
-    while (!APR_BRIGADE_EMPTY(input)) {
+    io_copy_ctx *ctx = (io_copy_ctx *)puser;
+    apr_size_t avail = ctx->buflen - ctx->readlen;
+    if (avail == 0) {
+        *done = 1;
+        return APR_SUCCESS;
+    }
+    if (avail > len) {
+        avail = len;
+    }
+    memcpy(ctx->buf+ctx->readlen, data, avail);
+    *readlen = avail;
+    ctx->readlen += avail;
+    *done = (ctx->readlen >= ctx->buflen);
+    return APR_SUCCESS;
+}
+
+apr_status_t h2_io_bucket_read(apr_bucket_brigade *input,
+                               apr_read_type_e block,
+                               h2_io_on_read_cb on_read_cb,
+                               void *puser, int *pdone)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_size_t readlen = 0;
+    
+    while (status == APR_SUCCESS && !*pdone
+           && !APR_BRIGADE_EMPTY(input)) {
+        
         apr_bucket* bucket = APR_BRIGADE_FIRST(input);
         if (APR_BUCKET_IS_METADATA(bucket)) {
             /* we do nothing regarding any meta here */
@@ -46,46 +76,40 @@ apr_status_t h2_io_bucket_read(apr_bucket_brigade *input,
         else {
             const char *bucket_data = NULL;
             apr_size_t bucket_length = 0;
-            apr_status_t rv = apr_bucket_read(bucket, &bucket_data,
-                                            &bucket_length, APR_NONBLOCK_READ);
-            if (rv != APR_SUCCESS) {
-                return rv;
-            }
-            
-            if (bucket_length > 0) {
-                if (bucket_length > length) {
-                    /* We cannot read more. Split the bucket, copy
-                     * the bytes and return.
-                     */
-                    rv = apr_bucket_split(bucket, length);
-                    if (rv != APR_SUCCESS) {
-                        return rv;
-                    }
-                    memcpy(buf, bucket_data, length);
-                    *read += length;
-                    return APR_SUCCESS;
-                }
-                else {
-                    memcpy(buf, bucket_data, bucket_length);
-                    *read += bucket_length;
+            status = apr_bucket_read(bucket, &bucket_data,
+                                     &bucket_length, block);
+            if (status == APR_SUCCESS && bucket_length > 0) {
+                apr_size_t readlen = 0;
+                status = on_read_cb(bucket_data, bucket_length,
+                                    &readlen, pdone, puser);
+                if (status == APR_SUCCESS && bucket_length > readlen) {
+                    /* We have data left in the bucket. Split it. */
+                    status = apr_bucket_split(bucket, readlen);
                 }
             }
         }
         apr_bucket_delete(bucket);
     }
-    return APR_SUCCESS;
+    if (readlen == 0 && status == APR_SUCCESS && block == APR_NONBLOCK_READ) {
+        return APR_EAGAIN;
+    }
+    return status;
 }
 
-apr_status_t h2_io_read(h2_io_ctx *io, char *buf, size_t length,
-                        size_t *read)
+apr_status_t h2_io_read(h2_io_ctx *io,
+                         apr_read_type_e block,
+                         h2_io_on_read_cb on_read_cb,
+                         void *puser)
 {
     apr_status_t status;
-    *read = 0;
+    int done = 0;
+    
     if (!APR_BRIGADE_EMPTY(io->input_brigade)) {
         /* Seems something is left from a previous read, lets
          * satisfy our caller with the data we already have. */
-        status = h2_io_bucket_read(io->input_brigade, buf, length, read);
-        if (status != APR_SUCCESS || *read > 0) {
+        status = h2_io_bucket_read(io->input_brigade, block,
+                                   on_read_cb, puser, &done);
+        if (status != APR_SUCCESS || done) {
             return status;
         }
         apr_brigade_cleanup(io->input_brigade);
@@ -93,24 +117,34 @@ apr_status_t h2_io_read(h2_io_ctx *io, char *buf, size_t length,
     
     status = ap_get_brigade(io->connection->input_filters,
                         io->input_brigade, AP_MODE_READBYTES,
-                        APR_NONBLOCK_READ, BLOCKSIZE);
+                        block, BLOCKSIZE);
     switch (status) {
         case APR_SUCCESS:
-            return h2_io_bucket_read(io->input_brigade, buf, length, read);
+            return h2_io_bucket_read(io->input_brigade, block,
+                                     on_read_cb, puser, &done);
         case APR_EOF:
             return APR_EOF;
         case APR_EAGAIN:
         case APR_TIMEUP:
-            status = h2_io_bucket_read(io->input_brigade, buf, length, read);
-            if (status == APR_SUCCESS && *read == 0) {
-                return APR_EAGAIN;
-            }
+            status = h2_io_bucket_read(io->input_brigade, block,
+                                       on_read_cb, puser, &done);
             break;
         default:
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
                           "h2_io: error reading");
             break;
     }
+    return status;
+}
+
+apr_status_t h2_io_read_copy(h2_io_ctx *io,
+                             apr_read_type_e block,
+                             char *buf, size_t length,
+                             size_t *read)
+{
+    io_copy_ctx ctx = { buf, length, 0 };
+    apr_status_t status = h2_io_read(io, block, on_read_copy, &ctx);
+    *read = ctx.readlen;
     return status;
 }
 

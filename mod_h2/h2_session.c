@@ -65,32 +65,6 @@ static ssize_t send_cb(nghttp2_session *session,
     return h2_session_status_from_apr_status(status);
 }
 
-static ssize_t recv_cb(nghttp2_session *session,
-                       uint8_t *buf, size_t length,
-                       int flags, void *userp)
-{
-    h2_session *ctx = (h2_session *)userp;
-    size_t read = 0;
-    apr_status_t status = h2_io_read(&ctx->io, (char *)buf,
-                                     length, &read);
-    if (status == APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->connection,
-                      "h2_session: callback recv %d bytes", (int)read);
-        return read;
-    }
-    else if (APR_STATUS_IS_EOF(status)) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, ctx->connection,
-                      "h2_session: callback recv eof");
-        return NGHTTP2_ERR_EOF;
-    }
-    else if (status == APR_EAGAIN || status == APR_TIMEUP) {
-        return NGHTTP2_ERR_WOULDBLOCK;
-    }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, ctx->connection,
-                  "h2_session: callback recv error");
-    return h2_session_status_from_apr_status(status);
-}
-
 static int on_frame_recv_cb(nghttp2_session *session,
                             const nghttp2_frame *frame,
                             void *userp)
@@ -223,7 +197,6 @@ static apr_status_t init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
     }
     
     NGH2_SET_CALLBACK(*pcb, send, send_cb);
-    NGH2_SET_CALLBACK(*pcb, recv, recv_cb);
     NGH2_SET_CALLBACK(*pcb, on_frame_recv, on_frame_recv_cb);
     NGH2_SET_CALLBACK(*pcb, on_invalid_frame_recv, on_invalid_frame_recv_cb);
     NGH2_SET_CALLBACK(*pcb, on_data_chunk_recv, on_data_chunk_recv_cb);
@@ -294,6 +267,31 @@ static apr_status_t h2_session_create(conn_rec *c, h2_session **pctx)
     return APR_SUCCESS;
 }
 
+static apr_status_t session_feed(const char *data, apr_size_t len,
+                                 apr_size_t *readlen, int *done,
+                                 void *puser)
+{
+    h2_session *session = (h2_session *)puser;
+    if (len > 0) {
+        ssize_t n = nghttp2_session_mem_recv(session->session,
+                                             (const uint8_t *)data, len);
+        if (n < 0) {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_EGENERAL,
+                          session->connection,
+                          "h2_session: nghttp2_session_mem_recv error %d",
+                          (int)n);
+            if (nghttp2_is_fatal(n)) {
+                *done = 1;
+                return APR_EGENERAL;
+            }
+        }
+        else {
+            *readlen = n;
+        }
+    }
+    return APR_SUCCESS;
+}
+
 apr_status_t h2_session_serve(conn_rec *c)
 {
     h2_session *h2ng_ctx = NULL;
@@ -315,25 +313,28 @@ apr_status_t h2_session_serve(conn_rec *c)
                       "nghttp2_submit_settings: %s", nghttp2_strerror(rv));
     }
     else {
-        // Receive frames from client
-        char buffer[16 * 1024];
-        size_t length = sizeof(buffer)/sizeof(buffer[0]);
-        size_t read, offset;
-        apr_status_t status;
         int done = 0;
-        
-        while (!done && !nghttp2_is_fatal(rv)) {
-            if (nghttp2_session_want_write(h2ng_ctx->session)) {
+        while (!done) {
+            /* It works like this:
+             * - if our http2 engine has something to write, do it.
+             * - try to read non-blocking and feed the data to the engine
+             * - if there is nothing to write, we switch to blocking reads,
+             *   we are a server after all...
+             */
+            int want_write = nghttp2_session_want_write(h2ng_ctx->session);
+            if (want_write) {
                 rv = nghttp2_session_send(h2ng_ctx->session);
                 if (rv != 0) {
                     ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, c,
                       "h2_session: send error %d", rv);
+                    done = nghttp2_is_fatal(rv);
                 }
             }
             
-            if (read <= offset) {
-                read = offset = 0;
-                status = h2_io_read(&h2ng_ctx->io, buffer, length, &read);
+            if (!done) {
+                status = h2_io_read(&h2ng_ctx->io, want_write?
+                                    APR_NONBLOCK_READ : APR_BLOCK_READ,
+                                    session_feed, h2ng_ctx);
                 switch (status) {
                     case APR_SUCCESS:
                     case APR_EAGAIN:
@@ -346,30 +347,6 @@ apr_status_t h2_session_serve(conn_rec *c)
                                       "h2_session: error reading");
                         done = 1;
                         break;
-                }
-            }
-        
-            if (read > offset) {
-                /*char scratch[256];
-                h2_util_hex_dump(scratch, sizeof(scratch)/sizeof(scratch[0]),
-                                 buffer, read);
-                ap_log_cerror( APLOG_MARK, APLOG_TRACE2, 0, c,
-                              "h2_session: read %d bytes [%s]",
-                              (int)read, scratch);
-                 */
-                ssize_t n = nghttp2_session_mem_recv(h2ng_ctx->session,
-                                                     (const uint8_t *)buffer+offset,
-                                                     read-offset);
-                if (n < 0) {
-                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_EGENERAL, c,
-                        "h2_session: recv error %d", (int)n);
-                    rv = n;
-                }
-                else if (n < read) {
-                    offset += n;
-                }
-                else {
-                    offset = read = 0;
                 }
             }
         }
