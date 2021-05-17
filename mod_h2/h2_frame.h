@@ -14,26 +14,12 @@
  * limitations under the License.
  */
 
+#ifndef __mod_h2__h2_frame__
+#define __mod_h2__h2_frame__
 
-#ifndef __mod_h2__h2_session__
-#define __mod_h2__h2_session__
 
-#include <nghttp2/nghttp2.h>
+apr_status_t h2_frame_to_http(const nghttp2_frame *frame,
+                              const char **pdata,
+                              apr_size_t *pdatalen);
 
-#include "h2_io.h"
-#include "h2_streams.h"
-#include "h2_data_queue.h"
-
-typedef struct h2_session {
-    conn_rec *connection;
-    nghttp2_session *ngh2;
-    h2_io_ctx io;
-    int loglvl;
-    
-    h2_streams streams;
-    h2_data_queue request_data;
-} h2_session;
-
-apr_status_t h2_session_serve(conn_rec *c);
-
-#endif /* defined(__mod_h2__h2_session__) */
+#endif /* defined(__mod_h2__h2_frame__) */

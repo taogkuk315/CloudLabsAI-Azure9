@@ -18,7 +18,7 @@
 #ifndef __mod_h2__h2_stream__
 #define __mod_h2__h2_stream__
 
-#include "h2_stream_input.h"
+#include "h2_data_queue.h"
 
 #define H2_STREAM_ST_IDLE           0
 #define H2_STREAM_ST_OPEN           1
@@ -29,24 +29,22 @@
 #define H2_STREAM_ST_CLOSED         6
 
 
-typedef struct {
+typedef struct h2_stream {
     int id;
     int state;
+    int eoh;
     conn_rec *c;
-    h2_stream_input input;
+    
+    h2_data_queue *request_data;
 } h2_stream;
 
 apr_status_t h2_stream_create(h2_stream **stream, int id, int state,
-                              conn_rec *master);
+                              conn_rec *master,
+                              h2_data_queue *request_data);
 
 apr_status_t h2_stream_destroy(h2_stream *stream);
 
 apr_status_t h2_stream_process(h2_stream *stream);
-
-
-apr_status_t h2_stream_close_input(h2_stream *stream);
-
-apr_status_t h2_stream_close_output(h2_stream *stream);
 
 
 apr_status_t h2_stream_push(h2_stream *stream, const char *data,

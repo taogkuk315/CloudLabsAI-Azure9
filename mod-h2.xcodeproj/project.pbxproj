@@ -1080,6 +1080,12 @@
 		B284ACB71A78E58700C35863 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B284ACB81A78E58700C35863 /* Makefile.am */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B284ACB91A78E58700C35863 /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
+		B284ACBC1A790A0300C35863 /* h2_streams.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_streams.c; sourceTree = "<group>"; };
+		B284ACBD1A790A0300C35863 /* h2_streams.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_streams.h; sourceTree = "<group>"; };
+		B284ACC31A792AC600C35863 /* h2_data_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_data_queue.c; sourceTree = "<group>"; };
+		B284ACC41A792AC600C35863 /* h2_data_queue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_data_queue.h; sourceTree = "<group>"; };
+		B284ACC51A7944F700C35863 /* h2_frame.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_frame.c; sourceTree = "<group>"; };
+		B284ACC61A7944F700C35863 /* h2_frame.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_frame.h; sourceTree = "<group>"; };
 		B2C16D221A778E78000B2297 /* alpn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
 		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
@@ -1154,6 +1160,10 @@
 				B225490E1A6EAE9F004BDEC9 /* h2_config.h */,
 				B22549331A6FBEF1004BDEC9 /* h2_ctx.c */,
 				B22549341A6FBEF1004BDEC9 /* h2_ctx.h */,
+				B284ACC31A792AC600C35863 /* h2_data_queue.c */,
+				B284ACC41A792AC600C35863 /* h2_data_queue.h */,
+				B284ACC51A7944F700C35863 /* h2_frame.c */,
+				B284ACC61A7944F700C35863 /* h2_frame.h */,
 				B225493A1A711985004BDEC9 /* h2_io.c */,
 				B225493B1A711985004BDEC9 /* h2_io.h */,
 				B22549371A6FCE13004BDEC9 /* h2_private.h */,
@@ -1163,6 +1173,8 @@
 				B2C16D2D1A77CAED000B2297 /* h2_stream_input.h */,
 				B2C16D251A779C55000B2297 /* h2_stream.c */,
 				B2C16D261A779C55000B2297 /* h2_stream.h */,
+				B284ACBC1A790A0300C35863 /* h2_streams.c */,
+				B284ACBD1A790A0300C35863 /* h2_streams.h */,
 				B225491E1A6FB8DF004BDEC9 /* h2_tls.c */,
 				B225491F1A6FB8DF004BDEC9 /* h2_tls.h */,
 				B225493C1A713D18004BDEC9 /* h2_util.c */,

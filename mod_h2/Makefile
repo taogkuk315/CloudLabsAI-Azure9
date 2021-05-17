@@ -23,10 +23,13 @@ LIBTOOL = libtool
 
 C_SRC   = h2_config.c \
         h2_ctx.c \
+        h2_data_queue.c \
+        h2_frame.c \
         h2_io.c \
         h2_session.c \
         h2_stream.c \
         h2_stream_input.c \
+        h2_streams.c \
         h2_tls.c \
         h2_util.c \
 
@@ -41,13 +44,13 @@ INCLUDES=-I.
 LIBS    = -L$(INST_DIR)/lib -lnghttp2
 
 # use the following rules in order to build .o files from .c and .cpp files
-.cc.o : *.h
+.cc.o : $(wildcard *.h)
 	$(LIBTOOL) --mode=compile $(CXX) $(CFLAGS) $(INCLUDES) -c $<
 
-.cpp.o : *.h
+.cpp.o : $(wildcard *.h)
 	$(CXX) $(CFLAGS) $(INCLUDES) -c $<
 
-.c.o : *.h
+.c.o : $(wildcard *.h)
 	$(APXS) $(INCLUDES) -o $@ $(INCLUDES) -c $<
 
 all: build

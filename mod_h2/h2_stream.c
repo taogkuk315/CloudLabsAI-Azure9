@@ -84,7 +84,8 @@ static apr_status_t h2_stream_conn_create(conn_rec **pc, conn_rec *master)
 }
 
 apr_status_t h2_stream_create(h2_stream **pstream, int id, int state,
-                              conn_rec *master)
+                              conn_rec *master,
+                              h2_data_queue *request_data)
 {
     conn_rec *c = NULL;
     apr_status_t status = h2_stream_conn_create(&c, master);
@@ -92,7 +93,9 @@ apr_status_t h2_stream_create(h2_stream **pstream, int id, int state,
         h2_stream *stream = apr_pcalloc(c->pool, sizeof(h2_stream));
         stream->id = id;
         stream->state = state;
+        stream->eoh = 0;
         stream->c = c;
+        stream->request_data = request_data;
         
         *pstream = stream;
         return APR_SUCCESS;
@@ -102,7 +105,6 @@ apr_status_t h2_stream_create(h2_stream **pstream, int id, int state,
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
-    h2_stream_input_destroy(&stream->input);
     apr_pool_clear(stream->c->pool);
     return APR_EGENERAL;
 }
@@ -132,51 +134,5 @@ apr_status_t h2_stream_process(h2_stream *stream)
     
     ap_process_connection(stream->c, socket);
     return APR_SUCCESS;
-}
-
-apr_status_t h2_stream_close_input(h2_stream *stream)
-{
-    switch (stream->state) {
-        case H2_STREAM_ST_OPEN:
-            stream->state = H2_STREAM_ST_CLOSED_INPUT;
-            break;
-        case H2_STREAM_ST_CLOSED_OUTPUT:
-            stream->state = H2_STREAM_ST_CLOSED;
-            break;
-        default:
-            /* ignore */
-            break;
-    }
-    return APR_SUCCESS;
-}
-
-apr_status_t h2_stream_close_output(h2_stream *stream)
-{
-    switch (stream->state) {
-        case H2_STREAM_ST_OPEN:
-            stream->state = H2_STREAM_ST_CLOSED_OUTPUT;
-            break;
-        case H2_STREAM_ST_CLOSED_INPUT:
-            stream->state = H2_STREAM_ST_CLOSED;
-            break;
-        default:
-            /* ignore */
-            break;
-    }
-    return APR_SUCCESS;
-}
-
-apr_status_t h2_stream_push(h2_stream *stream, const char *data,
-                            apr_size_t length)
-{
-    return h2_stream_input_push(&stream->input, data, length);
-}
-
-apr_status_t h2_stream_pull(h2_stream *stream, const char *data,
-                            apr_size_t length, int *eos)
-{
-    // TODO
-    *eos = 1;
-    return APR_EOF;
 }
 

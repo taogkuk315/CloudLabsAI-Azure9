@@ -184,3 +184,29 @@ apr_status_t h2_io_write(h2_io_ctx *io, const char *buf, size_t length,
 
     return status;
 }
+
+apr_status_t h2_io_flush(h2_io_ctx *io)
+{
+    /* Append flush.
+     */
+    APR_BRIGADE_INSERT_TAIL(io->output_brigade,
+                            apr_bucket_flush_create(io->output_brigade->bucket_alloc));
+    
+    /* Send it out through installed filters (TLS) to the client */
+    apr_status_t status = ap_pass_brigade(io->connection->output_filters,
+                                          io->output_brigade);
+    apr_brigade_cleanup(io->output_brigade);
+    
+    if (status == APR_SUCCESS
+        || APR_STATUS_IS_ECONNABORTED(status)
+        || APR_STATUS_IS_EPIPE(status)) {
+        /* These are all fine and no reason for concern. Everything else
+         * is interesting. */
+    }
+    else {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
+                      "h2_io: flush error");
+    }
+    
+    return status;
+}

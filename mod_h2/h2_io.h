@@ -45,4 +45,6 @@ apr_status_t h2_io_write(h2_io_ctx *io,
                          size_t length,
                          size_t *written);
 
+apr_status_t h2_io_flush(h2_io_ctx *io);
+
 #endif /* defined(__mod_h2__h2_io__) */
