@@ -23,7 +23,18 @@ extern module AP_MODULE_DECLARE_DATA h2_module;
 
 APLOG_USE_MODULE(h2);
 
-#define PROTO_H2_14     "h2-14"
-#define PROTO_H2C_14    "h2c-14"
+#define PROTO_H2_14          "h2-14"
+#define PROTO_H2C_14         "h2c-14"
+
+#define H2_HEADER_METHOD     ":method"
+#define H2_HEADER_METHOD_LEN 7
+#define H2_HEADER_SCHEME     ":scheme"
+#define H2_HEADER_SCHEME_LEN 7
+#define H2_HEADER_AUTH       ":authority"
+#define H2_HEADER_AUTH_LEN   10
+#define H2_HEADER_PATH       ":path"
+#define H2_HEADER_PATH_LEN   5
+#define H2_CRLF             "\r\n"
+
 
 #endif

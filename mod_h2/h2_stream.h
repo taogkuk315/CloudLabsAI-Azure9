@@ -18,7 +18,8 @@
 #ifndef __mod_h2__h2_stream__
 #define __mod_h2__h2_stream__
 
-#include "h2_data_queue.h"
+#include "h2_bucket.h"
+#include "h2_bucket_queue.h"
 
 #define H2_STREAM_ST_IDLE           0
 #define H2_STREAM_ST_OPEN           1
@@ -30,27 +31,43 @@
 
 
 typedef struct h2_stream {
-    int id;
-    int state;
-    int eoh;
-    conn_rec *c;
+    int id;                  /* http2 stream id */
+    int state;               /* stream state */
+    int eoh;                 /* end of headers seen */
+
+    conn_rec *c;             /* httpd connection for this */
+    h2_bucket_queue *input;  /* http/1.1 input data */
     
-    h2_data_queue *request_data;
+    /* pseudo header values, see ch. 8.1.2.3 */
+    const char *method;
+    const char *path;
+    const char *authority;
+    const char *scheme;
+    
+    h2_bucket *work;
+    
 } h2_stream;
 
 apr_status_t h2_stream_create(h2_stream **stream, int id, int state,
                               conn_rec *master,
-                              h2_data_queue *request_data);
+                              h2_bucket_queue *input);
 
 apr_status_t h2_stream_destroy(h2_stream *stream);
 
 apr_status_t h2_stream_process(h2_stream *stream);
 
+apr_status_t h2_stream_close_input(h2_stream *stream);
+apr_status_t h2_stream_close_output(h2_stream *stream);
 
-apr_status_t h2_stream_push(h2_stream *stream, const char *data,
-                            apr_size_t length);
-apr_status_t h2_stream_pull(h2_stream *stream, const char *data,
-                            apr_size_t length, int *eos);
+apr_status_t h2_stream_push(h2_stream *stream);
 
+apr_status_t h2_stream_add_header(h2_stream *stream,
+                                  const char *name, size_t nlen,
+                                  const char *value, size_t vlen);
+
+apr_status_t h2_stream_add_data(h2_stream *stream,
+                                const char *data, size_t len);
+
+apr_status_t h2_stream_end_headers(h2_stream *stream);
 
 #endif /* defined(__mod_h2__h2_stream__) */

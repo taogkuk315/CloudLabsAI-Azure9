@@ -17,9 +17,13 @@
 #ifndef __mod_h2__h2_frame__
 #define __mod_h2__h2_frame__
 
+#include "h2_bucket.h"
 
-apr_status_t h2_frame_to_http(const nghttp2_frame *frame,
-                              const char **pdata,
-                              apr_size_t *pdatalen);
+apr_status_t h2_frame_req_add_start(h2_bucket *bucket,
+                                    const char *method, const char *path);
+
+apr_status_t h2_frame_req_add_header(h2_bucket *bucket,
+                                     const char *name, size_t nlen,
+                                     const char *value, size_t vlen);
 
 #endif /* defined(__mod_h2__h2_frame__) */

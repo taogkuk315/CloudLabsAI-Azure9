@@ -22,23 +22,21 @@
 #include <http_connection.h>
 
 #include "h2_private.h"
-#include "h2_data_queue.h"
+#include "h2_bucket.h"
+#include "h2_bucket_queue.h"
 
 typedef struct h2_qdata {
     struct h2_qdata *next;
     struct h2_qdata *prev;
     void *puser;
-    const char *data;
-    apr_size_t datalen;
+    h2_bucket *bucket;
 } h2_qdata;
 
-apr_status_t h2_data_queue_init(h2_data_queue *q, apr_pool_t *pool,
-                                h2_data_free_func *ff)
+apr_status_t h2_bucket_queue_init(h2_bucket_queue *q, apr_pool_t *pool)
 {
     apr_status_t status = APR_SUCCESS;
     
     q->pool = pool;
-    q->free_func = ff;
     q->first = q->last = q->free = NULL;
     
     status = apr_thread_mutex_create(&q->lock, APR_THREAD_MUTEX_DEFAULT,
@@ -50,7 +48,7 @@ apr_status_t h2_data_queue_init(h2_data_queue *q, apr_pool_t *pool,
     return status;
 }
 
-void h2_data_queue_destroy(h2_data_queue *q)
+void h2_bucket_queue_destroy(h2_bucket_queue *q)
 {
     if (q->lock) {
         apr_thread_mutex_destroy(q->lock);
@@ -59,19 +57,17 @@ void h2_data_queue_destroy(h2_data_queue *q)
         apr_thread_cond_destroy(q->has_data);
     }
     
-    if (q->free_func) {
-        q->last = NULL;
-        while (q->first) {
-            h2_qdata *qdata = q->first;
-            q->first = qdata->next;
-            if (qdata->data) {
-                q->free_func((void*)qdata->data);
-            }
+    q->last = NULL;
+    while (q->first) {
+        h2_qdata *qdata = q->first;
+        q->first = qdata->next;
+        if (qdata->bucket) {
+            h2_bucket_destroy(qdata->bucket);
         }
     }
 }
 
-void h2_data_queue_term(h2_data_queue *q)
+void h2_bucket_queue_term(h2_bucket_queue *q)
 {
     apr_status_t status = apr_thread_mutex_lock(q->lock);
     if (status == APR_SUCCESS) {
@@ -81,7 +77,7 @@ void h2_data_queue_term(h2_data_queue *q)
     }
 }
 
-static void queue_unlink(h2_data_queue *q, h2_qdata *qdata) {
+static void queue_unlink(h2_bucket_queue *q, h2_qdata *qdata) {
     if (q->first == qdata) {
         /* at the head */
         q->first = qdata->next;
@@ -112,7 +108,7 @@ static void queue_unlink(h2_data_queue *q, h2_qdata *qdata) {
     qdata->next = qdata->prev = NULL;
 }
 
-static h2_qdata *find_first_for(h2_data_queue *q, void *user)
+static h2_qdata *find_first_for(h2_bucket_queue *q, void *user)
 {
     for (h2_qdata *qdata = q->first; qdata; qdata = qdata->next) {
         if (!user || user == qdata->puser) {
@@ -122,10 +118,10 @@ static h2_qdata *find_first_for(h2_data_queue *q, void *user)
     return NULL;
 }
 
-apr_status_t h2_data_queue_user_pop_int(h2_data_queue *q,
+apr_status_t h2_bucket_queue_user_pop_int(h2_bucket_queue *q,
                                         apr_read_type_e block,
                                         void *user,
-                                        const char **data, apr_size_t *datalen,
+                                        h2_bucket **pbucket,
                                         void **puser)
 {
     apr_status_t status = apr_thread_mutex_lock(q->lock);
@@ -140,8 +136,7 @@ apr_status_t h2_data_queue_user_pop_int(h2_data_queue *q,
     }
     
     if (qdata) {
-        *data = qdata->data;
-        *datalen = qdata->datalen;
+        *pbucket = qdata->bucket;
         *puser = qdata->puser;
         
         queue_unlink(q, qdata);
@@ -160,24 +155,21 @@ apr_status_t h2_data_queue_user_pop_int(h2_data_queue *q,
     return status;
 }
 
-apr_status_t h2_data_queue_user_pop(h2_data_queue *q, apr_read_type_e block,
-                                    void *user,
-                                    const char **data, apr_size_t *datalen)
+apr_status_t h2_bucket_queue_user_pop(h2_bucket_queue *q, apr_read_type_e block,
+                                    void *user, h2_bucket **pbucket)
 {
     void *dummy;
-    return h2_data_queue_user_pop_int(q, block, user, data, datalen, &dummy);
+    return h2_bucket_queue_user_pop_int(q, block, user, pbucket, &dummy);
 }
 
-apr_status_t h2_data_queue_pop(h2_data_queue *q, apr_read_type_e block,
-                               const char **data, apr_size_t *datalen,
-                               void **puser)
+apr_status_t h2_bucket_queue_pop(h2_bucket_queue *q, apr_read_type_e block,
+                               h2_bucket **pbucket, void **puser)
 {
-    return h2_data_queue_user_pop_int(q, block, NULL, data, datalen, puser);
+    return h2_bucket_queue_user_pop_int(q, block, NULL, pbucket, puser);
 }
 
-apr_status_t h2_data_queue_push(h2_data_queue *q, 
-                               const char *data, apr_size_t datalen,
-                               void *puser)
+apr_status_t h2_bucket_queue_push(h2_bucket_queue *q, 
+                               h2_bucket *bucket, void *puser)
 {
     apr_status_t status = apr_thread_mutex_lock(q->lock);
     if (status != APR_SUCCESS) {
@@ -197,8 +189,7 @@ apr_status_t h2_data_queue_push(h2_data_queue *q,
             qdata = apr_pcalloc(q->pool, sizeof(h2_qdata));
         }
         
-        qdata->data = data;
-        qdata->datalen = datalen;
+        qdata->bucket = bucket;
         qdata->puser = puser;
         
         if (q->last) {

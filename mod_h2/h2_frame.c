@@ -22,52 +22,44 @@
 #include <http_log.h>
 
 #include "h2_private.h"
+#include "h2_bucket.h"
 #include "h2_frame.h"
 
+#define HTTP_RLINE_SUFFIX       " HTTP/1.1\r\n"
+#define HTTP_RLINE_SUFFIX_LEN   11
 
-apr_status_t h2_frame_to_http(const nghttp2_frame *frame,
-                              const char **pdata,
-                              apr_size_t *pdatalen)
+apr_status_t h2_frame_req_add_start(h2_bucket *bucket,
+                                    const char *method, const char *path)
 {
-    *pdata = NULL;
-    *pdatalen = 0;
-    
-    if (frame->hd.type == NGHTTP2_HEADERS) {
-        /* Count all header name/value pairs lengths, add 4 for each pair
-         * for separator ': ' and CRLF.
-         * There is possibly a final CRLF, plus we have to add ' HTTP/1.1' to
-         * the status line.
-         */
-        apr_size_t len = 2 + 9;
-        for (int i = 0; i < frame->headers.nvlen; ++i) {
-            nghttp2_nv *nv = frame->headers.nva+i;
-            len += nv->namelen + 2 + nv->valuelen + 2;
-        }
-        char *data = calloc(len, sizeof(char));
-        if (data == NULL) {
-            return APR_ENOMEM;
-        }
+    size_t mlen = strlen(method);
+    size_t plen = strlen(path);
+    size_t total = mlen + 1 + plen + HTTP_RLINE_SUFFIX_LEN;
+    if (!h2_bucket_has_free(bucket, total)) {
+        return APR_ENAMETOOLONG;
     }
-    else if (frame->hd.type == NGHTTP2_HEADERS) {
-        /* Count all header name/value pairs lengths, add 4 for each pair
-         * for separator ': ' and CRLF and a possible, final CRLF.
-         */
-        apr_size_t len = 2;
-        for (int i = 0; i < frame->headers.nvlen; ++i) {
-            nghttp2_nv *nv = frame->headers.nva+i;
-            len += nv->namelen + 2 + nv->valuelen + 2;
-        }
-        char *data = calloc(len, sizeof(char));
-        if (data == NULL) {
-            return APR_ENOMEM;
-        }
-    }
-    else if (frame->hd.type == NGHTTP2_DATA) {
-        // TODO
-    }
-    else {
-        /* ingored */
-    }
-    
+    h2_bucket_append(bucket, method, mlen);
+    h2_bucket_append(bucket, " ", 1);
+    h2_bucket_append(bucket, path, plen);
+    h2_bucket_append(bucket, HTTP_RLINE_SUFFIX, HTTP_RLINE_SUFFIX_LEN);
     return APR_SUCCESS;
 }
+
+apr_status_t h2_frame_req_add_header(h2_bucket *bucket,
+                                     const char *name, size_t nlen,
+                                     const char *value, size_t vlen)
+{
+    if (nlen > 0) {
+        size_t total = nlen + vlen + 4;
+        if (!h2_bucket_has_free(bucket, total)) {
+            return APR_ENAMETOOLONG;
+        }
+        h2_bucket_append(bucket, name, nlen);
+        h2_bucket_append(bucket, ": ", 2);
+        if (vlen > 0) {
+            h2_bucket_append(bucket, value, vlen);
+        }
+        h2_bucket_append(bucket, "\r\n", 2);
+    }
+    return APR_SUCCESS;
+}
+

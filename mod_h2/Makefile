@@ -21,9 +21,11 @@ INST_DIR     = ../gen/install
 APXS    = $(INST_DIR)/bin/apxs
 LIBTOOL = libtool
 
-C_SRC   = h2_config.c \
+C_SRC   = \
+        h2_bucket.c \
+        h2_bucket_queue.c \
+        h2_config.c \
         h2_ctx.c \
-        h2_data_queue.c \
         h2_frame.c \
         h2_io.c \
         h2_session.c \

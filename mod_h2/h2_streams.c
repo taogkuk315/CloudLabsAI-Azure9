@@ -57,7 +57,7 @@ static int get_stream_index(h2_streams *streams, int stream_id)
 apr_status_t h2_streams_stream_create(h2_streams *streams,
                                       h2_stream **stream,
                                       int stream_id,
-                                      h2_data_queue *request_data)
+                                      h2_bucket_queue *request_data)
 {
     int index = get_stream_index(streams, stream_id);
     if (index >= 0) {

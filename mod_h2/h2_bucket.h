@@ -13,27 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef __mod_h2__h2_streams__
-#define __mod_h2__h2_streams__
 
-#include "h2_bucket_queue.h"
 
-typedef struct h2_streams {
-    conn_rec *c;
-    apr_size_t max;
-    struct h2_stream **streams;
-} h2_streams;
+#ifndef __mod_h2__h2_bucket__
+#define __mod_h2__h2_bucket__
 
-apr_status_t h2_streams_init(h2_streams *streams, int max_streams,
-                             conn_rec *c);
+struct h2_bucket;
 
-apr_status_t h2_streams_stream_create(h2_streams *streams,
-                                      struct h2_stream **stream,
-                                      int stream_id,
-                                      h2_bucket_queue *request_data);
+typedef void h2_bucket_free_func(struct h2_bucket *bucket);
 
-apr_status_t h2_streams_stream_destroy(h2_streams *streams, int stream_id);
+typedef struct h2_bucket {
+    char *data;
+    apr_size_t data_len;
+    apr_size_t data_size;
+    h2_bucket_free_func *free_bucket;
+} h2_bucket;
 
-struct h2_stream *h2_streams_get(h2_streams *streams, int stream_id);
+h2_bucket *h2_bucket_alloc(apr_size_t data_size);
+void h2_bucket_destroy(h2_bucket *bucket);
 
-#endif /* defined(__mod_h2__h2_streams__) */
+apr_size_t h2_bucket_append(h2_bucket *bucket,
+                            const char *data, apr_size_t len);
+apr_size_t h2_bucket_cat(h2_bucket *bucket, const char *s);
+
+int h2_bucket_has_free(h2_bucket *bucket, size_t bytes);
+
+
+#endif /* defined(__mod_h2__h2_bucket__) */

@@ -22,16 +22,16 @@
 
 #include "h2_io.h"
 #include "h2_streams.h"
-#include "h2_data_queue.h"
+#include "h2_bucket_queue.h"
 
 typedef struct h2_session {
-    conn_rec *connection;
+    conn_rec *c;
     nghttp2_session *ngh2;
     h2_io_ctx io;
     int loglvl;
     
     h2_streams streams;
-    h2_data_queue request_data;
+    h2_bucket_queue request_data;
 } h2_session;
 
 apr_status_t h2_session_serve(conn_rec *c);

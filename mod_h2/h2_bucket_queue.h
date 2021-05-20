@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_data_queue__
-#define __mod_h2__h2_data_queue__
+#ifndef __mod_h2__h2_bucket_queue__
+#define __mod_h2__h2_bucket_queue__
 
 #include <apr_thread_mutex.h>
 #include <apr_thread_cond.h>
 
-typedef void h2_data_free_func(void *);
+#include "h2_bucket.h"
 
-typedef struct h2_data_queue {
+typedef struct h2_bucket_queue {
     apr_pool_t *pool;
     struct h2_qdata *first;
     struct h2_qdata *last;
@@ -31,25 +31,19 @@ typedef struct h2_data_queue {
     apr_thread_mutex_t *lock;
     apr_thread_cond_t *has_data;
     int terminated;
-    
-    h2_data_free_func *free_func;
-} h2_data_queue;
+} h2_bucket_queue;
 
-apr_status_t h2_data_queue_init(h2_data_queue *q, apr_pool_t *pool,
-                                h2_data_free_func *ff);
+apr_status_t h2_bucket_queue_init(h2_bucket_queue *q, apr_pool_t *pool);
 
-void h2_data_queue_term(h2_data_queue *q);
+void h2_bucket_queue_term(h2_bucket_queue *q);
 
-apr_status_t h2_data_queue_pop(h2_data_queue *q, apr_read_type_e block,
-                               const char **data, apr_size_t *datalen,
-                               void **puser);
+apr_status_t h2_bucket_queue_push(h2_bucket_queue *q, h2_bucket *bucket,
+                                  void *puser);
 
-apr_status_t h2_data_queue_push(h2_data_queue *q, 
-                                const char *data, apr_size_t datalen,
-                                void *puser);
+apr_status_t h2_bucket_queue_pop(h2_bucket_queue *q, apr_read_type_e block,
+                                 h2_bucket **pbucket, void **puser);
 
-apr_status_t h2_data_queue_user_pop(h2_data_queue *q, apr_read_type_e block,
-                                    void *user,
-                                    const char **data, apr_size_t *datalen);
+apr_status_t h2_bucket_queue_user_pop(h2_bucket_queue *q, apr_read_type_e block,
+                                      void *user, h2_bucket **pbucket);
 
-#endif /* defined(__mod_h2__h2_data_queue__) */
+#endif /* defined(__mod_h2__h2_bucket_queue__) */
