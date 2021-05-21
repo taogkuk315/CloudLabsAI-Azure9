@@ -19,21 +19,22 @@
 #include "h2_bucket_queue.h"
 
 typedef struct h2_streams {
-    conn_rec *c;
+    struct h2_session *session;
     apr_size_t max;
     struct h2_stream **streams;
 } h2_streams;
 
 apr_status_t h2_streams_init(h2_streams *streams, int max_streams,
-                             conn_rec *c);
+                             struct h2_session *session);
 
 apr_status_t h2_streams_stream_create(h2_streams *streams,
                                       struct h2_stream **stream,
-                                      int stream_id,
-                                      h2_bucket_queue *request_data);
+                                      int stream_id);
 
 apr_status_t h2_streams_stream_destroy(h2_streams *streams, int stream_id);
 
 struct h2_stream *h2_streams_get(h2_streams *streams, int stream_id);
+
+apr_status_t h2_streams_stream_schedule(h2_streams *streams, int stream_id);
 
 #endif /* defined(__mod_h2__h2_streams__) */

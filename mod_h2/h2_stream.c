@@ -26,83 +26,26 @@
 #include <nghttp2/nghttp2.h>
 
 #include "h2_private.h"
-#include "h2_frame.h"
+#include "h2_session.h"
 #include "h2_stream.h"
+#include "h2_stream_task.h"
+#include "h2_ctx.h"
+#include "h2_frame.h"
+#include "h2_stream_input.h"
 
-static apr_sockaddr_t *h2_sockaddr_dup(apr_sockaddr_t *in, apr_pool_t *pool)
+
+apr_status_t h2_stream_create(h2_stream **pstream,
+                              int id, int state,
+                              h2_session *session)
 {
-    apr_sockaddr_t *out = apr_pcalloc(pool, sizeof(apr_sockaddr_t));
-    memcpy(out, in, sizeof(apr_sockaddr_t));
-    out->pool = pool;
+    h2_stream *stream = apr_pcalloc(session->c->pool, sizeof(h2_stream));
+    stream->id = id;
+    stream->state = state;
+    stream->eoh = 0;
+    stream->session = session;
     
-    if (in->hostname != NULL) {
-        out->hostname = apr_pstrdup(pool, in->hostname);
-    }
-    if (in->servname != NULL) {
-        out->servname = apr_pstrdup(pool, in->servname);
-    }
-    if (in->ipaddr_ptr != NULL) {
-        // ipaddr_ptr points inside the struct, towards the bits containing
-        // the actual IPv4/IPv6 address (e.g. to ->sa.sin.sin_addr or
-        // ->sa.sin6.sin6_addr). We point to the same offset in 'out' as was used
-        // in 'in'.
-        ptrdiff_t offset = (char *)in->ipaddr_ptr - (char *)in;
-        out->ipaddr_ptr = (char *)out + offset;
-    }
-    if (in->next != NULL) {
-        out->next = h2_sockaddr_dup(in->next, pool);
-    }
-    
-    return out;
-}
-
-static apr_status_t h2_stream_conn_create(conn_rec **pc, conn_rec *master)
-{
-    apr_pool_t *spool = NULL;
-    apr_status_t status = apr_pool_create(&spool, master->pool);
-    if (status == APR_SUCCESS) {
-        /* Setup a apache connection record for this stream.
-         * Most of the know how borrowed from mod_spdy::slave_connection.cc
-         */
-        conn_rec *c = apr_pcalloc(spool, sizeof(conn_rec));
-        
-        c->pool = spool;
-        c->bucket_alloc = apr_bucket_alloc_create(spool);
-        c->conn_config = ap_create_conn_config(spool);
-        c->notes = apr_table_make(spool, 5);
-        
-        c->base_server = master->base_server;
-        c->local_addr = h2_sockaddr_dup(master->local_addr, spool);
-        c->local_ip = apr_pstrdup(spool, master->local_ip);
-        c->client_addr = h2_sockaddr_dup(master->client_addr, spool);
-        c->client_ip = apr_pstrdup(spool, master->client_ip);
-        
-        c->id = master->id; // FIXME: this will not do
-        
-        *pc = c;
-        return APR_SUCCESS;
-    }
-    return status;
-}
-
-apr_status_t h2_stream_create(h2_stream **pstream, int id, int state,
-                              conn_rec *master,
-                              h2_bucket_queue *input)
-{
-    conn_rec *c = NULL;
-    apr_status_t status = h2_stream_conn_create(&c, master);
-    if (status == APR_SUCCESS) {
-        h2_stream *stream = apr_pcalloc(c->pool, sizeof(h2_stream));
-        stream->id = id;
-        stream->state = state;
-        stream->eoh = 0;
-        stream->c = c;
-        stream->input = input;
-        
-        *pstream = stream;
-        return APR_SUCCESS;
-    }
-    return status;
+    *pstream = stream;
+    return APR_SUCCESS;
 }
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
@@ -111,34 +54,7 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
         h2_bucket_destroy(stream->work);
         stream->work = NULL;
     }
-    apr_pool_clear(stream->c->pool);
-    return APR_EGENERAL;
-}
-
-apr_status_t h2_stream_process(h2_stream *stream)
-{
-    apr_status_t status;
-    
-    /* The juicy bit here is to guess a new connection id, as it
-     * needs to be unique in this httpd instance, but there is
-     * no API to allocate one.
-     */
-    // FIXME: this will not do
-    
-    /* Furthermore, other code might want to see the socket for
-     * this connection. Allocate one without further function...
-     */
-    apr_socket_t *socket = NULL;
-    status = apr_socket_create(&socket,
-                               APR_INET, SOCK_STREAM,
-                               APR_PROTO_TCP, stream->c->pool);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, stream->c,
-                      "h2_stream_process, unable to alloc socket");
-        return status;
-    }
-    
-    ap_process_connection(stream->c, socket);
+    stream->session = NULL;
     return APR_SUCCESS;
 }
 
@@ -155,17 +71,26 @@ static apr_status_t h2_stream_check_work(h2_stream *stream)
 
 apr_status_t h2_stream_push(h2_stream *stream)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
                   "h2_stream(%d): pushing req data %s",
                   stream->id, stream->work->data);
     
-    apr_status_t status = h2_bucket_queue_push(stream->input, stream->work,
-                                               stream);
+    apr_status_t status = h2_bucket_queue_push(&stream->session->request_data,
+                                               stream->work, stream->id);
     if (status == APR_SUCCESS) {
         stream->work = NULL;
     }
     return status;
 }
+
+apr_status_t h2_stream_push_eos(h2_stream *stream)
+{
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
+                  "h2_stream(%d): pushing eos", stream->id);
+    
+    return h2_bucket_queue_push_eos(&stream->session->request_data, stream->id);
+}
+
 
 apr_status_t h2_stream_end_headers(h2_stream *stream)
 {
@@ -183,7 +108,7 @@ apr_status_t h2_stream_end_headers(h2_stream *stream)
         h2_bucket_cat(stream->work, "\r\n");
         status = h2_stream_push(stream);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, stream->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, stream->session->c,
                   "h2_stream(%d): headers done", stream->id);
     return status;
 }
@@ -207,7 +132,10 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
     if (stream->work) {
         status = h2_stream_push(stream);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, stream->c,
+    if (status == APR_SUCCESS) {
+        status = h2_stream_push_eos(stream);
+    }
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, stream->session->c,
                   "h2_stream(%d): stream input closed", stream->id);
     return status;
 }
@@ -243,7 +171,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
     if (name[0] == ':') {
         /* pseudo header, see ch. 8.1.2.3, always should come first */
         if (stream->work) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->c,
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
                           "h2_stream(%d): pseudo header after request start",
                           stream->id);
             return APR_EGENERAL;
@@ -253,32 +181,32 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
             char buffer[32];
             memset(buffer, 0, 32);
             strncpy(buffer, name, (nlen > 31)? 31 : nlen);
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->c,
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
                           "h2_stream(%d): pseudo header without value %s",
                           stream->id, buffer);
             status = APR_EGENERAL;
         }
         else if (H2_HEADER_METHOD_LEN == nlen
                  && !strncmp(H2_HEADER_METHOD, name, nlen)) {
-            stream->method = apr_pstrndup(stream->c->pool, value, vlen);
+            stream->method = apr_pstrndup(stream->session->c->pool, value, vlen);
         }
         else if (H2_HEADER_SCHEME_LEN == nlen
                  && !strncmp(H2_HEADER_SCHEME, name, nlen)) {
-            stream->scheme = apr_pstrndup(stream->c->pool, value, vlen);
+            stream->scheme = apr_pstrndup(stream->session->c->pool, value, vlen);
         }
         else if (H2_HEADER_PATH_LEN == nlen
                  && !strncmp(H2_HEADER_PATH, name, nlen)) {
-            stream->path = apr_pstrndup(stream->c->pool, value, vlen);
+            stream->path = apr_pstrndup(stream->session->c->pool, value, vlen);
         }
         else if (H2_HEADER_AUTH_LEN == nlen
                  && !strncmp(H2_HEADER_AUTH, name, nlen)) {
-            stream->authority = apr_pstrndup(stream->c->pool, value, vlen);
+            stream->authority = apr_pstrndup(stream->session->c->pool, value, vlen);
         }
         else {
             char buffer[32];
             memset(buffer, 0, 32);
             strncpy(buffer, name, (nlen > 31)? 31 : nlen);
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, stream->c,
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, stream->session->c,
                           "h2_stream(%d): ignoring unknown pseudo header %s",
                           stream->id, buffer);
         }
@@ -290,13 +218,13 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
              * we should have all mandatory pseudo headers now.
              */
             if (!stream->method) {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->c,
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
                               "h2_stream(%d): header start but :method missing",
                               stream->id);
                 return APR_EGENERAL;
             }
             if (!stream->path) {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->c,
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
                               "h2_stream(%d): header start but :path missing",
                               stream->id);
                 return APR_EGENERAL;
@@ -308,6 +236,12 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
             }
             status = h2_frame_req_add_start(stream->work,
                                             stream->method, stream->path);
+            if (status == APR_SUCCESS && stream->authority) {
+                status = h2_frame_req_add_header(stream->work,
+                                                 "Host", 4,
+                                                 stream->authority,
+                                                 strlen(stream->authority));
+            }
         }
         
         if (status == APR_SUCCESS) {

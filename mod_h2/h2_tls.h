@@ -21,23 +21,25 @@
 /**
  * One time, post config intialization.
  */
-void h2_tls_init(apr_pool_t *pool, server_rec *s);
+apr_status_t h2_tls_init(apr_pool_t *pool, server_rec *s);
 
 /**
  * Once per child process initialization.
  */
-void h2_tls_child_init(apr_pool_t *pool, server_rec *s);
+apr_status_t h2_tls_child_init(apr_pool_t *pool, server_rec *s);
 
 /**
  * hooks for processing incoming connections.
  */
 int h2_tls_pre_conn(conn_rec* c, void *arg);
 int h2_tls_process_conn(conn_rec* c);
+int h2_tls_stream_pre_conn(conn_rec* c, void *arg);
 
 /**
  * Is the connection a TLS connection?
  */
 int h2_tls_is_tls(conn_rec *c);
+
 
 
 #endif /* defined(__mod_h2__h2_tls__) */

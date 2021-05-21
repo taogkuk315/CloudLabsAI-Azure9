@@ -29,15 +29,14 @@
 #define H2_STREAM_ST_CLOSED_OUTPUT  5
 #define H2_STREAM_ST_CLOSED         6
 
-
 typedef struct h2_stream {
     int id;                  /* http2 stream id */
     int state;               /* stream state */
     int eoh;                 /* end of headers seen */
+    int aborted;             /* was aborted */
 
-    conn_rec *c;             /* httpd connection for this */
-    h2_bucket_queue *input;  /* http/1.1 input data */
-    
+    struct h2_session *session;
+
     /* pseudo header values, see ch. 8.1.2.3 */
     const char *method;
     const char *path;
@@ -45,16 +44,13 @@ typedef struct h2_stream {
     const char *scheme;
     
     h2_bucket *work;
-    
 } h2_stream;
 
-apr_status_t h2_stream_create(h2_stream **stream, int id, int state,
-                              conn_rec *master,
-                              h2_bucket_queue *input);
+apr_status_t h2_stream_create(h2_stream **pstream,
+                              int id, int state,
+                              struct h2_session *session);
 
 apr_status_t h2_stream_destroy(h2_stream *stream);
-
-apr_status_t h2_stream_process(h2_stream *stream);
 
 apr_status_t h2_stream_close_input(h2_stream *stream);
 apr_status_t h2_stream_close_output(h2_stream *stream);

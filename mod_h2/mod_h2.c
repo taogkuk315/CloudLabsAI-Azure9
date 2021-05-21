@@ -31,6 +31,9 @@
 
 #include "mod_h2.h"
 
+#include "h2_stream.h"
+#include "h2_stream_task.h"
+#include "h2_session.h"
 #include "h2_config.h"
 #include "h2_ctx.h"
 #include "h2_tls.h"
@@ -77,9 +80,12 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, se
     }
     ap_log_error( APLOG_MARK, APLOG_INFO, 0, s, "initializing post config for real");
     
-    h2_tls_init( p, s );
+    apr_status_t status = h2_tls_init(p, s);
+    if (status == APR_SUCCESS) {
+        status = h2_session_init(p, s);
+    }
     
-    return APR_SUCCESS;
+    return status;
 }
 
 /* Runs once per created child process. Perform any process related initionalization here.
@@ -105,30 +111,38 @@ static void h2_hooks(apr_pool_t *pool)
 {
     ap_log_perror(APLOG_MARK, APLOG_INFO, 0, pool, "installing hooks");
     
-    static const char *const pred[] = { "mod_ssl.c", NULL};
-    static const char *const succ[] = { "core.c", NULL};
+    static const char *const mod_ssl[] = { "mod_ssl.c", NULL};
+    static const char *const more_core[] = { "core.c", NULL};
     
     /* Run once after configuration is set, but before mpm children initialize.
      */
-    ap_hook_post_config(h2_post_config, pred, NULL, APR_HOOK_MIDDLE);
+    ap_hook_post_config(h2_post_config, mod_ssl, NULL, APR_HOOK_MIDDLE);
     
     /* Run once after a child process has been created.
      */
     ap_hook_child_init(h2_child_init, NULL, NULL, APR_HOOK_MIDDLE);
+
+    h2_stream_hooks_init();
     
-    /* When httpd accepts a connection, but before processing it:
-     * a) on a master connection, we need to check if TLS is used and, if so, 
-     *    add our ALPN registration to mod_ssl.
-     * b) on a slave connection, whose master is using h2*, we need to prevent
-     *    httpd core from inserting its filters, since we handle this ourself.
+    /* This hook runs on new connections before mod_ssl has a say.
+     * Its purpose is to prevent mod_ssl from touching our pseudo-connections
+     * for streams.
      */
-    ap_hook_pre_connection(h2_tls_pre_conn, pred, succ, APR_HOOK_LAST);
+    ap_hook_pre_connection(h2_tls_stream_pre_conn,
+                           NULL, mod_ssl, APR_HOOK_FIRST);
+   
+    /* This hook runs on new connection after mod_ssl, but before the core
+     * httpd. Its purpose is to register, if TLS is used, the ALPN callbacks
+     * that enable us to chose "h2" as next procotol if the client supports it.
+     */
+    ap_hook_pre_connection(h2_tls_pre_conn, mod_ssl, more_core, APR_HOOK_LAST);
     
     /* When the connection processing actually starts, we might to
      * take over, if h2* was selected by ALPN on a TLS connection.
      */
     ap_hook_process_connection(h2_tls_process_conn, NULL, NULL, APR_HOOK_FIRST);
     
+
     /* We offer a function to other modules that lets them retrieve
      * the h2 protocol used on a connection (if any).
      */

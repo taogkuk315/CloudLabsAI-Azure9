@@ -553,6 +553,8 @@
 		B2254B671A724AE4004BDEC9 /* Makefile.am */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2254B681A724AE4004BDEC9 /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
 		B2254B691A724AE4004BDEC9 /* nghttp2-0.7.1.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "nghttp2-0.7.1.tar.gz"; sourceTree = "<group>"; };
+		B2546D881A7F71F80033A875 /* h2_stream_task.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream_task.c; sourceTree = "<group>"; };
+		B2546D891A7F71F80033A875 /* h2_stream_task.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream_task.h; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27BBD2E1A65927E00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = httpd/Makefile; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = "<none>"; };
 		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
@@ -1088,11 +1090,11 @@
 		B284ACC61A7944F700C35863 /* h2_frame.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_frame.h; sourceTree = "<group>"; };
 		B284ACC71A7A605200C35863 /* h2_bucket.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_bucket.c; sourceTree = "<group>"; };
 		B284ACC81A7A605200C35863 /* h2_bucket.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_bucket.h; sourceTree = "<group>"; };
+		B284ACC91A7B9DF900C35863 /* h2_stream_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream_input.c; sourceTree = "<group>"; };
+		B284ACCA1A7B9DF900C35863 /* h2_stream_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream_input.h; sourceTree = "<group>"; };
 		B2C16D221A778E78000B2297 /* alpn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
 		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
-		B2C16D2C1A77CAED000B2297 /* h2_stream_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream_input.c; sourceTree = "<group>"; };
-		B2C16D2D1A77CAED000B2297 /* h2_stream_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream_input.h; sourceTree = "<group>"; };
 		B2D05D421A6D11C0004DF5C0 /* config.m4 */ = {isa = PBXFileReference; lastKnownFileType = text; path = config.m4; sourceTree = "<group>"; };
 		B2D05D431A6D11C0004DF5C0 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2D05D441A6D11C0004DF5C0 /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
@@ -1173,8 +1175,10 @@
 				B22549371A6FCE13004BDEC9 /* h2_private.h */,
 				B22549381A710329004BDEC9 /* h2_session.c */,
 				B22549391A710329004BDEC9 /* h2_session.h */,
-				B2C16D2C1A77CAED000B2297 /* h2_stream_input.c */,
-				B2C16D2D1A77CAED000B2297 /* h2_stream_input.h */,
+				B284ACC91A7B9DF900C35863 /* h2_stream_input.c */,
+				B284ACCA1A7B9DF900C35863 /* h2_stream_input.h */,
+				B2546D881A7F71F80033A875 /* h2_stream_task.c */,
+				B2546D891A7F71F80033A875 /* h2_stream_task.h */,
 				B2C16D251A779C55000B2297 /* h2_stream.c */,
 				B2C16D261A779C55000B2297 /* h2_stream.h */,
 				B284ACBC1A790A0300C35863 /* h2_streams.c */,
@@ -2840,11 +2844,33 @@
 		};
 /* End PBXGroup section */
 
+/* Begin PBXLegacyTarget section */
+		B2546D8A1A7F76FA0033A875 /* mod_h2 make */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "$(ACTION)";
+			buildConfigurationList = B2546D8B1A7F76FA0033A875 /* Build configuration list for PBXLegacyTarget "mod_h2 make" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = "/Users/sei/projects/mod-h2/mod_h2";
+			dependencies = (
+			);
+			name = "mod_h2 make";
+			passBuildSettingsInEnvironment = 1;
+			productName = "mod_h2 make";
+		};
+/* End PBXLegacyTarget section */
+
 /* Begin PBXProject section */
 		B27BBD201A65757700C58A41 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				LastUpgradeCheck = 0600;
+				TargetAttributes = {
+					B2546D8A1A7F76FA0033A875 = {
+						CreatedOnToolsVersion = 6.0;
+					};
+				};
 			};
 			buildConfigurationList = B27BBD231A65757700C58A41 /* Build configuration list for PBXProject "mod-h2" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -2857,26 +2883,121 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				B2546D8A1A7F76FA0033A875 /* mod_h2 make */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin XCBuildConfiguration section */
+		B2546D8C1A7F76FA0033A875 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUGGING_SYMBOLS = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		B2546D8D1A7F76FA0033A875 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
 		B27BBD241A65757700C58A41 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BuildMake = "";
+				MACOSX_DEPLOYMENT_TARGET = 10.9;
 			};
 			name = Debug;
 		};
 		B27BBD251A65757700C58A41 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BuildMake = "";
+				MACOSX_DEPLOYMENT_TARGET = 10.9;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B2546D8B1A7F76FA0033A875 /* Build configuration list for PBXLegacyTarget "mod_h2 make" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2546D8C1A7F76FA0033A875 /* Debug */,
+				B2546D8D1A7F76FA0033A875 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
 		B27BBD231A65757700C58A41 /* Build configuration list for PBXProject "mod-h2" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

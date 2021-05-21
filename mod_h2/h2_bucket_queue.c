@@ -28,7 +28,7 @@
 typedef struct h2_qdata {
     struct h2_qdata *next;
     struct h2_qdata *prev;
-    void *puser;
+    int stream_id;
     h2_bucket *bucket;
 } h2_qdata;
 
@@ -108,36 +108,43 @@ static void queue_unlink(h2_bucket_queue *q, h2_qdata *qdata) {
     qdata->next = qdata->prev = NULL;
 }
 
-static h2_qdata *find_first_for(h2_bucket_queue *q, void *user)
+static h2_qdata *find_first_for(h2_bucket_queue *q, int stream_id)
 {
     for (h2_qdata *qdata = q->first; qdata; qdata = qdata->next) {
-        if (!user || user == qdata->puser) {
+        if (stream_id < 0 || stream_id == qdata->stream_id) {
             return qdata;
         }
     }
     return NULL;
 }
 
-apr_status_t h2_bucket_queue_user_pop_int(h2_bucket_queue *q,
-                                        apr_read_type_e block,
-                                        void *user,
-                                        h2_bucket **pbucket,
-                                        void **puser)
+apr_status_t h2_bucket_queue_pop_int(h2_bucket_queue *q,
+                                     apr_read_type_e block,
+                                     int match_id,
+                                     h2_bucket **pbucket,
+                                     int *pstream_id)
 {
     apr_status_t status = apr_thread_mutex_lock(q->lock);
     if (status != APR_SUCCESS) {
         return status;
     }
     
-    h2_qdata *qdata = find_first_for(q, user);
+    h2_qdata *qdata = find_first_for(q, match_id);
     while (!qdata && block == APR_BLOCK_READ && !q->terminated) {
         apr_thread_cond_wait(q->has_data, q->lock);
-        qdata = find_first_for(q, user);
+        qdata = find_first_for(q, match_id);
     }
     
     if (qdata) {
-        *pbucket = qdata->bucket;
-        *puser = qdata->puser;
+        if (qdata->bucket) {
+            *pbucket = qdata->bucket;
+        }
+        else {
+            // qdata->bucket == NULL ---> EOS
+            *pbucket = NULL;
+            status = APR_EOF;
+        }
+        *pstream_id = qdata->stream_id;
         
         queue_unlink(q, qdata);
         memset(qdata, 0, sizeof(h2_qdata));
@@ -155,27 +162,27 @@ apr_status_t h2_bucket_queue_user_pop_int(h2_bucket_queue *q,
     return status;
 }
 
-apr_status_t h2_bucket_queue_user_pop(h2_bucket_queue *q, apr_read_type_e block,
-                                    void *user, h2_bucket **pbucket)
+apr_status_t h2_bucket_queue_stream_pop(h2_bucket_queue *q, apr_read_type_e block,
+                                        int stream_id, h2_bucket **pbucket)
 {
-    void *dummy;
-    return h2_bucket_queue_user_pop_int(q, block, user, pbucket, &dummy);
+    int dummy;
+    return h2_bucket_queue_pop_int(q, block, stream_id, pbucket, &dummy);
 }
 
 apr_status_t h2_bucket_queue_pop(h2_bucket_queue *q, apr_read_type_e block,
-                               h2_bucket **pbucket, void **puser)
+                                 h2_bucket **pbucket, int *pstream_id)
 {
-    return h2_bucket_queue_user_pop_int(q, block, NULL, pbucket, puser);
+    return h2_bucket_queue_pop_int(q, block, -1, pbucket, pstream_id);
 }
 
-apr_status_t h2_bucket_queue_push(h2_bucket_queue *q, 
-                               h2_bucket *bucket, void *puser)
+apr_status_t h2_bucket_queue_push(h2_bucket_queue *q,
+                                  h2_bucket *bucket, int stream_id)
 {
     apr_status_t status = apr_thread_mutex_lock(q->lock);
     if (status != APR_SUCCESS) {
         return status;
     }
-
+    
     if (q->terminated) {
         status = APR_EOF;
     }
@@ -190,7 +197,7 @@ apr_status_t h2_bucket_queue_push(h2_bucket_queue *q,
         }
         
         qdata->bucket = bucket;
-        qdata->puser = puser;
+        qdata->stream_id = stream_id;
         
         if (q->last) {
             q->last->next = qdata;
@@ -207,3 +214,28 @@ apr_status_t h2_bucket_queue_push(h2_bucket_queue *q,
     apr_thread_mutex_unlock(q->lock);
     return status;
 }
+
+apr_status_t h2_bucket_queue_push_eos(h2_bucket_queue *q,
+                                      int stream_id)
+{
+    return h2_bucket_queue_push(q, NULL, stream_id);
+}
+
+int h2_bucket_queue_has_eos_for(h2_bucket_queue *q, int stream_id)
+{
+    int eos_found = 0;
+    apr_status_t status = apr_thread_mutex_lock(q->lock);
+    if (status == APR_SUCCESS) {
+        for (h2_qdata *qdata = q->first; qdata; qdata = qdata->next) {
+            if (stream_id == qdata->stream_id && qdata->bucket == NULL) {
+                eos_found = 1;
+                break;
+            }
+        }
+        
+        apr_thread_mutex_unlock(q->lock);
+    }
+    
+    return eos_found;
+}
+

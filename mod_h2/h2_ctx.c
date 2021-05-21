@@ -20,6 +20,9 @@
 #include <http_core.h>
 #include <http_config.h>
 
+#include "h2_private.h"
+#include "h2_bucket_queue.h"
+#include "h2_stream_task.h"
 #include "h2_ctx.h"
 #include "h2_private.h"
 
@@ -28,6 +31,16 @@ h2_ctx *h2_ctx_create(conn_rec *c)
     h2_ctx *ctx = apr_pcalloc(c->pool, sizeof(h2_ctx));
     assert(ctx);
     ap_set_module_config(c->conn_config, &h2_module, ctx);
+    return ctx;
+}
+
+h2_ctx *h2_ctx_create_for(conn_rec *c, h2_stream_task *task)
+{
+    h2_ctx *ctx = h2_ctx_create(c);
+    if (ctx) {
+        ctx->is_stream = 1;
+        ctx->userp = task;
+    }
     return ctx;
 }
 
@@ -53,16 +66,16 @@ h2_ctx *h2_ctx_set_protocol(conn_rec* c, const char *proto)
     return ctx;
 }
 
-int h2_ctx_is_slave(conn_rec * c)
+int h2_ctx_is_session(conn_rec * c)
 {
     h2_ctx *ctx = h2_ctx_get(c);
-    return ctx && ctx->is_slave;
+    return ctx && !ctx->is_stream;
 }
 
-int h2_ctx_is_master(conn_rec * c)
+int h2_ctx_is_stream(conn_rec * c)
 {
     h2_ctx *ctx = h2_ctx_get(c);
-    return ctx && !ctx->is_slave;
+    return ctx && ctx->is_stream;
 }
 
 int h2_ctx_is_negotiated( conn_rec * c )

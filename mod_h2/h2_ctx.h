@@ -19,21 +19,22 @@
 
 typedef struct {
     int is_h2;
+    int is_stream;
     const char *protocol;
-    int is_slave;
     int is_negotiated;
     void *userp;
 } h2_ctx;
 
 h2_ctx *h2_ctx_create(conn_rec *c);
+h2_ctx *h2_ctx_create_for(conn_rec *c, struct h2_stream_task *task);
 h2_ctx *h2_ctx_get(conn_rec *c);
 
 const char *h2_ctx_get_protocol(conn_rec* c);
 h2_ctx *h2_ctx_set_protocol(conn_rec* c, const char *proto);
 int h2_ctx_is_negotiated(conn_rec * c);
 
-int h2_ctx_is_master(conn_rec * c);
-int h2_ctx_is_slave(conn_rec * c);
+int h2_ctx_is_session(conn_rec * c);
+int h2_ctx_is_stream(conn_rec * c);
 int h2_ctx_is_active(conn_rec * c);
 
 #endif /* defined(__mod_h2__h2_ctx__) */

@@ -22,11 +22,12 @@
 #include <http_log.h>
 
 #include "h2_private.h"
+#include "h2_stream.h"
+#include "h2_stream_task.h"
 #include "h2_bucket.h"
 #include "h2_ctx.h"
 #include "h2_frame.h"
 #include "h2_session.h"
-#include "h2_stream.h"
 #include "h2_util.h"
 
 static int h2_session_status_from_apr_status(apr_status_t rv)
@@ -167,8 +168,7 @@ static int on_begin_headers_cb(nghttp2_session *ngh2,
     h2_session *session = (h2_session *)userp;
     h2_stream * stream = NULL;
     apr_status_t status = h2_streams_stream_create(&session->streams, &stream,
-                                                   frame->hd.stream_id,
-                                                   &session->request_data);
+                                                   frame->hd.stream_id);
     
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
@@ -211,6 +211,23 @@ static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
     return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_INVALID_STREAM_STATE;
 }
 
+static void *h2_stream_start(apr_thread_t *thread, void *puser)
+{
+    h2_stream *stream = (h2_stream *)puser;
+    ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
+                  "h2_session:  stream(%d): start", stream->id);
+    
+    h2_stream_task *task = NULL;
+    apr_status_t status = h2_stream_task_create(&task, stream, 
+                                                &stream->session->request_data);
+    if (status == APR_SUCCESS) {
+        status = h2_stream_task_do(task);
+    }
+    
+    //apr_thread_exit(thread, status);
+    return NULL;
+}
+
 /**
  * nghttp2 session has received a complete frame. Most, it uses
  * for processing of internal state. HEADER and DATA frames however
@@ -222,7 +239,6 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
 {
     h2_session *session = (h2_session *)userp;
     apr_status_t status = APR_SUCCESS;
-    int start_processing = 0;
     switch (frame->hd.type) {
         case NGHTTP2_HEADERS:
         case NGHTTP2_CONTINUATION: {
@@ -238,9 +254,19 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             if (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS) {
                 h2_stream_end_headers(stream);
                 
-                /* Now would be a good time to actually schedule this
-                 * stream for processing in a worker thread */
-                int start_processing = 1;
+                if (1) {
+                    /* Now would be a good time to actually schedule this
+                     * stream for processing in a worker thread */
+                    apr_threadattr_t *attr;
+                    apr_threadattr_create(&attr, session->c->pool);
+                    
+                    apr_thread_t *thread;
+                    apr_thread_create(&thread, attr, h2_stream_start,
+                                      stream, session->c->pool);
+                }
+                else {
+                    h2_stream_start(NULL, stream);
+                }
             }
             break;
         }
@@ -268,10 +294,6 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                       "h2_session: stream(%d): error handling frame",
                       (int)frame->hd.stream_id);
         return NGHTTP2_ERR_INVALID_STREAM_STATE;
-    }
-    
-    if (start_processing) {
-        // TODO
     }
     
     return 0;
@@ -327,7 +349,7 @@ static apr_status_t h2_session_create(conn_rec *c, apr_size_t max_streams, h2_se
     session->ngh2 = NULL;
     
     h2_bucket_queue_init(&session->request_data, c->pool);
-    h2_streams_init(&session->streams, max_streams, c);
+    h2_streams_init(&session->streams, max_streams, session);
     h2_io_init(c, &session->io);
     
     apr_status_t status = init_callbacks(c, &callbacks);
@@ -462,6 +484,11 @@ apr_status_t h2_session_serve(conn_rec *c)
     session->ngh2 = NULL;
     
     return status;
+}
+
+apr_status_t h2_session_init(apr_pool_t *pool, server_rec *s)
+{
+    return APR_SUCCESS;
 }
 
 

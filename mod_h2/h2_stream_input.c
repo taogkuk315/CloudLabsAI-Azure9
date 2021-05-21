@@ -15,21 +15,21 @@
  */
 
 #include <assert.h>
-#include <apr_strings.h>
 
 #include <httpd.h>
 #include <http_core.h>
-#include <http_connection.h>
 #include <http_log.h>
+#include <http_connection.h>
 
+#include "h2_bucket_queue.h"
+#include "h2_session.h"
+#include "h2_stream.h"
 #include "h2_stream_input.h"
 
-static const int GetLineMax = 4096;
-
-static int check_abort(ap_filter_t *filter,
+static int check_abort(h2_stream_input *input,
+                       ap_filter_t *filter,
                        apr_bucket_brigade *brigade)
 {
-    h2_stream_input *input = (h2_stream_input *)filter->ctx;
     if (input->aborted || filter->c->aborted) {
         APR_BRIGADE_INSERT_TAIL(brigade,
                                 apr_bucket_eos_create(filter->c->bucket_alloc));
@@ -38,252 +38,152 @@ static int check_abort(ap_filter_t *filter,
     return 1;
 }
 
-apr_status_t h2_stream_input_consume(h2_stream_input *input, apr_size_t len)
+/** stream is in state of input closed. That means no input is pending
+ * on the connection and all input (if any) is in the input queue.
+ */
+static int all_queued(h2_stream_input *input)
 {
-    apr_status_t status = apr_thread_mutex_lock(input->lock);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    
-    if (input->start) {
-        if (input->start < input->end) {
-            /* there is data left, either a previous call was speculative
-             * or the caller did not want as much data as we had stored.
-             * mode == AP_MODE_GETLINE is a candidate. */
-            memmove(input->buffer, input->buffer + input->start,
-                    input->end - input->start);
-            input->end -= input->start;
-            input->start = 0;
-        }
-        else {
-            input->start = input->end = 0;
-        }
-    }
-    
-    apr_thread_cond_signal(input->has_space);
-    apr_thread_mutex_unlock(input->lock);
-    return status;
+    return input->eos
+    || h2_bucket_queue_has_eos_for(input->queue, input->stream_id);
 }
 
-apr_status_t h2_stream_input_wait_data(h2_stream_input *input,
-                                       apr_read_type_e block)
+h2_stream_input *h2_stream_input_create(apr_pool_t *pool,
+                                        int stream_id,
+                                        h2_bucket_queue *q)
 {
-    apr_status_t status = apr_thread_mutex_lock(input->lock);
-    if (status != APR_SUCCESS) {
-        return status;
+    h2_stream_input *input = apr_pcalloc(pool, sizeof(h2_stream_input));
+    if (input) {
+        input->queue = q;
+        input->stream_id = stream_id;
     }
-    
-    // Wait for more data to arrive
-    while (!input->eos && !input->aborted
-           && (input->start == input->end)
-           && block != APR_NONBLOCK_READ) {
-        apr_thread_cond_wait(input->has_data, input->lock);
-    }
-    
-    apr_thread_cond_signal(input->has_space);
-    apr_thread_mutex_unlock(input->lock);
-    return status;
+    return input;
 }
 
-apr_status_t h2_stream_input_push(h2_stream_input *input,
-                                  const char *data, apr_size_t len)
+void h2_stream_input_destroy(h2_stream_input *input)
 {
-    apr_status_t status = apr_thread_mutex_lock(input->lock);
-    if (status != APR_SUCCESS) {
-        return status;
+    if (input->cur) {
+        h2_bucket_destroy(input->cur);
+        input->cur = NULL;
     }
-    
-    if (input->eos) {
-        status = APR_EOF;
-    }
-    else if (input->aborted) {
-        status = APR_ECONNABORTED;
-    }
-    else {
-        /* copy over data and signal everyone waiting for it */
-        /* enough room? */
-        while (len > 0) {
-            if (input->end < input->length) {
-                apr_size_t copylen = input->length - input->end;
-                if (copylen > len) {
-                    copylen = len;
-                }
-                memcpy(input->buffer + input->end, data, copylen);
-                input->end += copylen;
-                len -= copylen;
-                data += copylen;
-            }
-            else {
-                /* full, wait for someone to read from it */
-                apr_thread_cond_wait(input->has_space, input->lock);
-            }
-        }
-        
-        apr_thread_cond_signal(input->has_data);
-        status = APR_SUCCESS;
-    }
-    
-    apr_thread_mutex_unlock(input->lock);
-    return status;
 }
 
-apr_status_t h2_stream_input_close(h2_stream_input *input)
-{
-    apr_status_t status = apr_thread_mutex_lock(input->lock);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    
-    input->eos = 1;
-    apr_thread_cond_broadcast(input->has_data);
-    apr_thread_mutex_unlock(input->lock);
-    return status;
-}
-
-apr_status_t h2_stream_input_init(h2_stream_input *input, apr_pool_t *pool,
-                                  apr_size_t bufsize)
-{
-    apr_status_t status = APR_SUCCESS;
-    
-    input->buffer = apr_palloc(pool, bufsize);
-    input->length = bufsize;
-    input->start = input->end = 0;
-    input->aborted = input->eos = 0;
-    
-    status = apr_thread_mutex_create(&input->lock, APR_THREAD_MUTEX_DEFAULT,
-                                     pool);
-    if (status == APR_SUCCESS) {
-        status = apr_thread_cond_create(&input->has_data, pool);
-    }
-    if (status == APR_SUCCESS) {
-        status = apr_thread_cond_create(&input->has_space, pool);
-    }
-    return status;
-}
-
-apr_status_t h2_stream_input_destroy(h2_stream_input *input)
-{
-    if (input->lock) {
-        apr_thread_mutex_destroy(input->lock);
-    }
-    if (input->has_data) {
-        apr_thread_cond_destroy(input->has_data);
-    }
-    if (input->has_space) {
-        apr_thread_cond_destroy(input->has_space);
-    }
-    return APR_SUCCESS;
-}
-
-apr_status_t h2_stream_input_read(ap_filter_t *filter,
-                                  apr_bucket_brigade *brigade,
+apr_status_t h2_stream_input_read(h2_stream_input *input,
+                                  ap_filter_t* filter,
+                                  apr_bucket_brigade* brigade,
                                   ap_input_mode_t mode,
                                   apr_read_type_e block,
                                   apr_off_t readbytes)
 {
-    h2_stream_input *input = (h2_stream_input *)filter->ctx;
-    apr_size_t read = 0;
-    apr_size_t maxread = (readbytes > 0)?
-        ((readbytes > input->length)? input->length : readbytes) : 0;
-    int sth_inserted = 0;
-
-    /* The bytes we returned on a previous invocation have been
-     * processed. Remove them from our buffer and signal anyone
-     * wanting to give us more data that there might be room again.
-     */
-    h2_stream_input_consume(input, input->start);
+    apr_status_t status = APR_SUCCESS;
+    apr_size_t nread = 0;
+    int all_there = all_queued(input);
     
-    if (mode == AP_MODE_INIT) {
-        return APR_SUCCESS;
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, filter->c,
+                  "h2_stream_input(%d): read() asking for %d bytes",
+                  input->stream_id, (int)readbytes);
+    
+    if (input->cur && input->cur_offset >= input->cur->data_len) {
+        /* we read all in a previous call, time to remove
+         * this bucket. */
+        h2_bucket_destroy(input->cur);
+        input->cur = NULL;
+        input->cur_offset = 0;
     }
     
-    /* No data and end-of-stream, we certainly reported this before,
-     so this gives an explicity return status. */
-    if (input->eos && input->end == 0) {
+    if (input->eos) {
         return APR_EOF;
     }
     
-    if (!check_abort(filter, brigade)) {
-        return APR_ECONNABORTED;
-    }
-
-    if (mode == AP_MODE_READBYTES
-        || mode == AP_MODE_SPECULATIVE
-        || mode == AP_MODE_EXHAUSTIVE) {
-        /* Read data until we have what was asked for */
-        while (input->end < maxread || mode == AP_MODE_EXHAUSTIVE) {
-            if (h2_stream_input_wait_data(input, block) != APR_SUCCESS) {
-                break;
-            }
-        }
-        /* If the read was not exhaustive, we return only the amount
-         * asked for. */
-        read = input->end;
-        if (read > maxread || mode != AP_MODE_EXHAUSTIVE) {
-            read = maxread;
-        }
-    }
-    else if (mode == AP_MODE_GETLINE) {
-        /* Look for a linebreak in the first GetLineMax bytes. 
-         * If we do not find one, return all we have. */
-        apr_size_t scan = input->start;
-        apr_off_t index = -1;
-        while (scan < GetLineMax && input->end < input->length) {
-            for (/**/; scan < input->end && index < 0; ++scan) {
-                if (input->buffer[scan] == '\n') {
-                    index = scan;
-                }
-            }
-            
-            if (index >= 0
-                || h2_stream_input_wait_data(input, block) != APR_SUCCESS) {
-                break;
-            }
+    if (!input->cur) {
+        /* Try to get new data for our stream from the queue.
+         * If all data is in queue (could be none), do not block.
+         * Getting none back in that case means we reached the
+         * end of the input.
+         */
+        if (!check_abort(input, filter, brigade)) {
+            return APR_ECONNABORTED;
         }
         
-        read = (index >= 0)? index+1 : input->end;
-    }
-    else {
-        /* Hmm, well. There is mode AP_MODE_EATCRLF, but we chose not
-         * to support it. Seems to work. */
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOTIMPL, filter->c,
-                      "h2_stream_input, unsupported READ mode %d",
-                      mode);
-        return APR_ENOTIMPL;
+        status = h2_bucket_queue_stream_pop(input->queue,
+                                            all_there? APR_NONBLOCK_READ : block,
+                                            input->stream_id, &input->cur);
+        input->cur_offset = 0;
+        if (status == APR_EOF) {
+            input->eos = 1;
+        }
     }
     
-    if (!check_abort(filter, brigade)) {
+    if (input->cur) {
+        /* Got data, depends on the read mode how much we return. */
+        h2_bucket *b = input->cur;
+        apr_size_t avail = (input->cur_offset < b->data_len)?
+        (b->data_len - input->cur_offset) : 0;
+        if (avail > 0) {
+            if (mode == AP_MODE_EXHAUSTIVE) {
+                /* return all we have */
+                nread = avail;
+            }
+            else if (mode == AP_MODE_READBYTES
+                     || mode == AP_MODE_SPECULATIVE) {
+                /* return not more than was asked for */
+                nread = (avail > readbytes)? readbytes : avail;
+            }
+            else if (mode == AP_MODE_GETLINE) {
+                /* Look for a linebreak in the first GetLineMax bytes.
+                 * If we do not find one, return all we have. */
+                apr_size_t scan = input->cur_offset;
+                apr_size_t scan_max = ((b->data_len > 4096)?
+                                       4096 : b->data_len);
+                apr_off_t index = -1;
+                for (/**/; scan < scan_max; ++scan) {
+                    if (b->data[scan] == '\n') {
+                        index = scan;
+                        break;
+                    }
+                }
+                
+                nread = (index >= 0)? (index - input->cur_offset + 1) : avail;
+            }
+            else {
+                /* Hmm, well. There is mode AP_MODE_EATCRLF, but we chose not
+                 * to support it. Seems to work. */
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOTIMPL, filter->c,
+                              "h2_stream_input, unsupported READ mode %d",
+                              mode);
+                return APR_ENOTIMPL;
+            }
+            
+        }
+    }
+    
+    if (!check_abort(input, filter, brigade)) {
         return APR_ECONNABORTED;
     }
     
-    if (read > 0) {
+    if (nread > 0) {
         /* We got actual data. */
         APR_BRIGADE_INSERT_TAIL(brigade,
-            apr_bucket_transient_create(input->buffer, read,
-                                        brigade->bucket_alloc));
-        sth_inserted = 1;
+                                apr_bucket_transient_create(input->cur->data + input->cur_offset,
+                                                            nread, brigade->bucket_alloc));
+        if (mode != AP_MODE_SPECULATIVE) {
+            input->cur_offset += nread;
+        }
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, filter->c,
+                      "h2_stream_input(%d): forward %d bytes",
+                      input->stream_id, (int)nread);
     }
-    
-    if (input->eos && input->end == read) {
+    else if (all_there) {
         /* we know there is nothing more to come and inserted all data
          * there is into the brigade. Send the EOS right away, saving
          * everyone some work. */
         APR_BRIGADE_INSERT_TAIL(brigade,
                                 apr_bucket_eos_create(brigade->bucket_alloc));
-        sth_inserted = 1;
-    }
-
-    if (!sth_inserted && block == APR_NONBLOCK_READ) {
-        /* no EOS, no data and call was non blocking. Caller may try again. */
-        return APR_EAGAIN;
+        input->eos = 1;
     }
     
-    if (mode != AP_MODE_SPECULATIVE) {
-        /* Mark the data we inserted into the brigade as read.
-         * We leave the data buffer untouched since we inserted it
-         * transient into the brigade. The next read will reset
-         * the offset and reuse any leftover data. */
-        input->start = read;
+    if (nread == 0 && !input->eos && block == APR_NONBLOCK_READ) {
+        /* no EOS, no data and call was non blocking. Caller may try again. */
+        return APR_EAGAIN;
     }
     
     return APR_SUCCESS;

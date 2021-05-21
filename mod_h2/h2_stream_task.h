@@ -14,31 +14,27 @@
  * limitations under the License.
  */
 
+#ifndef __mod_h2__h2_stream_task__
+#define __mod_h2__h2_stream_task__
 
-#ifndef __mod_h2__h2_session__
-#define __mod_h2__h2_session__
-
-#include <nghttp2/nghttp2.h>
-
-#include "h2_io.h"
-#include "h2_streams.h"
-#include "h2_bucket_queue.h"
-
-typedef struct h2_session {
+typedef struct h2_stream_task {
     conn_rec *c;
-    nghttp2_session *ngh2;
-    h2_io_ctx io;
-    int loglvl;
+    struct h2_stream *stream;
     
-    h2_streams streams;
-    h2_bucket_queue request_data;
-} h2_session;
+    struct h2_stream_input *input;  /* http/1.1 input data */
+} h2_stream_task;
+
+apr_status_t h2_stream_task_create(h2_stream_task **ptask,
+                                   struct h2_stream *stream,
+                                   struct h2_bucket_queue *input);
+
+apr_status_t h2_stream_task_destroy(h2_stream_task *task);
+
+apr_status_t h2_stream_task_do(h2_stream_task *task);
 
 
-apr_status_t h2_session_init(apr_pool_t *pool, server_rec *s);
+void h2_stream_hooks_init(void);
+int h2_stream_task_pre_conn(h2_stream_task *task, conn_rec *c);
 
-apr_status_t h2_session_serve(conn_rec *c);
 
-int h2_session_pre_conn(conn_rec* c, void *arg);
-
-#endif /* defined(__mod_h2__h2_session__) */
+#endif /* defined(__mod_h2__h2_stream_task__) */

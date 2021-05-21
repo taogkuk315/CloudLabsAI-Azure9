@@ -17,37 +17,28 @@
 #ifndef __mod_h2__h2_stream_input__
 #define __mod_h2__h2_stream_input__
 
-#include <apr_thread_mutex.h>
-#include <apr_thread_cond.h>
+#include "h2_bucket_queue.h"
+#include "h2_stream.h"
 
-typedef struct {
-    char *buffer;
-    apr_size_t length;
-    apr_size_t start;
-    apr_size_t end;
+typedef struct h2_stream_input {
+    h2_bucket_queue *queue;
+    int stream_id;
     int eos;
     int aborted;
-    
-    apr_thread_mutex_t *lock;
-    apr_thread_cond_t *has_data;
-    apr_thread_cond_t *has_space;
+    h2_bucket *cur;
+    apr_size_t cur_offset;
 } h2_stream_input;
 
+h2_stream_input *h2_stream_input_create(apr_pool_t *pool,
+                                        int stream_id,
+                                        h2_bucket_queue *q);
+void h2_stream_input_destroy(h2_stream_input *input);
 
-apr_status_t h2_stream_input_init(h2_stream_input *input, apr_pool_t *pool,
-                                  apr_size_t bufsize);
-apr_status_t h2_stream_input_destroy(h2_stream_input *input);
-
-apr_status_t h2_stream_input_read(ap_filter_t *filter,
-                                  apr_bucket_brigade *brigade,
+apr_status_t h2_stream_input_read(h2_stream_input *input,
+                                  ap_filter_t* filter,
+                                  apr_bucket_brigade* brigade,
                                   ap_input_mode_t mode,
                                   apr_read_type_e block,
                                   apr_off_t readbytes);
-
-
-apr_status_t h2_stream_input_push(h2_stream_input *input,
-                                  const char *data, apr_size_t len);
-
-apr_status_t h2_stream_input_close(h2_stream_input *input);
 
 #endif /* defined(__mod_h2__h2_stream_input__) */

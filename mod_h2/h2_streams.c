@@ -20,16 +20,18 @@
 #include <http_core.h>
 #include <http_log.h>
 
+#include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_streams.h"
 
 
 apr_status_t h2_streams_init(h2_streams *streams, int max_streams,
-                             conn_rec *c)
+                             h2_session *session)
 {
-    streams->c = c;
+    streams->session = session;
     streams->max = max_streams;
-    streams->streams = apr_pcalloc(c->pool, sizeof(h2_stream *) * max_streams);
+    streams->streams = apr_pcalloc(session->c->pool,
+                                   sizeof(h2_stream *) * max_streams);
     return APR_SUCCESS;
 }
 
@@ -55,27 +57,26 @@ static int get_stream_index(h2_streams *streams, int stream_id)
 }
 
 apr_status_t h2_streams_stream_create(h2_streams *streams,
-                                      h2_stream **stream,
-                                      int stream_id,
-                                      h2_bucket_queue *request_data)
+                                      struct h2_stream **stream,
+                                      int stream_id)
 {
     int index = get_stream_index(streams, stream_id);
     if (index >= 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, streams->c,
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, streams->session->c,
                       "h2_streams: creating stream that already exists: %d",
                       stream_id);
         return APR_EEXIST;
     }
     index = get_first_free(streams);
     if (index < 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, streams->c,
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, streams->session->c,
                       "h2_streams: creating stream, no more free slots for %d",
                       stream_id);
         return APR_EGENERAL;
     }
     
     h2_stream_create(&streams->streams[index],
-                     stream_id, H2_STREAM_ST_IDLE, streams->c, request_data);
+                     stream_id, H2_STREAM_ST_IDLE, streams->session);
     *stream = streams->streams[index];
     return APR_SUCCESS;
 }
@@ -84,7 +85,7 @@ apr_status_t h2_streams_stream_destroy(h2_streams *streams, int stream_id)
 {
     int index = get_stream_index(streams, stream_id);
     if (index < 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, streams->c,
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, streams->session->c,
                       "h2_streams: destroying stream, not found %d",
                       stream_id);
         return APR_ENOENT;
