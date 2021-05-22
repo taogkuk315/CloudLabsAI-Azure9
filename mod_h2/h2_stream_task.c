@@ -26,8 +26,10 @@
 
 #include "h2_private.h"
 #include "h2_session.h"
+#include "h2_response.h"
 #include "h2_stream.h"
 #include "h2_stream_input.h"
+#include "h2_stream_output.h"
 #include "h2_stream_task.h"
 #include "h2_ctx.h"
 
@@ -40,9 +42,6 @@ static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
                                            apr_read_type_e block,
                                            apr_off_t readbytes) {
     h2_stream_task *task = (h2_stream_task *)filter->ctx;
-    ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, task->c,
-                  "h2_stream(%d): input filter", task->stream->id);
-    
     return h2_stream_input_read(task->input, filter, brigade,
                                 mode, block, readbytes);
 }
@@ -50,73 +49,7 @@ static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
 static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
                                             apr_bucket_brigade* brigade) {
     h2_stream_task *task = (h2_stream_task *)filter->ctx;
-    ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, filter->c,
-                  "h2_stream(%d): output filter", task->stream->id);
-    
-    if (filter->next != NULL) {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, filter->c,
-                      "h2_stream(%d): output has unexpected filter",
-                      task->stream->id);
-    }
-    
-    if (APR_BRIGADE_EMPTY(brigade)) {
-        return APR_SUCCESS;
-    }
-    
-    while (!APR_BRIGADE_EMPTY(brigade)) {
-        apr_bucket* bucket = APR_BRIGADE_FIRST(brigade);
-        int got_eos = 0;
-        
-        if (APR_BUCKET_IS_METADATA(bucket)) {
-            if (APR_BUCKET_IS_EOS(bucket)) {
-                h2_stream_close_output(task->stream);
-                got_eos = 1;
-            }
-            else if (APR_BUCKET_IS_FLUSH(bucket)) {
-            }
-            else {
-                /* ignore */
-            }
-        }
-        else if (got_eos) {
-            ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, filter->c,
-                          "h2_stream(%d): output has data after eos",
-                          task->stream->id);
-        } else {
-            // Data
-            const char* data = NULL;
-            apr_size_t data_length = 0;
-            
-            apr_status_t status = apr_bucket_read(bucket, &data, &data_length,
-                                                  APR_NONBLOCK_READ);
-            if (status == APR_SUCCESS) {
-                /* process */
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, filter->c,
-                              "h2_stream(%d): output received %d bytes",
-                              task->stream->id, (int)data_length);
-            }
-            else if (APR_STATUS_IS_EAGAIN(status)) {
-                status = apr_bucket_read(bucket, &data, &data_length, APR_BLOCK_READ);
-                if (status != APR_SUCCESS) {
-                    ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, filter->c,
-                                  "h2_stream(%d): output read failed",
-                                  task->stream->id);
-                    return status;
-                }
-                /* process data */
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, filter->c,
-                              "h2_stream(%d): output2 received %d bytes",
-                              task->stream->id, (int)data_length);
-            }
-            else {
-                return status;
-            }
-        }
-        
-        apr_bucket_delete(bucket);
-    }
-    
-    return APR_SUCCESS;
+    return h2_stream_output_write(task->output, filter, brigade);
 }
 
 
@@ -217,7 +150,9 @@ static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
 }
 
 apr_status_t h2_stream_task_create(h2_stream_task **ptask,
-                                   h2_stream *stream, h2_bucket_queue *input)
+                                   h2_stream *stream,
+                                   h2_bucket_queue *input,
+                                   h2_bucket_queue *output)
 {
     conn_rec *c = NULL;
     apr_status_t status = h2_conn_create(&c, stream->session->c);
@@ -239,7 +174,13 @@ apr_status_t h2_stream_task_create(h2_stream_task **ptask,
     task->c = c;
     task->stream = stream;
     task->input = h2_stream_input_create(task->c->pool, stream->id, input);
-
+    task->output = h2_stream_output_create(task->c->pool, stream->id, output);
+    
+    task->response = h2_response_create(stream->id, task->c);
+    h2_stream_output_set_converter(task->output,
+                                   h2_response_http_convert,
+                                   task->response);
+    
     h2_ctx_create_for(task->c, task);
 
     *ptask = task;
@@ -251,6 +192,14 @@ apr_status_t h2_stream_task_destroy(h2_stream_task *task)
     if (task->input) {
         h2_stream_input_destroy(task->input);
         task->input = NULL;
+    }
+    if (task->output) {
+        h2_stream_output_destroy(task->output);
+        task->output = NULL;
+    }
+    if (task->response) {
+        h2_response_destroy(task->response);
+        task->response = NULL;
     }
     apr_pool_clear(task->c->pool);
     return APR_EGENERAL;
@@ -280,6 +229,10 @@ apr_status_t h2_stream_task_do(h2_stream_task *task)
     ap_set_module_config(task->c->conn_config, &core_module, socket);
     
     ap_process_connection(task->c, socket);
+    
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, task->c,
+                  "h2_stream(%d): done with task",
+                  (int)task->stream->id);
     
     return APR_SUCCESS;
 }

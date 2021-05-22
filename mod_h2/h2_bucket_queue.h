@@ -35,7 +35,7 @@ typedef struct h2_bucket_queue {
 
 apr_status_t h2_bucket_queue_init(h2_bucket_queue *q, apr_pool_t *pool);
 
-void h2_bucket_queue_term(h2_bucket_queue *q);
+void h2_bucket_queue_destroy(h2_bucket_queue *q);
 
 apr_status_t h2_bucket_queue_push(h2_bucket_queue *q, h2_bucket *bucket,
                                   int stream_id);

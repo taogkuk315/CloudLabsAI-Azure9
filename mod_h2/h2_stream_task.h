@@ -21,12 +21,15 @@ typedef struct h2_stream_task {
     conn_rec *c;
     struct h2_stream *stream;
     
-    struct h2_stream_input *input;  /* http/1.1 input data */
+    struct h2_stream_input *input;    /* http/1.1 input data */
+    struct h2_stream_output *output;  /* response body data */
+    struct h2_response *response;     /* response meta data */
 } h2_stream_task;
 
 apr_status_t h2_stream_task_create(h2_stream_task **ptask,
                                    struct h2_stream *stream,
-                                   struct h2_bucket_queue *input);
+                                   h2_bucket_queue *input,
+                                   h2_bucket_queue *output);
 
 apr_status_t h2_stream_task_destroy(h2_stream_task *task);
 

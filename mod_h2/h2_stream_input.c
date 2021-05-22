@@ -21,6 +21,7 @@
 #include <http_log.h>
 #include <http_connection.h>
 
+#include "h2_private.h"
 #include "h2_bucket_queue.h"
 #include "h2_session.h"
 #include "h2_stream.h"
@@ -78,7 +79,7 @@ apr_status_t h2_stream_input_read(h2_stream_input *input,
     apr_size_t nread = 0;
     int all_there = all_queued(input);
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, filter->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
                   "h2_stream_input(%d): read() asking for %d bytes",
                   input->stream_id, (int)readbytes);
     
@@ -168,7 +169,7 @@ apr_status_t h2_stream_input_read(h2_stream_input *input,
         if (mode != AP_MODE_SPECULATIVE) {
             input->cur_offset += nread;
         }
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, filter->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
                       "h2_stream_input(%d): forward %d bytes",
                       input->stream_id, (int)nread);
     }

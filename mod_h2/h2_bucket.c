@@ -72,3 +72,10 @@ int h2_bucket_has_free(h2_bucket *bucket, size_t bytes)
     return bytes <= bucket->data_size - bucket->data_len;
 }
 
+apr_size_t h2_bucket_available(h2_bucket *bucket)
+{
+    if (bucket->data_size > bucket->data_len) {
+        return bucket->data_size - bucket->data_len;
+    }
+    return 0;
+}

@@ -35,6 +35,18 @@ apr_status_t h2_streams_init(h2_streams *streams, int max_streams,
     return APR_SUCCESS;
 }
 
+apr_status_t h2_streams_destroy(h2_streams *streams)
+{
+    for (int i = 0; i < streams->max; ++i) {
+        h2_stream *stream = streams->streams[i];
+        if (stream) {
+            streams->streams[i] = NULL;
+            h2_stream_destroy(stream);
+        }
+    }
+    return APR_SUCCESS;
+}
+
 static int get_first_free(h2_streams *streams)
 {
     for (int i = 0; i < streams->max; ++i) {

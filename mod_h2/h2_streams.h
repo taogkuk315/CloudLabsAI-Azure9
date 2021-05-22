@@ -26,6 +26,8 @@ typedef struct h2_streams {
 
 apr_status_t h2_streams_init(h2_streams *streams, int max_streams,
                              struct h2_session *session);
+apr_status_t h2_streams_destroy(h2_streams *streams);
+
 
 apr_status_t h2_streams_stream_create(h2_streams *streams,
                                       struct h2_stream **stream,

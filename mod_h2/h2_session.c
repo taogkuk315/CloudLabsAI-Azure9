@@ -22,6 +22,7 @@
 #include <http_log.h>
 
 #include "h2_private.h"
+#include "h2_bucket_queue.h"
 #include "h2_stream.h"
 #include "h2_stream_task.h"
 #include "h2_bucket.h"
@@ -219,7 +220,8 @@ static void *h2_stream_start(apr_thread_t *thread, void *puser)
     
     h2_stream_task *task = NULL;
     apr_status_t status = h2_stream_task_create(&task, stream, 
-                                                &stream->session->request_data);
+                                                &stream->session->request_data,
+                                                &stream->session->response_data);
     if (status == APR_SUCCESS) {
         status = h2_stream_task_do(task);
     }
@@ -349,6 +351,7 @@ static apr_status_t h2_session_create(conn_rec *c, apr_size_t max_streams, h2_se
     session->ngh2 = NULL;
     
     h2_bucket_queue_init(&session->request_data, c->pool);
+    h2_bucket_queue_init(&session->response_data, c->pool);
     h2_streams_init(&session->streams, max_streams, session);
     h2_io_init(c, &session->io);
     
@@ -417,6 +420,18 @@ static apr_status_t session_feed(const char *data, apr_size_t len,
     return APR_SUCCESS;
 }
 
+static apr_status_t h2_session_destroy(h2_session *session)
+{
+    if (session->ngh2) {
+        nghttp2_session_del(session->ngh2);
+        session->ngh2 = NULL;
+    }
+    h2_streams_destroy(&session->streams);
+    h2_bucket_queue_destroy(&session->request_data);
+    h2_bucket_queue_destroy(&session->response_data);
+    return APR_SUCCESS;
+}
+
 apr_status_t h2_session_serve(conn_rec *c)
 {
     h2_session *session = NULL;
@@ -480,8 +495,7 @@ apr_status_t h2_session_serve(conn_rec *c)
                       "h2_session: TLS session done, recv returned %d", rv);
     }
     
-    nghttp2_session_del(session->ngh2);
-    session->ngh2 = NULL;
+    status = h2_session_destroy(session);
     
     return status;
 }

@@ -28,9 +28,11 @@ C_SRC   = \
         h2_ctx.c \
         h2_frame.c \
         h2_io.c \
+        h2_response.c \
         h2_session.c \
         h2_stream.c \
         h2_stream_input.c \
+        h2_stream_output.c \
         h2_stream_task.c \
         h2_streams.c \
         h2_tls.c \

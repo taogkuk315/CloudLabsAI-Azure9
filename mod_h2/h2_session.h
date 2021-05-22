@@ -32,6 +32,7 @@ typedef struct h2_session {
     
     h2_streams streams;
     h2_bucket_queue request_data;
+    h2_bucket_queue response_data;
 } h2_session;
 
 

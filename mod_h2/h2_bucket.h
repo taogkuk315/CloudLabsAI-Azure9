@@ -30,6 +30,7 @@ typedef struct h2_bucket {
 } h2_bucket;
 
 h2_bucket *h2_bucket_alloc(apr_size_t data_size);
+
 void h2_bucket_destroy(h2_bucket *bucket);
 
 apr_size_t h2_bucket_append(h2_bucket *bucket,
@@ -38,5 +39,6 @@ apr_size_t h2_bucket_cat(h2_bucket *bucket, const char *s);
 
 int h2_bucket_has_free(h2_bucket *bucket, size_t bytes);
 
+apr_size_t h2_bucket_available(h2_bucket *bucket);
 
 #endif /* defined(__mod_h2__h2_bucket__) */
