@@ -26,4 +26,6 @@ int h2_util_header_print(char *buffer, size_t maxlen,
                          const char *name, size_t namelen,
                          const char *value, size_t valuelen);
 
+char *h2_strlwr(char *s);
+
 #endif /* defined(__mod_h2__h2_util__) */

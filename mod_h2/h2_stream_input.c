@@ -105,9 +105,9 @@ apr_status_t h2_stream_input_read(h2_stream_input *input,
             return APR_ECONNABORTED;
         }
         
-        status = h2_bucket_queue_stream_pop(input->queue,
-                                            all_there? APR_NONBLOCK_READ : block,
-                                            input->stream_id, &input->cur);
+        status = h2_bucket_queue_pop(input->queue,
+                                     all_there? APR_NONBLOCK_READ : block,
+                                     input->stream_id, &input->cur);
         input->cur_offset = 0;
         if (status == APR_EOF) {
             input->eos = 1;

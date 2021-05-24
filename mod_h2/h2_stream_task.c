@@ -56,10 +56,10 @@ static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
 void h2_stream_hooks_init(void)
 {
     h2_input_filter_handle = ap_register_input_filter(
-        "H2_TO_HTTP", h2_filter_stream_input, NULL, AP_FTYPE_NETWORK);
+                                                      "H2_TO_HTTP", h2_filter_stream_input, NULL, AP_FTYPE_NETWORK);
     
     h2_output_filter_handle = ap_register_output_filter(
-        "HTTP_TO_H2", h2_filter_stream_output, NULL, AP_FTYPE_NETWORK);
+                                                        "HTTP_TO_H2", h2_filter_stream_output, NULL, AP_FTYPE_NETWORK);
 }
 
 int h2_stream_task_pre_conn(h2_stream_task *task, conn_rec *c)
@@ -149,6 +149,26 @@ static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
     return APR_SUCCESS;
 }
 
+static apr_status_t output_convert(h2_bucket *bucket,
+                                   void *conv_ctx,
+                                   const char *data, apr_size_t len,
+                                   apr_size_t *pconsumed)
+{
+    h2_stream_task *task = (h2_stream_task *)conv_ctx;
+    apr_status_t status = h2_response_http_convert(bucket, task->response,
+                                                   data, len, pconsumed);
+    if (status == APR_SUCCESS
+        && !task->ready_called
+        && h2_response_is_ready(task->response)) {
+        /* time to submit the response on the stream. This
+         * needs to happen inside the h2_session thread that
+         * manages the main, real connection. */
+        task->ready_called = 1;
+        status = task->on_headers_ready(task);
+    }
+    return status;
+}
+
 apr_status_t h2_stream_task_create(h2_stream_task **ptask,
                                    h2_stream *stream,
                                    h2_bucket_queue *input,
@@ -177,12 +197,10 @@ apr_status_t h2_stream_task_create(h2_stream_task **ptask,
     task->output = h2_stream_output_create(task->c->pool, stream->id, output);
     
     task->response = h2_response_create(stream->id, task->c);
-    h2_stream_output_set_converter(task->output,
-                                   h2_response_http_convert,
-                                   task->response);
+    h2_stream_output_set_converter(task->output, output_convert, task);
     
     h2_ctx_create_for(task->c, task);
-
+    
     *ptask = task;
     return APR_SUCCESS;
 }
@@ -205,12 +223,17 @@ apr_status_t h2_stream_task_destroy(h2_stream_task *task)
     return APR_EGENERAL;
 }
 
+void h2_stream_task_set_on_ready(h2_stream_task *task, h2_on_headers_ready cb)
+{
+    task->on_headers_ready = cb;
+}
+
 apr_status_t h2_stream_task_do(h2_stream_task *task)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_stream_task(%d): do", task->stream->id);
     apr_status_t status;
-
+    
     /* Furthermore, other code might want to see the socket for
      * this connection. Allocate one without further function...
      */
@@ -231,8 +254,10 @@ apr_status_t h2_stream_task_do(h2_stream_task *task)
     ap_process_connection(task->c, socket);
     
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, task->c,
-                  "h2_stream(%d): done with task",
-                  (int)task->stream->id);
+                  "h2_stream(%d): done with task, input_eos=%d, output_eos=%d"
+                  ", response status=%s, headers=%d",
+                  (int)task->stream->id, task->input->eos, task->output->eos,
+                  task->response->status, (int)task->response->nvlen);
     
     return APR_SUCCESS;
 }

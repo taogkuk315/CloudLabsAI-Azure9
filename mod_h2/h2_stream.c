@@ -75,8 +75,8 @@ apr_status_t h2_stream_push(h2_stream *stream)
                   "h2_stream(%d): pushing req data %s",
                   stream->id, stream->work->data);
     
-    apr_status_t status = h2_bucket_queue_push(&stream->session->request_data,
-                                               stream->work, stream->id);
+    apr_status_t status = h2_bucket_queue_append(stream->session->request_data,
+                                                 stream->work, stream->id);
     if (status == APR_SUCCESS) {
         stream->work = NULL;
     }
@@ -88,7 +88,8 @@ apr_status_t h2_stream_push_eos(h2_stream *stream)
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
                   "h2_stream(%d): pushing eos", stream->id);
     
-    return h2_bucket_queue_push_eos(&stream->session->request_data, stream->id);
+    return h2_bucket_queue_append_eos(stream->session->request_data,
+                                      stream->id);
 }
 
 

@@ -14,35 +14,32 @@
  * limitations under the License.
  */
 
+#ifndef __mod_h2__h2_task_pool__
+#define __mod_h2__h2_task_pool__
 
-#ifndef __mod_h2__h2_session__
-#define __mod_h2__h2_session__
+#include <apr_thread_mutex.h>
+#include <apr_thread_cond.h>
 
-#include <nghttp2/nghttp2.h>
-
-#include "h2_io.h"
 #include "h2_queue.h"
-#include "h2_bucket_queue.h"
 
-typedef struct h2_session {
-    conn_rec *c;
-    nghttp2_session *ngh2;
-    h2_io_ctx io;
-    int loglvl;
-    
-    h2_bucket_queue *request_data;
-    h2_bucket_queue *response_data;
+typedef struct h2_task_pool {
+    h2_queue *queue;
+    apr_thread_mutex_t *lock;
+} h2_task_pool;
 
-    struct h2_stream_pool *streams;
-    struct h2_task_pool *submit_tasks;
-} h2_session;
+h2_task_pool *h2_task_pool_create(apr_pool_t *pool);
 
+void h2_task_pool_destroy(h2_task_pool *sp);
 
-h2_session *h2_session_create(conn_rec *c, apr_size_t max_streams);
-void h2_session_destroy(h2_session *session);
+apr_status_t h2_task_pool_term(h2_task_pool *sp);
 
-apr_status_t h2_session_serve(conn_rec *c);
+apr_status_t h2_task_pool_add(h2_task_pool *sp, h2_stream_task *task);
 
-int h2_session_pre_conn(conn_rec* c, void *arg);
+h2_stream_task *h2_task_pool_get(h2_task_pool *sp, int stream_id);
 
-#endif /* defined(__mod_h2__h2_session__) */
+h2_stream_task *h2_task_pool_get_any(h2_task_pool *sp);
+
+h2_stream_task *h2_task_pool_remove(h2_task_pool *sp,h2_stream_task *task);
+
+#endif /* defined(__mod_h2__h2_task_pool__) */
+

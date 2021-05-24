@@ -81,10 +81,6 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, se
     ap_log_error( APLOG_MARK, APLOG_INFO, 0, s, "initializing post config for real");
     
     apr_status_t status = h2_tls_init(p, s);
-    if (status == APR_SUCCESS) {
-        status = h2_session_init(p, s);
-    }
-    
     return status;
 }
 

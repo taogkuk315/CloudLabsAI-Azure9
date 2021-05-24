@@ -26,12 +26,20 @@ typedef struct h2_response {
     int stream_id;
     conn_rec *c;
     int state;
+    
     int chunked;
+    apr_size_t body_len;
+    apr_size_t remain_len;
+    h2_bucket *chunk_work;
     
     apr_size_t offset;
     h2_bucket *rawhead;
     
     char *status;
+    apr_array_header_t *hlines;
+    
+    const nghttp2_nv *nv;
+    apr_size_t nvlen;
 } h2_response;
 
 h2_response *h2_response_create(int stream_id, conn_rec *c);
@@ -43,5 +51,6 @@ apr_status_t h2_response_http_convert(h2_bucket *bucket,
                                       const char *data, apr_size_t len,
                                       apr_size_t *pconsumed);
 
+int h2_response_is_ready(h2_response *resp);
 
 #endif /* defined(__mod_h2__h2_response__) */

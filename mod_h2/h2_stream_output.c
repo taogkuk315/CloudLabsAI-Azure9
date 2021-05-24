@@ -91,7 +91,7 @@ static apr_status_t flush_cur(h2_stream_output *output,
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
                       "h2_stream(%d): flush %d bytes",
                       output->stream_id, (int)output->cur->data_len);
-        h2_bucket_queue_push(output->queue, output->cur, output->stream_id);
+        h2_bucket_queue_append(output->queue, output->cur, output->stream_id);
         output->cur = NULL;
     }
     
@@ -119,8 +119,7 @@ static apr_status_t process_data(h2_stream_output *output,
         }
         len -= consumed;
         data += consumed;
-        apr_size_t avail = h2_bucket_available(output->cur);
-        if (avail <= 0) {
+        if (h2_bucket_available(output->cur) <= 0) {
             flush_cur(output, filter);
         }
     }
@@ -156,7 +155,7 @@ apr_status_t h2_stream_output_write(h2_stream_output *output,
                               output->stream_id);
                 output->eos = 1;
                 flush_cur(output, filter);
-                h2_bucket_queue_push_eos(output->queue, output->stream_id);
+                h2_bucket_queue_append_eos(output->queue, output->stream_id);
                 got_eos = 1;
             }
             else if (APR_BUCKET_IS_FLUSH(bucket)) {
