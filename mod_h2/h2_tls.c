@@ -107,7 +107,7 @@ static int h2_tls_alpn_propose(conn_rec *c,
     
     if (!client_protos
         || h2_util_array_index(client_protos, PROTO_H2_14) >= 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "ALPN proposing %s", PROTO_H2_14);
         APR_ARRAY_PUSH(protos, const char*) = PROTO_H2_14;
     }
@@ -142,8 +142,6 @@ static int h2_tls_alpn_negotiated(conn_rec *c,
     
     if (proto_name_len == strlen(PROTO_H2_14)
         && strncmp(PROTO_H2_14, proto_name, proto_name_len) == 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
-                      "ALPN negotiated: %s", PROTO_H2_14);
         h2_ctx_set_protocol(c, PROTO_H2_14);
     }
     else {
@@ -154,23 +152,23 @@ static int h2_tls_alpn_negotiated(conn_rec *c,
 
 int h2_tls_pre_conn(conn_rec* c, void *arg)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_tls, pre_connection, start");
     h2_ctx *ctx = h2_ctx_get(c);
     if (!ctx) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_tls, pre_connection, no ctx");
         /* We have not seen this one yet, are we active? */
         h2_config *cfg = h2_config_get(c);
         if (!cfg->h2_enabled) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                           "h2_tls, pre_connection, h2 not enabled");
             return DECLINED;
         }
         
         /* Are we using TLS on this connection? */
         if (!h2_tls_is_tls(c)) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                           "h2_tls, pre_connection, no TLS");
             return DECLINED;
         }
@@ -184,16 +182,16 @@ int h2_tls_pre_conn(conn_rec* c, void *arg)
         
         ctx = h2_ctx_create(c);
         opt_ssl_register_alpn(c, h2_tls_alpn_propose, h2_tls_alpn_negotiated);
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_tls, pre_connection, ALPN callback registered");
         
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_tls, pre_connection, end");
     }
     else if (h2_ctx_is_stream(c)) {
         /* A connection that represents a http2 stream from another connection.
          */
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_tls, pre_connection, found stream task");
         h2_stream_task *task = (h2_stream_task *)ctx->userp;
         return h2_stream_task_pre_conn(task, c);
@@ -223,14 +221,14 @@ int h2_tls_process_conn(conn_rec* c)
         }
     }
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_tls, connection, start");
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, "h2_tls, connection, start");
     if (h2_ctx_is_active(c)) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_tls, connection, h2 active");
         
         return h2_session_serve(c);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_tls, connection, declined");
     return DECLINED;
 }
@@ -243,7 +241,7 @@ int h2_tls_stream_pre_conn(conn_rec* c, void *arg)
          * And it uses TLS by default. We need to disable that.
          */
         if (!opt_ssl_engine_disable || opt_ssl_engine_disable(c) == 0) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c,
                           "h2_tls, stream_pre_conn, unable to disable TLS");
         }
     }

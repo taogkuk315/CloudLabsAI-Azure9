@@ -39,7 +39,7 @@ distclean:
 	@rm -rf $(GEN)
 	$(foreach sd, $(SUB_DIRS), make -C $(sd) distclean; )
 
-start: $(INST_DIR)/.httpd-setup
+start: $(INST_DIR)/.test-setup
 	@$(INST_DIR)/bin/apachectl restart
 
 stop:

@@ -29,7 +29,7 @@ CURL         = $(INST_DIR)/bin/curl
 all: test
 
 clean:
-	@rm -rf $(GEN)
+	@rm -rf $(GEN) $(INST_DIR)/.testdocs-setup $(INST_DIR)/.test-setup
 
 distclean:
 	@rm -rf $(GEN)
@@ -39,21 +39,22 @@ distclean:
 # Test the local httpd
 #
 test: \
-		$(INST_DIR)/.httpd-setup \
+		$(INST_DIR)/.test-setup \
 		$(INST_DIR)/.curl-installed
 	@rm -rf $(GEN)/tmp
 	@mkdir -p $(GEN)/tmp
 	@$(INST_DIR)/bin/apachectl restart
 	@echo -n checking index.html over http...
 	@$(CURL) -sk --resolv test.local:$(HTTP_PORT):127.0.0.1 http://test.local:$(HTTP_PORT)/index.html > $(GEN)/tmp/http_index.html
-	@diff  $(INST_DIR)/htdocs/index.html $(GEN)/tmp/http_index.html
+	@diff  htdocs/test.local/index.html $(GEN)/tmp/http_index.html
 	@echo ok.
 	@echo -n checking index.html over https with HTTP/1...
 	@$(CURL) -sk --http1.1 --resolv test.local:$(HTTPS_PORT):127.0.0.1 https://test.local:$(HTTPS_PORT)/index.html > $(GEN)/tmp/https_index.html
-	@diff  $(INST_DIR)/htdocs/index.html $(GEN)/tmp/https_index.html
+	@diff  htdocs/test.local/index.html $(GEN)/tmp/https_index.html
 	@echo ok.
 	@echo -n checking index.html over https with h2...
-	@$(CURL) -sk --http2 --resolv test.local:$(HTTPS_PORT):127.0.0.1 https://test.local:$(HTTPS_PORT)/index.html > $(GEN)/tmp/h2_index.html || bash -c "echo -n failed as expected..."
+	@$(CURL) -sk --http2 --resolv test.local:$(HTTPS_PORT):127.0.0.1 https://test.local:$(HTTPS_PORT)/index.html > $(GEN)/tmp/h2_index.html
+	@diff  htdocs/test.local/index.html $(GEN)/tmp/h2_index.html
 	@echo ok.
 	@$(INST_DIR)/bin/apachectl stop
 
@@ -64,17 +65,27 @@ test: \
 SETUP_FILES = $(wildcard conf/*.conf) $(wildcard conf/sites/*.conf) \
     $(wildcard conf/mods/*.conf) $(wildcard conf/mods/*.load)
 
-$(INST_DIR)/.httpd-setup: \
+$(INST_DIR)/.testdocs-setup: \
+	$(wildcard conf/*) \
+	$(wildcard htdocs/*/*)
+	@echo -n setup htdocs locally...
+	@cp -r htdocs/* $(INST_DIR)/htdocs
+	@echo done.
+	@touch $(INST_DIR)/.testdocs-setup
+
+$(INST_DIR)/.test-setup: \
 		$(INST_DIR)/.httpd-installed \
 		conf/httpd.conf \
 		conf/modules.conf \
 		$(wildcard conf/sites/*.conf) \
         $(wildcard conf/mods/*.*) \
-		$(INST_DIR)/conf/test.local.key \
-		$(INST_DIR)/conf/test.local.pem
+		$(INST_DIR)/conf/ssl/test.local.key \
+		$(INST_DIR)/conf/ssl/test.local.pem \
+		$(INST_DIR)/.testdocs-setup
 	@echo -n setup httpd locally...
 	@mkdir -p $(INST_DIR)/conf/sites
 	@mkdir -p $(INST_DIR)/conf/mods
+	@mkdir -p $(INST_DIR)/conf/ssl
 	@for file in $(SETUP_FILES); do \
 		sed -e "s,SUBST_SERVER_ROOT_SUBST,$(BLD_PREFIX),g" \
 			-e "s,SUBST_SERVER_NAME_SUBST,$(shell hostname -f),g" \
@@ -82,16 +93,19 @@ $(INST_DIR)/.httpd-setup: \
 			-e "s,SUBST_PORT_HTTPS_SUBST,$(HTTPS_PORT),g" \
 			< $$file > $(INST_DIR)/$$file; \
 	done
+	@cp conf/ssl/*.* $(INST_DIR)/conf/ssl
 	@echo done.
-	@touch $(INST_DIR)/.httpd-setup
+	@touch $(INST_DIR)/.test-setup
 
-$(INST_DIR)/conf/test.local.key:
-	openssl genrsa -out $(INST_DIR)/conf/test.local.key 4096
+$(INST_DIR)/conf/ssl/test.local.key:
+	@mkdir -p $(INST_DIR)/conf/ssl
+	openssl genrsa -out $(INST_DIR)/conf/ssl/test.local.key 4096
 
-$(INST_DIR)/conf/test.local.pem: \
-		$(INST_DIR)/conf/test.local.key \
-		conf/x509.input
-	openssl req -new -x509 -key $(INST_DIR)/conf/test.local.key -out $(INST_DIR)/conf/test.local.pem -days 1095 < conf/x509.input
+$(INST_DIR)/conf/ssl/test.local.pem: \
+		$(INST_DIR)/conf/ssl/test.local.key \
+		conf/ssl/x509.input
+	openssl req -new -x509 -key $(INST_DIR)/conf/ssl/test.local.key \
+		-out $(INST_DIR)/conf/ssl/test.local.pem -days 1095 < conf/ssl/x509.input
 
 ################################################################################
 # Install the local httpd for our tests

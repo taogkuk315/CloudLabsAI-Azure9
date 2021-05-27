@@ -108,7 +108,8 @@ static void *match_entry(void *match_entry, int id, void *entry)
     return (match_entry == entry)? entry : NULL;
 }
 
-h2_qdata *h2_queue_find_int(h2_queue *q, h2_queue_find_fn find, void *ctx)
+static h2_qdata *h2_queue_find_int(h2_queue *q,
+                                   h2_queue_match_fn find, void *ctx)
 {
     
     for (h2_qdata *qdata = q->first; qdata; qdata = qdata->next) {
@@ -120,7 +121,7 @@ h2_qdata *h2_queue_find_int(h2_queue *q, h2_queue_find_fn find, void *ctx)
     return NULL;
 }
 
-void *h2_queue_find(h2_queue *q, h2_queue_find_fn find, void *ctx)
+void *h2_queue_find(h2_queue *q, h2_queue_match_fn find, void *ctx)
 {
     h2_qdata *qdata = h2_queue_find_int(q, find, ctx);
     return qdata? qdata->entry : NULL;
@@ -132,7 +133,7 @@ void *h2_queue_find_id(h2_queue *q, int id)
     return qdata? qdata->entry : NULL;
 }
 
-void *h2_queue_pop_find(h2_queue *q, h2_queue_find_fn find, void *ctx)
+void *h2_queue_pop_find(h2_queue *q, h2_queue_match_fn find, void *ctx)
 {
     void *entry;
     h2_qdata *qdata = h2_queue_find_int(q, find, ctx);
@@ -154,6 +155,42 @@ void *h2_queue_pop(h2_queue *q)
 void *h2_queue_pop_id(h2_queue *q, int id)
 {
     return h2_queue_pop_find(q, match_id, &id);
+}
+
+apr_status_t h2_queue_append(h2_queue *q, void *entry)
+{
+    return h2_queue_append_id(q, H2_QUEUE_ID_NONE, entry);
+}
+
+apr_status_t h2_queue_append_id(h2_queue *q, int id, void *entry)
+{
+    if (q->terminated) {
+        return APR_EOF;
+    }
+    else {
+        h2_qdata *qdata = q->free;
+        if (qdata) {
+            q->free = qdata->next;
+            memset(qdata, 0, sizeof(h2_qdata));
+        }
+        else {
+            qdata = apr_pcalloc(q->pool, sizeof(h2_qdata));
+        }
+        
+        qdata->entry = entry;
+        qdata->id = id;
+        
+        if (q->last) {
+            q->last->next = qdata;
+            qdata->prev = q->last;
+            q->last = qdata;
+        }
+        else {
+            assert(!q->first);
+            q->first = q->last = qdata;
+        }
+    }
+    return APR_SUCCESS;
 }
 
 apr_status_t h2_queue_push(h2_queue *q, void *entry)
@@ -179,13 +216,13 @@ apr_status_t h2_queue_push_id(h2_queue *q, int id, void *entry)
         qdata->entry = entry;
         qdata->id = id;
         
-        if (q->last) {
-            q->last->next = qdata;
-            qdata->prev = q->last;
-            q->last = qdata;
+        if (q->first) {
+            q->first->prev = qdata;
+            qdata->next = q->first;
+            q->first = qdata;
         }
         else {
-            assert(!q->first);
+            assert(!q->last);
             q->first = q->last = qdata;
         }
     }

@@ -19,6 +19,8 @@
 INST_DIR     = ../gen/install
 
 APXS    = $(INST_DIR)/bin/apxs
+APXS_FLAGS =
+
 LIBTOOL = libtool
 
 C_SRC   = \
@@ -34,9 +36,9 @@ C_SRC   = \
         h2_stream.c \
         h2_stream_input.c \
         h2_stream_output.c \
-        h2_stream_pool.c \
+        h2_stream_set.c \
         h2_stream_task.c \
-        h2_task_pool.c \
+        h2_task_set.c \
         h2_tls.c \
         h2_util.c \
 
@@ -65,7 +67,7 @@ all: build
 build: mod_h2.la
 
 mod_h2.la : mod_h2.c $(OBJ) Makefile
-	$(APXS) $(INCLUDES) -o $@ -c mod_h2.c $(LOBJ) $(LIBS)
+	$(APXS) $(APXS_FLAGS) $(INCLUDES) -o $@ -c mod_h2.c $(LOBJ) $(LIBS)
 
 install: mod_h2.la
 	$(APXS) -i mod_h2.la
@@ -73,7 +75,7 @@ install: mod_h2.la
 clean:
 	rm -f *.o *.la *.lo *.slo
 
-start: $(INST_DIR)/.httpd-setup
+start: $(INST_DIR)/.test-setup
 	@$(INST_DIR)/bin/apachectl restart
 
 stop:

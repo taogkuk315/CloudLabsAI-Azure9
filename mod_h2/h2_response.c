@@ -31,25 +31,33 @@
 #include "h2_response.h"
 #include "h2_util.h"
 
-apr_status_t h2_response_init(h2_response *response, int stream_id, conn_rec *c)
+static void set_state(h2_response *resp, h2_response_state_t state)
 {
-    memset(response, 0, sizeof(h2_response));
-    response->stream_id = stream_id;
-    response->c = c;
-    response->state = H2_RESP_ST_STATUS_LINE;
-    response->hlines = apr_array_make(c->pool, 10, sizeof(char *));
-    return APR_SUCCESS;
+    if (resp->state != state) {
+        h2_response_state_t oldstate = resp->state;
+        resp->state = state;
+        if (resp->state_cb) {
+            resp->state_cb(resp, oldstate, resp->state_cb_ctx);
+        }
+    }
 }
+
 
 h2_response *h2_response_create(int stream_id, conn_rec *c)
 {
     h2_response *resp = apr_pcalloc(c->pool, sizeof(h2_response));
-    h2_response_init(resp, stream_id, c);
+    if (resp) {
+        resp->stream_id = stream_id;
+        resp->c = c;
+        resp->state = H2_RESP_ST_STATUS_LINE;
+        resp->hlines = apr_array_make(c->pool, 10, sizeof(char *));
+    }
     return resp;
 }
 
 apr_status_t h2_response_destroy(h2_response *response)
 {
+    set_state(response, H2_RESP_ST_DONE);
     if (response->rawhead) {
         h2_bucket_destroy(response->rawhead);
         response->rawhead = NULL;
@@ -57,10 +65,12 @@ apr_status_t h2_response_destroy(h2_response *response)
     return APR_SUCCESS;
 }
 
-int h2_response_is_ready(h2_response *resp)
+void h2_response_set_state_change_cb(h2_response *resp,
+                                     h2_response_state_change_cb *callback,
+                                     void *cb_ctx)
 {
-    return (resp->state == H2_RESP_ST_BODY)
-        || (resp->state == H2_RESP_ST_DONE);
+    resp->state_cb = callback;
+    resp->state_cb_ctx = cb_ctx;
 }
 
 static apr_status_t ensure_buffer(h2_response *resp)
@@ -130,18 +140,18 @@ static apr_status_t make_h2_headers(h2_response *resp)
             }
             resp->body_len = clen;
         }
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, resp->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, resp->c,
                       "h2_response(%d): constructed header '%s' = '%s'",
                       resp->stream_id, (char*)nv->name, (char*)nv->value);
     }
     resp->nvlen = nvlen;
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,
-                  "h2_response(%d): converted %d headers into nghttp2 format",
-                  resp->stream_id, (int)resp->nvlen);
+                  "h2_response(%d): converted %d headers, content-length: %ld",
+                  resp->stream_id, (int)resp->nvlen, (long)resp->body_len);
     
     resp->remain_len = resp->body_len;
-    resp->state = ((resp->chunked || resp->body_len > 0)?
-                   H2_RESP_ST_BODY : H2_RESP_ST_DONE);
+    set_state(resp, ((resp->chunked || resp->body_len > 0)?
+                     H2_RESP_ST_BODY : H2_RESP_ST_DONE));
     /* We are ready to be sent to the client */
     return APR_SUCCESS;
 }
@@ -218,9 +228,9 @@ static apr_status_t parse_status_line(h2_response *resp)
             
             resp->status = apr_pstrdup(resp->c->pool, sword);
             resp->offset = i + 2;
-            resp->state = H2_RESP_ST_HEADERS;
+            set_state(resp, H2_RESP_ST_HEADERS);
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,
-                          "h2_response(%d): parsed status %s",
+                          "h2_response(%d): status is %s",
                           resp->stream_id, resp->status);
             
             return parse_headers(resp);
@@ -277,7 +287,7 @@ static apr_status_t read_chunk_size(h2_response *resp,
                                       "h2_response(%d): end chunk read, but %ld bytes remain",
                                       resp->stream_id, (long)len - *pconsumed);
                     }
-                    resp->state = H2_RESP_ST_DONE;
+                    set_state(resp, H2_RESP_ST_DONE);
                 }
                 h2_bucket_reset(resp->chunk_work);
                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,

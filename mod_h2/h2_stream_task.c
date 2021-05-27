@@ -55,11 +55,13 @@ static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
 
 void h2_stream_hooks_init(void)
 {
-    h2_input_filter_handle = ap_register_input_filter(
-                                                      "H2_TO_HTTP", h2_filter_stream_input, NULL, AP_FTYPE_NETWORK);
+    h2_input_filter_handle =
+        ap_register_input_filter("H2_TO_HTTP", h2_filter_stream_input,
+                                 NULL, AP_FTYPE_NETWORK);
     
-    h2_output_filter_handle = ap_register_output_filter(
-                                                        "HTTP_TO_H2", h2_filter_stream_output, NULL, AP_FTYPE_NETWORK);
+    h2_output_filter_handle =
+        ap_register_output_filter("HTTP_TO_H2", h2_filter_stream_output,
+                                  NULL, AP_FTYPE_NETWORK);
 }
 
 int h2_stream_task_pre_conn(h2_stream_task *task, conn_rec *c)
@@ -71,7 +73,7 @@ int h2_stream_task_pre_conn(h2_stream_task *task, conn_rec *c)
      */
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
                   "h2_stream(%d): task_pre_conn, installing filters",
-                  task->stream->id);
+                  task->stream_id);
     ap_add_input_filter_handle(h2_input_filter_handle,
                                task, NULL, c);
     ap_add_output_filter_handle(h2_output_filter_handle,
@@ -80,7 +82,7 @@ int h2_stream_task_pre_conn(h2_stream_task *task, conn_rec *c)
     /* prevent processing by anyone else, including httpd core */
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
                   "h2_stream(%d): task_pre_conn, taking over",
-                  task->stream->id);
+                  task->stream_id);
     return DONE;
 }
 
@@ -155,58 +157,84 @@ static apr_status_t output_convert(h2_bucket *bucket,
                                    apr_size_t *pconsumed)
 {
     h2_stream_task *task = (h2_stream_task *)conv_ctx;
-    apr_status_t status = h2_response_http_convert(bucket, task->response,
-                                                   data, len, pconsumed);
-    if (status == APR_SUCCESS
-        && !task->ready_called
-        && h2_response_is_ready(task->response)) {
-        /* time to submit the response on the stream. This
-         * needs to happen inside the h2_session thread that
-         * manages the main, real connection. */
-        task->ready_called = 1;
-        status = task->on_headers_ready(task);
-    }
-    return status;
+    return h2_response_http_convert(bucket, task->response,
+                                    data, len, pconsumed);
 }
 
-apr_status_t h2_stream_task_create(h2_stream_task **ptask,
-                                   h2_stream *stream,
-                                   h2_bucket_queue *input,
-                                   h2_bucket_queue *output)
+static void set_state(h2_stream_task *task, h2_stream_task_state_t state)
+{
+    if (task->state != state) {
+        h2_stream_task_state_t oldstate = task->state;
+        task->state = state;
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, task->c,
+                      "h2_stream_task(%d): state now %d, was %d",
+                      task->stream_id, task->state, oldstate);
+        if (task->state_change_cb) {
+            task->state_change_cb(task, oldstate, task->state_change_ctx);
+        }
+    }
+}
+
+static void response_state_change(h2_response *resp,
+                                  h2_response_state_t prevstate,
+                                  void *cb_ctx)
+{
+    switch (resp->state) {
+        case H2_RESP_ST_BODY:
+        case H2_RESP_ST_DONE: {
+            h2_stream_task *task = (h2_stream_task *)cb_ctx;
+            if (task->state < H2_TASK_ST_READY) {
+                set_state(task, H2_TASK_ST_READY);
+            }
+            break;
+        }
+        default:
+            /* nop */
+            break;
+    }
+}
+
+h2_stream_task *h2_stream_task_create(int stream_id,
+                                      conn_rec *master,
+                                      h2_bucket_queue *input,
+                                      h2_bucket_queue *output)
 {
     conn_rec *c = NULL;
-    apr_status_t status = h2_conn_create(&c, stream->session->c);
+    apr_status_t status = h2_conn_create(&c, master);
     if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, stream->session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, master,
                       "h2_stream_task(%d): unable to create stream task",
-                      stream->id);
-        return status;
+                      stream_id);
+        return NULL;
     }
     
     h2_stream_task *task = apr_pcalloc(c->pool, sizeof(h2_stream_task));
     if (task == NULL) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream->session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, master,
                       "h2_stream_task(%d): unable to create stream task",
-                      stream->id);
-        return APR_ENOMEM;
+                      stream_id);
+        return NULL;
     }
     
     task->c = c;
-    task->stream = stream;
-    task->input = h2_stream_input_create(task->c->pool, stream->id, input);
-    task->output = h2_stream_output_create(task->c->pool, stream->id, output);
+    task->state = H2_TASK_ST_IDLE;
+    task->stream_id = stream_id;
+    task->input = h2_stream_input_create(task->c->pool, stream_id, input);
+    task->output = h2_stream_output_create(task->c->pool, stream_id, output);
     
-    task->response = h2_response_create(stream->id, task->c);
+    task->response = h2_response_create(stream_id, task->c);
+    h2_response_set_state_change_cb(task->response,
+                                    response_state_change, task);
     h2_stream_output_set_converter(task->output, output_convert, task);
     
     h2_ctx_create_for(task->c, task);
     
-    *ptask = task;
-    return APR_SUCCESS;
+    return task;
 }
 
 apr_status_t h2_stream_task_destroy(h2_stream_task *task)
 {
+    set_state(task, H2_TASK_ST_DONE);
     if (task->input) {
         h2_stream_input_destroy(task->input);
         task->input = NULL;
@@ -219,19 +247,25 @@ apr_status_t h2_stream_task_destroy(h2_stream_task *task)
         h2_response_destroy(task->response);
         task->response = NULL;
     }
-    apr_pool_clear(task->c->pool);
+    if (0 && task->c->pool) {
+        apr_pool_destroy(task->c->pool);
+        task->c->pool = NULL;
+    }
     return APR_EGENERAL;
 }
 
-void h2_stream_task_set_on_ready(h2_stream_task *task, h2_on_headers_ready cb)
+void h2_stream_task_set_state_change_cb(h2_stream_task *task,
+                                        h2_stream_task_state_change_cb *cb,
+                                        void *cb_ctx)
 {
-    task->on_headers_ready = cb;
+    task->state_change_cb = cb;
+    task->state_change_ctx = cb_ctx;
 }
 
 apr_status_t h2_stream_task_do(h2_stream_task *task)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_stream_task(%d): do", task->stream->id);
+                  "h2_stream_task(%d): do", task->stream_id);
     apr_status_t status;
     
     /* Furthermore, other code might want to see the socket for
@@ -247,16 +281,21 @@ apr_status_t h2_stream_task_do(h2_stream_task *task)
         return status;
     }
     
+    set_state(task, H2_TASK_ST_STARTED);
+    
     /* Incantations from mod_spdy. Peek and poke until the core
      * and other modules like mod_reqtimeout are happy */
     ap_set_module_config(task->c->conn_config, &core_module, socket);
     
     ap_process_connection(task->c, socket);
     
+    apr_socket_close(socket);
+    
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, task->c,
-                  "h2_stream(%d): done with task, input_eos=%d, output_eos=%d"
-                  ", response status=%s, headers=%d",
-                  (int)task->stream->id, task->input->eos, task->output->eos,
+                  "h2_stream(%d): done with task, state=%d, input_eos=%d, "
+                  "output_eos=%d, response status=%s, headers=%d",
+                  (int)task->stream_id, task->state,
+                  task->input->eos, task->output->eos,
                   task->response->status, (int)task->response->nvlen);
     
     return APR_SUCCESS;

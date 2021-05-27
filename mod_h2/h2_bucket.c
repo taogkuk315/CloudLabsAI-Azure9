@@ -98,3 +98,27 @@ void h2_bucket_reset(h2_bucket *bucket)
     bucket->data_len = 0;
     memset(bucket->data, 0, bucket->data_size);
 }
+
+apr_size_t h2_bucket_copy(const h2_bucket *bucket, char *buf, apr_size_t len)
+{
+    apr_size_t copied = (len > bucket->data_len)? bucket->data_len : len;
+    memcpy(buf, bucket->data, copied);
+    return copied;
+}
+
+apr_size_t h2_bucket_move(h2_bucket *bucket, char *buf, apr_size_t len)
+{
+    /* copy as much data as we can and update the bucket to show
+     * any data that has not been copied yet. */
+    apr_size_t copied = h2_bucket_copy(bucket, buf, len);
+    if (copied > 0) {
+        assert(copied <= bucket->data_len);
+        bucket->data_len -= copied;
+        if (bucket->data_len > 0) {
+            bucket->data += copied;
+        }
+    }
+    return copied;
+}
+
+

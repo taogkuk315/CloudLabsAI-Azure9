@@ -19,7 +19,7 @@
 
 #include <stdio.h>
 
-typedef void *(*h2_queue_find_fn)(void *ctx, int id, void *entry);
+typedef void *(*h2_queue_match_fn)(void *ctx, int id, void *entry);
 typedef void (*h2_queue_free_fn)(void *entry);
 
 typedef struct h2_queue {
@@ -39,15 +39,18 @@ h2_queue *h2_queue_create(apr_pool_t *pool, h2_queue_free_fn free_fn);
 void h2_queue_destroy(h2_queue *q);
 void h2_queue_term(h2_queue *q);
 
+apr_status_t h2_queue_append(h2_queue *q, void *entry);
+apr_status_t h2_queue_append_id(h2_queue *q, int id, void *entry);
+
 apr_status_t h2_queue_push(h2_queue *q, void *entry);
 apr_status_t h2_queue_push_id(h2_queue *q, int id, void *entry);
 
-void *h2_queue_find(h2_queue *q, h2_queue_find_fn find, void *ctx);
+void *h2_queue_find(h2_queue *q, h2_queue_match_fn find, void *ctx);
 void *h2_queue_find_id(h2_queue *q, int id);
 
 void *h2_queue_pop(h2_queue *q);
 void *h2_queue_pop_id(h2_queue *q, int id);
-void *h2_queue_pop_find(h2_queue *q, h2_queue_find_fn find, void *ctx);
+void *h2_queue_pop_find(h2_queue *q, h2_queue_match_fn find, void *ctx);
 
 void *h2_queue_remove(h2_queue *q, void *entry);
 

@@ -34,8 +34,20 @@
 #include "h2_stream_input.h"
 
 
+static void set_state(h2_stream *stream, h2_stream_state_t state)
+{
+    if (stream->state != state) {
+        h2_stream_state_t oldstate = stream->state;
+        stream->state = state;
+        if (stream->state_change_cb) {
+            stream->state_change_cb(stream, oldstate, stream->state_change_ctx);
+        }
+    }
+}
+
+
 apr_status_t h2_stream_create(h2_stream **pstream,
-                              int id, int state,
+                              int id, h2_stream_state_t state,
                               h2_session *session)
 {
     h2_stream *stream = apr_pcalloc(session->c->pool, sizeof(h2_stream));
@@ -54,8 +66,20 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
         h2_bucket_destroy(stream->work);
         stream->work = NULL;
     }
+    if (stream->task) {
+        h2_stream_task_destroy(stream->task);
+        stream->task = NULL;
+    }
     stream->session = NULL;
     return APR_SUCCESS;
+}
+
+void h2_stream_set_state_change_cb(h2_stream *stream,
+                                   h2_stream_state_change_cb cb,
+                                   void *cb_ctx)
+{
+    stream->state_change_cb = cb;
+    stream->state_change_ctx = cb_ctx;
 }
 
 static apr_status_t h2_stream_check_work(h2_stream *stream)
@@ -72,8 +96,9 @@ static apr_status_t h2_stream_check_work(h2_stream *stream)
 apr_status_t h2_stream_push(h2_stream *stream)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                  "h2_stream(%d): pushing req data %s",
-                  stream->id, stream->work->data);
+                  "h2_stream(%d): pushing request: %s %s for %s",
+                  (int)stream->id,
+                  stream->method, stream->path, stream->authority);
     
     apr_status_t status = h2_bucket_queue_append(stream->session->request_data,
                                                  stream->work, stream->id);
@@ -123,11 +148,11 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
             break; /* ignore, idempotent */
         case H2_STREAM_ST_CLOSED_OUTPUT:
             /* both closed now */
-            stream->state = H2_STREAM_ST_CLOSED;
+            set_state(stream, H2_STREAM_ST_CLOSED);
             break;
         default:
             /* everything else we jump to here */
-            stream->state = H2_STREAM_ST_CLOSED_INPUT;
+            set_state(stream, H2_STREAM_ST_CLOSED_INPUT);
             break;
     }
     if (stream->work) {
@@ -149,11 +174,11 @@ apr_status_t h2_stream_close_output(h2_stream *stream)
             break; /* ignore, idempotent */
         case H2_STREAM_ST_CLOSED_INPUT:
             /* both closed now */
-            stream->state = H2_STREAM_ST_CLOSED;
+            set_state(stream, H2_STREAM_ST_CLOSED);
             break;
         default:
             /* everything else we jump to here */
-            stream->state = H2_STREAM_ST_CLOSED_OUTPUT;
+            set_state(stream, H2_STREAM_ST_CLOSED_OUTPUT);
             break;
     }
     return APR_SUCCESS;
@@ -289,3 +314,12 @@ apr_status_t h2_stream_add_data(h2_stream *stream,
     return APR_SUCCESS;
 }
 
+void h2_stream_set_data_suspended(h2_stream *stream, int suspended)
+{
+    stream->data_suspended = suspended;
+}
+
+int h2_stream_is_data_suspended(h2_stream *stream)
+{
+    return stream->data_suspended;
+}

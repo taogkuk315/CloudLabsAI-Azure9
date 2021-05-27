@@ -129,6 +129,28 @@ static apr_status_t pop_int(h2_bucket_queue *q,
     return status;
 }
 
+apr_status_t h2_bucket_queue_push(h2_bucket_queue *q, h2_bucket *bucket,
+                                  int stream_id)
+{
+    apr_status_t status = apr_thread_mutex_lock(q->lock);
+    if (status != APR_SUCCESS) {
+        return status;
+    }
+    
+    if (q->queue->terminated) {
+        status = APR_EOF;
+    }
+    else {
+        if (q->ev_cb) {
+            q->ev_cb(q, H2_BQ_EV_BEFORE_PUSH, bucket, stream_id, q->ev_ctx);
+        }
+        status = h2_queue_push_id(q->queue, stream_id, bucket);
+        apr_thread_cond_broadcast(q->has_data);
+    }
+    apr_thread_mutex_unlock(q->lock);
+    return status;
+}
+
 apr_status_t h2_bucket_queue_pop(h2_bucket_queue *q, apr_read_type_e block,
                                  int stream_id, h2_bucket **pbucket)
 {
@@ -148,7 +170,10 @@ apr_status_t h2_bucket_queue_append(h2_bucket_queue *q,
         status = APR_EOF;
     }
     else {
-        status = h2_queue_push_id(q->queue, stream_id, bucket);
+        if (q->ev_cb) {
+            q->ev_cb(q, H2_BQ_EV_BEFORE_APPEND, bucket, stream_id, q->ev_ctx);
+        }
+        status = h2_queue_append_id(q->queue, stream_id, bucket);
         apr_thread_cond_broadcast(q->has_data);
     }
     apr_thread_mutex_unlock(q->lock);
@@ -172,5 +197,38 @@ int h2_bucket_queue_has_eos_for(h2_bucket_queue *q, int stream_id)
     }
     
     return eos_found;
+}
+
+int h2_bucket_queue_is_empty(h2_bucket_queue *q)
+{
+    int empty = 0;
+    apr_status_t status = apr_thread_mutex_lock(q->lock);
+    if (status == APR_SUCCESS) {
+        empty = h2_queue_is_empty(q->queue);
+        apr_thread_mutex_unlock(q->lock);
+    }
+    
+    return empty;
+}
+
+int h2_bucket_queue_has_buckets_for(h2_bucket_queue *q, int stream_id)
+{
+    int found = 0;
+    apr_status_t status = apr_thread_mutex_lock(q->lock);
+    if (status == APR_SUCCESS) {
+        h2_bucket *b = h2_queue_find_id(q->queue, stream_id);
+        found = (b != NULL);
+        apr_thread_mutex_unlock(q->lock);
+    }
+    
+    return found;
+}
+
+void h2_bucket_queue_set_event_cb(h2_bucket_queue *queue,
+                                  h2_bucket_queue_event_cb *callback,
+                                  void *ev_ctx)
+{
+    queue->ev_cb = callback;
+    queue->ev_ctx = ev_ctx;
 }
 

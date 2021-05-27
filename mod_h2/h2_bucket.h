@@ -46,4 +46,7 @@ apr_size_t h2_bucket_available(h2_bucket *bucket);
 
 void h2_bucket_reset(h2_bucket *bucket);
 
+apr_size_t h2_bucket_copy(const h2_bucket *bucket, char *buf, apr_size_t len);
+apr_size_t h2_bucket_move(h2_bucket *bucket, char *buf, apr_size_t len);
+
 #endif /* defined(__mod_h2__h2_bucket__) */

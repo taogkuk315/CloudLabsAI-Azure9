@@ -27,14 +27,14 @@
 typedef struct h2_session {
     conn_rec *c;
     nghttp2_session *ngh2;
-    h2_io_ctx io;
     int loglvl;
-    
+
+    h2_io_ctx io;
     h2_bucket_queue *request_data;
     h2_bucket_queue *response_data;
 
-    struct h2_stream_pool *streams;
-    struct h2_task_pool *submit_tasks;
+    struct h2_stream_set *streams;
+    struct h2_task_set *submit_tasks;
 } h2_session;
 
 

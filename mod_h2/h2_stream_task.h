@@ -19,24 +19,35 @@
 
 struct h2_stream_task;
 
-typedef apr_status_t (*h2_on_headers_ready)(struct h2_stream_task *task);
+typedef enum {
+    H2_TASK_ST_IDLE,
+    H2_TASK_ST_STARTED,
+    H2_TASK_ST_READY,
+    H2_TASK_ST_DONE
+} h2_stream_task_state_t;
+
+typedef void h2_stream_task_state_change_cb(struct h2_stream_task *task,
+                                            h2_stream_task_state_t,
+                                            void *cb_ctx);
 
 typedef struct h2_stream_task {
     conn_rec *c;
-    struct h2_stream *stream;
+    int stream_id;
+    h2_stream_task_state_t state;
     
     struct h2_stream_input *input;    /* http/1.1 input data */
     struct h2_stream_output *output;  /* response body data */
     struct h2_response *response;     /* response meta data */
+
+    h2_stream_task_state_change_cb *state_change_cb;
+    void *state_change_ctx;
     
-    int ready_called;
-    h2_on_headers_ready on_headers_ready;
 } h2_stream_task;
 
-apr_status_t h2_stream_task_create(h2_stream_task **ptask,
-                                   struct h2_stream *stream,
-                                   h2_bucket_queue *input,
-                                   h2_bucket_queue *output);
+h2_stream_task *h2_stream_task_create(int stream_id,
+                                      conn_rec *master,
+                                      h2_bucket_queue *input,
+                                      h2_bucket_queue *output);
 
 apr_status_t h2_stream_task_destroy(h2_stream_task *task);
 
@@ -46,6 +57,8 @@ apr_status_t h2_stream_task_do(h2_stream_task *task);
 void h2_stream_hooks_init(void);
 int h2_stream_task_pre_conn(h2_stream_task *task, conn_rec *c);
 
-void h2_stream_task_set_on_ready(h2_stream_task *task, h2_on_headers_ready cb);
+void h2_stream_task_set_state_change_cb(h2_stream_task *task,
+                                        h2_stream_task_state_change_cb cb,
+                                        void *cb_ctx);
 
 #endif /* defined(__mod_h2__h2_stream_task__) */
