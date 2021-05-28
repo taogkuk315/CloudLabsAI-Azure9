@@ -17,6 +17,8 @@
 #ifndef __mod_h2__h2_ctx__
 #define __mod_h2__h2_ctx__
 
+struct h2_task;
+
 typedef struct {
     int is_h2;
     int is_stream;
@@ -26,7 +28,7 @@ typedef struct {
 } h2_ctx;
 
 h2_ctx *h2_ctx_create(conn_rec *c);
-h2_ctx *h2_ctx_create_for(conn_rec *c, struct h2_stream_task *task);
+h2_ctx *h2_ctx_create_for(conn_rec *c, struct h2_task *task);
 h2_ctx *h2_ctx_get(conn_rec *c);
 
 const char *h2_ctx_get_protocol(conn_rec* c);

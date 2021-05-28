@@ -25,9 +25,9 @@
 #include "h2_bucket_queue.h"
 #include "h2_session.h"
 #include "h2_stream.h"
-#include "h2_stream_input.h"
+#include "h2_task_input.h"
 
-static int check_abort(h2_stream_input *input,
+static int check_abort(h2_task_input *input,
                        ap_filter_t *filter,
                        apr_bucket_brigade *brigade)
 {
@@ -42,17 +42,17 @@ static int check_abort(h2_stream_input *input,
 /** stream is in state of input closed. That means no input is pending
  * on the connection and all input (if any) is in the input queue.
  */
-static int all_queued(h2_stream_input *input)
+static int all_queued(h2_task_input *input)
 {
     return input->eos
     || h2_bucket_queue_has_eos_for(input->queue, input->stream_id);
 }
 
-h2_stream_input *h2_stream_input_create(apr_pool_t *pool,
+h2_task_input *h2_task_input_create(apr_pool_t *pool,
                                         int stream_id,
                                         h2_bucket_queue *q)
 {
-    h2_stream_input *input = apr_pcalloc(pool, sizeof(h2_stream_input));
+    h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
         input->queue = q;
         input->stream_id = stream_id;
@@ -60,7 +60,7 @@ h2_stream_input *h2_stream_input_create(apr_pool_t *pool,
     return input;
 }
 
-void h2_stream_input_destroy(h2_stream_input *input)
+void h2_task_input_destroy(h2_task_input *input)
 {
     if (input->cur) {
         h2_bucket_destroy(input->cur);
@@ -68,7 +68,7 @@ void h2_stream_input_destroy(h2_stream_input *input)
     }
 }
 
-apr_status_t h2_stream_input_read(h2_stream_input *input,
+apr_status_t h2_task_input_read(h2_task_input *input,
                                   ap_filter_t* filter,
                                   apr_bucket_brigade* brigade,
                                   ap_input_mode_t mode,
@@ -80,7 +80,7 @@ apr_status_t h2_stream_input_read(h2_stream_input *input,
     int all_there = all_queued(input);
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                  "h2_stream_input(%d): read() asking for %d bytes",
+                  "h2_task_input(%d): read() asking for %d bytes",
                   input->stream_id, (int)readbytes);
     
     if (input->cur && input->cur_offset >= input->cur->data_len) {
@@ -149,7 +149,7 @@ apr_status_t h2_stream_input_read(h2_stream_input *input,
                 /* Hmm, well. There is mode AP_MODE_EATCRLF, but we chose not
                  * to support it. Seems to work. */
                 ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOTIMPL, filter->c,
-                              "h2_stream_input, unsupported READ mode %d",
+                              "h2_task_input, unsupported READ mode %d",
                               mode);
                 return APR_ENOTIMPL;
             }
@@ -170,7 +170,7 @@ apr_status_t h2_stream_input_read(h2_stream_input *input,
             input->cur_offset += nread;
         }
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                      "h2_stream_input(%d): forward %d bytes",
+                      "h2_task_input(%d): forward %d bytes",
                       input->stream_id, (int)nread);
     }
     else if (all_there) {
@@ -189,3 +189,9 @@ apr_status_t h2_stream_input_read(h2_stream_input *input,
     
     return APR_SUCCESS;
 }
+
+void h2_task_input_abort(h2_task_input *input)
+{
+    input->aborted = 1;
+}
+

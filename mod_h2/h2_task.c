@@ -28,9 +28,9 @@
 #include "h2_session.h"
 #include "h2_response.h"
 #include "h2_stream.h"
-#include "h2_stream_input.h"
-#include "h2_stream_output.h"
-#include "h2_stream_task.h"
+#include "h2_task_input.h"
+#include "h2_task_output.h"
+#include "h2_task.h"
 #include "h2_ctx.h"
 
 static ap_filter_rec_t *h2_input_filter_handle;
@@ -41,37 +41,37 @@ static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
                                            ap_input_mode_t mode,
                                            apr_read_type_e block,
                                            apr_off_t readbytes) {
-    h2_stream_task *task = (h2_stream_task *)filter->ctx;
-    return h2_stream_input_read(task->input, filter, brigade,
-                                mode, block, readbytes);
+    h2_task *task = (h2_task *)filter->ctx;
+    return h2_task_input_read(task->input, filter, brigade,
+                              mode, block, readbytes);
 }
 
 static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
                                             apr_bucket_brigade* brigade) {
-    h2_stream_task *task = (h2_stream_task *)filter->ctx;
-    return h2_stream_output_write(task->output, filter, brigade);
+    h2_task *task = (h2_task *)filter->ctx;
+    return h2_task_output_write(task->output, filter, brigade);
 }
 
 
-void h2_stream_hooks_init(void)
+void h2_task_hooks_init(void)
 {
     h2_input_filter_handle =
-        ap_register_input_filter("H2_TO_HTTP", h2_filter_stream_input,
-                                 NULL, AP_FTYPE_NETWORK);
+    ap_register_input_filter("H2_TO_HTTP", h2_filter_stream_input,
+                             NULL, AP_FTYPE_NETWORK);
     
     h2_output_filter_handle =
-        ap_register_output_filter("HTTP_TO_H2", h2_filter_stream_output,
-                                  NULL, AP_FTYPE_NETWORK);
+    ap_register_output_filter("HTTP_TO_H2", h2_filter_stream_output,
+                              NULL, AP_FTYPE_NETWORK);
 }
 
-int h2_stream_task_pre_conn(h2_stream_task *task, conn_rec *c)
+int h2_task_pre_conn(h2_task *task, conn_rec *c)
 {
     /* Add our own, network level in- and output filters.
      * These will take input from the h2_session->request_data
      * bucket queue and place the output into the
      * h2_session->response_data bucket queue.
      */
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_stream(%d): task_pre_conn, installing filters",
                   task->stream_id);
     ap_add_input_filter_handle(h2_input_filter_handle,
@@ -80,7 +80,7 @@ int h2_stream_task_pre_conn(h2_stream_task *task, conn_rec *c)
                                 task, NULL, c);
     
     /* prevent processing by anyone else, including httpd core */
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_stream(%d): task_pre_conn, taking over",
                   task->stream_id);
     return DONE;
@@ -116,7 +116,7 @@ static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
     apr_status_t status = apr_pool_create(&spool, NULL);
     if (status != APR_SUCCESS || spool == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, master,
-                      "h2_stream_task, unable to alloc new pool");
+                      "h2_task, unable to alloc new pool");
         return APR_ENOMEM;
     }
     
@@ -145,7 +145,7 @@ static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
     *pc = c;
     
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, master,
-                  "h2_stream_task: created con %d from master %d",
+                  "h2_task: created con %d from master %d",
                   (int)c->id, (int)master->id);
     
     return APR_SUCCESS;
@@ -156,22 +156,19 @@ static apr_status_t output_convert(h2_bucket *bucket,
                                    const char *data, apr_size_t len,
                                    apr_size_t *pconsumed)
 {
-    h2_stream_task *task = (h2_stream_task *)conv_ctx;
+    h2_task *task = (h2_task *)conv_ctx;
     return h2_response_http_convert(bucket, task->response,
                                     data, len, pconsumed);
 }
 
-static void set_state(h2_stream_task *task, h2_stream_task_state_t state)
+static void set_state(h2_task *task, h2_task_state_t state)
 {
     if (task->state != state) {
-        h2_stream_task_state_t oldstate = task->state;
+        h2_task_state_t oldstate = task->state;
         task->state = state;
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, task->c,
-                      "h2_stream_task(%d): state now %d, was %d",
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, task->c,
+                      "h2_task(%d): state now %d, was %d",
                       task->stream_id, task->state, oldstate);
-        if (task->state_change_cb) {
-            task->state_change_cb(task, oldstate, task->state_change_ctx);
-        }
     }
 }
 
@@ -182,7 +179,7 @@ static void response_state_change(h2_response *resp,
     switch (resp->state) {
         case H2_RESP_ST_BODY:
         case H2_RESP_ST_DONE: {
-            h2_stream_task *task = (h2_stream_task *)cb_ctx;
+            h2_task *task = (h2_task *)cb_ctx;
             if (task->state < H2_TASK_ST_READY) {
                 set_state(task, H2_TASK_ST_READY);
             }
@@ -194,24 +191,24 @@ static void response_state_change(h2_response *resp,
     }
 }
 
-h2_stream_task *h2_stream_task_create(int stream_id,
-                                      conn_rec *master,
-                                      h2_bucket_queue *input,
-                                      h2_bucket_queue *output)
+h2_task *h2_task_create(int stream_id,
+                        conn_rec *master,
+                        h2_bucket_queue *input,
+                        h2_bucket_queue *output)
 {
     conn_rec *c = NULL;
     apr_status_t status = h2_conn_create(&c, master);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, master,
-                      "h2_stream_task(%d): unable to create stream task",
+                      "h2_task(%d): unable to create stream task",
                       stream_id);
         return NULL;
     }
     
-    h2_stream_task *task = apr_pcalloc(c->pool, sizeof(h2_stream_task));
+    h2_task *task = apr_pcalloc(c->pool, sizeof(h2_task));
     if (task == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, master,
-                      "h2_stream_task(%d): unable to create stream task",
+                      "h2_task(%d): unable to create stream task",
                       stream_id);
         return NULL;
     }
@@ -219,28 +216,27 @@ h2_stream_task *h2_stream_task_create(int stream_id,
     task->c = c;
     task->state = H2_TASK_ST_IDLE;
     task->stream_id = stream_id;
-    task->input = h2_stream_input_create(task->c->pool, stream_id, input);
-    task->output = h2_stream_output_create(task->c->pool, stream_id, output);
+    task->input = h2_task_input_create(task->c->pool, stream_id, input);
+    task->output = h2_task_output_create(task->c->pool, stream_id, output);
     
     task->response = h2_response_create(stream_id, task->c);
     h2_response_set_state_change_cb(task->response,
                                     response_state_change, task);
-    h2_stream_output_set_converter(task->output, output_convert, task);
+    h2_task_output_set_converter(task->output, output_convert, task);
     
     h2_ctx_create_for(task->c, task);
     
     return task;
 }
 
-apr_status_t h2_stream_task_destroy(h2_stream_task *task)
+apr_status_t h2_task_destroy(h2_task *task)
 {
-    set_state(task, H2_TASK_ST_DONE);
     if (task->input) {
-        h2_stream_input_destroy(task->input);
+        h2_task_input_destroy(task->input);
         task->input = NULL;
     }
     if (task->output) {
-        h2_stream_output_destroy(task->output);
+        h2_task_output_destroy(task->output);
         task->output = NULL;
     }
     if (task->response) {
@@ -254,18 +250,10 @@ apr_status_t h2_stream_task_destroy(h2_stream_task *task)
     return APR_EGENERAL;
 }
 
-void h2_stream_task_set_state_change_cb(h2_stream_task *task,
-                                        h2_stream_task_state_change_cb *cb,
-                                        void *cb_ctx)
-{
-    task->state_change_cb = cb;
-    task->state_change_ctx = cb_ctx;
-}
-
-apr_status_t h2_stream_task_do(h2_stream_task *task)
+apr_status_t h2_task_do(h2_task *task)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_stream_task(%d): do", task->stream_id);
+                  "h2_task(%d): do", task->stream_id);
     apr_status_t status;
     
     /* Furthermore, other code might want to see the socket for
@@ -291,13 +279,52 @@ apr_status_t h2_stream_task_do(h2_stream_task *task)
     
     apr_socket_close(socket);
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, task->c,
-                  "h2_stream(%d): done with task, state=%d, input_eos=%d, "
-                  "output_eos=%d, response status=%s, headers=%d",
-                  (int)task->stream_id, task->state,
-                  task->input->eos, task->output->eos,
-                  task->response->status, (int)task->response->nvlen);
+    set_state(task, H2_TASK_ST_DONE);
+    
+    if (task->auto_destroy) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, task->c,
+                      "h2_stream(%d): auto_destroy task, state=%d",
+                      (int)task->stream_id, task->state);
+        h2_task_destroy(task);
+    }
+    else {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, task->c,
+                      "h2_stream(%d): done with task, state=%d",
+                      (int)task->stream_id, task->state);
+    }
     
     return APR_SUCCESS;
+}
+
+void h2_task_abort(h2_task *task)
+{
+    task->aborted = 1;
+    if (task->output) {
+        h2_task_output_abort(task->output);
+    }
+    if (task->input) {
+        h2_task_input_abort(task->input);
+    }
+}
+
+int h2_task_is_aborted(h2_task *task)
+{
+    return task->aborted;
+}
+
+int h2_task_is_done(h2_task *task)
+{
+    return task->state == H2_TASK_ST_DONE;
+}
+
+int h2_task_is_busy(h2_task *task)
+{
+    return (task->state != H2_TASK_ST_DONE
+            && task->state != H2_TASK_ST_IDLE);
+}
+
+void h2_task_set_auto_destroy(h2_task *task, int auto_destroy)
+{
+    task->auto_destroy = auto_destroy;
 }
 

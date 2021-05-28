@@ -18,8 +18,9 @@
 #ifndef __mod_h2__h2_stream__
 #define __mod_h2__h2_stream__
 
-#include "h2_bucket.h"
-#include "h2_bucket_queue.h"
+struct h2_bucket;
+struct h2_bucket_queue;
+struct h2_task;
 
 typedef enum {
     H2_STREAM_ST_IDLE,
@@ -32,7 +33,7 @@ typedef enum {
 } h2_stream_state_t;
 
 struct h2_stream;
-struct h2_stream_task;
+struct h2_task;
 
 typedef void h2_stream_state_change_cb(struct h2_stream *stream,
                                        h2_stream_state_t,
@@ -58,10 +59,9 @@ typedef struct h2_stream {
     const char *authority;
     const char *scheme;
     
-    h2_bucket *work;
+    struct h2_bucket *work;
     
-    struct h2_stream_task *task;
-    apr_size_t data_bytes_written;
+    struct h2_task *task;
 } h2_stream;
 
 apr_status_t h2_stream_create(h2_stream **pstream,
@@ -69,6 +69,8 @@ apr_status_t h2_stream_create(h2_stream **pstream,
                               struct h2_session *session);
 
 apr_status_t h2_stream_destroy(h2_stream *stream);
+
+struct h2_task *h2_stream_create_task(h2_stream *stream);
 
 apr_status_t h2_stream_close_input(h2_stream *stream);
 apr_status_t h2_stream_close_output(h2_stream *stream);
@@ -86,6 +88,7 @@ apr_status_t h2_stream_end_headers(h2_stream *stream);
 
 void h2_stream_set_data_suspended(h2_stream *stream, int suspended);
 int h2_stream_is_data_suspended(h2_stream *stream);
+int h2_stream_ready_to_submit(h2_stream *stream);
 
 void h2_stream_set_state_change_cb(h2_stream *stream,
                                    h2_stream_state_change_cb cb,

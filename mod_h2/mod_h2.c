@@ -32,7 +32,7 @@
 #include "mod_h2.h"
 
 #include "h2_stream.h"
-#include "h2_stream_task.h"
+#include "h2_task.h"
 #include "h2_session.h"
 #include "h2_config.h"
 #include "h2_ctx.h"
@@ -118,7 +118,7 @@ static void h2_hooks(apr_pool_t *pool)
      */
     ap_hook_child_init(h2_child_init, NULL, NULL, APR_HOOK_MIDDLE);
 
-    h2_stream_hooks_init();
+    h2_task_hooks_init();
     
     /* This hook runs on new connections before mod_ssl has a say.
      * Its purpose is to prevent mod_ssl from touching our pseudo-connections

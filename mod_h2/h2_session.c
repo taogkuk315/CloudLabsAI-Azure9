@@ -27,8 +27,7 @@
 #include "h2_stream.h"
 #include "h2_stream_set.h"
 #include "h2_response.h"
-#include "h2_stream_task.h"
-#include "h2_task_set.h"
+#include "h2_task.h"
 #include "h2_bucket.h"
 #include "h2_ctx.h"
 #include "h2_frame.h"
@@ -168,9 +167,6 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
                       (int)stream_id,
                       stream->task? stream->task->state : -1);
         h2_stream_set_remove(session->streams, stream);
-        if (stream->task) {
-            h2_task_set_remove(session->submit_tasks, stream->task);
-        }
         h2_stream_destroy(stream);
     }
     
@@ -243,35 +239,13 @@ static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
     return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_INVALID_STREAM_STATE;
 }
 
-void task_state_change(h2_stream_task *task,
-                       h2_stream_task_state_t prevstate,
-                       void *cb_ctx)
+static void *h2_task_start(apr_thread_t *thread, void *puser)
 {
-    switch (task->state) {
-        case H2_TASK_ST_READY: {
-            h2_stream *stream = (h2_stream *)cb_ctx;
-            h2_task_set_add(stream->session->submit_tasks, task);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                          "h2_stream(%d): added to submit pool",
-                          (int)stream->id);
-        }
-        case H2_TASK_ST_DONE: {
-            h2_stream *stream = (h2_stream *)cb_ctx;
-            h2_stream_close_output(stream);
-        }
-        default:
-            /* nop */
-            break;
-    }
-}
-
-static void *h2_stream_task_start(apr_thread_t *thread, void *puser)
-{
-    h2_stream_task *task = (h2_stream_task *)puser;
+    h2_task *task = (h2_task *)puser;
 
     ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, task->c,
                   "h2_session:  stream(%d): start", task->stream_id);
-    apr_status_t status = h2_stream_task_do(task);
+    apr_status_t status = h2_task_do(task);
     apr_thread_exit(thread, status);
     return NULL;
 }
@@ -294,7 +268,8 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                                                     frame->hd.stream_id);
             if (stream == NULL) {
                 ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
-                              "h2_session:  stream(%d): frame type %d for unknown stream",
+                              "h2_session:  stream(%d): frame type %d "
+                              "for unknown stream",
                               (int)frame->hd.stream_id, frame->hd.type);
                 return NGHTTP2_ERR_INVALID_STREAM_ID;
             }
@@ -305,20 +280,14 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                 if (1) {
                     /* Now would be a good time to actually schedule this
                      * stream for processing in a worker thread */
-                    stream->task = h2_stream_task_create(stream->id,
-                                                         stream->session->c,
-                                                         stream->session->request_data,
-                                                         stream->session->response_data);
-                    h2_stream_task_set_state_change_cb(stream->task,
-                                                       task_state_change,
-                                                       stream);
+                    h2_task *task = h2_stream_create_task(stream);
                     
                     apr_threadattr_t *attr;
-                    apr_threadattr_create(&attr, session->c->pool);
+                    apr_threadattr_create(&attr, task->c->pool);
                     
                     apr_thread_t *thread;
-                    apr_thread_create(&thread, attr, h2_stream_task_start,
-                                      stream->task, session->c->pool);
+                    apr_thread_create(&thread, attr, h2_task_start,
+                                      task, task->c->pool);
                 }
             }
             break;
@@ -439,7 +408,6 @@ h2_session *h2_session_create(conn_rec *c, apr_size_t max_streams)
     session->ngh2 = NULL;
     
     session->streams = h2_stream_set_create(c->pool);
-    session->submit_tasks = h2_task_set_create(c->pool);
     
     session->request_data = h2_bucket_queue_create(c->pool);
     
@@ -530,9 +498,6 @@ void h2_session_destroy(h2_session *session)
     if (session->streams) {
         h2_stream_set_destroy(session->streams);
     }
-    if (session->submit_tasks) {
-        h2_task_set_destroy(session->submit_tasks);
-    }
 }
 
 static ssize_t h2_session_data_cb(nghttp2_session *ng2s,
@@ -562,21 +527,16 @@ static ssize_t h2_session_data_cb(nghttp2_session *ng2s,
             else {
                 h2_bucket_destroy(bucket);
             }
-            stream->data_bytes_written += nread;
             return nread;
         }
             
         case APR_EAGAIN:
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                          "h2_stream(%d): defer data read",
-                          (int)stream_id);
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+                          "h2_stream(%d): defer data read", (int)stream_id);
             h2_stream_set_data_suspended(stream, 1);
             return NGHTTP2_ERR_DEFERRED;
         case APR_EOF:
             *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                          "h2_stream(%d): seen EOS, data written %ld",
-                          (int)stream_id, (long)stream->data_bytes_written);
             return 0;
         default:
             return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -584,35 +544,31 @@ static ssize_t h2_session_data_cb(nghttp2_session *ng2s,
 }
 
 static int h2_session_submit_response(h2_session *session,
-                                       h2_stream_task *task)
+                                       h2_stream *stream)
 {
     int rv = 0;
-    h2_stream *stream = h2_stream_set_get(session->streams,
-                                           task->stream_id);
-    if (!stream) {
+    if (!stream->task) {
         /* already gone? */
     }
     else if (stream->response_started) {
         /* already on its way */
         ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                      "h2_stream(%d): response already started",
-                      task->stream_id);
+                      "h2_stream(%d): response already started", stream->id);
     }
     else {
         ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                      "h2_stream(%d): submitting response",
-                      task->stream_id);
+                      "h2_stream(%d): submitting response", stream->id);
         
-        nghttp2_data_provider provider = {
-            task->stream_id, h2_session_data_cb
-        };
-        
-        rv = nghttp2_submit_response(session->ngh2,
-                                     task->stream_id,
-                                     task->response->nv,
-                                     task->response->nvlen,
-                                     &provider);
         stream->response_started = 1;
+
+        nghttp2_data_provider provider = {
+            stream->id, h2_session_data_cb
+        };
+        rv = nghttp2_submit_response(session->ngh2,
+                                     stream->id,
+                                     stream->task->response->nv,
+                                     stream->task->response->nvlen,
+                                     &provider);
         if (rv) {
             ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
                           "nghttp2_submit_response: %s",
@@ -651,7 +607,7 @@ apr_status_t h2_session_serve(conn_rec *c)
              * - if there is nothing to write, we switch to blocking reads,
              *   we are a server after all...
              */
-            int stream_write = h2_stream_set_want_write(session->streams);
+            int got_streams = !h2_stream_set_is_empty(session->streams);
             int data_write = h2_bucket_queue_is_empty(session->response_data);
             int session_write = nghttp2_session_want_write(session->ngh2);
             
@@ -665,16 +621,14 @@ apr_status_t h2_session_serve(conn_rec *c)
             }
             
             if (!done) {
-                h2_stream_task *task = h2_task_set_get_any(session->submit_tasks);
-                if (task != NULL) {
-                    h2_task_set_remove(session->submit_tasks, task);
-                    rv = h2_session_submit_response(session, task);
-                    session_write = 1;
+                h2_stream *stream = h2_stream_set_get_ready_for_submit(session->streams);
+                if (stream != NULL) {
+                    rv = h2_session_submit_response(session, stream);
                 }
             }
             
             if (!done) {
-                status = h2_io_read(&session->io, (data_write || session_write || stream_write)?
+                status = h2_io_read(&session->io, (data_write || session_write || got_streams)?
                                     APR_NONBLOCK_READ : APR_BLOCK_READ,
                                     session_feed, session);
                 switch (status) {
@@ -682,11 +636,13 @@ apr_status_t h2_session_serve(conn_rec *c)
                     case APR_EAGAIN:
                         break;
                     case APR_EOF:
+                        ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,
+                                      "h2_session: eof reading, terminating");
                         done = 1;
                         break;
                     default:
                         ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,
-                                      "h2_session: error reading");
+                                      "h2_session: error reading, terminating");
                         done = 1;
                         break;
                 }

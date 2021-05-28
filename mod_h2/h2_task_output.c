@@ -25,7 +25,7 @@
 #include "h2_bucket_queue.h"
 #include "h2_session.h"
 #include "h2_stream.h"
-#include "h2_stream_output.h"
+#include "h2_task_output.h"
 
 
 static apr_status_t copy_unchanged(h2_bucket *bucket,
@@ -37,11 +37,11 @@ static apr_status_t copy_unchanged(h2_bucket *bucket,
     return APR_SUCCESS;
 }
 
-h2_stream_output *h2_stream_output_create(apr_pool_t *pool,
+h2_task_output *h2_task_output_create(apr_pool_t *pool,
                                           int stream_id,
                                           h2_bucket_queue *q)
 {
-    h2_stream_output *output = apr_pcalloc(pool, sizeof(h2_stream_output));
+    h2_task_output *output = apr_pcalloc(pool, sizeof(h2_task_output));
     if (output) {
         output->queue = q;
         output->stream_id = stream_id;
@@ -50,7 +50,7 @@ h2_stream_output *h2_stream_output_create(apr_pool_t *pool,
     return output;
 }
 
-void h2_stream_output_destroy(h2_stream_output *output)
+void h2_task_output_destroy(h2_task_output *output)
 {
     if (output->cur) {
         h2_bucket_destroy(output->cur);
@@ -58,7 +58,7 @@ void h2_stream_output_destroy(h2_stream_output *output)
     }
 }
 
-void h2_stream_output_set_converter(h2_stream_output *output,
+void h2_task_output_set_converter(h2_task_output *output,
                                     h2_output_converter conv,
                                     void *conv_ctx)
 {
@@ -72,7 +72,7 @@ void h2_stream_output_set_converter(h2_stream_output *output,
     }
 }
 
-static apr_status_t prepare_cur(h2_stream_output *output)
+static apr_status_t prepare_cur(h2_task_output *output)
 {
     if (!output->cur) {
         output->cur = h2_bucket_alloc(16 * 1024);
@@ -84,7 +84,7 @@ static apr_status_t prepare_cur(h2_stream_output *output)
 }
 
 
-static apr_status_t flush_cur(h2_stream_output *output,
+static apr_status_t flush_cur(h2_task_output *output,
                               ap_filter_t* filter)
 {
     if (output->cur) {
@@ -98,7 +98,7 @@ static apr_status_t flush_cur(h2_stream_output *output,
     return APR_SUCCESS;
 }
 
-static apr_status_t process_data(h2_stream_output *output,
+static apr_status_t process_data(h2_task_output *output,
                                  ap_filter_t *filter,
                                  const char *data, apr_size_t len)
 {
@@ -126,11 +126,16 @@ static apr_status_t process_data(h2_stream_output *output,
     return APR_SUCCESS;
 }
 
-apr_status_t h2_stream_output_write(h2_stream_output *output,
+apr_status_t h2_task_output_write(h2_task_output *output,
                                     ap_filter_t* filter,
                                     apr_bucket_brigade* brigade)
 {
     apr_status_t status = APR_SUCCESS;
+    
+    if (output->aborted) {
+        return APR_ECONNABORTED;
+    }
+    
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
                   "h2_stream(%d): output write", output->stream_id);
     
@@ -144,13 +149,13 @@ apr_status_t h2_stream_output_write(h2_stream_output *output,
         return APR_SUCCESS;
     }
     
-    while (!APR_BRIGADE_EMPTY(brigade)) {
+    while (!output->aborted && !APR_BRIGADE_EMPTY(brigade)) {
         apr_bucket* bucket = APR_BRIGADE_FIRST(brigade);
         int got_eos = 0;
         
         if (APR_BUCKET_IS_METADATA(bucket)) {
             if (APR_BUCKET_IS_EOS(bucket)) {
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, filter->c,
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, filter->c,
                               "h2_stream(%d): output, got eos from brigade",
                               output->stream_id);
                 output->eos = 1;
@@ -159,7 +164,7 @@ apr_status_t h2_stream_output_write(h2_stream_output *output,
                 got_eos = 1;
             }
             else if (APR_BUCKET_IS_FLUSH(bucket)) {
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, filter->c,
                               "h2_stream(%d): output, got flush from brigade",
                               output->stream_id);
                 flush_cur(output, filter);
@@ -172,7 +177,8 @@ apr_status_t h2_stream_output_write(h2_stream_output *output,
             ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, filter->c,
                           "h2_stream(%d): output has data after eos",
                           output->stream_id);
-        } else {
+        }
+        else {
             // Data
             const char* data = NULL;
             apr_size_t data_length = 0;
@@ -204,7 +210,11 @@ apr_status_t h2_stream_output_write(h2_stream_output *output,
         apr_bucket_delete(bucket);
     }
     
-    return APR_SUCCESS;
+    return output->aborted? APR_ECONNABORTED : APR_SUCCESS;
 }
 
+void h2_task_output_abort(h2_task_output *output)
+{
+    output->aborted = 1;
+}
 

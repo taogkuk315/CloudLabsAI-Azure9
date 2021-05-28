@@ -39,6 +39,8 @@ h2_stream *h2_stream_set_get(h2_stream_set *sp, int stream_id);
 
 h2_stream *h2_stream_set_get_any(h2_stream_set *sp);
 
+h2_stream *h2_stream_set_get_ready_for_submit(h2_stream_set *sp);
+
 h2_stream *h2_stream_set_remove(h2_stream_set *sp,h2_stream *stream);
 
 int h2_stream_set_want_write(h2_stream_set *sp);

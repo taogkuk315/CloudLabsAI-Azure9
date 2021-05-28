@@ -24,7 +24,7 @@
 #include "h2_private.h"
 
 #include "h2_stream.h"
-#include "h2_stream_task.h"
+#include "h2_task.h"
 #include "h2_config.h"
 #include "h2_ctx.h"
 #include "h2_session.h"
@@ -193,8 +193,8 @@ int h2_tls_pre_conn(conn_rec* c, void *arg)
          */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_tls, pre_connection, found stream task");
-        h2_stream_task *task = (h2_stream_task *)ctx->userp;
-        return h2_stream_task_pre_conn(task, c);
+        h2_task *task = (h2_task *)ctx->userp;
+        return h2_task_pre_conn(task, c);
     }
     
     return DECLINED;

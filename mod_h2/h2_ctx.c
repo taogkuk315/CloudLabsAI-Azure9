@@ -22,7 +22,7 @@
 
 #include "h2_private.h"
 #include "h2_bucket_queue.h"
-#include "h2_stream_task.h"
+#include "h2_task.h"
 #include "h2_ctx.h"
 #include "h2_private.h"
 
@@ -34,7 +34,7 @@ h2_ctx *h2_ctx_create(conn_rec *c)
     return ctx;
 }
 
-h2_ctx *h2_ctx_create_for(conn_rec *c, h2_stream_task *task)
+h2_ctx *h2_ctx_create_for(conn_rec *c, h2_task *task)
 {
     h2_ctx *ctx = h2_ctx_create(c);
     if (ctx) {

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include <stddef.h>
 
 #include <apr_strings.h>
@@ -28,10 +29,10 @@
 #include "h2_private.h"
 #include "h2_session.h"
 #include "h2_stream.h"
-#include "h2_stream_task.h"
+#include "h2_task.h"
 #include "h2_ctx.h"
 #include "h2_frame.h"
-#include "h2_stream_input.h"
+#include "h2_task_input.h"
 
 
 static void set_state(h2_stream *stream, h2_stream_state_t state)
@@ -67,11 +68,34 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
         stream->work = NULL;
     }
     if (stream->task) {
-        h2_stream_task_destroy(stream->task);
+        if (h2_task_is_busy(stream->task)) {
+            /* task is running in its own thread somewhere, we cannot
+             * just destroy it now. Instead we abort it, which should
+             * trigger its suicide when the doing is done. */
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
+                          "h2_stream(%d): destroy, abort task in state=%d",
+                          (int)stream->id, stream->task->state);
+            h2_task_abort(stream->task);
+            h2_task_set_auto_destroy(stream->task, 1);
+        }
+        else {
+            h2_task_destroy(stream->task);
+        }
         stream->task = NULL;
     }
     stream->session = NULL;
     return APR_SUCCESS;
+}
+
+h2_task *h2_stream_create_task(h2_stream *stream)
+{
+    assert(!stream->task);
+    stream->task = h2_task_create(stream->id,
+                                  stream->session->c,
+                                  stream->session->request_data,
+                                  stream->session->response_data);
+    return stream->task;
+
 }
 
 void h2_stream_set_state_change_cb(h2_stream *stream,
@@ -108,16 +132,6 @@ apr_status_t h2_stream_push(h2_stream *stream)
     return status;
 }
 
-apr_status_t h2_stream_push_eos(h2_stream *stream)
-{
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                  "h2_stream(%d): pushing eos", stream->id);
-    
-    return h2_bucket_queue_append_eos(stream->session->request_data,
-                                      stream->id);
-}
-
-
 apr_status_t h2_stream_end_headers(h2_stream *stream)
 {
     apr_status_t status = h2_stream_check_work(stream);
@@ -134,7 +148,7 @@ apr_status_t h2_stream_end_headers(h2_stream *stream)
         h2_bucket_cat(stream->work, "\r\n");
         status = h2_stream_push(stream);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, stream->session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, stream->session->c,
                   "h2_stream(%d): headers done", stream->id);
     return status;
 }
@@ -159,10 +173,11 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
         status = h2_stream_push(stream);
     }
     if (status == APR_SUCCESS) {
-        status = h2_stream_push_eos(stream);
+        status = h2_bucket_queue_append_eos(stream->session->request_data,
+                                            stream->id);
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, stream->session->c,
-                  "h2_stream(%d): stream input closed", stream->id);
+                  "h2_stream(%d): got eos", stream->id);
     return status;
 }
 
@@ -323,3 +338,14 @@ int h2_stream_is_data_suspended(h2_stream *stream)
 {
     return stream->data_suspended;
 }
+
+int h2_stream_ready_to_submit(h2_stream *stream)
+{
+    return (!stream->response_started
+            && stream->task
+            && (stream->task->state == H2_TASK_ST_READY
+                || stream->task->state == H2_TASK_ST_DONE));
+}
+
+
+

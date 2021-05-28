@@ -99,6 +99,8 @@ static apr_status_t make_h2_headers(h2_response *resp)
     nv->namelen = strlen(":status");
     nv->value = (uint8_t *)resp->status;
     nv->valuelen = strlen(resp->status);
+    
+    int seen_clen = 0;
     for (int i = 0; i < resp->hlines->nelts; ++i) {
         char *hline = ((char **)resp->hlines->elts)[i];
         nv = (nghttp2_nv *)(resp->nv + (i+1));
@@ -139,6 +141,7 @@ static apr_status_t make_h2_headers(h2_response *resp)
                 return APR_EINVAL;
             }
             resp->body_len = clen;
+            seen_clen = 1;
         }
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, resp->c,
                       "h2_response(%d): constructed header '%s' = '%s'",
@@ -146,8 +149,10 @@ static apr_status_t make_h2_headers(h2_response *resp)
     }
     resp->nvlen = nvlen;
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,
-                  "h2_response(%d): converted %d headers, content-length: %ld",
-                  resp->stream_id, (int)resp->nvlen, (long)resp->body_len);
+                  "h2_response(%d): converted %d headers, content-length: %ld"
+                  ", chunked=%d",
+                  resp->stream_id, (int)resp->nvlen, (long)resp->body_len,
+                  resp->chunked);
     
     resp->remain_len = resp->body_len;
     set_state(resp, ((resp->chunked || resp->body_len > 0)?
@@ -428,7 +433,8 @@ apr_status_t h2_response_http_convert(h2_bucket *bucket,
                 ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->c,
                               "h2_response(%d): body done, but receiving %ld more bytes",
                               resp->stream_id, (long)len);
-                return APR_EINVAL;
+                status = APR_EINVAL;
+                break;
                 
             default:
                 /* ??? */

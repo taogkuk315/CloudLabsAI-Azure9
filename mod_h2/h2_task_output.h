@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_stream_output__
-#define __mod_h2__h2_stream_output__
+#ifndef __mod_h2__h2_task_output__
+#define __mod_h2__h2_task_output__
 
 #include "h2_bucket_queue.h"
 #include "h2_stream.h"
@@ -25,7 +25,7 @@ typedef apr_status_t (*h2_output_converter)(h2_bucket *bucket,
                                             const char *data, apr_size_t len,
                                             apr_size_t *pconsumed);
 
-typedef struct h2_stream_output {
+typedef struct h2_task_output {
     h2_bucket_queue *queue;
     int stream_id;
     int eos;
@@ -35,20 +35,22 @@ typedef struct h2_stream_output {
     
     h2_output_converter conv;
     void *conv_ctx;
-} h2_stream_output;
+} h2_task_output;
 
-h2_stream_output *h2_stream_output_create(apr_pool_t *pool,
-                                          int stream_id,
-                                          h2_bucket_queue *q);
+h2_task_output *h2_task_output_create(apr_pool_t *pool,
+                                      int stream_id,
+                                      h2_bucket_queue *q);
 
-void h2_stream_output_destroy(h2_stream_output *output);
+void h2_task_output_destroy(h2_task_output *output);
 
-apr_status_t h2_stream_output_write(h2_stream_output *output,
-                                    ap_filter_t* filter,
-                                    apr_bucket_brigade* brigade);
+apr_status_t h2_task_output_write(h2_task_output *output,
+                                  ap_filter_t* filter,
+                                  apr_bucket_brigade* brigade);
 
-void h2_stream_output_set_converter(h2_stream_output *output,
-                                    h2_output_converter conv,
-                                    void *conv_ctx);
+void h2_task_output_set_converter(h2_task_output *output,
+                                  h2_output_converter conv,
+                                  void *conv_ctx);
 
-#endif /* defined(__mod_h2__h2_stream_output__) */
+void h2_task_output_abort(h2_task_output *output);
+
+#endif /* defined(__mod_h2__h2_task_output__) */

@@ -18,10 +18,10 @@
 #define __mod_h2__h2_response__
 
 typedef enum {
-    H2_RESP_ST_STATUS_LINE,
-    H2_RESP_ST_HEADERS,
-    H2_RESP_ST_BODY,
-    H2_RESP_ST_DONE
+    H2_RESP_ST_STATUS_LINE, /* parsing http/1 status line */
+    H2_RESP_ST_HEADERS,     /* parsing http/1 response headers */
+    H2_RESP_ST_BODY,        /* transferring response body */
+    H2_RESP_ST_DONE         /* complete response converted */
 } h2_response_state_t;
 
 struct h2_response;

@@ -34,7 +34,6 @@ typedef struct h2_session {
     h2_bucket_queue *response_data;
 
     struct h2_stream_set *streams;
-    struct h2_task_set *submit_tasks;
 } h2_session;
 
 

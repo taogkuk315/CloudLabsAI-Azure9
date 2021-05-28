@@ -14,31 +14,33 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_stream_input__
-#define __mod_h2__h2_stream_input__
+#ifndef __mod_h2__h2_task_input__
+#define __mod_h2__h2_task_input__
 
 #include "h2_bucket_queue.h"
 #include "h2_stream.h"
 
-typedef struct h2_stream_input {
+typedef struct h2_task_input {
     h2_bucket_queue *queue;
     int stream_id;
     int eos;
     int aborted;
     h2_bucket *cur;
     apr_size_t cur_offset;
-} h2_stream_input;
+} h2_task_input;
 
-h2_stream_input *h2_stream_input_create(apr_pool_t *pool,
+h2_task_input *h2_task_input_create(apr_pool_t *pool,
                                         int stream_id,
                                         h2_bucket_queue *q);
-void h2_stream_input_destroy(h2_stream_input *input);
+void h2_task_input_destroy(h2_task_input *input);
 
-apr_status_t h2_stream_input_read(h2_stream_input *input,
+apr_status_t h2_task_input_read(h2_task_input *input,
                                   ap_filter_t* filter,
                                   apr_bucket_brigade* brigade,
                                   ap_input_mode_t mode,
                                   apr_read_type_e block,
                                   apr_off_t readbytes);
 
-#endif /* defined(__mod_h2__h2_stream_input__) */
+void h2_task_input_abort(h2_task_input *input);
+
+#endif /* defined(__mod_h2__h2_task_input__) */

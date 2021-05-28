@@ -26,7 +26,7 @@
 #include "h2_private.h"
 #include "h2_session.h"
 #include "h2_stream.h"
-#include "h2_stream_task.h"
+#include "h2_task.h"
 #include "h2_stream_set.h"
 
 h2_stream_set *h2_stream_set_create(apr_pool_t *pool)
@@ -152,4 +152,23 @@ int h2_stream_set_is_empty(h2_stream_set *sp)
     return empty;
 }
 
+static void *match_ready_to_submit(void *ctx, int stream_id, void *entry) {
+    h2_stream *stream = (h2_stream *)entry;
+    if (h2_stream_ready_to_submit(stream)) {
+        return stream;
+    }
+    return NULL;
+}
 
+h2_stream *h2_stream_set_get_ready_for_submit(h2_stream_set *sp)
+{
+    apr_status_t status = apr_thread_mutex_lock(sp->lock);
+    if (status == APR_SUCCESS) {
+        h2_stream *stream = h2_queue_find(sp->queue,
+                                          match_ready_to_submit,
+                                          sp);
+        apr_thread_mutex_unlock(sp->lock);
+        return stream;
+    }
+    return NULL;
+}
