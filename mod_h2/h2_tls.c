@@ -27,7 +27,7 @@
 #include "h2_task.h"
 #include "h2_config.h"
 #include "h2_ctx.h"
-#include "h2_session.h"
+#include "h2_conn.h"
 #include "h2_tls.h"
 
 
@@ -226,7 +226,7 @@ int h2_tls_process_conn(conn_rec* c)
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_tls, connection, h2 active");
         
-        return h2_session_serve(c);
+        return h2_conn_process(c);
     }
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_tls, connection, declined");

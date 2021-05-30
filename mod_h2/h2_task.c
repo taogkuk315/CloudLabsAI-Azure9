@@ -25,6 +25,8 @@
 #include <http_connection.h>
 
 #include "h2_private.h"
+#include "h2_bucket.h"
+#include "h2_bucket_queue.h"
 #include "h2_session.h"
 #include "h2_response.h"
 #include "h2_stream.h"
@@ -169,6 +171,9 @@ static void set_state(h2_task *task, h2_task_state_t state)
         ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, task->c,
                       "h2_task(%d): state now %d, was %d",
                       task->stream_id, task->state, oldstate);
+        if (task->ready_cb) {
+            task->ready_cb(task, task->ready_ctx);
+        }
     }
 }
 
@@ -326,5 +331,13 @@ int h2_task_is_busy(h2_task *task)
 void h2_task_set_auto_destroy(h2_task *task, int auto_destroy)
 {
     task->auto_destroy = auto_destroy;
+    task->ready_cb = NULL;
+    task->ready_ctx = NULL;
+}
+
+void h2_task_set_ready_cb(h2_task *task, h2_task_ready_cb *cb, void *ready_ctx)
+{
+    task->ready_cb = cb;
+    task->ready_ctx = ready_ctx;
 }
 

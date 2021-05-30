@@ -17,15 +17,15 @@
 #ifndef __mod_h2__h2_task_input__
 #define __mod_h2__h2_task_input__
 
-#include "h2_bucket_queue.h"
-#include "h2_stream.h"
+struct h2_bucket;
+struct h2_bucket_queue;
 
 typedef struct h2_task_input {
-    h2_bucket_queue *queue;
+    struct h2_bucket_queue *queue;
     int stream_id;
     int eos;
     int aborted;
-    h2_bucket *cur;
+    struct h2_bucket *cur;
     apr_size_t cur_offset;
 } h2_task_input;
 

@@ -137,17 +137,6 @@ apr_status_t h2_io_read(h2_io_ctx *io,
     return status;
 }
 
-apr_status_t h2_io_read_copy(h2_io_ctx *io,
-                             apr_read_type_e block,
-                             char *buf, size_t length,
-                             size_t *read)
-{
-    io_copy_ctx ctx = { buf, length, 0 };
-    apr_status_t status = h2_io_read(io, block, on_read_copy, &ctx);
-    *read = ctx.readlen;
-    return status;
-}
-
 apr_status_t h2_io_write(h2_io_ctx *io, const char *buf, size_t length,
                          size_t *written)
 {

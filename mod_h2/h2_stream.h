@@ -18,6 +18,12 @@
 #ifndef __mod_h2__h2_stream__
 #define __mod_h2__h2_stream__
 
+/**
+ * A HTTP/2 stream, e.g. a client request+response in HTTP/1.1 terms.
+ *
+ *
+ */
+
 struct h2_bucket;
 struct h2_bucket_queue;
 struct h2_task;
@@ -45,7 +51,7 @@ typedef struct h2_stream {
     h2_stream_state_t state;
     int eoh;                 /* end of headers seen */
     int aborted;             /* was aborted */
-    int response_started;    /* response was started, e.g. headers are in the queue */
+    int response_started;    /* response was started */
     int data_suspended;      /* is suspended, e.g. sends no data */
     
     struct h2_session *session;

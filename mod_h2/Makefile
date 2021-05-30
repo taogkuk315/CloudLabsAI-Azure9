@@ -27,6 +27,7 @@ C_SRC   = \
         h2_bucket.c \
         h2_bucket_queue.c \
         h2_config.c \
+        h2_conn.c \
         h2_ctx.c \
         h2_frame.c \
         h2_io.c \

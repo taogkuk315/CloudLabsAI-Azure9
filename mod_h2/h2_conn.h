@@ -14,28 +14,16 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_config_h__
-#define __mod_h2__h2_config_h__
 
-#include <http_config.h>
+#ifndef __mod_h2__h2_conn__
+#define __mod_h2__h2_conn__
 
-/* Apache httpd module configuration for h2. */
-typedef struct {
-    const char *name;
-    int h2_enabled;
-    int h2_set;
-} h2_config;
+/* Process the connection that is now starting the HTTP/2
+ * conversation. Return when the HTTP/2 session is done
+ * and the connection will close.
+ */
+apr_status_t h2_conn_process(conn_rec *c);
 
 
-void *h2_config_create_svr(apr_pool_t *pool, server_rec *s);
-void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv);
 
-apr_status_t h2_config_apply_header(h2_config *config, request_rec *r);
-
-extern const command_rec h2_cmds[];
-
-h2_config *h2_config_get(conn_rec *c);
-h2_config *h2_config_sget(server_rec *s);
-
-#endif /* __mod_h2__h2_config_h__ */
-
+#endif /* defined(__mod_h2__h2_conn__) */

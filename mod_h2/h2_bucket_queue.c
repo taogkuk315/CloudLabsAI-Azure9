@@ -15,6 +15,8 @@
  */
 
 #include <assert.h>
+#include <apr_thread_mutex.h>
+#include <apr_thread_cond.h>
 
 #include <httpd.h>
 #include <http_core.h>
@@ -23,6 +25,7 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
+#include "h2_queue.h"
 #include "h2_bucket_queue.h"
 
 static void bucket_free(void *entry)

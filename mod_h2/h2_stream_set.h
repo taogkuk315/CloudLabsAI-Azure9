@@ -17,14 +17,17 @@
 #ifndef __mod_h2__h2_stream_set__
 #define __mod_h2__h2_stream_set__
 
-#include <apr_thread_mutex.h>
-#include <apr_thread_cond.h>
+/**
+ * A set of h2_stream instances. Thread safe.
+ *
+ */
 
-#include "h2_queue.h"
+struct h2_queue;
+struct apr_thread_mutex_t;
 
 typedef struct h2_stream_set {
-    h2_queue *queue;
-    apr_thread_mutex_t *lock;
+    struct h2_queue *queue;
+    struct apr_thread_mutex_t *lock;
 } h2_stream_set;
 
 h2_stream_set *h2_stream_set_create(apr_pool_t *pool);
@@ -37,13 +40,9 @@ apr_status_t h2_stream_set_add(h2_stream_set *sp, h2_stream *stream);
 
 h2_stream *h2_stream_set_get(h2_stream_set *sp, int stream_id);
 
-h2_stream *h2_stream_set_get_any(h2_stream_set *sp);
-
 h2_stream *h2_stream_set_get_ready_for_submit(h2_stream_set *sp);
 
 h2_stream *h2_stream_set_remove(h2_stream_set *sp,h2_stream *stream);
-
-int h2_stream_set_want_write(h2_stream_set *sp);
 
 int h2_stream_set_is_empty(h2_stream_set *sp);
 

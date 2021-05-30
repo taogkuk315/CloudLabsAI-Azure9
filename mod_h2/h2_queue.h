@@ -17,11 +17,19 @@
 #ifndef __mod_h2__h2_queue__
 #define __mod_h2__h2_queue__
 
-#include <stdio.h>
-
 typedef void *(*h2_queue_match_fn)(void *ctx, int id, void *entry);
 typedef void (*h2_queue_free_fn)(void *entry);
 
+/**
+ * A simple double linked list, operating on a APR memory pool, that
+ * has a memory footprint controlled by the queue length, not the 
+ * number of pop/push operations.
+ *
+ * Each entry can be associated with an integer id. The id can be used
+ * for searching and manipulations.
+ * 
+ * This queue is *not* thread safe.
+ */
 typedef struct h2_queue {
     apr_pool_t *pool;
     struct h2_qdata *first;

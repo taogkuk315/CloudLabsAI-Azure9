@@ -82,7 +82,7 @@ apr_size_t h2_bucket_cat(h2_bucket *bucket, const char *s)
 
 int h2_bucket_has_free(h2_bucket *bucket, size_t bytes)
 {
-    return bytes <= bucket->data_size - bucket->data_len;
+    return bytes <= h2_bucket_available(bucket);
 }
 
 apr_size_t h2_bucket_available(h2_bucket *bucket)

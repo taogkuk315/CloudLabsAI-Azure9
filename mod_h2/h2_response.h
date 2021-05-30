@@ -17,6 +17,18 @@
 #ifndef __mod_h2__h2_response__
 #define __mod_h2__h2_response__
 
+/**
+ * h2_response parses a HTTP/1.1 response into
+ * - response status
+ * - a list of header values
+ * - a series of bytes that represent the response body alone, without
+ *   any meta data, such as inserted by chunked transfer encoding.
+ *
+ * All data is allocated from the connection memory pool. Body data
+ * is passed "through" into the given h2_bucket(s) and will not
+ * cause allocations.
+ */
+
 typedef enum {
     H2_RESP_ST_STATUS_LINE, /* parsing http/1 status line */
     H2_RESP_ST_HEADERS,     /* parsing http/1 response headers */
@@ -24,6 +36,7 @@ typedef enum {
     H2_RESP_ST_DONE         /* complete response converted */
 } h2_response_state_t;
 
+struct h2_bucket;
 struct h2_response;
 
 typedef void h2_response_state_change_cb(struct h2_response *resp,
@@ -41,10 +54,10 @@ typedef struct h2_response {
     int chunked;
     apr_size_t body_len;
     apr_size_t remain_len;
-    h2_bucket *chunk_work;
+    struct h2_bucket *chunk_work;
     
     apr_size_t offset;
-    h2_bucket *rawhead;
+    struct h2_bucket *rawhead;
     
     char *status;
     apr_array_header_t *hlines;
@@ -60,7 +73,7 @@ void h2_response_set_state_change_cb(h2_response *resp,
                                      h2_response_state_change_cb *callback,
                                      void *cb_ctx);
 
-apr_status_t h2_response_http_convert(h2_bucket *bucket,
+apr_status_t h2_response_http_convert(struct h2_bucket *bucket,
                                       void *conv_ctrx,
                                       const char *data, apr_size_t len,
                                       apr_size_t *pconsumed);

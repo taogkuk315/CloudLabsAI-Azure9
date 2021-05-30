@@ -19,6 +19,14 @@
 
 struct h2_task;
 
+/**
+ * The h2 module context associated with a connection. 
+ *
+ * It keeps track of the different types of connections:
+ * - those from clients that use HTTP/2 protocol
+ * - those from clients that do not use HTTP/2
+ * - those created by ourself to perform work on HTTP/2 streams
+ */
 typedef struct {
     int is_h2;
     int is_stream;

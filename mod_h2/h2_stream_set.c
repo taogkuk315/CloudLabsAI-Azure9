@@ -16,6 +16,8 @@
 
 #include <stddef.h>
 
+#include <apr_thread_mutex.h>
+#include <apr_thread_cond.h>
 #include <apr_strings.h>
 
 #include <httpd.h>
@@ -95,17 +97,6 @@ h2_stream *h2_stream_set_get(h2_stream_set *sp, int stream_id)
     return NULL;
 }
 
-h2_stream *h2_stream_set_get_any(h2_stream_set *sp)
-{
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        h2_stream *stream = h2_queue_pop(sp->queue);
-        apr_thread_mutex_unlock(sp->lock);
-        return stream;
-    }
-    return NULL;
-}
-
 h2_stream *h2_stream_set_remove(h2_stream_set *sp, h2_stream *stream)
 {
     apr_status_t status = apr_thread_mutex_lock(sp->lock);
@@ -128,17 +119,6 @@ static void *match_write_stream(void *ctx, int id, void *entry)
         default:
             return stream;
     }
-}
-
-int h2_stream_set_want_write(h2_stream_set *sp)
-{
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        h2_stream *stream = h2_queue_find(sp->queue, match_write_stream, NULL);
-        apr_thread_mutex_unlock(sp->lock);
-        return stream != NULL;
-    }
-    return 0;
 }
 
 int h2_stream_set_is_empty(h2_stream_set *sp)

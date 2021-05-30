@@ -17,20 +17,20 @@
 #ifndef __mod_h2__h2_task_output__
 #define __mod_h2__h2_task_output__
 
-#include "h2_bucket_queue.h"
-#include "h2_stream.h"
+struct h2_bucket;
+struct h2_bucket_queue;
 
-typedef apr_status_t (*h2_output_converter)(h2_bucket *bucket,
+typedef apr_status_t (*h2_output_converter)(struct h2_bucket *bucket,
                                             void *conv_data,
                                             const char *data, apr_size_t len,
                                             apr_size_t *pconsumed);
 
 typedef struct h2_task_output {
-    h2_bucket_queue *queue;
+    struct h2_bucket_queue *queue;
     int stream_id;
     int eos;
     int aborted;
-    h2_bucket *cur;
+    struct h2_bucket *cur;
     apr_size_t cur_offset;
     
     h2_output_converter conv;

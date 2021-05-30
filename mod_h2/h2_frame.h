@@ -19,9 +19,15 @@
 
 #include "h2_bucket.h"
 
+/* Append a HTTP/1.1 request line in the given bucket, including
+ * proper CRLF. Expects the bucket to have enough place for it.
+ */
 apr_status_t h2_frame_req_add_start(h2_bucket *bucket,
                                     const char *method, const char *path);
 
+/* Append a HTTP/1.1 header line to the bucket, including CRLF.
+ *  Expects the bucket to have enough place for it.
+ */
 apr_status_t h2_frame_req_add_header(h2_bucket *bucket,
                                      const char *name, size_t nlen,
                                      const char *value, size_t vlen);
