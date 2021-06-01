@@ -54,21 +54,29 @@ typedef void on_new_task(struct h2_session *session,
                          int stream_id, struct h2_task *task);
 
 typedef struct h2_session {
-    conn_rec *c;
-    struct nghttp2_session *ngh2;
+    conn_rec *c;                    /* the connection this session serves */
+
+    int aborted;                    /* this session is being aborted */
+    
+    h2_io_ctx io;                   /* io on httpd conn filters */
+    h2_bucket_queue *data_in;       /* stream data coming in */
+    h2_bucket_queue *data_out;      /* stream data going out */
+
+    struct h2_stream_set *streams;  /* streams handled by this session */
+    struct h2_stream_set *readies;  /* streams ready for submit */
+    
+    struct h2_task_set *actives;    /* tasks, active for this session */
+    struct h2_task_set *zombies;    /* finished tasks, need to destroy */
+    
+    struct apr_thread_mutex_t *lock;
+    struct apr_thread_cond_t *has_data; /* there is data to be written */
+    
+    on_new_task *on_new_task_cb;    /* notify of new h2_task creations */
+
     int loglvl;
+    
+    struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
 
-    h2_io_ctx io;
-    h2_bucket_queue *request_data;
-    h2_bucket_queue *response_data;
-
-    struct h2_stream_set *streams;
-    
-    struct apr_thread_mutex_t *write_lock;
-    struct apr_thread_cond_t *has_data;
-    
-    on_new_task *on_new_task_cb;
-    
 } h2_session;
 
 
@@ -84,6 +92,10 @@ void h2_session_destroy(h2_session *session);
 
 /* Called once at start of session. Performs initial client thingies. */
 apr_status_t h2_session_start(h2_session *session);
+
+/* Called when controlled shutdown is no longer an option. For 
+ * example, when the client simply closed the connection. */
+apr_status_t h2_session_abort(h2_session *session);
 
 /* Read more data from the client connection. Used normally with blocking
  * APR_NONBLOCK_READ, which will return APR_EAGAIN when no data is available.
@@ -113,7 +125,8 @@ void h2_session_set_new_task_cb(h2_session *session, on_new_task *callback);
 struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);
 
 /* Get the first h2_session that has a response ready and not submitted
- * yet. Returns NULL if no such session is available. */
-struct h2_stream *h2_session_get_ready_response(h2_session *session);
+ * yet. Returns NULL if no such session is available. Will only return
+ * a stream once. */
+struct h2_stream *h2_session_pop_ready_response(h2_session *session);
 
 #endif /* defined(__mod_h2__h2_session__) */

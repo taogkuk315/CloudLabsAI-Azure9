@@ -24,7 +24,6 @@ typedef struct h2_task_input {
     struct h2_bucket_queue *queue;
     int stream_id;
     int eos;
-    int aborted;
     struct h2_bucket *cur;
     apr_size_t cur_offset;
 } h2_task_input;
@@ -40,7 +39,5 @@ apr_status_t h2_task_input_read(h2_task_input *input,
                                   ap_input_mode_t mode,
                                   apr_read_type_e block,
                                   apr_off_t readbytes);
-
-void h2_task_input_abort(h2_task_input *input);
 
 #endif /* defined(__mod_h2__h2_task_input__) */

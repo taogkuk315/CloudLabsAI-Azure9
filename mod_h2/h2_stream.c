@@ -27,6 +27,7 @@
 #include <nghttp2/nghttp2.h>
 
 #include "h2_private.h"
+#include "h2_resp_head.h"
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_task.h"
@@ -48,12 +49,11 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
 
 
 apr_status_t h2_stream_create(h2_stream **pstream,
-                              int id, h2_stream_state_t state,
-                              h2_session *session)
+                              int id, h2_session *session)
 {
     h2_stream *stream = apr_pcalloc(session->c->pool, sizeof(h2_stream));
     stream->id = id;
-    stream->state = state;
+    stream->state = H2_STREAM_ST_IDLE;
     stream->eoh = 0;
     stream->session = session;
     
@@ -67,35 +67,19 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
         h2_bucket_destroy(stream->work);
         stream->work = NULL;
     }
-    if (stream->task) {
-        if (h2_task_is_busy(stream->task)) {
-            /* task is running in its own thread somewhere, we cannot
-             * just destroy it now. Instead we abort it, which should
-             * trigger its suicide when the doing is done. */
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                          "h2_stream(%d): destroy, abort task in state=%d",
-                          (int)stream->id, stream->task->state);
-            h2_task_abort(stream->task);
-            h2_task_set_auto_destroy(stream->task, 1);
-        }
-        else {
-            h2_task_destroy(stream->task);
-        }
-        stream->task = NULL;
+    if (stream->resp_head) {
+        h2_resp_head_destroy(stream->resp_head);
+        stream->resp_head = NULL;
     }
     stream->session = NULL;
     return APR_SUCCESS;
 }
 
-h2_task *h2_stream_create_task(h2_stream *stream)
+void h2_stream_abort(h2_stream *stream)
 {
-    assert(!stream->task);
-    stream->task = h2_task_create(stream->id,
-                                  stream->session->c,
-                                  stream->session->request_data,
-                                  stream->session->response_data);
-    return stream->task;
-
+    if (!stream->aborted) {
+        stream->aborted = 1;
+    }
 }
 
 void h2_stream_set_state_change_cb(h2_stream *stream,
@@ -124,7 +108,7 @@ apr_status_t h2_stream_push(h2_stream *stream)
                   (int)stream->id,
                   stream->method, stream->path, stream->authority);
     
-    apr_status_t status = h2_bucket_queue_append(stream->session->request_data,
+    apr_status_t status = h2_bucket_queue_append(stream->session->data_in,
                                                  stream->work, stream->id);
     if (status == APR_SUCCESS) {
         stream->work = NULL;
@@ -173,30 +157,12 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
         status = h2_stream_push(stream);
     }
     if (status == APR_SUCCESS) {
-        status = h2_bucket_queue_append_eos(stream->session->request_data,
+        status = h2_bucket_queue_append_eos(stream->session->data_in,
                                             stream->id);
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, stream->session->c,
                   "h2_stream(%d): got eos", stream->id);
     return status;
-}
-
-apr_status_t h2_stream_close_output(h2_stream *stream)
-{
-    switch (stream->state) {
-        case H2_STREAM_ST_CLOSED_OUTPUT:
-        case H2_STREAM_ST_CLOSED:
-            break; /* ignore, idempotent */
-        case H2_STREAM_ST_CLOSED_INPUT:
-            /* both closed now */
-            set_state(stream, H2_STREAM_ST_CLOSED);
-            break;
-        default:
-            /* everything else we jump to here */
-            set_state(stream, H2_STREAM_ST_CLOSED_OUTPUT);
-            break;
-    }
-    return APR_SUCCESS;
 }
 
 apr_status_t h2_stream_add_header(h2_stream *stream,
@@ -327,24 +293,6 @@ apr_status_t h2_stream_add_data(h2_stream *stream,
         }
     }
     return APR_SUCCESS;
-}
-
-void h2_stream_set_data_suspended(h2_stream *stream, int suspended)
-{
-    stream->data_suspended = suspended;
-}
-
-int h2_stream_is_data_suspended(h2_stream *stream)
-{
-    return stream->data_suspended;
-}
-
-int h2_stream_ready_to_submit(h2_stream *stream)
-{
-    return (!stream->response_started
-            && stream->task
-            && (stream->task->state == H2_TASK_ST_READY
-                || stream->task->state == H2_TASK_ST_DONE));
 }
 
 

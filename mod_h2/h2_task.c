@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <stddef.h>
 
+#include <apr_atomic.h>
 #include <apr_strings.h>
 
 #include <httpd.h>
@@ -29,6 +30,7 @@
 #include "h2_bucket_queue.h"
 #include "h2_session.h"
 #include "h2_response.h"
+#include "h2_resp_head.h"
 #include "h2_stream.h"
 #include "h2_task_input.h"
 #include "h2_task_output.h"
@@ -44,6 +46,9 @@ static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
                                            apr_read_type_e block,
                                            apr_off_t readbytes) {
     h2_task *task = (h2_task *)filter->ctx;
+    if (!task->input) {
+        return APR_ECONNABORTED;
+    }
     return h2_task_input_read(task->input, filter, brigade,
                               mode, block, readbytes);
 }
@@ -51,6 +56,9 @@ static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
 static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
                                             apr_bucket_brigade* brigade) {
     h2_task *task = (h2_task *)filter->ctx;
+    if (!task->output) {
+        return APR_ECONNABORTED;
+    }
     return h2_task_output_write(task->output, filter, brigade);
 }
 
@@ -171,8 +179,11 @@ static void set_state(h2_task *task, h2_task_state_t state)
         ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, task->c,
                       "h2_task(%d): state now %d, was %d",
                       task->stream_id, task->state, oldstate);
-        if (task->ready_cb) {
-            task->ready_cb(task, task->ready_ctx);
+        if (state == H2_TASK_ST_READY && task->event_cb) {
+            task->event_cb(task, H2_TASK_EV_READY, task->event_ctx);
+        }
+        else if (state == H2_TASK_ST_DONE && task->event_cb) {
+            task->event_cb(task, H2_TASK_EV_DONE, task->event_ctx);
         }
     }
 }
@@ -236,6 +247,15 @@ h2_task *h2_task_create(int stream_id,
 
 apr_status_t h2_task_destroy(h2_task *task)
 {
+    if (!task->aborted && task->thread) {
+        apr_status_t status = APR_SUCCESS;
+        apr_status_t join_stat = apr_thread_join(&status, task->thread);
+        if (join_stat != APR_SUCCESS) {
+            ap_log_perror(APLOG_MARK, APLOG_ERR, join_stat, task->c->pool,
+                          "h2_task: error joining task thread");
+        }
+        task->thread = NULL;
+    }
     if (task->input) {
         h2_task_input_destroy(task->input);
         task->input = NULL;
@@ -252,15 +272,16 @@ apr_status_t h2_task_destroy(h2_task *task)
         apr_pool_destroy(task->c->pool);
         task->c->pool = NULL;
     }
-    return APR_EGENERAL;
+    return APR_SUCCESS;
 }
 
-apr_status_t h2_task_do(h2_task *task)
+apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_task(%d): do", task->stream_id);
     apr_status_t status;
     
+    task->thread = thread;
     /* Furthermore, other code might want to see the socket for
      * this connection. Allocate one without further function...
      */
@@ -286,58 +307,36 @@ apr_status_t h2_task_do(h2_task *task)
     
     set_state(task, H2_TASK_ST_DONE);
     
-    if (task->auto_destroy) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, task->c,
-                      "h2_stream(%d): auto_destroy task, state=%d",
-                      (int)task->stream_id, task->state);
-        h2_task_destroy(task);
-    }
-    else {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, task->c,
-                      "h2_stream(%d): done with task, state=%d",
-                      (int)task->stream_id, task->state);
-    }
-    
     return APR_SUCCESS;
 }
 
 void h2_task_abort(h2_task *task)
 {
-    task->aborted = 1;
-    if (task->output) {
-        h2_task_output_abort(task->output);
-    }
+    task->aborted =  1;
+    task->event_cb = NULL;
+    task->event_ctx = NULL;
     if (task->input) {
-        h2_task_input_abort(task->input);
+        h2_task_input_destroy(task->input);
+        task->input = NULL;
+    }
+    if (task->output) {
+        h2_task_output_destroy(task->output);
+        task->output = NULL;
     }
 }
 
-int h2_task_is_aborted(h2_task *task)
+void h2_task_set_event_cb(h2_task *task, h2_task_event_cb *cb, void *event_ctx)
 {
-    return task->aborted;
+    task->event_cb = cb;
+    task->event_ctx = event_ctx;
 }
 
-int h2_task_is_done(h2_task *task)
+h2_resp_head *h2_task_get_resp_head(h2_task *task)
 {
-    return task->state == H2_TASK_ST_DONE;
-}
-
-int h2_task_is_busy(h2_task *task)
-{
-    return (task->state != H2_TASK_ST_DONE
-            && task->state != H2_TASK_ST_IDLE);
-}
-
-void h2_task_set_auto_destroy(h2_task *task, int auto_destroy)
-{
-    task->auto_destroy = auto_destroy;
-    task->ready_cb = NULL;
-    task->ready_ctx = NULL;
-}
-
-void h2_task_set_ready_cb(h2_task *task, h2_task_ready_cb *cb, void *ready_ctx)
-{
-    task->ready_cb = cb;
-    task->ready_ctx = ready_ctx;
+    h2_resp_head *head = task->response->head;
+    if (head) {
+        task->response->head = NULL;
+    }
+    return head;
 }
 

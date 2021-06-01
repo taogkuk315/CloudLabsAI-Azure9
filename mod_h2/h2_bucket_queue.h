@@ -52,7 +52,7 @@ struct h2_bucket_queue;
 typedef void h2_bucket_queue_event_cb(struct h2_bucket_queue *queue,
                                       h2_bucket_queue_event_t etype,
                                       struct h2_bucket *bucket,
-                                      int stream_id,
+                                      int stream_id, int is_only_one,
                                       void *ev_ctx);
 
 typedef struct h2_bucket_queue {

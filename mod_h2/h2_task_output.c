@@ -133,10 +133,6 @@ apr_status_t h2_task_output_write(h2_task_output *output,
 {
     apr_status_t status = APR_SUCCESS;
     
-    if (output->aborted) {
-        return APR_ECONNABORTED;
-    }
-    
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
                   "h2_stream(%d): output write", output->stream_id);
     
@@ -150,7 +146,7 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         return APR_SUCCESS;
     }
     
-    while (!output->aborted && !APR_BRIGADE_EMPTY(brigade)) {
+    while (!APR_BRIGADE_EMPTY(brigade)) {
         apr_bucket* bucket = APR_BRIGADE_FIRST(brigade);
         int got_eos = 0;
         
@@ -211,11 +207,7 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         apr_bucket_delete(bucket);
     }
     
-    return output->aborted? APR_ECONNABORTED : APR_SUCCESS;
+    return APR_SUCCESS;
 }
 
-void h2_task_output_abort(h2_task_output *output)
-{
-    output->aborted = 1;
-}
 

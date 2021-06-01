@@ -145,7 +145,9 @@ apr_status_t h2_bucket_queue_push(h2_bucket_queue *q, h2_bucket *bucket,
     }
     else {
         if (q->ev_cb) {
-            q->ev_cb(q, H2_BQ_EV_BEFORE_PUSH, bucket, stream_id, q->ev_ctx);
+            int first = (h2_queue_find_id(q->queue, stream_id) == NULL);
+            q->ev_cb(q, H2_BQ_EV_BEFORE_PUSH, bucket,
+                     stream_id, first, q->ev_ctx);
         }
         status = h2_queue_push_id(q->queue, stream_id, bucket);
         apr_thread_cond_broadcast(q->has_data);
@@ -174,7 +176,9 @@ apr_status_t h2_bucket_queue_append(h2_bucket_queue *q,
     }
     else {
         if (q->ev_cb) {
-            q->ev_cb(q, H2_BQ_EV_BEFORE_APPEND, bucket, stream_id, q->ev_ctx);
+            int first = (h2_queue_find_id(q->queue, stream_id) == NULL);
+            q->ev_cb(q, H2_BQ_EV_BEFORE_APPEND, bucket,
+                     stream_id, first, q->ev_ctx);
         }
         status = h2_queue_append_id(q->queue, stream_id, bucket);
         apr_thread_cond_broadcast(q->has_data);

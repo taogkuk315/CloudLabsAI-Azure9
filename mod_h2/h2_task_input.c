@@ -32,7 +32,7 @@ static int check_abort(h2_task_input *input,
                        ap_filter_t *filter,
                        apr_bucket_brigade *brigade)
 {
-    if (input->aborted || filter->c->aborted) {
+    if (filter->c->aborted) {
         APR_BRIGADE_INSERT_TAIL(brigade,
                                 apr_bucket_eos_create(filter->c->bucket_alloc));
         return 0;
@@ -189,10 +189,5 @@ apr_status_t h2_task_input_read(h2_task_input *input,
     }
     
     return APR_SUCCESS;
-}
-
-void h2_task_input_abort(h2_task_input *input)
-{
-    input->aborted = 1;
 }
 

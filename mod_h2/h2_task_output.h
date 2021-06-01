@@ -29,7 +29,6 @@ typedef struct h2_task_output {
     struct h2_bucket_queue *queue;
     int stream_id;
     int eos;
-    int aborted;
     struct h2_bucket *cur;
     apr_size_t cur_offset;
     
@@ -50,7 +49,5 @@ apr_status_t h2_task_output_write(h2_task_output *output,
 void h2_task_output_set_converter(h2_task_output *output,
                                   h2_output_converter conv,
                                   void *conv_ctx);
-
-void h2_task_output_abort(h2_task_output *output);
 
 #endif /* defined(__mod_h2__h2_task_output__) */

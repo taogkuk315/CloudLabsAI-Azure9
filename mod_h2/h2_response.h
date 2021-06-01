@@ -37,6 +37,7 @@ typedef enum {
 } h2_response_state_t;
 
 struct h2_bucket;
+struct h2_resp_head;
 struct h2_response;
 
 typedef void h2_response_state_change_cb(struct h2_response *resp,
@@ -62,8 +63,7 @@ typedef struct h2_response {
     char *status;
     apr_array_header_t *hlines;
     
-    const nghttp2_nv *nv;
-    apr_size_t nvlen;
+    struct h2_resp_head *head;
 } h2_response;
 
 h2_response *h2_response_create(int stream_id, conn_rec *c);

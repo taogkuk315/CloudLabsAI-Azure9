@@ -61,6 +61,7 @@ void *h2_queue_pop_id(h2_queue *q, int id);
 void *h2_queue_pop_find(h2_queue *q, h2_queue_match_fn find, void *ctx);
 
 void *h2_queue_remove(h2_queue *q, void *entry);
+void h2_queue_remove_all(h2_queue *q);
 
 int h2_queue_is_terminated(h2_queue *q);
 int h2_queue_is_empty(h2_queue *q);

@@ -38,8 +38,12 @@ static void *task_run(apr_thread_t *thread, void *puser)
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_conn:  stream(%d): task run", task->stream_id);
     
-    apr_status_t status = h2_task_do(task);
+    apr_status_t status = h2_task_do(task, thread);
     
+    if (task->aborted) {
+        h2_task_destroy(task);
+    }
+
     apr_thread_exit(thread, status);
     return NULL;
 }
@@ -99,7 +103,7 @@ apr_status_t h2_conn_process(conn_rec *c)
     
     while (status == APR_SUCCESS || status == APR_EAGAIN) {
         int got_streams = !h2_stream_set_is_empty(session->streams);
-        int data_write = h2_bucket_queue_is_empty(session->response_data);
+        int data_write = h2_bucket_queue_is_empty(session->data_in);
         int have_written = 0;
         
         status = h2_session_write(session, wait_micros);
@@ -123,7 +127,7 @@ apr_status_t h2_conn_process(conn_rec *c)
         /* Get a stream that is ready to be submitted, e.g. that has all
          * response headers ready?
          */
-        h2_stream *stream = h2_session_get_ready_response(session);
+        h2_stream *stream = h2_session_pop_ready_response(session);
         if (stream != NULL) {
             status = h2_session_submit_response(session, stream);
             if (status != APR_SUCCESS) {
@@ -151,8 +155,10 @@ apr_status_t h2_conn_process(conn_rec *c)
                 }
                 break;
             case APR_EOF:
+            case APR_ECONNABORTED:
                 ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,
                               "h2_conn_process: eof reading, terminating");
+                h2_session_abort(session);
                 break;
             default:
                 ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,

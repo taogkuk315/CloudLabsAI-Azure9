@@ -92,6 +92,13 @@ static void queue_unlink(h2_queue *q, h2_qdata *qdata) {
     qdata->next = qdata->prev = NULL;
 }
 
+static void queue_free(h2_queue *q, h2_qdata *qdata) {
+    queue_unlink(q, qdata);
+    memset(qdata, 0, sizeof(h2_qdata));
+    qdata->next = q->free;
+    q->free = qdata;
+}
+
 static void *match_any(void *ctx, int id, void *entry)
 {
     return entry;
@@ -109,11 +116,11 @@ static void *match_entry(void *match_entry, int id, void *entry)
 }
 
 static h2_qdata *h2_queue_find_int(h2_queue *q,
-                                   h2_queue_match_fn find, void *ctx)
+                                   h2_queue_match_fn match, void *ctx)
 {
     
     for (h2_qdata *qdata = q->first; qdata; qdata = qdata->next) {
-        void *entry = find(ctx, qdata->id, qdata->entry);
+        void *entry = match(ctx, qdata->id, qdata->entry);
         if (entry) {
             return qdata;
         }
@@ -121,9 +128,9 @@ static h2_qdata *h2_queue_find_int(h2_queue *q,
     return NULL;
 }
 
-void *h2_queue_find(h2_queue *q, h2_queue_match_fn find, void *ctx)
+void *h2_queue_find(h2_queue *q, h2_queue_match_fn match, void *ctx)
 {
-    h2_qdata *qdata = h2_queue_find_int(q, find, ctx);
+    h2_qdata *qdata = h2_queue_find_int(q, match, ctx);
     return qdata? qdata->entry : NULL;
 }
 
@@ -135,14 +142,11 @@ void *h2_queue_find_id(h2_queue *q, int id)
 
 void *h2_queue_pop_find(h2_queue *q, h2_queue_match_fn find, void *ctx)
 {
-    void *entry;
+    void *entry = NULL;
     h2_qdata *qdata = h2_queue_find_int(q, find, ctx);
     if (qdata) {
         entry = qdata->entry;
-        queue_unlink(q, qdata);
-        memset(qdata, 0, sizeof(h2_qdata));
-        qdata->next = q->free;
-        q->free = qdata;
+        queue_free(q, qdata);
     }
     return entry;
 }
@@ -232,6 +236,13 @@ apr_status_t h2_queue_push_id(h2_queue *q, int id, void *entry)
 void *h2_queue_remove(h2_queue *q, void *entry)
 {
     return h2_queue_pop_find(q, match_entry, entry);
+}
+
+void h2_queue_remove_all(h2_queue *q)
+{
+    while(q->first) {
+        queue_free(q, q->first);
+    }
 }
 
 int h2_queue_is_terminated(h2_queue *q)

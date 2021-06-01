@@ -28,6 +28,7 @@
 #include "h2_private.h"
 #include "h2_bucket.h"
 #include "h2_bucket_queue.h"
+#include "h2_resp_head.h"
 #include "h2_response.h"
 #include "h2_util.h"
 
@@ -62,6 +63,10 @@ apr_status_t h2_response_destroy(h2_response *response)
         h2_bucket_destroy(response->rawhead);
         response->rawhead = NULL;
     }
+    if (response->head) {
+        h2_resp_head_destroy(response->head);
+        response->head = NULL;
+    }
     return APR_SUCCESS;
 }
 
@@ -87,45 +92,19 @@ static apr_status_t ensure_buffer(h2_response *resp)
 
 static apr_status_t make_h2_headers(h2_response *resp)
 {
-    assert(resp->status);
-    assert(resp->hlines);
-    apr_size_t nvlen = 1 + resp->hlines->nelts;
-    resp->nv = apr_pcalloc(resp->c->pool, nvlen * sizeof(nghttp2_nv));
-    if (resp->nv == NULL) {
-        return APR_ENOMEM;
+    resp->head = h2_resp_head_create(resp->rawhead,
+                                     resp->status, resp->hlines);
+    if (resp->head == NULL) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->c,
+                      "h2_response(%d): unable to create resp_head",
+                      resp->stream_id);
+        return APR_EINVAL;
     }
-    nghttp2_nv *nv = (nghttp2_nv *)resp->nv;
-    nv->name = (uint8_t *)":status";
-    nv->namelen = strlen(":status");
-    nv->value = (uint8_t *)resp->status;
-    nv->valuelen = strlen(resp->status);
     
-    int seen_clen = 0;
-    for (int i = 0; i < resp->hlines->nelts; ++i) {
-        char *hline = ((char **)resp->hlines->elts)[i];
-        nv = (nghttp2_nv *)(resp->nv + (i+1));
-        char *sep = strchr(hline, ':');
-        if (!sep) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->c,
-                          "h2_response(%d): header line without ':', %s",
-                          resp->stream_id, hline);
-            return APR_EINVAL;
-        }
-        (*sep++) = '\0';
-        nv->name = (uint8_t *)h2_strlwr(hline);
-        nv->namelen = strlen(hline);
-        while (*sep == ' ' || *sep == '\t') {
-            ++sep;
-        }
-        if (*sep) {
-            nv->value = (uint8_t *)sep;
-            nv->valuelen = strlen(sep);
-        }
-        else {
-            /* reached end of line, an empty header value */
-            nv->value = (uint8_t *)"";
-            nv->valuelen = 0;
-        }
+    resp->rawhead = NULL; /* h2_resp_head took ownership */
+    
+    for (int i = 1; i < resp->head->nvlen; ++i) {
+        const nghttp2_nv *nv = &(&resp->head->nv)[i];
         
         if (!strcmp("transfer-encoding", (char*)nv->name)) {
             if (!strcmp("chunked", (char *)nv->value)) {
@@ -141,18 +120,14 @@ static apr_status_t make_h2_headers(h2_response *resp)
                 return APR_EINVAL;
             }
             resp->body_len = clen;
-            seen_clen = 1;
         }
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, resp->c,
-                      "h2_response(%d): constructed header '%s' = '%s'",
-                      resp->stream_id, (char*)nv->name, (char*)nv->value);
     }
-    resp->nvlen = nvlen;
+    
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,
                   "h2_response(%d): converted %d headers, content-length: %ld"
                   ", chunked=%d",
-                  resp->stream_id, (int)resp->nvlen, (long)resp->body_len,
-                  resp->chunked);
+                  resp->stream_id, (int)resp->head->nvlen,
+                  (long)resp->body_len, resp->chunked);
     
     resp->remain_len = resp->body_len;
     set_state(resp, ((resp->chunked || resp->body_len > 0)?

@@ -21,12 +21,13 @@
 /**
  * A HTTP/2 stream, e.g. a client request+response in HTTP/1.1 terms.
  *
- *
+ * A stream always belongs to a h2_session, the one managing the
+ * connection to the client.
  */
 
 struct h2_bucket;
 struct h2_bucket_queue;
-struct h2_task;
+struct h2_resp_head;
 
 typedef enum {
     H2_STREAM_ST_IDLE,
@@ -47,39 +48,36 @@ typedef void h2_stream_state_change_cb(struct h2_stream *stream,
 
 
 typedef struct h2_stream {
-    int id;                  /* http2 stream id */
-    h2_stream_state_t state;
-    int eoh;                 /* end of headers seen */
-    int aborted;             /* was aborted */
-    int response_started;    /* response was started */
-    int data_suspended;      /* is suspended, e.g. sends no data */
+    int id;                     /* http2 stream id */
+    h2_stream_state_t state;    /* http/2 state of this stream */
+    struct h2_session *session; /* the session this stream belongs to */
     
-    struct h2_session *session;
+    int eoh;                    /* end of headers seen */
+    int aborted;                /* was aborted */
+    int response_started;       /* response was started */
     
     h2_stream_state_change_cb *state_change_cb;
     void *state_change_ctx;
     
+    struct h2_resp_head *resp_head;
+    
     /* pseudo header values, see ch. 8.1.2.3 */
+    struct h2_bucket *work;
     const char *method;
     const char *path;
     const char *authority;
     const char *scheme;
     
-    struct h2_bucket *work;
-    
-    struct h2_task *task;
 } h2_stream;
 
 apr_status_t h2_stream_create(h2_stream **pstream,
-                              int id, h2_stream_state_t state,
-                              struct h2_session *session);
+                              int id, struct h2_session *session);
 
 apr_status_t h2_stream_destroy(h2_stream *stream);
 
-struct h2_task *h2_stream_create_task(h2_stream *stream);
+void h2_stream_abort(h2_stream *stream);
 
 apr_status_t h2_stream_close_input(h2_stream *stream);
-apr_status_t h2_stream_close_output(h2_stream *stream);
 
 apr_status_t h2_stream_push(h2_stream *stream);
 
@@ -91,10 +89,6 @@ apr_status_t h2_stream_add_data(h2_stream *stream,
                                 const char *data, size_t len);
 
 apr_status_t h2_stream_end_headers(h2_stream *stream);
-
-void h2_stream_set_data_suspended(h2_stream *stream, int suspended);
-int h2_stream_is_data_suspended(h2_stream *stream);
-int h2_stream_ready_to_submit(h2_stream *stream);
 
 void h2_stream_set_state_change_cb(h2_stream *stream,
                                    h2_stream_state_change_cb cb,

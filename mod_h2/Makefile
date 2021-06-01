@@ -33,12 +33,14 @@ C_SRC   = \
         h2_io.c \
         h2_queue.c \
         h2_response.c \
+        h2_resp_head.c \
         h2_session.c \
         h2_stream.c \
         h2_stream_set.c \
         h2_task.c \
         h2_task_input.c \
         h2_task_output.c \
+        h2_task_set.c \
         h2_tls.c \
         h2_util.c \
 

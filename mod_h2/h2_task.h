@@ -42,6 +42,8 @@
  */
 
 struct h2_task;
+struct h2_resp_head;
+struct h2_response;
 
 typedef enum {
     H2_TASK_ST_IDLE,
@@ -50,21 +52,27 @@ typedef enum {
     H2_TASK_ST_DONE
 } h2_task_state_t;
 
-typedef void h2_task_ready_cb(struct h2_task *task, void *cb_ctx);
+typedef enum {
+    H2_TASK_EV_READY,
+    H2_TASK_EV_DONE
+} h2_task_event_t;
+
+typedef void h2_task_event_cb(struct h2_task *task,
+                              h2_task_event_t event, void *cb_ctx);
 
 typedef struct h2_task {
     conn_rec *c;
     int stream_id;
     h2_task_state_t state;
     int aborted;
-    int auto_destroy;
+    apr_thread_t *thread;
     
     struct h2_task_input *input;    /* http/1.1 input data */
     struct h2_task_output *output;  /* response body data */
     struct h2_response *response;     /* response meta data */
     
-    h2_task_ready_cb *ready_cb;
-    void *ready_ctx;
+    h2_task_event_cb *event_cb;
+    void *event_ctx;
     
 } h2_task;
 
@@ -74,16 +82,14 @@ h2_task *h2_task_create(int stream_id,
                         struct h2_bucket_queue *output);
 
 apr_status_t h2_task_destroy(h2_task *task);
-void h2_task_set_auto_destroy(h2_task *task, int auto_destroy);
 
-apr_status_t h2_task_do(h2_task *task);
+apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread);
 
 void h2_task_abort(h2_task *task);
-int h2_task_is_aborted(h2_task *task);
-int h2_task_is_busy(h2_task *task);
-int h2_task_is_done(h2_task *task);
 
-void h2_task_set_ready_cb(h2_task *task, h2_task_ready_cb *cb, void *ready_ctx);
+void h2_task_set_event_cb(h2_task *task, h2_task_event_cb *cb, void *event_ctx);
+
+struct h2_resp_head *h2_task_get_resp_head(h2_task *task);
 
 void h2_task_hooks_init(void);
 int h2_task_pre_conn(h2_task *task, conn_rec *c);

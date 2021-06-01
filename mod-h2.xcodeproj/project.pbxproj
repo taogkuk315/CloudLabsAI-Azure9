@@ -782,6 +782,10 @@
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
 		B2CB610E1A88BB9F00D270A6 /* h2_conn.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_conn.c; sourceTree = "<group>"; };
 		B2CB610F1A88BB9F00D270A6 /* h2_conn.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_conn.h; sourceTree = "<group>"; };
+		B2CB61101A8A0FB400D270A6 /* h2_resp_head.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_resp_head.c; sourceTree = "<group>"; };
+		B2CB61111A8A0FB400D270A6 /* h2_resp_head.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_resp_head.h; sourceTree = "<group>"; };
+		B2CB61121A8A494C00D270A6 /* h2_task_set.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_set.c; sourceTree = "<group>"; };
+		B2CB61131A8A494C00D270A6 /* h2_task_set.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_set.h; sourceTree = "<group>"; };
 		B2D05D421A6D11C0004DF5C0 /* config.m4 */ = {isa = PBXFileReference; lastKnownFileType = text; path = config.m4; sourceTree = "<group>"; };
 		B2D05D431A6D11C0004DF5C0 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2D05D441A6D11C0004DF5C0 /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
@@ -868,6 +872,8 @@
 				B22549371A6FCE13004BDEC9 /* h2_private.h */,
 				B2546D9B1A810A450033A875 /* h2_queue.c */,
 				B2546D9C1A810A450033A875 /* h2_queue.h */,
+				B2CB61101A8A0FB400D270A6 /* h2_resp_head.c */,
+				B2CB61111A8A0FB400D270A6 /* h2_resp_head.h */,
 				B2546D971A7FC2A60033A875 /* h2_response.c */,
 				B2546D981A7FC2A60033A875 /* h2_response.h */,
 				B22549381A710329004BDEC9 /* h2_session.c */,
@@ -880,6 +886,8 @@
 				B284ACCA1A7B9DF900C35863 /* h2_task_input.h */,
 				B2546D8E1A7FA7D70033A875 /* h2_task_output.c */,
 				B2546D8F1A7FA7D70033A875 /* h2_task_output.h */,
+				B2CB61121A8A494C00D270A6 /* h2_task_set.c */,
+				B2CB61131A8A494C00D270A6 /* h2_task_set.h */,
 				B2546D881A7F71F80033A875 /* h2_task.c */,
 				B2546D891A7F71F80033A875 /* h2_task.h */,
 				B225491E1A6FB8DF004BDEC9 /* h2_tls.c */,
