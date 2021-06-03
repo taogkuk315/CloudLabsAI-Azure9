@@ -44,6 +44,7 @@
 struct h2_task;
 struct h2_resp_head;
 struct h2_response;
+struct h2_bucket_queue;
 
 typedef enum {
     H2_TASK_ST_IDLE,
@@ -61,12 +62,12 @@ typedef void h2_task_event_cb(struct h2_task *task,
                               h2_task_event_t event, void *cb_ctx);
 
 typedef struct h2_task {
-    conn_rec *c;
+    int session_id;
     int stream_id;
     h2_task_state_t state;
     int aborted;
-    apr_thread_t *thread;
     
+    conn_rec *c;
     struct h2_task_input *input;    /* http/1.1 input data */
     struct h2_task_output *output;  /* response body data */
     struct h2_response *response;     /* response meta data */
@@ -76,14 +77,14 @@ typedef struct h2_task {
     
 } h2_task;
 
-h2_task *h2_task_create(int stream_id,
+h2_task *h2_task_create(int session_id, int stream_id,
                         conn_rec *master,
                         struct h2_bucket_queue *input,
                         struct h2_bucket_queue *output);
 
 apr_status_t h2_task_destroy(h2_task *task);
 
-apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread);
+apr_status_t h2_task_do(h2_task *task);
 
 void h2_task_abort(h2_task *task);
 

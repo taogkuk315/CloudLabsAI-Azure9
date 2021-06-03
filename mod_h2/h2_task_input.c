@@ -49,6 +49,16 @@ static int all_queued(h2_task_input *input)
     || h2_bucket_queue_has_eos_for(input->queue, input->stream_id);
 }
 
+static void cleanup(h2_task_input *input) {
+    if (input->cur) {
+        /* we read all in a previous call, time to remove
+         * this bucket. */
+        h2_bucket_destroy(input->cur);
+        input->cur = NULL;
+        input->cur_offset = 0;
+    }
+}
+
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
                                         int stream_id,
                                         h2_bucket_queue *q)
@@ -85,14 +95,11 @@ apr_status_t h2_task_input_read(h2_task_input *input,
                   input->stream_id, (int)readbytes);
     
     if (input->cur && input->cur_offset >= input->cur->data_len) {
-        /* we read all in a previous call, time to remove
-         * this bucket. */
-        h2_bucket_destroy(input->cur);
-        input->cur = NULL;
-        input->cur_offset = 0;
+        cleanup(input);
     }
     
     if (input->eos) {
+        cleanup(input);
         return APR_EOF;
     }
     

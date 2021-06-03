@@ -123,7 +123,7 @@ static apr_status_t make_h2_headers(h2_response *resp)
         }
     }
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, resp->c,
                   "h2_response(%d): converted %d headers, content-length: %ld"
                   ", chunked=%d",
                   resp->stream_id, (int)resp->head->nvlen,
@@ -144,7 +144,7 @@ static apr_status_t parse_headers(h2_response *resp)
         if (data[i] == '\r' && data[i+1] == '\n') {
             if (i == resp->offset) {
                 /* empty line -> end of headers */
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, resp->c,
                               "h2_response(%d): end of headers",
                               resp->stream_id);
                 resp->offset = i + 2;
@@ -270,7 +270,7 @@ static apr_status_t read_chunk_size(h2_response *resp,
                     set_state(resp, H2_RESP_ST_DONE);
                 }
                 h2_bucket_reset(resp->chunk_work);
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, resp->c,
                               "h2_response(%d): read chunk size %ld",
                               resp->stream_id, (long)resp->remain_len);
                 break;
@@ -396,7 +396,7 @@ apr_status_t h2_response_http_convert(h2_bucket *bucket,
             case H2_RESP_ST_BODY:
                 status = copy_body(resp, bucket, data, len, pconsumed);
                 if (resp->state == H2_RESP_ST_DONE) {
-                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, resp->c,
                                   "h2_response(%d): body done",
                                   resp->stream_id);
                 }

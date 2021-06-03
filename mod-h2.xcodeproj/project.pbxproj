@@ -786,6 +786,10 @@
 		B2CB61111A8A0FB400D270A6 /* h2_resp_head.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_resp_head.h; sourceTree = "<group>"; };
 		B2CB61121A8A494C00D270A6 /* h2_task_set.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_set.c; sourceTree = "<group>"; };
 		B2CB61131A8A494C00D270A6 /* h2_task_set.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_set.h; sourceTree = "<group>"; };
+		B2CB61141A8B698A00D270A6 /* h2_worker.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_worker.c; sourceTree = "<group>"; };
+		B2CB61151A8B698A00D270A6 /* h2_worker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_worker.h; sourceTree = "<group>"; };
+		B2CB61161A8B699E00D270A6 /* h2_workers.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_workers.c; sourceTree = "<group>"; };
+		B2CB61171A8B699E00D270A6 /* h2_workers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_workers.h; sourceTree = "<group>"; };
 		B2D05D421A6D11C0004DF5C0 /* config.m4 */ = {isa = PBXFileReference; lastKnownFileType = text; path = config.m4; sourceTree = "<group>"; };
 		B2D05D431A6D11C0004DF5C0 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2D05D441A6D11C0004DF5C0 /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
@@ -894,6 +898,10 @@
 				B225491F1A6FB8DF004BDEC9 /* h2_tls.h */,
 				B225493C1A713D18004BDEC9 /* h2_util.c */,
 				B225493D1A713D18004BDEC9 /* h2_util.h */,
+				B2CB61141A8B698A00D270A6 /* h2_worker.c */,
+				B2CB61151A8B698A00D270A6 /* h2_worker.h */,
+				B2CB61161A8B699E00D270A6 /* h2_workers.c */,
+				B2CB61171A8B699E00D270A6 /* h2_workers.h */,
 				B225490B1A6EAAA3004BDEC9 /* Makefile */,
 				B225490C1A6EAC37004BDEC9 /* mod_h2.c */,
 				B22549361A6FCCAA004BDEC9 /* mod_h2.h */,

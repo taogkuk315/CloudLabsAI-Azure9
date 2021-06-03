@@ -28,35 +28,25 @@
 #include "h2_stream_set.h"
 #include "h2_response.h"
 #include "h2_task.h"
+#include "h2_workers.h"
 #include "h2_conn.h"
 
 
-static void *task_run(apr_thread_t *thread, void *puser)
-{
-    h2_task *task = (h2_task *)puser;
-    
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_conn:  stream(%d): task run", task->stream_id);
-    
-    apr_status_t status = h2_task_do(task, thread);
-    
-    if (task->aborted) {
-        h2_task_destroy(task);
-    }
-
-    apr_thread_exit(thread, status);
-    return NULL;
-}
-
+static h2_workers *workers;
 
 static void start_new_task(h2_session *session, int stream_id, h2_task *task)
 {
-    /* TODO: make a thread pool */
-    apr_threadattr_t *attr;
-    apr_threadattr_create(&attr, task->c->pool);
-    
-    apr_thread_t *thread;
-    apr_thread_create(&thread, attr, task_run, task, task->c->pool);
+    apr_status_t status = h2_workers_schedule(workers, task, session->c->id);
+    if (status != APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                      "scheduling task(%d-%d)", session->id, stream_id);
+    }
+}
+
+apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
+{
+    workers = h2_workers_create(s, pool, 10, 20);
+    return workers? APR_SUCCESS : APR_ENOMEM;
 }
 
 apr_status_t h2_conn_process(conn_rec *c)
@@ -64,6 +54,11 @@ apr_status_t h2_conn_process(conn_rec *c)
     apr_status_t status = APR_SUCCESS;
     
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_conn_process start");
+    
+    if (!workers) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, "workers not initialized");
+        return APR_EGENERAL;
+    }
     
     /* Create a h2_session for this connection and start talking
      * to the client. Except protocol meta data back and forth, we mainly
@@ -156,21 +151,23 @@ apr_status_t h2_conn_process(conn_rec *c)
                 break;
             case APR_EOF:
             case APR_ECONNABORTED:
-                ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,
-                              "h2_conn_process: eof reading, terminating");
+                ap_log_cerror( APLOG_MARK, APLOG_INFO, status, c,
+                              "h2_session(%d): eof on input"
+                              ", terminating", session->id);
                 h2_session_abort(session);
                 break;
             default:
                 ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,
-                              "h2_conn_process: error reading, terminating");
-                // TODO: try to shut down controlled
+                              "h2_session(%d): error processing"
+                              ", terminating", session->id);
+                // TODO: try to shut down controlled, GO_AWAY and such...
                 break;
         }
     }
     
     ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, c,
                   "h2_conn_process done");
-    
+    h2_workers_shutdown(workers, c->id);
     h2_session_destroy(session);
     return DONE;
 }

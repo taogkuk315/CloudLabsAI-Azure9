@@ -104,8 +104,8 @@ static apr_status_t h2_stream_check_work(h2_stream *stream)
 apr_status_t h2_stream_push(h2_stream *stream)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                  "h2_stream(%d): pushing request: %s %s for %s",
-                  (int)stream->id,
+                  "h2_stream(%d-%d): pushing request: %s %s for %s",
+                  stream->session->id, (int)stream->id,
                   stream->method, stream->path, stream->authority);
     
     apr_status_t status = h2_bucket_queue_append(stream->session->data_in,
@@ -133,7 +133,8 @@ apr_status_t h2_stream_end_headers(h2_stream *stream)
         status = h2_stream_push(stream);
     }
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, stream->session->c,
-                  "h2_stream(%d): headers done", stream->id);
+                  "h2_stream(%d-%d): headers done",
+                  stream->session->id, stream->id);
     return status;
 }
 
@@ -160,8 +161,9 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
         status = h2_bucket_queue_append_eos(stream->session->data_in,
                                             stream->id);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, stream->session->c,
-                  "h2_stream(%d): got eos", stream->id);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, stream->session->c,
+                  "h2_stream(%d-%d): got eos",
+                  stream->session->id, stream->id);
     return status;
 }
 
@@ -179,8 +181,8 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
         /* pseudo header, see ch. 8.1.2.3, always should come first */
         if (stream->work) {
             ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                          "h2_stream(%d): pseudo header after request start",
-                          stream->id);
+                          "h2_stream(%d-%d): pseudo header after request start",
+                          stream->session->id, stream->id);
             return APR_EGENERAL;
         }
         
@@ -189,8 +191,8 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
             memset(buffer, 0, 32);
             strncpy(buffer, name, (nlen > 31)? 31 : nlen);
             ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                          "h2_stream(%d): pseudo header without value %s",
-                          stream->id, buffer);
+                          "h2_stream(%d-%d): pseudo header without value %s",
+                          stream->session->id, stream->id, buffer);
             status = APR_EGENERAL;
         }
         else if (H2_HEADER_METHOD_LEN == nlen
@@ -214,8 +216,8 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
             memset(buffer, 0, 32);
             strncpy(buffer, name, (nlen > 31)? 31 : nlen);
             ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, stream->session->c,
-                          "h2_stream(%d): ignoring unknown pseudo header %s",
-                          stream->id, buffer);
+                          "h2_stream(%d-%d): ignoring unknown pseudo header %s",
+                          stream->session->id, stream->id, buffer);
         }
     }
     else {
@@ -226,14 +228,14 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
              */
             if (!stream->method) {
                 ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                              "h2_stream(%d): header start but :method missing",
-                              stream->id);
+                              "h2_stream(%d-%d): header start but :method missing",
+                              stream->session->id, stream->id);
                 return APR_EGENERAL;
             }
             if (!stream->path) {
                 ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                              "h2_stream(%d): header start but :path missing",
-                              stream->id);
+                              "h2_stream(%d-%d): header start but :path missing",
+                              stream->session->id, stream->id);
                 return APR_EGENERAL;
             }
             

@@ -32,6 +32,7 @@
 #include "mod_h2.h"
 
 #include "h2_stream.h"
+#include "h2_conn.h"
 #include "h2_task.h"
 #include "h2_session.h"
 #include "h2_config.h"
@@ -88,6 +89,12 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, se
  */
 static void h2_child_init(apr_pool_t *pool, server_rec *s)
 {
+    /* Set up our connection processing */
+    apr_status_t status = h2_conn_child_init(pool, s);
+    if (status != APR_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_ERR, status, s,
+                      "initializing connection handling");
+    }
 }
 
 static void *h2_core_inspect(request_rec *r)

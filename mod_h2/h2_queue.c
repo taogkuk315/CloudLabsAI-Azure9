@@ -118,7 +118,6 @@ static void *match_entry(void *match_entry, int id, void *entry)
 static h2_qdata *h2_queue_find_int(h2_queue *q,
                                    h2_queue_match_fn match, void *ctx)
 {
-    
     for (h2_qdata *qdata = q->first; qdata; qdata = qdata->next) {
         void *entry = match(ctx, qdata->id, qdata->entry);
         if (entry) {
@@ -138,6 +137,16 @@ void *h2_queue_find_id(h2_queue *q, int id)
 {
     h2_qdata *qdata = h2_queue_find_int(q, match_id, &id);
     return qdata? qdata->entry : NULL;
+}
+
+void h2_queue_iter(h2_queue *q, h2_queue_iter_fn iter, void *ctx)
+{
+    int index = 0;
+    for (h2_qdata *qdata = q->first; qdata; qdata = qdata->next, ++index) {
+        if (!iter(ctx, qdata->id, qdata->entry, index)) {
+            break;
+        }
+    }
 }
 
 void *h2_queue_pop_find(h2_queue *q, h2_queue_match_fn find, void *ctx)
@@ -253,6 +262,15 @@ int h2_queue_is_terminated(h2_queue *q)
 int h2_queue_is_empty(h2_queue *q)
 {
     return q->first == NULL;
+}
+
+apr_size_t h2_queue_size(h2_queue *q)
+{
+    apr_size_t size = 0;
+    for (h2_qdata *e = q->first; e; e = e->next) {
+        ++size;
+    }
+    return size;
 }
 
 

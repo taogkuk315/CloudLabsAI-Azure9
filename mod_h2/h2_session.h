@@ -54,6 +54,8 @@ typedef void on_new_task(struct h2_session *session,
                          int stream_id, struct h2_task *task);
 
 typedef struct h2_session {
+    int id;                         /* identifier of this session, unique
+                                     * inside a httpd process */
     conn_rec *c;                    /* the connection this session serves */
 
     int aborted;                    /* this session is being aborted */
@@ -64,9 +66,6 @@ typedef struct h2_session {
 
     struct h2_stream_set *streams;  /* streams handled by this session */
     struct h2_stream_set *readies;  /* streams ready for submit */
-    
-    struct h2_task_set *actives;    /* tasks, active for this session */
-    struct h2_task_set *zombies;    /* finished tasks, need to destroy */
     
     struct apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *has_data; /* there is data to be written */
@@ -102,9 +101,6 @@ apr_status_t h2_session_abort(h2_session *session);
  * Use with APR_BLOCK_READ only when certain that no data needs to be written
  * while waiting. */
 apr_status_t h2_session_read(h2_session *session, apr_read_type_e block);
-
-/* Check if the session has data to write. */
-int h2_session_want_write(h2_session *session);
 
 /* Write data out to the client, if there is any. Otherwise, wait for
  * a maximum of timeout micro-seconds and return to the caller. If timeout

@@ -18,6 +18,7 @@
 #define __mod_h2__h2_queue__
 
 typedef void *(*h2_queue_match_fn)(void *ctx, int id, void *entry);
+typedef int (*h2_queue_iter_fn)(void *ctx, int id, void *entry, int index);
 typedef void (*h2_queue_free_fn)(void *entry);
 
 /**
@@ -56,6 +57,8 @@ apr_status_t h2_queue_push_id(h2_queue *q, int id, void *entry);
 void *h2_queue_find(h2_queue *q, h2_queue_match_fn find, void *ctx);
 void *h2_queue_find_id(h2_queue *q, int id);
 
+void h2_queue_iter(h2_queue *q, h2_queue_iter_fn iter, void *ctx);
+
 void *h2_queue_pop(h2_queue *q);
 void *h2_queue_pop_id(h2_queue *q, int id);
 void *h2_queue_pop_find(h2_queue *q, h2_queue_match_fn find, void *ctx);
@@ -65,5 +68,6 @@ void h2_queue_remove_all(h2_queue *q);
 
 int h2_queue_is_terminated(h2_queue *q);
 int h2_queue_is_empty(h2_queue *q);
+apr_size_t h2_queue_size(h2_queue *q);
 
 #endif /* defined(__mod_h2__h2_queue__) */

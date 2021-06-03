@@ -82,8 +82,8 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
      * h2_session->response_data bucket queue.
      */
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                  "h2_stream(%d): task_pre_conn, installing filters",
-                  task->stream_id);
+                  "h2_stream(%d-%d): task_pre_conn, installing filters",
+                  task->session_id, task->stream_id);
     ap_add_input_filter_handle(h2_input_filter_handle,
                                task, NULL, c);
     ap_add_output_filter_handle(h2_output_filter_handle,
@@ -91,8 +91,8 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
     
     /* prevent processing by anyone else, including httpd core */
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                  "h2_stream(%d): task_pre_conn, taking over",
-                  task->stream_id);
+                  "h2_stream(%d-%d): task_pre_conn, taking over",
+                  task->session_id, task->stream_id);
     return DONE;
 }
 
@@ -154,7 +154,7 @@ static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
     c->id = (int)master->id^(int)c;
     *pc = c;
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, master,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, master,
                   "h2_task: created con %d from master %d",
                   (int)c->id, (int)master->id);
     
@@ -177,8 +177,9 @@ static void set_state(h2_task *task, h2_task_state_t state)
         h2_task_state_t oldstate = task->state;
         task->state = state;
         ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, task->c,
-                      "h2_task(%d): state now %d, was %d",
-                      task->stream_id, task->state, oldstate);
+                      "h2_task(%d-%d): state now %d, was %d",
+                      task->session_id, task->stream_id,
+                      task->state, oldstate);
         if (state == H2_TASK_ST_READY && task->event_cb) {
             task->event_cb(task, H2_TASK_EV_READY, task->event_ctx);
         }
@@ -207,7 +208,7 @@ static void response_state_change(h2_response *resp,
     }
 }
 
-h2_task *h2_task_create(int stream_id,
+h2_task *h2_task_create(int session_id, int stream_id,
                         conn_rec *master,
                         h2_bucket_queue *input,
                         h2_bucket_queue *output)
@@ -216,22 +217,23 @@ h2_task *h2_task_create(int stream_id,
     apr_status_t status = h2_conn_create(&c, master);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, master,
-                      "h2_task(%d): unable to create stream task",
-                      stream_id);
+                      "h2_task(%d-%d): unable to create stream task",
+                      session_id, stream_id);
         return NULL;
     }
     
     h2_task *task = apr_pcalloc(c->pool, sizeof(h2_task));
     if (task == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, master,
-                      "h2_task(%d): unable to create stream task",
-                      stream_id);
+                      "h2_task(%d-%d): unable to create stream task",
+                      session_id, stream_id);
         return NULL;
     }
     
+    task->stream_id = stream_id;
+    task->session_id = session_id;
     task->c = c;
     task->state = H2_TASK_ST_IDLE;
-    task->stream_id = stream_id;
     task->input = h2_task_input_create(task->c->pool, stream_id, input);
     task->output = h2_task_output_create(task->c->pool, stream_id, output);
     
@@ -242,20 +244,16 @@ h2_task *h2_task_create(int stream_id,
     
     h2_ctx_create_for(task->c, task);
     
+    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, task->c->pool,
+                  "h2_task(%d-%d): created", task->session_id, task->stream_id);
     return task;
 }
 
 apr_status_t h2_task_destroy(h2_task *task)
 {
-    if (!task->aborted && task->thread) {
-        apr_status_t status = APR_SUCCESS;
-        apr_status_t join_stat = apr_thread_join(&status, task->thread);
-        if (join_stat != APR_SUCCESS) {
-            ap_log_perror(APLOG_MARK, APLOG_ERR, join_stat, task->c->pool,
-                          "h2_task: error joining task thread");
-        }
-        task->thread = NULL;
-    }
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
+                  "h2_task(%d-%d): destroy started",
+                  task->session_id, task->stream_id);
     if (task->input) {
         h2_task_input_destroy(task->input);
         task->input = NULL;
@@ -275,13 +273,12 @@ apr_status_t h2_task_destroy(h2_task *task)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread)
+apr_status_t h2_task_do(h2_task *task)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_task(%d): do", task->stream_id);
+                  "h2_task(%d-%d): do", task->session_id, task->stream_id);
     apr_status_t status;
     
-    task->thread = thread;
     /* Furthermore, other code might want to see the socket for
      * this connection. Allocate one without further function...
      */
@@ -307,6 +304,9 @@ apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread)
     
     set_state(task, H2_TASK_ST_DONE);
     
+    if (task->aborted) {
+        h2_task_destroy(task);
+    }
     return APR_SUCCESS;
 }
 

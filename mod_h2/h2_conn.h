@@ -24,6 +24,10 @@
  */
 apr_status_t h2_conn_process(conn_rec *c);
 
+/* Initialize this child process for h2 connection work 
+ */
+apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s);
+
 
 
 #endif /* defined(__mod_h2__h2_conn__) */

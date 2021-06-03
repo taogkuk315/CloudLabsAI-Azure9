@@ -43,6 +43,8 @@ C_SRC   = \
         h2_task_set.c \
         h2_tls.c \
         h2_util.c \
+        h2_worker.c \
+        h2_workers.c
 
 CPP_SRC =
 
