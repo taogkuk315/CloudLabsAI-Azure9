@@ -5,7 +5,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
  		"OpenSSL configuration command")
  #endif
  
-+#if defined(HAVE_ALPN_NPN) || defined(HAVE_TLS_NPN)
++#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
 +    SSL_CMD_SRV(AlpnPreference, ITERATE,
 +                "Preference in Application-Layer Protocol Negotiation (ALPN), "
 +                "protocols are chosed in the specified order")
@@ -22,7 +22,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
 +                               ssl_alpn_propose_protos advertisefn,
 +                               ssl_alpn_proto_negotiated negotiatedfn)
 +{
-+#if defined(HAVE_ALPN_NPN) || defined(HAVE_TLS_NPN)
++#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
 +	SSLConnRec *sslconn = myConnConfig(c);
 +	
 +	if (!sslconn) {
@@ -117,7 +117,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_
      SSL_CONF_CTX_set_flags(mctx->ssl_ctx_config, SSL_CONF_FLAG_CERTIFICATE);
      mctx->ssl_ctx_param = apr_array_make(p, 5, sizeof(ssl_ctx_param_t));
  #endif
-+#if defined(HAVE_ALPN_NPN) || defined(HAVE_TLS_NPN)
++#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
 +    mctx->ssl_alpn_pref = apr_array_make(p, 5, sizeof(const char *));
 +#endif
  }
@@ -127,7 +127,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_
  #ifdef HAVE_SSL_CONF_CMD
      cfgMergeArray(ssl_ctx_param);
  #endif
-+#if defined(HAVE_ALPN_NPN) || defined(HAVE_TLS_NPN)
++#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
 +    cfgMergeArray(ssl_alpn_pref);
 +#endif
  }
@@ -138,7 +138,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_
  }
  #endif
 +
-+#if defined(HAVE_ALPN_NPN) || defined(HAVE_TLS_NPN)
++#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
 +const char *ssl_cmd_SSLAlpnPreference(cmd_parms *cmd, void *dcfg,
 +                                      const char *protocol)
 +{
@@ -535,7 +535,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
 +
 +/* Next Protocol Negotiation */
 +#if !defined(OPENSSL_NO_NEXTPROTONEG) && defined(OPENSSL_NPN_NEGOTIATED)
-+#define HAVE_TLS_NPN
++#define HAVE_TLS_NPNX
 +#endif
 +
  /* Secure Remote Password */
@@ -545,7 +545,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
                       * connection */
      } reneg_state;
  
-+#ifdef HAVE_TLS_NPN
++#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
 +    /* Poor man's inter-module optional hooks for NPN. */
 +    apr_array_header_t *alpn_proposefns; /* list of ssl_alpn_propose_protos callbacks */
 +    apr_array_header_t *alpn_negofns; /* list of ssl_alpn_proto_negotiated callbacks. */
@@ -559,7 +559,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
      apr_array_header_t *ssl_ctx_param; /* parameters to pass to SSL_CTX */
  #endif
 +  
-+#if defined(HAVE_ALPN_NPN) || defined(HAVE_TLS_NPN)
++#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
 +  apr_array_header_t *ssl_alpn_pref; /* protocol names in order of preference */
 +#endif
  } modssl_ctx_t;
@@ -569,7 +569,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
  const char *ssl_cmd_SSLOpenSSLConfCmd(cmd_parms *cmd, void *dcfg, const char *arg1, const char *arg2);
  #endif
  
-+#if defined(HAVE_ALPN_NPN) || defined(HAVE_TLS_NPN)
++#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
 +const char *ssl_cmd_SSLAlpnPreference(cmd_parms *cmd, void *dcfg, const char *protocol);
 +#endif
 +
