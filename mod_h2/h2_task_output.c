@@ -76,7 +76,7 @@ void h2_task_output_set_converter(h2_task_output *output,
 static apr_status_t prepare_cur(h2_task_output *output)
 {
     if (!output->cur) {
-        output->cur = h2_bucket_alloc(16 * 1024);
+        output->cur = h2_bucket_alloc(BLOCKSIZE);
         if (!output->cur) {
             return APR_ENOMEM;
         }

@@ -81,7 +81,7 @@ void h2_response_set_state_change_cb(h2_response *resp,
 static apr_status_t ensure_buffer(h2_response *resp)
 {
     if (!resp->rawhead) {
-        resp->rawhead = h2_bucket_alloc(16*1024);
+        resp->rawhead = h2_bucket_alloc(BLOCKSIZE);
         if (resp->rawhead == NULL) {
             return APR_ENOMEM;
         }

@@ -479,7 +479,7 @@ h2_session *h2_session_create(conn_rec *c, apr_size_t max_streams)
         session->data_in = h2_bucket_queue_create(c->pool);
         session->data_out = h2_bucket_queue_create(c->pool);
         
-        h2_io_init(c, &session->io);
+        h2_io_init(&session->io, c);
         
         apr_status_t status = init_callbacks(c, &callbacks);
         if (status != APR_SUCCESS) {
@@ -573,6 +573,7 @@ void h2_session_destroy(h2_session *session)
         apr_thread_cond_destroy(session->has_data);
         session->has_data = NULL;
     }
+    h2_io_destroy(&session->io);
 }
 
 apr_status_t h2_session_abort(h2_session *session)

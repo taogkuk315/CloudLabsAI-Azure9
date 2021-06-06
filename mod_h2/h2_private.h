@@ -36,5 +36,8 @@ APLOG_USE_MODULE(h2);
 #define H2_HEADER_PATH_LEN   5
 #define H2_CRLF             "\r\n"
 
+static const apr_off_t BLOCKSIZE      = 4 * 1024;
+static const apr_off_t DATA_BLOCKSIZE = 8 * 1024;
+
 
 #endif

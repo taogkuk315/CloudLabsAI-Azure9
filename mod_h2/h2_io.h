@@ -29,7 +29,8 @@ typedef struct {
     apr_bucket_brigade *output_brigade;
 } h2_io_ctx;
 
-int h2_io_init(conn_rec *c, h2_io_ctx *io);
+apr_status_t h2_io_init(h2_io_ctx *io, conn_rec *c);
+void h2_io_destroy(h2_io_ctx *io);
 
 typedef apr_status_t (*h2_io_on_read_cb)(const char *data, apr_size_t len,
                                          apr_size_t *readlen, int *done,

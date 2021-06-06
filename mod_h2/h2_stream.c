@@ -90,10 +90,10 @@ void h2_stream_set_state_change_cb(h2_stream *stream,
     stream->state_change_ctx = cb_ctx;
 }
 
-static apr_status_t h2_stream_check_work(h2_stream *stream)
+static apr_status_t h2_stream_check_work(h2_stream *stream, apr_size_t size)
 {
     if (!stream->work) {
-        stream->work = h2_bucket_alloc(16 * 1024);
+        stream->work = h2_bucket_alloc(size);
         if (!stream->work) {
             return APR_ENOMEM;
         }
@@ -118,7 +118,7 @@ apr_status_t h2_stream_push(h2_stream *stream)
 
 apr_status_t h2_stream_end_headers(h2_stream *stream)
 {
-    apr_status_t status = h2_stream_check_work(stream);
+    apr_status_t status = h2_stream_check_work(stream, BLOCKSIZE);
     if (status != APR_SUCCESS) {
         return status;
     }
@@ -239,7 +239,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
                 return APR_EGENERAL;
             }
             
-            status = h2_stream_check_work(stream);
+            status = h2_stream_check_work(stream, BLOCKSIZE);
             if (status != APR_SUCCESS) {
                 return status;
             }
@@ -275,7 +275,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
 apr_status_t h2_stream_add_data(h2_stream *stream,
                                 const char *data, size_t len)
 {
-    apr_status_t status = h2_stream_check_work(stream);
+    apr_status_t status = h2_stream_check_work(stream, DATA_BLOCKSIZE);
     if (status != APR_SUCCESS) {
         return status;
     }

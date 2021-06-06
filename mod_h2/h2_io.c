@@ -23,39 +23,24 @@
 #include "h2_private.h"
 #include "h2_io.h"
 
-static const apr_off_t BLOCKSIZE = 4 * 1024;
-
-int h2_io_init(conn_rec *c, h2_io_ctx *io)
+apr_status_t h2_io_init(h2_io_ctx *io, conn_rec *c)
 {
     io->connection = c;
     io->input_brigade = apr_brigade_create(c->pool, c->bucket_alloc);
     io->output_brigade = apr_brigade_create(c->pool, c->bucket_alloc);
-    return OK;
+    return APR_SUCCESS;
 }
 
-typedef struct {
-    char *buf;
-    apr_size_t buflen;
-    apr_size_t readlen;
-} io_copy_ctx;
-
-static apr_status_t on_read_copy(const char *data, apr_size_t len,
-                                 apr_size_t *readlen, int *done, void *puser)
+void h2_io_destroy(h2_io_ctx *io)
 {
-    io_copy_ctx *ctx = (io_copy_ctx *)puser;
-    apr_size_t avail = ctx->buflen - ctx->readlen;
-    if (avail == 0) {
-        *done = 1;
-        return APR_SUCCESS;
+    if (io->input_brigade) {
+        apr_brigade_destroy(io->input_brigade);
+        io->input_brigade = NULL;
     }
-    if (avail > len) {
-        avail = len;
+    if (io->output_brigade) {
+        apr_brigade_destroy(io->output_brigade);
+        io->output_brigade = NULL;
     }
-    memcpy(ctx->buf+ctx->readlen, data, avail);
-    *readlen = avail;
-    ctx->readlen += avail;
-    *done = (ctx->readlen >= ctx->buflen);
-    return APR_SUCCESS;
 }
 
 apr_status_t h2_io_bucket_read(apr_bucket_brigade *input,
