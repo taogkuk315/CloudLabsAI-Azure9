@@ -118,14 +118,6 @@ static int h2_tls_alpn_negotiated(conn_rec *c,
                                   const char *proto_name,
                                   apr_size_t proto_name_len)
 {
-    char buffer[20];
-    int i;
-    for (i = 0; i < (sizeof(buffer)/sizeof(buffer[0]))-1 && i < proto_name_len;
-         ++i) {
-        buffer[i] = proto_name[i];
-    }
-    buffer[i] = '\0';
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "ALPN negotiated: %s", buffer);
     h2_config *cfg = h2_config_get(c);
     if (!cfg->h2_enabled) {
         return DECLINED;
@@ -142,6 +134,7 @@ static int h2_tls_alpn_negotiated(conn_rec *c,
     
     if (proto_name_len == strlen(PROTO_H2_14)
         && strncmp(PROTO_H2_14, proto_name, proto_name_len) == 0) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "ALPN negotiated: h2-14");
         h2_ctx_set_protocol(c, PROTO_H2_14);
     }
     else {
