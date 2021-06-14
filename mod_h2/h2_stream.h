@@ -63,6 +63,7 @@ typedef struct h2_stream {
     
     /* pseudo header values, see ch. 8.1.2.3 */
     struct h2_bucket *work;
+    int request_line_inserted;
     const char *method;
     const char *path;
     const char *authority;

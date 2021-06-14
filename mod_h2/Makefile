@@ -40,7 +40,6 @@ C_SRC   = \
         h2_task.c \
         h2_task_input.c \
         h2_task_output.c \
-        h2_task_set.c \
         h2_tls.c \
         h2_util.c \
         h2_worker.c \

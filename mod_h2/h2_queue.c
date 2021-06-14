@@ -53,6 +53,12 @@ void h2_queue_destroy(h2_queue *q)
             }
             qdata->entry = NULL;
         }
+        free(qdata);
+    }
+    while (q->free) {
+        h2_qdata *qdata = q->free;
+        q->free = qdata->next;
+        free(qdata);
     }
 }
 
@@ -187,7 +193,7 @@ apr_status_t h2_queue_append_id(h2_queue *q, int id, void *entry)
             memset(qdata, 0, sizeof(h2_qdata));
         }
         else {
-            qdata = apr_pcalloc(q->pool, sizeof(h2_qdata));
+            qdata = calloc(1, sizeof(h2_qdata));
         }
         
         qdata->entry = entry;
@@ -223,7 +229,7 @@ apr_status_t h2_queue_push_id(h2_queue *q, int id, void *entry)
             memset(qdata, 0, sizeof(h2_qdata));
         }
         else {
-            qdata = apr_pcalloc(q->pool, sizeof(h2_qdata));
+            qdata = calloc(1, sizeof(h2_qdata));
         }
         
         qdata->entry = entry;

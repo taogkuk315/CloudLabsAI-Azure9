@@ -14,18 +14,45 @@
 # limitations under the License.
 
 
-NGHTTP2_VERSION = 0.7.1
+NGHTTP2_VERSION = 0.7.3
 NGHTTP2_DIR     = nghttp2-$(NGHTTP2_VERSION)
 NGHTTP2_TAR     = $(NGHTTP2_DIR).tar.gz
 NGHTTP2_URL     = https://github.com/tatsuhiro-t/nghttp2/releases/download/v$(NGHTTP2_VERSION)/$(NGHTTP2_TAR)
 
-GEN          = gen
-INST_DIR     = ../gen/install
-BLD_PREFIX   = $(shell dirname $$PWD)/gen/install
+NGHTTP2_CONF_ENV=
+NGHTTP2_CONF    = --prefix=$(BLD_PREFIX) --enable-app
 
-CURL_OPTS    = --progress-bar
+ZLIB_VERSION    = 1.2.8
+ZLIB_DIR        = zlib-$(ZLIB_VERSION)
+ZLIB_TAR        = $(ZLIB_DIR).tar.gz
+ZLIB_URL        = http://zlib.net/$(ZLIB_TAR)
 
-OS           = $(shell uname -s)
+LIBEV_VERSION    = 4.19
+LIBEV_DIR        = libev-$(LIBEV_VERSION)
+LIBEV_TAR        = $(LIBEV_DIR).tar.gz
+LIBEV_URL        = http://dist.schmorp.de/libev/$(LIBEV_TAR)
+
+GEN             = gen
+INST_DIR        = ../gen/install
+BLD_PREFIX      = $(shell dirname $$PWD)/gen/install
+
+CURL_OPTS       = --progress-bar
+
+OS              = $(shell uname -s)
+
+NGHTTP2_DEPS    =
+
+# For OS X, we drag our own zlib in as the one installed is not
+# recognized by nghttp2 configure.
+# On other OS, we expect a proper zlib/zlib-dev installation
+#
+ifeq ($(OS),Darwin)
+    # we need our own zlib
+    NGHTTP2_DEPS  += $(INST_DIR)/.zlib-installed $(INST_DIR)/.libev-installed
+#NGHTTP2_CONF  += --disable-threads
+    NGHTTP2_CONF_ENV += PKG_CONFIG_LIBDIR=$(BLD_PREFIX)/lib/pkgconfig \
+        LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
+endif
 
 all: install
 
@@ -69,7 +96,7 @@ $(GEN)/$(NGHTTP2_DIR)/.nghttp2-configured: \
 		$(GEN)/$(NGHTTP2_DIR)/.nghttp2-extracted
 	@echo -n configuring nghttp2...
 	cd $(GEN)/$(NGHTTP2_DIR)/ && \
-	./configure --prefix=$(BLD_PREFIX) $(NGHTTP2_CONF) >> ../build.log
+	$(NGHTTP2_CONF_ENV) ./configure $(NGHTTP2_CONF) #>> ../build.log
 	@echo done.
 	@touch $(GEN)/$(NGHTTP2_DIR)/.nghttp2-configured
 
@@ -89,6 +116,64 @@ $(GEN)/$(NGHTTP2_DIR)/.nghttp2-extracted: \
 #
 $(GEN)/$(NGHTTP2_TAR):
 	@mkdir -p $(GEN)
-	@cp $(NGHTTP2_TAR) $(GEN)
-	#curl $(CURL_OPTS) $(NGHTTP2_URL) > $(GEN)/$(NGHTTP2_TAR)
+	curl $(CURL_OPTS) -L $(NGHTTP2_URL) > $(GEN)/$(NGHTTP2_TAR)
+
+
+################################################################################
+# Build + install a local libev library (if needed)
+#
+$(INST_DIR)/.libev-installed: \
+		$(GEN)/$(LIBEV_DIR)/.libev-built
+	@echo -n installing libev locally...
+	@cd $(GEN)/$(LIBEV_DIR) && make install >> ../build.log
+	@echo done.
+	@touch $(INST_DIR)/.libev-installed
+
+$(GEN)/$(LIBEV_DIR)/.libev-built: \
+		$(GEN)/$(LIBEV_DIR)/.libev-configured
+	@echo -n building libev locally...
+	@cd $(GEN)/$(LIBEV_DIR) && make >> ../build.log
+	@echo done.
+	@touch $(GEN)/$(LIBEV_DIR)/.libev-built
+
+$(GEN)/$(LIBEV_DIR)/.libev-configured: $(GEN)/$(LIBEV_TAR)
+	@rm -rf $(GEN)/$(LIBEV_DIR)
+	@cd $(GEN) && tar xfz $(LIBEV_TAR)
+	@echo -n configuring libev...
+	@cd $(GEN)/$(LIBEV_DIR) && ./configure --prefix=$(BLD_PREFIX)
+	@echo done.
+	@touch $(GEN)/$(LIBEV_DIR)/.libev-configured
+
+$(GEN)/$(LIBEV_TAR):
+	@mkdir -p $(GEN)
+	curl $(CURL_OPTS) -L $(LIBEV_URL) > $(GEN)/$(LIBEV_TAR)
+
+################################################################################
+# Build + install a local zlib library (if needed)
+#
+$(INST_DIR)/.zlib-installed: \
+		$(GEN)/$(ZLIB_DIR)/.zlib-built
+	@echo -n installing zlib locally...
+	@cd $(GEN)/$(ZLIB_DIR) && make install >> ../build.log
+	@echo done.
+	@touch $(INST_DIR)/.zlib-installed
+
+$(GEN)/$(ZLIB_DIR)/.zlib-built: \
+		$(GEN)/$(ZLIB_DIR)/.zlib-configured
+	@echo -n building zlib locally...
+	@cd $(GEN)/$(ZLIB_DIR) && make >> ../build.log
+	@echo done.
+	@touch $(GEN)/$(ZLIB_DIR)/.zlib-built
+
+$(GEN)/$(ZLIB_DIR)/.zlib-configured: $(GEN)/$(ZLIB_TAR)
+	@rm -rf $(GEN)/$(ZLIB_DIR)
+	@cd $(GEN) && tar xfz $(ZLIB_TAR)
+	@echo -n configuring zlib...
+	@cd $(GEN)/$(ZLIB_DIR) && ./configure --prefix=$(BLD_PREFIX)
+	@echo done.
+	@touch $(GEN)/$(ZLIB_DIR)/.zlib-configured
+
+$(GEN)/$(ZLIB_TAR):
+	@mkdir -p $(GEN)
+	curl $(CURL_OPTS) -L $(ZLIB_URL) > $(GEN)/$(ZLIB_TAR)
 

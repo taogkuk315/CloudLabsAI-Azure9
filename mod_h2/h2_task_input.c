@@ -77,6 +77,7 @@ void h2_task_input_destroy(h2_task_input *input)
         h2_bucket_destroy(input->cur);
         input->cur = NULL;
     }
+    input->queue = NULL;
 }
 
 apr_status_t h2_task_input_read(h2_task_input *input,

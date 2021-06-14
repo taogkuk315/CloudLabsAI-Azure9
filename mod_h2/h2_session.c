@@ -32,7 +32,6 @@
 #include "h2_stream_set.h"
 #include "h2_response.h"
 #include "h2_task.h"
-#include "h2_task_set.h"
 #include "h2_bucket.h"
 #include "h2_frame.h"
 #include "h2_session.h"

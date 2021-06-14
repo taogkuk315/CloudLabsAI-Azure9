@@ -103,7 +103,7 @@ static apr_status_t add_worker(h2_workers *workers)
     if (!w) {
         return APR_ENOMEM;
     }
-    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+    ap_log_error(APLOG_MARK, APLOG_TRACE2, 0, workers->s,
                  "h2_workers: adding worker(%d)", w->id);
     return h2_queue_append(workers->workers, w);
 }
@@ -226,7 +226,7 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, int session_id)
                      session_id);
         /* remove all tasks still pending for the given owner */
         while (1) {
-            h2_task *task = h2_queue_find_id(workers->tasks_todo, session_id);
+            h2_task *task = h2_queue_pop_id(workers->tasks_todo, session_id);
             if (!task) {
                 break;
             }
@@ -235,6 +235,7 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, int session_id)
         }
         /* abort all running tasks and wait for workers to finish */
         h2_queue_iter(workers->tasks_active, abort_task, NULL);
+        
         while (h2_queue_find_id(workers->tasks_active, session_id)) {
             ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                          "h2_workers: wait for session(%d) tasks to end",

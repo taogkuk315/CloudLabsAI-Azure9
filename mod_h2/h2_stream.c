@@ -102,12 +102,48 @@ static apr_status_t h2_stream_check_work(h2_stream *stream, apr_size_t size)
     return APR_SUCCESS;
 }
 
+static apr_status_t insert_request_line(h2_stream *stream)
+{
+    apr_status_t status = APR_SUCCESS;
+    if (!stream->method) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
+                      "h2_stream(%d-%d): header start but :method missing",
+                      stream->session->id, stream->id);
+        return APR_EGENERAL;
+    }
+    if (!stream->path) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
+                      "h2_stream(%d-%d): header start but :path missing",
+                      stream->session->id, stream->id);
+        return APR_EGENERAL;
+    }
+    
+    status = h2_stream_check_work(stream, BLOCKSIZE);
+    if (status != APR_SUCCESS) {
+        return status;
+    }
+    status = h2_frame_req_add_start(stream->work,
+                                    stream->method, stream->path);
+    if (status != APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, stream->session->c,
+                      "h2_stream(%d-%d): adding request line",
+                      stream->session->id, stream->id);
+    }
+    if (stream->authority) {
+        status = h2_frame_req_add_header(stream->work,
+                                         "Host", 4,
+                                         stream->authority,
+                                         strlen(stream->authority));
+    }
+    return status;
+}
+
 apr_status_t h2_stream_push(h2_stream *stream)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                  "h2_stream(%d-%d): pushing request: %s %s for %s",
+                  "h2_stream(%d-%d): pushing request: %s",
                   stream->session->id, (int)stream->id,
-                  stream->method, stream->path, stream->authority);
+                  stream->work->data);
     
     apr_status_t status = h2_bucket_queue_append(stream->session->data_in,
                                                  stream->work, stream->id);
@@ -130,6 +166,11 @@ apr_status_t h2_stream_end_headers(h2_stream *stream)
     }
     stream->eoh = 1;
 
+    if (!stream->request_line_inserted) {
+        status = insert_request_line(stream);
+        stream->request_line_inserted = 1;
+    }
+    
     if (!h2_bucket_has_free(stream->work, 2)) {
         status = h2_stream_push(stream);
     }
@@ -146,6 +187,9 @@ apr_status_t h2_stream_end_headers(h2_stream *stream)
 
 apr_status_t h2_stream_close_input(h2_stream *stream)
 {
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
+                  "h2_stream(%d-%d): closing input",
+                  stream->session->id, stream->id);
     apr_status_t status = APR_SUCCESS;
     switch (stream->state) {
         case H2_STREAM_ST_CLOSED_INPUT:
@@ -167,9 +211,6 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
         status = h2_bucket_queue_append_eos(stream->session->data_in,
                                             stream->id);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, stream->session->c,
-                  "h2_stream(%d-%d): got eos",
-                  stream->session->id, stream->id);
     return status;
 }
 
@@ -183,6 +224,9 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
         return status;
     }
     
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
+                  "h2_stream(%d-%d): adding header %s",
+                  stream->session->id, stream->id, name);
     if (name[0] == ':') {
         /* pseudo header, see ch. 8.1.2.3, always should come first */
         if (stream->work) {
@@ -228,35 +272,9 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
     }
     else {
         /* non-pseudo header, append to work bucket of stream */
-        if (stream->work == NULL) {
-            /* the first bucket of request data we generate for this stream.
-             * we should have all mandatory pseudo headers now.
-             */
-            if (!stream->method) {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                              "h2_stream(%d-%d): header start but :method missing",
-                              stream->session->id, stream->id);
-                return APR_EGENERAL;
-            }
-            if (!stream->path) {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                              "h2_stream(%d-%d): header start but :path missing",
-                              stream->session->id, stream->id);
-                return APR_EGENERAL;
-            }
-            
-            status = h2_stream_check_work(stream, BLOCKSIZE);
-            if (status != APR_SUCCESS) {
-                return status;
-            }
-            status = h2_frame_req_add_start(stream->work,
-                                            stream->method, stream->path);
-            if (status == APR_SUCCESS && stream->authority) {
-                status = h2_frame_req_add_header(stream->work,
-                                                 "Host", 4,
-                                                 stream->authority,
-                                                 strlen(stream->authority));
-            }
+        if (!stream->request_line_inserted) {
+            status = insert_request_line(stream);
+            stream->request_line_inserted = 1;
         }
         
         if (status == APR_SUCCESS) {
