@@ -20,10 +20,26 @@
 #include <http_config.h>
 
 /* Apache httpd module configuration for h2. */
-typedef struct {
+typedef struct h2_config {
     const char *name;
     int h2_enabled;
     int h2_set;
+
+    int h2_max_streams;
+    int h2_max_streams_set;
+
+    int h2_max_hl_size;
+    int h2_max_hl_size_set;
+    
+    int h2_window_size;
+    int h2_window_size_set;
+
+    int h2_min_workers;
+    int h2_min_workers_set;
+
+    int h2_max_workers;
+    int h2_max_workers_set;
+
 } h2_config;
 
 

@@ -213,8 +213,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
 +			ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, f->c,
 +						  APLOGNO(02306) "SSL negotiated protocol: '%s'",
 +						  (next_proto && next_proto_len)?
-+                         apr_pstrmemdup(f->c->pool, next_proto, next_proto_len)
-+                         : "(null)");
++                         apr_pstrmemdup(f->c->pool, (const char *)next_proto,
++                              next_proto_len) : "(null)");
 +			for (n = 0; n < sslconn->alpn_negofns->nelts; n++) {
 +				ssl_alpn_proto_negotiated fn =
 +				APR_ARRAY_IDX(sslconn->alpn_negofns, n, ssl_alpn_proto_negotiated);
@@ -254,12 +254,12 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
  #endif /* HAVE_TLS_SESSION_TICKETS */
  
 +static int ssl_array_index(apr_array_header_t *array,
-+                           const unsigned char *s)
++                           const char *s)
 +{
 +    int i;
 +    for (i = 0; i < array->nelts; i++) {
-+        const unsigned char *p = APR_ARRAY_IDX(array, i, const unsigned char*);
-+        if (!strcmp((const char *)p, (const char *)s)) {
++        const char *p = APR_ARRAY_IDX(array, i, const char*);
++        if (!strcmp(p, s)) {
 +            return i;
 +        }
 +    }
@@ -272,8 +272,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 + * 0 gives same precedence, >0 means proto1 is prefered.
 + */
 +static int ssl_cmp_alpn_protos(modssl_ctx_t *ctx,
-+							   const unsigned char *proto1,
-+							   const unsigned char *proto2)
++							   const char *proto1,
++							   const char *proto2)
 +{
 +	/* TODO: we should have a mod_ssl configuration parameter. */
 +    if (ctx && ctx->ssl_alpn_pref) {
@@ -313,7 +313,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 +    server_rec *s       = mySrvFromConn(c);
 +    SSLSrvConfigRec *sc = mySrvConfig(s);
 +    modssl_ctx_t *mctx  = myCtxConfig(sslconn, sc);
-+	const unsigned char *alpn_http1 = (const unsigned char*)"http/1.1";
++	const char *alpn_http1 = "http/1.1";
 +	apr_array_header_t *client_protos;
 +	apr_array_header_t *proposed_protos;
 +	int i;
@@ -351,7 +351,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 +	proposed_protos = apr_array_make(c->pool, client_protos->nelts+1,
 +									 sizeof(char *));
 +	if (ssl_array_index(client_protos, alpn_http1) >= 0) {
-+		APR_ARRAY_PUSH(proposed_protos, const unsigned char*) = alpn_http1;
++		APR_ARRAY_PUSH(proposed_protos, const char*) = alpn_http1;
 +	}
 +	
 +	if (sslconn->alpn_proposefns != NULL) {
@@ -379,11 +379,10 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 +	/* Now select the most preferred protocol from the proposals. */
 +	*out = APR_ARRAY_IDX(proposed_protos, 0, const unsigned char *);
 +	for (i = 1; i < proposed_protos->nelts; ++i) {
-+		const unsigned char *proto = APR_ARRAY_IDX(proposed_protos, i,
-+												   const unsigned char*);
++		const char *proto = APR_ARRAY_IDX(proposed_protos, i, const char*);
 +		/* Do we prefer it over existing candidate? */
-+		if (ssl_cmp_alpn_protos(mctx, *out, proto) < 0) {
-+			*out = proto;
++		if (ssl_cmp_alpn_protos(mctx, (const char *)*out, proto) < 0) {
++			*out = (const unsigned char*)proto;
 +		}
 +	}
 +	
@@ -420,6 +419,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 +    int i, j;
 +    unsigned char *data;
 +    unsigned char *start;
++    const char *http11 = "http/1.1";
 +
 +    *data_out = NULL;
 +    *size_out = 0;
@@ -443,8 +443,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 +        if (fn(c, NULL, protos) == DONE)
 +            break;
 +    }
-+    if (ssl_array_index(ssl_alpn_propose_protos, "http/1.1") < 0) {
-+		APR_ARRAY_PUSH(ssl_alpn_propose_protos, const unsigned char*) = "http/1.1";
++    if (ssl_array_index(protos, http11) < 0) {
++		APR_ARRAY_PUSH(protos, const char*) = http11;
 +    }
 +    num_protos = protos->nelts;
 +
@@ -533,8 +533,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
 +#endif
 +
 +/* Next Protocol Negotiation */
-+#if !defined(OPENSSL_NO_NEXTPROTONEG) && defined(OPENSSL_NPN_NEGOTIATED)
-+#define HAVE_TLS_NPNX
++#if !defined(OPENSSL_NO_NEXTPROTONEG) && !defined(OPENSSL_NO_TLSEXT) && defined(OPENSSL_NPN_NEGOTIATED)
++#define HAVE_TLS_NPN
 +#endif
 +
  /* Secure Remote Password */

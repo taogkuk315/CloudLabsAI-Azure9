@@ -57,8 +57,10 @@ typedef void h2_bucket_queue_event_cb(struct h2_bucket_queue *queue,
 
 typedef struct h2_bucket_queue {
     struct h2_queue *queue;
+    apr_size_t max_stream_size;
     struct apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *has_data;
+    struct apr_thread_cond_t *data_removed;
     
     h2_bucket_queue_event_cb *ev_cb;
     void *ev_ctx;
@@ -66,8 +68,13 @@ typedef struct h2_bucket_queue {
 
 /* Create a new queue using the given memory pool. The queue will
  * reuse allocated memory, so memory footprint varies with queue length,
- * not number of buckets placed. */
-h2_bucket_queue *h2_bucket_queue_create(apr_pool_t *pool);
+ * not number of buckets placed. 
+ * If max_stream_size is > 0, an append to the queue for a given stream id
+ * will block, until the queue holds less than max_stream_size bytes for
+ * this stream.
+ */
+h2_bucket_queue *h2_bucket_queue_create(apr_pool_t *pool,
+                                        apr_size_t max_stream_size);
 
 /* Destroys this queue and all buckets it still contains. */
 void h2_bucket_queue_destroy(h2_bucket_queue *q);

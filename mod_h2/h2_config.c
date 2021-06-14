@@ -38,6 +38,12 @@ void *h2_config_create_svr(apr_pool_t *pool, server_rec *s)
     strcat(name, "]");
     conf->name = name;
 
+    conf->h2_enabled = 0;
+    conf->h2_max_streams = 100;
+    conf->h2_max_hl_size = 16 * 1024;
+    conf->h2_window_size = 64 * 1024;
+    conf->h2_min_workers = 32;
+    conf->h2_max_workers = 256;
     return conf;
 }
 
@@ -56,12 +62,18 @@ void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     strcat(name, "]");
     n->name = name;
 
-    n->h2_enabled = add->h2_set? add->h2_enabled : base->h2_enabled;
+    n->h2_enabled = (add->h2_set? add : base)->h2_enabled;
+    n->h2_max_streams = (add->h2_max_streams_set? add : base)->h2_max_streams;
+    n->h2_max_hl_size = (add->h2_max_hl_size_set? add : base)->h2_max_hl_size;
+    n->h2_window_size = (add->h2_window_size_set? add : base)->h2_window_size;
+    n->h2_min_workers = (add->h2_min_workers_set? add : base)->h2_min_workers;
+    n->h2_max_workers = (add->h2_max_workers_set? add : base)->h2_max_workers;
 
     return n;
 }
 
-static const char *h2_conf_engine_set(cmd_parms *parms, void *arg, const char *value)
+static const char *h2_conf_engine_set(cmd_parms *parms,
+                                      void *arg, const char *value)
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->h2_enabled = !strcasecmp(value, "On");
@@ -72,7 +84,22 @@ static const char *h2_conf_engine_set(cmd_parms *parms, void *arg, const char *v
 
 const command_rec h2_cmds[] = {
     AP_INIT_TAKE1("H2Engine", h2_conf_engine_set, NULL,
-        RSRC_CONF, "on to enable HTTP/2 protocol handling"),
+                  RSRC_CONF, "on to enable HTTP/2 protocol handling"),
+    AP_INIT_TAKE1("H2MaxSessionStreams", ap_set_int_slot,
+                  (void*)APR_OFFSETOF(h2_config, h2_max_streams),
+                  RSRC_CONF, "maximum number of open streams per session"),
+    AP_INIT_TAKE1("H2InitialWindowSize", ap_set_int_slot,
+                  (void*)APR_OFFSETOF(h2_config, h2_window_size),
+                  RSRC_CONF, "initial window size on client DATA"),
+    AP_INIT_TAKE1("H2MaxHeaderListSize", ap_set_int_slot,
+                  (void*)APR_OFFSETOF(h2_config, h2_max_hl_size),
+                  RSRC_CONF, "maximum acceptable size of request headers"),
+    AP_INIT_TAKE1("H2MinWorkers", ap_set_int_slot,
+                  (void*)APR_OFFSETOF(h2_config, h2_min_workers),
+                  RSRC_CONF, "minimum number of worker threads per child"),
+    AP_INIT_TAKE1("H2MaxWorkers", ap_set_int_slot,
+                  (void*)APR_OFFSETOF(h2_config, h2_max_workers),
+                  RSRC_CONF, "maximum number of worker threads per child"),
     {NULL}
 };
 

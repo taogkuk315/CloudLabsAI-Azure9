@@ -25,7 +25,7 @@ APR-UTIL_DIR = apr-util-$(APR-UTIL_VERSION)
 APR-UTIL_TAR = $(APR-UTIL_DIR).tar.gz
 APR-UTIL_URL = http://apache.mirror.iphh.net//apr/$(APR-UTIL_TAR)
 
-HTTPD_VERSION = 2.4.10
+HTTPD_VERSION = 2.4.12
 HTTPD_DIR    = httpd-$(HTTPD_VERSION)
 HTTPD_TAR    = httpd-$(HTTPD_VERSION).tar.gz
 HTTPD_URL    = https://archive.apache.org/dist/httpd/$(HTTPD_TAR)
@@ -71,7 +71,7 @@ ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0))
 	HTTPD_DEPS  += $(INST_DIR)/.openssl-installed
 	HTTPD_CONF  += --with-ssl=$(BLD_PREFIX)
 	ifeq ($(OS),Darwin)
-	OPENSSL_CONF = debug-darwin64-x86_64-cc
+	OPENSSL_CONF = darwin64-x86_64-cc
 	endif
 endif
 

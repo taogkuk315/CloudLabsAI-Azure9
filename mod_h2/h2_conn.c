@@ -23,6 +23,8 @@
 #include <http_log.h>
 
 #include "h2_private.h"
+#include "h2_config.h"
+#include "h2_bucket_queue.h"
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_stream_set.h"
@@ -45,13 +47,17 @@ static void start_new_task(h2_session *session, int stream_id, h2_task *task)
 
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
-    workers = h2_workers_create(s, pool, 10, 20);
+    h2_config *config = h2_config_sget(s);
+    workers = h2_workers_create(s, pool,
+                                config->h2_min_workers,
+                                config->h2_max_workers);
     return workers? APR_SUCCESS : APR_ENOMEM;
 }
 
 apr_status_t h2_conn_process(conn_rec *c)
 {
     apr_status_t status = APR_SUCCESS;
+    h2_config *config = h2_config_get(c);
     
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_conn_process start");
     
@@ -85,7 +91,7 @@ apr_status_t h2_conn_process(conn_rec *c)
      *
      * TODO: implement graceful GO_AWAY after configurable idle time
      */
-    h2_session *session = h2_session_create(c, 32);
+    h2_session *session = h2_session_create(c, config);
     if (!session) {
         return APR_EGENERAL;
     }

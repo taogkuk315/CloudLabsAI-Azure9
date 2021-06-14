@@ -28,6 +28,7 @@
 
 #include "h2_private.h"
 #include "h2_resp_head.h"
+#include "h2_bucket_queue.h"
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_task.h"
@@ -112,6 +113,11 @@ apr_status_t h2_stream_push(h2_stream *stream)
                                                  stream->work, stream->id);
     if (status == APR_SUCCESS) {
         stream->work = NULL;
+    }
+    else {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, stream->session->c,
+                      "h2_stream(%d-%d): pushing request data",
+                      stream->session->id, (int)stream->id);
     }
     return status;
 }

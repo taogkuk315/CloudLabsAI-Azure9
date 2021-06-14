@@ -245,8 +245,6 @@
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27BBD2E1A65927E00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = httpd/Makefile; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = "<none>"; };
 		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
-		B27BBD3A1A690C9800C58A41 /* npn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "npn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
-		B27BBD841A696C0D00C58A41 /* alpn-2.4.10.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.10.unified.diff.patch"; sourceTree = "<group>"; };
 		B284AA921A78E58600C35863 /* .nghttp2-built */ = {isa = PBXFileReference; lastKnownFileType = text; path = ".nghttp2-built"; sourceTree = "<group>"; };
 		B284AA931A78E58600C35863 /* .nghttp2-configured */ = {isa = PBXFileReference; lastKnownFileType = text; path = ".nghttp2-configured"; sourceTree = "<group>"; };
 		B284AA941A78E58600C35863 /* .nghttp2-extracted */ = {isa = PBXFileReference; lastKnownFileType = text; path = ".nghttp2-extracted"; sourceTree = "<group>"; };
@@ -1218,8 +1216,6 @@
 			isa = PBXGroup;
 			children = (
 				B2C16D221A778E78000B2297 /* alpn-2.4.x.unified.diff.patch */,
-				B27BBD841A696C0D00C58A41 /* alpn-2.4.10.unified.diff.patch */,
-				B27BBD3A1A690C9800C58A41 /* npn-2.4.x.unified.diff.patch */,
 			);
 			name = patches;
 			path = httpd/patches;

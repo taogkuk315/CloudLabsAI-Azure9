@@ -24,6 +24,7 @@
 #include <http_log.h>
 
 #include "h2_private.h"
+#include "h2_config.h"
 #include "h2_bucket.h"
 #include "h2_bucket_queue.h"
 #include "h2_resp_head.h"
@@ -462,7 +463,7 @@ static apr_status_t init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
     return APR_SUCCESS;
 }
 
-h2_session *h2_session_create(conn_rec *c, apr_size_t max_streams)
+h2_session *h2_session_create(conn_rec *c, h2_config *config)
 {
     nghttp2_session_callbacks *callbacks = NULL;
     nghttp2_option *options = NULL;
@@ -476,8 +477,8 @@ h2_session *h2_session_create(conn_rec *c, apr_size_t max_streams)
         session->streams = h2_stream_set_create(c->pool);
         session->readies = h2_stream_set_create(c->pool);
         
-        session->data_in = h2_bucket_queue_create(c->pool);
-        session->data_out = h2_bucket_queue_create(c->pool);
+        session->data_in = h2_bucket_queue_create(c->pool, 0);
+        session->data_out = h2_bucket_queue_create(c->pool, 1000);
         
         h2_io_init(&session->io, c);
         
@@ -498,15 +499,23 @@ h2_session *h2_session_create(conn_rec *c, apr_size_t max_streams)
         }
         
         /* Our server nghttp2 options.
-         * TODO: some should come from config
          */
         nghttp2_option_set_recv_client_preface(options, 1);
-        nghttp2_option_set_peer_max_concurrent_streams(options, max_streams);
+        nghttp2_option_set_peer_max_concurrent_streams(options,
+                                                       config->h2_max_streams);
         
         rv = nghttp2_session_server_new2(&session->ngh2, callbacks,
                                          session, options);
         nghttp2_session_callbacks_del(callbacks);
         nghttp2_option_del(options);
+        
+        if (rv != 0) {
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EGENERAL, c,
+                          "nghttp2_session_server_new: %s",
+                          nghttp2_strerror(rv));
+            h2_session_destroy(session);
+            return NULL;
+        }
         
         status = apr_thread_mutex_create(&session->lock,
                                          APR_THREAD_MUTEX_DEFAULT,
@@ -526,16 +535,8 @@ h2_session *h2_session_create(conn_rec *c, apr_size_t max_streams)
             return NULL;
         }
         
-        
         h2_bucket_queue_set_event_cb(session->data_out,
                                      on_data_out_cb, session);
-        if (rv != 0) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EGENERAL, c,
-                          "nghttp2_session_server_new: %s",
-                          nghttp2_strerror(rv));
-            h2_session_destroy(session);
-            return NULL;
-        }
     }
     return session;
 }
@@ -599,10 +600,17 @@ apr_status_t h2_session_abort(h2_session *session)
 
 apr_status_t h2_session_start(h2_session *session)
 {
-    apr_status_t status = APR_SUCCESS;
-    
     /* Start the conversation by submitting our SETTINGS frame */
-    int rv = nghttp2_submit_settings(session->ngh2, NGHTTP2_FLAG_NONE, NULL, 0);
+    apr_status_t status = APR_SUCCESS;
+    h2_config *config = h2_config_get(session->c);
+    
+    nghttp2_settings_entry settings[] = {
+        { NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, config->h2_max_hl_size },
+        { NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, config->h2_window_size },
+    };
+    int rv = nghttp2_submit_settings(session->ngh2, NGHTTP2_FLAG_NONE,
+                                     settings,
+                                     sizeof(settings)/sizeof(settings[0]));
     if (rv != 0) {
         status = APR_EGENERAL;
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,

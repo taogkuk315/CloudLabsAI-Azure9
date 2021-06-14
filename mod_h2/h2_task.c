@@ -267,6 +267,7 @@ apr_status_t h2_task_destroy(h2_task *task)
         task->response = NULL;
     }
     if (0 && task->c->pool) {
+        apr_pool_clear(task->c->pool);
         apr_pool_destroy(task->c->pool);
         task->c->pool = NULL;
     }

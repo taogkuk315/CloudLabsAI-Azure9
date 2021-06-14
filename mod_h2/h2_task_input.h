@@ -30,7 +30,7 @@ typedef struct h2_task_input {
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
                                         int stream_id,
-                                        h2_bucket_queue *q);
+                                        struct h2_bucket_queue *q);
 void h2_task_input_destroy(h2_task_input *input);
 
 apr_status_t h2_task_input_read(h2_task_input *input,

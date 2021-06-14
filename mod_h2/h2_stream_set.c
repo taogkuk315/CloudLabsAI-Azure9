@@ -26,6 +26,7 @@
 #include <http_log.h>
 
 #include "h2_private.h"
+#include "h2_queue.h"
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_task.h"

@@ -19,8 +19,6 @@
 #define __mod_h2__h2_session__
 
 #include "h2_io.h"
-#include "h2_queue.h"
-#include "h2_bucket_queue.h"
 
 /**
  * A HTTP/2 connection, a session with a specific client.
@@ -44,6 +42,7 @@
 struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 
+struct h2_config;
 struct h2_session;
 struct h2_stream;
 struct h2_task;
@@ -60,9 +59,9 @@ typedef struct h2_session {
 
     int aborted;                    /* this session is being aborted */
     
-    h2_io_ctx io;                   /* io on httpd conn filters */
-    h2_bucket_queue *data_in;       /* stream data coming in */
-    h2_bucket_queue *data_out;      /* stream data going out */
+    h2_io_ctx io;                     /* io on httpd conn filters */
+    struct h2_bucket_queue *data_in;  /* stream data coming in */
+    struct h2_bucket_queue *data_out; /* stream data going out */
 
     struct h2_stream_set *streams;  /* streams handled by this session */
     struct h2_stream_set *readies;  /* streams ready for submit */
@@ -83,7 +82,7 @@ typedef struct h2_session {
  * memory pool of that connection.
  * The session will allow the given maximum of concurrent streams.
  */
-h2_session *h2_session_create(conn_rec *c, apr_size_t max_streams);
+h2_session *h2_session_create(conn_rec *c, struct h2_config *cfg);
 
 /* Destroy the session and all object it still contains. This will not
  * destroy h2_task instances that not finished yet. */

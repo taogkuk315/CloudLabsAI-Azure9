@@ -197,10 +197,6 @@ void h2_workers_destroy(h2_workers *workers)
         h2_queue_destroy(workers->workers);
         workers->workers = NULL;
     }
-    if (workers->pool) {
-        apr_pool_destroy(workers->pool);
-        workers->pool = NULL;
-    }
 }
 
 apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task,
