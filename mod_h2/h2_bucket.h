@@ -42,9 +42,6 @@ extern h2_bucket H2_NULL_BUCKET;
 
 /* Allocate a bucket from heap, will free memory when destroyed */
 h2_bucket *h2_bucket_alloc(apr_size_t data_size);
-/* Allocate a bucket form pool, beware that it will not live longer
- * than the pool itself. */
-h2_bucket *h2_bucket_palloc(apr_pool_t *pool, apr_size_t data_size);
 
 /* Destroy the bucket and release memory when possible */
 void h2_bucket_destroy(h2_bucket *bucket);

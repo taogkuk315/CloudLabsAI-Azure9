@@ -54,6 +54,8 @@ typedef struct h2_stream {
     
     int eoh;                    /* end of headers seen */
     int aborted;                /* was aborted */
+    int deferred;               /* DATA sending is deferred until 
+                                 * more becomes available */
     int response_started;       /* response was started */
     
     h2_stream_state_change_cb *state_change_cb;
@@ -94,5 +96,8 @@ apr_status_t h2_stream_end_headers(h2_stream *stream);
 void h2_stream_set_state_change_cb(h2_stream *stream,
                                    h2_stream_state_change_cb cb,
                                    void *cb_ctx);
+
+void h2_stream_set_deferred(h2_stream *stream, int deferred);
+int h2_stream_is_deferred(h2_stream *stream);
 
 #endif /* defined(__mod_h2__h2_stream__) */

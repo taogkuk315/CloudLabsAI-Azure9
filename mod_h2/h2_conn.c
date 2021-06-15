@@ -122,6 +122,7 @@ apr_status_t h2_conn_process(conn_rec *c)
             status = APR_EAGAIN;
         }
         if (status != APR_SUCCESS && status != APR_EAGAIN) {
+            h2_session_abort(session, status);
             break;
         }
         
@@ -160,13 +161,13 @@ apr_status_t h2_conn_process(conn_rec *c)
                 ap_log_cerror( APLOG_MARK, APLOG_INFO, status, c,
                               "h2_session(%d): eof on input"
                               ", terminating", session->id);
-                h2_session_abort(session);
+                h2_session_abort(session, status);
                 break;
             default:
                 ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,
                               "h2_session(%d): error processing"
                               ", terminating", session->id);
-                // TODO: try to shut down controlled, GO_AWAY and such...
+                h2_session_abort(session, status);
                 break;
         }
     }

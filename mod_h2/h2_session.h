@@ -91,9 +91,18 @@ void h2_session_destroy(h2_session *session);
 /* Called once at start of session. Performs initial client thingies. */
 apr_status_t h2_session_start(h2_session *session);
 
-/* Called when controlled shutdown is no longer an option. For 
- * example, when the client simply closed the connection. */
-apr_status_t h2_session_abort(h2_session *session);
+/* Return != 0 iff session is finished and connection can be closed.
+ */
+int h2_session_is_done(h2_session *session);
+
+/* Called when the session will shutdown after all open streams
+ * are handled. New streams will no longer be accepted. 
+ * Call with reason APR_SUCCESS to initiate a graceful shutdown. */
+apr_status_t h2_session_goaway(h2_session *session, apr_status_t reason);
+
+/* Called when an error occured and the session needs to shut down.
+ * Status indicates the reason of the error. */
+apr_status_t h2_session_abort(h2_session *session, apr_status_t reason);
 
 /* Read more data from the client connection. Used normally with blocking
  * APR_NONBLOCK_READ, which will return APR_EAGAIN when no data is available.

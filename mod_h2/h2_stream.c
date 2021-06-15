@@ -69,7 +69,7 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
         stream->work = NULL;
     }
     if (stream->resp_head) {
-        h2_resp_head_destroy(stream->resp_head);
+        //h2_resp_head_destroy(stream->resp_head);
         stream->resp_head = NULL;
     }
     stream->session = NULL;
@@ -205,9 +205,15 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
             break;
     }
     if (stream->work) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
+                      "h2_stream(%d-%d): closing input, pushing work",
+                      stream->session->id, stream->id);
         status = h2_stream_push(stream);
     }
     if (status == APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
+                      "h2_stream(%d-%d): closing input, append eos",
+                      stream->session->id, stream->id);
         status = h2_bucket_queue_append_eos(stream->session->data_in,
                                             stream->id);
     }
@@ -321,5 +327,14 @@ apr_status_t h2_stream_add_data(h2_stream *stream,
     return APR_SUCCESS;
 }
 
+void h2_stream_set_deferred(h2_stream *stream, int deferred)
+{
+    stream->deferred = !!deferred;
+}
+
+int h2_stream_is_deferred(h2_stream *stream)
+{
+    return stream->deferred;
+}
 
 

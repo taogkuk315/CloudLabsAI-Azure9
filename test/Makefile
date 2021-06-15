@@ -86,6 +86,12 @@ $(GEN)/load-urls-1.txt: \
 	@mkdir -p $(GEN)/tmp
 	@sed -e "s,SUBST_AUTH_SUBST,https://$(HTTPS_AUTH)," < load-urls-1.txt >$(GEN)/load-urls-1.txt
 
+test1: \
+		$(INST_DIR)/.test-setup \
+		$(INST_DIR)/.curl-installed \
+        $(GEN)/load-urls-1.txt
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 100000 -t 1 -c 1
+
 loadtest: \
 		$(INST_DIR)/.test-setup \
 		$(INST_DIR)/.curl-installed \

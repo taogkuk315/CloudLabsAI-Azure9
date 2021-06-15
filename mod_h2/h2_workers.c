@@ -75,7 +75,7 @@ static void task_done(h2_worker *worker, h2_task *task,
         
         h2_queue_remove(workers->tasks_active, task);
         apr_thread_cond_broadcast(workers->task_done);
-        h2_task_destroy(task);
+        h2_task_destroy(task, workers->pool);
         
         apr_thread_mutex_unlock(workers->lock);
     }
@@ -221,7 +221,7 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, int session_id)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+        ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
                      "h2_workers: shutdown session(%d) started",
                      session_id);
         /* remove all tasks still pending for the given owner */
@@ -231,7 +231,7 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, int session_id)
                 break;
             }
             h2_task_abort(task);
-            h2_task_destroy(task);
+            h2_task_destroy(task, workers->pool);
         }
         /* abort all running tasks and wait for workers to finish */
         h2_queue_iter(workers->tasks_active, abort_task, NULL);
@@ -244,7 +244,7 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, int session_id)
         }
         
         apr_thread_mutex_unlock(workers->lock);
-        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+        ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
                      "h2_workers: shutdown session(%d) done",
                      session_id);
     }

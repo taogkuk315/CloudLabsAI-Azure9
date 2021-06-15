@@ -239,6 +239,28 @@ apr_status_t h2_bucket_queue_append_eos(h2_bucket_queue *q,
     return h2_bucket_queue_append(q, &H2_NULL_BUCKET, stream_id);
 }
 
+typedef struct {
+    h2_bucket_queue_iter_fn *cb;
+    void *ctx;
+} my_iter_ctx;
+
+static int my_iter(void *ctx, int stream_id, void *entry, int index)
+{
+    my_iter_ctx *ictx = (my_iter_ctx *)ctx;
+    return ictx->cb(ictx->ctx, stream_id, (h2_bucket *)entry, index);
+}
+
+void h2_bucket_queue_iter(h2_bucket_queue *q,
+                          h2_bucket_queue_iter_fn *iter, void *ctx)
+{
+    apr_status_t status = apr_thread_mutex_lock(q->lock);
+    if (status == APR_SUCCESS) {
+        my_iter_ctx ictx = { iter, ctx };
+        h2_queue_iter(q->queue, my_iter, (void*)&ictx);
+        apr_thread_mutex_unlock(q->lock);
+    }
+}
+
 int h2_bucket_queue_has_eos_for(h2_bucket_queue *q, int stream_id)
 {
     int eos_found = 0;

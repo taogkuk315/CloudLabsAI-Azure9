@@ -34,6 +34,9 @@ static void *execute(apr_thread_t *thread, void *wctx)
         if (status == APR_SUCCESS) {
             apr_status_t status = h2_task_do(worker->current);
             worker->task_done(worker, worker->current, status, worker->ctx);
+            if (worker->current->aborted) {
+                h2_task_destroy(worker->current, worker->pool);
+            }
             worker->current = NULL;
         }
     }
@@ -54,6 +57,7 @@ h2_worker *h2_worker_create(int id,
     h2_worker *w = apr_pcalloc(pool, sizeof(h2_worker));
     if (w) {
         w->id = id;
+        w->pool = pool;
         w->get_next = get_next;
         w->task_done = task_done;
         w->worker_done = worker_done;

@@ -151,12 +151,12 @@ static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
      * no API to allocate one.
      */
     // FIXME
-    c->id = (int)master->id^(int)c;
+    c->id = (long)master->id^(long)c;
     *pc = c;
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, master,
-                  "h2_task: created con %d from master %d",
-                  (int)c->id, (int)master->id);
+                  "h2_task: created con %ld from master %ld",
+                  c->id, master->id);
     
     return APR_SUCCESS;
 }
@@ -244,14 +244,14 @@ h2_task *h2_task_create(int session_id, int stream_id,
     
     h2_ctx_create_for(task->c, task);
     
-    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, task->c->pool,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_task(%d-%d): created", task->session_id, task->stream_id);
     return task;
 }
 
-apr_status_t h2_task_destroy(h2_task *task)
+apr_status_t h2_task_destroy(h2_task *task, apr_pool_t *pool)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
+    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, pool,
                   "h2_task(%d-%d): destroy started",
                   task->session_id, task->stream_id);
     if (task->input) {
@@ -266,11 +266,13 @@ apr_status_t h2_task_destroy(h2_task *task)
         h2_response_destroy(task->response);
         task->response = NULL;
     }
-    if (0 && task->c->pool) {
-        apr_pool_clear(task->c->pool);
+    if (task->c->pool) {
         apr_pool_destroy(task->c->pool);
         task->c->pool = NULL;
     }
+    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, pool,
+                  "h2_task(%d-%d): destroy finished",
+                  task->session_id, task->stream_id);
     return APR_SUCCESS;
 }
 
@@ -305,14 +307,14 @@ apr_status_t h2_task_do(h2_task *task)
     
     set_state(task, H2_TASK_ST_DONE);
     
-    if (task->aborted) {
-        h2_task_destroy(task);
-    }
     return APR_SUCCESS;
 }
 
 void h2_task_abort(h2_task *task)
 {
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
+                  "h2_task(%d-%d): aborting task",
+                  task->session_id, task->stream_id);
     task->aborted =  1;
     task->event_cb = NULL;
     task->event_ctx = NULL;

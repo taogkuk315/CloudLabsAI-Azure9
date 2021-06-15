@@ -34,6 +34,7 @@ typedef void h2_worker_done_fn(struct h2_worker *worker, void *ctx);
 typedef struct h2_worker {
     int id;
     apr_thread_t *thread;
+    apr_pool_t *pool;
     h2_worker_task_next_fn *get_next;
     h2_worker_task_done_fn *task_done;
     h2_worker_done_fn *worker_done;

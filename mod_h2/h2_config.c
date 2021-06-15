@@ -30,7 +30,7 @@
 void *h2_config_create_svr(apr_pool_t *pool, server_rec *s)
 {
     h2_config *conf = (h2_config *)apr_pcalloc(pool, sizeof(h2_config));
-
+    
     const char *sname = s->defn_name? s->defn_name : "unknown";
     char *name = (char *)apr_pcalloc(pool, strlen(sname) + 20);
     strcpy(name, "server[");
@@ -42,7 +42,7 @@ void *h2_config_create_svr(apr_pool_t *pool, server_rec *s)
     conf->h2_max_streams = 100;
     conf->h2_max_hl_size = 16 * 1024;
     conf->h2_window_size = 64 * 1024;
-    conf->h2_min_workers = 32;
+    conf->h2_min_workers = 10;
     conf->h2_max_workers = 256;
     return conf;
 }

@@ -43,17 +43,6 @@ h2_bucket *h2_bucket_alloc(apr_size_t data_size)
     return bucket;
 }
 
-h2_bucket *h2_bucket_palloc(apr_pool_t *pool, apr_size_t data_size)
-{
-    apr_size_t total = sizeof(h2_bucket) + data_size;
-    h2_bucket *bucket = apr_pcalloc(pool, total);
-    if (bucket != NULL) {
-        bucket->data = ((char *)bucket) + sizeof(h2_bucket);
-        bucket->data_size = data_size;
-    }
-    return bucket;
-}
-
 void h2_bucket_destroy(h2_bucket *bucket)
 {
     if (bucket->free_bucket) {
@@ -64,6 +53,8 @@ void h2_bucket_destroy(h2_bucket *bucket)
 apr_size_t h2_bucket_append(h2_bucket *bucket,
                             const char *data, apr_size_t len)
 {
+    assert(bucket);
+    assert(bucket->data_size >= bucket->data_len);
     apr_size_t free_len = bucket->data_size - bucket->data_len;
     if (len > free_len) {
         len = free_len;

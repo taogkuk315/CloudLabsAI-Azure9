@@ -67,6 +67,10 @@ apr_status_t h2_response_destroy(h2_response *response)
         h2_resp_head_destroy(response->head);
         response->head = NULL;
     }
+    if (response->chunk_work) {
+        h2_bucket_destroy(response->chunk_work);
+        response->chunk_work = NULL;
+    }
     return APR_SUCCESS;
 }
 
@@ -229,7 +233,7 @@ static apr_status_t read_chunk_size(h2_response *resp,
                                     const char *data, apr_size_t len,
                                     apr_size_t *pconsumed) {
     if (!resp->chunk_work) {
-        resp->chunk_work = h2_bucket_palloc(resp->c->pool, 256);
+        resp->chunk_work = h2_bucket_alloc(256);
         if (!resp->chunk_work) {
             return APR_ENOMEM;
         }

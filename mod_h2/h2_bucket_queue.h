@@ -54,6 +54,8 @@ typedef void h2_bucket_queue_event_cb(struct h2_bucket_queue *queue,
                                       struct h2_bucket *bucket,
                                       int stream_id, int is_only_one,
                                       void *ev_ctx);
+typedef int h2_bucket_queue_iter_fn(void *ctx, int stream_id,
+                                    struct h2_bucket *bucket, int index);
 
 typedef struct h2_bucket_queue {
     struct h2_queue *queue;
@@ -93,6 +95,13 @@ apr_status_t h2_bucket_queue_push(h2_bucket_queue *q,
  * expected to be appended afterwards, although the queue does not check for
  * this. */
 apr_status_t h2_bucket_queue_append_eos(h2_bucket_queue *q, int stream_id);
+
+/* Iterate over all buckets in the queue and call the supplied function
+ * until it returns 0 or all buckets have been visited. 
+ * The queue is locked during iteration and should not be modified.
+ */
+void h2_bucket_queue_iter(h2_bucket_queue *q,
+                          h2_bucket_queue_iter_fn *iter, void *ctx);
 
 /* Return != 0 iff there are no buckets in the queue. */
 int h2_bucket_queue_is_empty(h2_bucket_queue *q);
