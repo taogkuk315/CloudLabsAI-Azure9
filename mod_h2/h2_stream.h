@@ -27,7 +27,6 @@
 
 struct h2_bucket;
 struct h2_bucket_queue;
-struct h2_resp_head;
 
 typedef enum {
     H2_STREAM_ST_IDLE,
@@ -54,14 +53,11 @@ typedef struct h2_stream {
     
     int eoh;                    /* end of headers seen */
     int aborted;                /* was aborted */
-    int deferred;               /* DATA sending is deferred until 
-                                 * more becomes available */
+    int suspended;              /* DATA sending has been suspended */
     int response_started;       /* response was started */
     
     h2_stream_state_change_cb *state_change_cb;
     void *state_change_ctx;
-    
-    struct h2_resp_head *resp_head;
     
     /* pseudo header values, see ch. 8.1.2.3 */
     struct h2_bucket *work;
@@ -97,7 +93,7 @@ void h2_stream_set_state_change_cb(h2_stream *stream,
                                    h2_stream_state_change_cb cb,
                                    void *cb_ctx);
 
-void h2_stream_set_deferred(h2_stream *stream, int deferred);
-int h2_stream_is_deferred(h2_stream *stream);
+void h2_stream_set_suspended(h2_stream *stream, int suspended);
+int h2_stream_is_suspended(h2_stream *stream);
 
 #endif /* defined(__mod_h2__h2_stream__) */

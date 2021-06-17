@@ -27,7 +27,7 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
-#include "h2_bucket_queue.h"
+#include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_response.h"
 #include "h2_resp_head.h"
@@ -180,11 +180,15 @@ static void set_state(h2_task *task, h2_task_state_t state)
                       "h2_task(%d-%d): state now %d, was %d",
                       task->session_id, task->stream_id,
                       task->state, oldstate);
-        if (state == H2_TASK_ST_READY && task->event_cb) {
-            task->event_cb(task, H2_TASK_EV_READY, task->event_ctx);
-        }
-        else if (state == H2_TASK_ST_DONE && task->event_cb) {
-            task->event_cb(task, H2_TASK_EV_DONE, task->event_ctx);
+        if (state == H2_TASK_ST_READY) {
+            /* task needs to submit the head of the response */
+            apr_status_t status = h2_task_output_open(
+                task->output, h2_response_get_head(task->response));
+            if (status != APR_SUCCESS) {
+                ap_log_cerror( APLOG_MARK, APLOG_ERR, status, task->c,
+                              "task(%d-%d): starting response",
+                              task->session_id, task->stream_id);
+            }
         }
     }
 }
@@ -210,8 +214,7 @@ static void response_state_change(h2_response *resp,
 
 h2_task *h2_task_create(int session_id, int stream_id,
                         conn_rec *master,
-                        h2_bucket_queue *input,
-                        h2_bucket_queue *output)
+                        h2_mplx *mplx)
 {
     conn_rec *c = NULL;
     apr_status_t status = h2_conn_create(&c, master);
@@ -234,8 +237,10 @@ h2_task *h2_task_create(int session_id, int stream_id,
     task->session_id = session_id;
     task->c = c;
     task->state = H2_TASK_ST_IDLE;
-    task->input = h2_task_input_create(task->c->pool, stream_id, input);
-    task->output = h2_task_output_create(task->c->pool, stream_id, output);
+    task->input = h2_task_input_create(task->c->pool,
+                                       session_id, stream_id, mplx);
+    task->output = h2_task_output_create(task->c->pool,
+                                         session_id, stream_id, mplx);
     
     task->response = h2_response_create(stream_id, task->c);
     h2_response_set_state_change_cb(task->response,
@@ -254,6 +259,10 @@ apr_status_t h2_task_destroy(h2_task *task, apr_pool_t *pool)
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, pool,
                   "h2_task(%d-%d): destroy started",
                   task->session_id, task->stream_id);
+    if (task->response) {
+        h2_response_destroy(task->response);
+        task->response = NULL;
+    }
     if (task->input) {
         h2_task_input_destroy(task->input);
         task->input = NULL;
@@ -261,10 +270,6 @@ apr_status_t h2_task_destroy(h2_task *task, apr_pool_t *pool)
     if (task->output) {
         h2_task_output_destroy(task->output);
         task->output = NULL;
-    }
-    if (task->response) {
-        h2_response_destroy(task->response);
-        task->response = NULL;
     }
     if (task->c->pool) {
         apr_pool_destroy(task->c->pool);
@@ -316,8 +321,6 @@ void h2_task_abort(h2_task *task)
                   "h2_task(%d-%d): aborting task",
                   task->session_id, task->stream_id);
     task->aborted =  1;
-    task->event_cb = NULL;
-    task->event_ctx = NULL;
     if (task->input) {
         h2_task_input_destroy(task->input);
         task->input = NULL;
@@ -326,20 +329,5 @@ void h2_task_abort(h2_task *task)
         h2_task_output_destroy(task->output);
         task->output = NULL;
     }
-}
-
-void h2_task_set_event_cb(h2_task *task, h2_task_event_cb *cb, void *event_ctx)
-{
-    task->event_cb = cb;
-    task->event_ctx = event_ctx;
-}
-
-h2_resp_head *h2_task_get_resp_head(h2_task *task)
-{
-    h2_resp_head *head = task->response->head;
-    if (head) {
-        task->response->head = NULL;
-    }
-    return head;
 }
 

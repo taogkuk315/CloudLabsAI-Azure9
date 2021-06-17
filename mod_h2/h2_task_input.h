@@ -18,10 +18,11 @@
 #define __mod_h2__h2_task_input__
 
 struct h2_bucket;
-struct h2_bucket_queue;
+struct h2_mplx;
 
 typedef struct h2_task_input {
-    struct h2_bucket_queue *queue;
+    struct h2_mplx *m;
+    int session_id;
     int stream_id;
     int eos;
     struct h2_bucket *cur;
@@ -29,8 +30,8 @@ typedef struct h2_task_input {
 } h2_task_input;
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
-                                        int stream_id,
-                                        struct h2_bucket_queue *q);
+                                        int session_id, int stream_id,
+                                        struct h2_mplx *mplx);
 void h2_task_input_destroy(h2_task_input *input);
 
 apr_status_t h2_task_input_read(h2_task_input *input,

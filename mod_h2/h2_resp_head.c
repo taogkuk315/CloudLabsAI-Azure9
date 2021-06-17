@@ -31,7 +31,8 @@
 #include "h2_resp_head.h"
 
 
-h2_resp_head *h2_resp_head_create(h2_bucket *data, const char *status,
+h2_resp_head *h2_resp_head_create(h2_bucket *data, int stream_id,
+                                  const char *status,
                                   apr_array_header_t *hlines)
 {
     assert(status);
@@ -80,6 +81,7 @@ h2_resp_head *h2_resp_head_create(h2_bucket *data, const char *status,
         }
     }
     
+    head->stream_id = stream_id;
     head->status = status;
     head->data = data;
     head->nvlen = nvlen;

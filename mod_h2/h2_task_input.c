@@ -23,7 +23,7 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
-#include "h2_bucket_queue.h"
+#include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_task_input.h"
@@ -45,8 +45,7 @@ static int check_abort(h2_task_input *input,
  */
 static int all_queued(h2_task_input *input)
 {
-    return input->eos
-    || h2_bucket_queue_has_eos_for(input->queue, input->stream_id);
+    return input->eos || h2_mplx_in_has_eos_for(input->m, input->stream_id);
 }
 
 static void cleanup(h2_task_input *input) {
@@ -60,12 +59,14 @@ static void cleanup(h2_task_input *input) {
 }
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
-                                        int stream_id,
-                                        h2_bucket_queue *q)
+                                        int session_id, int stream_id,
+                                        h2_mplx *m)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
-        input->queue = q;
+        input->m = m;
+        h2_mplx_reference(m);
+        input->session_id = session_id;
         input->stream_id = stream_id;
     }
     return input;
@@ -77,7 +78,10 @@ void h2_task_input_destroy(h2_task_input *input)
         h2_bucket_destroy(input->cur);
         input->cur = NULL;
     }
-    input->queue = NULL;
+    if (input->m) {
+        h2_mplx_release(input->m);
+        input->m = NULL;
+    }
 }
 
 apr_status_t h2_task_input_read(h2_task_input *input,
@@ -91,9 +95,9 @@ apr_status_t h2_task_input_read(h2_task_input *input,
     apr_size_t nread = 0;
     int all_there = all_queued(input);
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                  "h2_task_input(%d): read() asking for %d bytes",
-                  input->stream_id, (int)readbytes);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, filter->c,
+                  "h2_task_input(%d-%d): read() asking for %d bytes",
+                  input->session_id, input->stream_id, (int)readbytes);
     
     if (input->cur && input->cur_offset >= input->cur->data_len) {
         cleanup(input);
@@ -114,8 +118,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
             return APR_ECONNABORTED;
         }
         
-        status = h2_bucket_queue_pop(input->queue,
-                                     all_there? APR_NONBLOCK_READ : block,
+        status = h2_mplx_in_read(input->m, all_there? APR_NONBLOCK_READ : block,
                                      input->stream_id, &input->cur);
         input->cur_offset = 0;
         if (status == APR_EOF) {
@@ -177,10 +180,10 @@ apr_status_t h2_task_input_read(h2_task_input *input,
                                                             nread, brigade->bucket_alloc));
         if (mode != AP_MODE_SPECULATIVE) {
             input->cur_offset += nread;
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
+                          "h2_task_input(%d-%d): forward %d bytes",
+                          input->session_id, input->stream_id, (int)nread);
         }
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                      "h2_task_input(%d): forward %d bytes",
-                      input->stream_id, (int)nread);
     }
     else if (all_there) {
         /* we know there is nothing more to come and inserted all data

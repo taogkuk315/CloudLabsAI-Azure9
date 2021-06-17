@@ -20,6 +20,7 @@
 struct h2_bucket;
 
 typedef struct h2_resp_head {
+    int stream_id;
     const char *status;
     struct h2_bucket *data;
 
@@ -29,6 +30,7 @@ typedef struct h2_resp_head {
 } h2_resp_head;
 
 h2_resp_head *h2_resp_head_create(struct h2_bucket *data,
+                                  int stream_id,
                                   const char *status,
                                   apr_array_header_t *hlines);
 

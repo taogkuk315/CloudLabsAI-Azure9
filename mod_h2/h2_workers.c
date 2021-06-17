@@ -233,16 +233,6 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, int session_id)
             h2_task_abort(task);
             h2_task_destroy(task, workers->pool);
         }
-        /* abort all running tasks and wait for workers to finish */
-        h2_queue_iter(workers->tasks_active, abort_task, NULL);
-        
-        while (h2_queue_find_id(workers->tasks_active, session_id)) {
-            ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
-                         "h2_workers: wait for session(%d) tasks to end",
-                         session_id);
-            apr_thread_cond_wait(workers->task_done, workers->lock);
-        }
-        
         apr_thread_mutex_unlock(workers->lock);
         ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
                      "h2_workers: shutdown session(%d) done",

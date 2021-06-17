@@ -41,6 +41,7 @@
  * of our own to disble those.
  */
 
+struct h2_mplx;
 struct h2_task;
 struct h2_resp_head;
 struct h2_response;
@@ -53,14 +54,6 @@ typedef enum {
     H2_TASK_ST_DONE
 } h2_task_state_t;
 
-typedef enum {
-    H2_TASK_EV_READY,
-    H2_TASK_EV_DONE
-} h2_task_event_t;
-
-typedef void h2_task_event_cb(struct h2_task *task,
-                              h2_task_event_t event, void *cb_ctx);
-
 typedef struct h2_task {
     int session_id;
     int stream_id;
@@ -72,23 +65,17 @@ typedef struct h2_task {
     struct h2_task_output *output;  /* response body data */
     struct h2_response *response;     /* response meta data */
     
-    h2_task_event_cb *event_cb;
-    void *event_ctx;
-    
 } h2_task;
 
 h2_task *h2_task_create(int session_id, int stream_id,
                         conn_rec *master,
-                        struct h2_bucket_queue *input,
-                        struct h2_bucket_queue *output);
+                        struct h2_mplx *mplx);
 
 apr_status_t h2_task_destroy(h2_task *task, apr_pool_t *pool);
 
 apr_status_t h2_task_do(h2_task *task);
 
 void h2_task_abort(h2_task *task);
-
-void h2_task_set_event_cb(h2_task *task, h2_task_event_cb *cb, void *event_ctx);
 
 struct h2_resp_head *h2_task_get_resp_head(h2_task *task);
 

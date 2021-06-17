@@ -15,8 +15,6 @@
  */
 
 #include <assert.h>
-#include <apr_thread_mutex.h>
-#include <apr_thread_cond.h>
 
 #include <httpd.h>
 #include <http_core.h>
@@ -41,24 +39,11 @@ h2_bucket_queue *h2_bucket_queue_create(apr_pool_t *pool,
         return NULL;
     }
     q->max_stream_size = max_stream_size;
-    
     q->queue = h2_queue_create(pool, bucket_free);
     if (!q->queue) {
         return NULL;
     }
-    
-    if (apr_thread_mutex_create(&q->lock,
-                                APR_THREAD_MUTEX_DEFAULT,
-                                pool) == APR_SUCCESS) {
-        if (apr_thread_cond_create(&q->has_data, pool) == APR_SUCCESS) {
-            if (q->max_stream_size == 0
-                || apr_thread_cond_create(&q->data_removed, pool) == APR_SUCCESS) {
-                return q;
-            }
-        }
-    }
-    h2_bucket_queue_destroy(q);
-    return NULL;
+    return q;
 }
 
 typedef struct {
@@ -84,32 +69,15 @@ static apr_size_t get_stream_size(h2_bucket_queue *q, int stream_id) {
 
 void h2_bucket_queue_destroy(h2_bucket_queue *q)
 {
-    if (q->lock) {
-        apr_thread_mutex_destroy(q->lock);
-        q->lock = NULL;
-    }
-    if (q->data_removed) {
-        apr_thread_cond_destroy(q->data_removed);
-        q->data_removed = NULL;
-    }
-    if (q->has_data) {
-        apr_thread_cond_destroy(q->has_data);
-        q->has_data = NULL;
-    }
     if (q->queue) {
         h2_queue_destroy(q->queue);
         q->queue = NULL;
     }
 }
 
-void h2_bucket_queue_term(h2_bucket_queue *q)
+void h2_bucket_queue_abort(h2_bucket_queue *q)
 {
-    apr_status_t status = apr_thread_mutex_lock(q->lock);
-    if (status == APR_SUCCESS) {
-        h2_queue_term(q->queue);
-        apr_thread_cond_broadcast(q->has_data);
-        apr_thread_mutex_unlock(q->lock);
-    }
+    h2_queue_abort(q->queue);
 }
 
 static void *find_eos_for(void *ctx, int id, void *entry)
@@ -125,118 +93,45 @@ static void *find_first_for(void *ctx, int id, void *entry)
 }
 
 
-static apr_status_t pop_int(h2_bucket_queue *q,
-                                     apr_read_type_e block,
-                                     int match_id,
-                                     h2_bucket **pbucket,
-                                     int *pstream_id)
+apr_status_t h2_bucket_queue_push(h2_bucket_queue *q,
+                                  int stream_id, h2_bucket *bucket)
 {
-    apr_status_t status = apr_thread_mutex_lock(q->lock);
-    if (status != APR_SUCCESS) {
-        return status;
+    if (q->queue->aborted) {
+        return APR_EOF;
     }
     
-    h2_bucket *bucket = h2_queue_pop_find(q->queue, find_first_for, &match_id);
-    while (!bucket
-           && block == APR_BLOCK_READ
-           && !h2_queue_is_terminated(q->queue)) {
-        apr_thread_cond_wait(q->has_data, q->lock);
-        bucket = h2_queue_pop_find(q->queue, find_first_for, &match_id);
-    }
-    
-    if (bucket && q->data_removed) {
-        apr_thread_cond_broadcast(q->data_removed);
-    }
-    
+    return h2_queue_push_id(q->queue, stream_id, bucket);
+}
+
+apr_status_t h2_bucket_queue_pop(h2_bucket_queue *q,
+                                 int stream_id, h2_bucket **pbucket)
+{
+    *pbucket = NULL;
+    h2_bucket *bucket = h2_queue_pop_find(q->queue, find_first_for, &stream_id);
     if (bucket == &H2_NULL_BUCKET) {
-        *pbucket = NULL;
-        status = APR_EOF;
+        return APR_EOF;
     }
     else if (bucket) {
         *pbucket = bucket;
+        return APR_SUCCESS;
     }
-    else if (block == APR_NONBLOCK_READ) {
-        status = APR_EAGAIN;
-    }
-    else {
-        status = APR_EOF;
-    }
-    
-    apr_thread_mutex_unlock(q->lock);
-    return status;
+    return APR_EAGAIN;
 }
 
-apr_status_t h2_bucket_queue_push(h2_bucket_queue *q, h2_bucket *bucket,
-                                  int stream_id)
+apr_status_t h2_bucket_queue_append(h2_bucket_queue *q, int stream_id,
+                                    h2_bucket *bucket)
 {
-    apr_status_t status = apr_thread_mutex_lock(q->lock);
-    if (status != APR_SUCCESS) {
-        return status;
+    if (q->queue->aborted) {
+        return APR_EOF;
     }
     
-    if (q->queue->terminated) {
-        status = APR_EOF;
-    }
-    else {
-        if (q->ev_cb) {
-            int first = (h2_queue_find_id(q->queue, stream_id) == NULL);
-            q->ev_cb(q, H2_BQ_EV_BEFORE_PUSH, bucket,
-                     stream_id, first, q->ev_ctx);
-        }
-        status = h2_queue_push_id(q->queue, stream_id, bucket);
-        apr_thread_cond_broadcast(q->has_data);
-    }
-    apr_thread_mutex_unlock(q->lock);
-    return status;
-}
-
-apr_status_t h2_bucket_queue_pop(h2_bucket_queue *q, apr_read_type_e block,
-                                 int stream_id, h2_bucket **pbucket)
-{
-    int dummy;
-    return pop_int(q, block, stream_id, pbucket, &dummy);
-}
-
-apr_status_t h2_bucket_queue_append(h2_bucket_queue *q,
-                                    h2_bucket *bucket, int stream_id)
-{
-    apr_status_t status = apr_thread_mutex_lock(q->lock);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    
-    if (q->max_stream_size > 0 && q->data_removed) {
-        /* Block until we have less than max_stream_size bytes queued for
-         * this stream */
-        while (!q->queue->terminated
-               && (get_stream_size(q, stream_id) >= q->max_stream_size)) {
-            ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, q->queue->pool,
-                          "h2_stream(%d): waiting for queue to drain",
-                          stream_id);
-            apr_thread_cond_wait(q->data_removed, q->lock);
-        }
-    }
-    
-    if (q->queue->terminated) {
-        status = APR_EOF;
-    }
-    else {
-        if (q->ev_cb) {
-            int first = (h2_queue_find_id(q->queue, stream_id) == NULL);
-            q->ev_cb(q, H2_BQ_EV_BEFORE_APPEND, bucket,
-                     stream_id, first, q->ev_ctx);
-        }
-        status = h2_queue_append_id(q->queue, stream_id, bucket);
-        apr_thread_cond_broadcast(q->has_data);
-    }
-    apr_thread_mutex_unlock(q->lock);
-    return status;
+    return h2_queue_append_id(q->queue, stream_id, bucket);
 }
 
 apr_status_t h2_bucket_queue_append_eos(h2_bucket_queue *q,
                                         int stream_id)
 {
-    return h2_bucket_queue_append(q, &H2_NULL_BUCKET, stream_id);
+    return h2_bucket_queue_append(q, stream_id, &H2_NULL_BUCKET);
 }
 
 typedef struct {
@@ -253,57 +148,24 @@ static int my_iter(void *ctx, int stream_id, void *entry, int index)
 void h2_bucket_queue_iter(h2_bucket_queue *q,
                           h2_bucket_queue_iter_fn *iter, void *ctx)
 {
-    apr_status_t status = apr_thread_mutex_lock(q->lock);
-    if (status == APR_SUCCESS) {
-        my_iter_ctx ictx = { iter, ctx };
-        h2_queue_iter(q->queue, my_iter, (void*)&ictx);
-        apr_thread_mutex_unlock(q->lock);
-    }
+    my_iter_ctx ictx = { iter, ctx };
+    h2_queue_iter(q->queue, my_iter, (void*)&ictx);
 }
 
 int h2_bucket_queue_has_eos_for(h2_bucket_queue *q, int stream_id)
 {
-    int eos_found = 0;
-    apr_status_t status = apr_thread_mutex_lock(q->lock);
-    if (status == APR_SUCCESS) {
-        h2_bucket *b = h2_queue_find(q->queue, find_eos_for, (void*)&stream_id);
-        eos_found = (b != NULL);
-        apr_thread_mutex_unlock(q->lock);
-    }
-    
-    return eos_found;
+    h2_bucket *b = h2_queue_find(q->queue, find_eos_for, (void*)&stream_id);
+    return (b != NULL);
 }
 
 int h2_bucket_queue_is_empty(h2_bucket_queue *q)
 {
-    int empty = 0;
-    apr_status_t status = apr_thread_mutex_lock(q->lock);
-    if (status == APR_SUCCESS) {
-        empty = h2_queue_is_empty(q->queue);
-        apr_thread_mutex_unlock(q->lock);
-    }
-    
-    return empty;
+    return h2_queue_is_empty(q->queue);
 }
 
 int h2_bucket_queue_has_buckets_for(h2_bucket_queue *q, int stream_id)
 {
-    int found = 0;
-    apr_status_t status = apr_thread_mutex_lock(q->lock);
-    if (status == APR_SUCCESS) {
-        h2_bucket *b = h2_queue_find_id(q->queue, stream_id);
-        found = (b != NULL);
-        apr_thread_mutex_unlock(q->lock);
-    }
-    
-    return found;
-}
-
-void h2_bucket_queue_set_event_cb(h2_bucket_queue *queue,
-                                  h2_bucket_queue_event_cb *callback,
-                                  void *ev_ctx)
-{
-    queue->ev_cb = callback;
-    queue->ev_ctx = ev_ctx;
+    h2_bucket *b = h2_queue_find_id(q->queue, stream_id);
+    return (b != NULL);
 }
 

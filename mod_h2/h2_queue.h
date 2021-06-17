@@ -37,7 +37,7 @@ typedef struct h2_queue {
     struct h2_qdata *last;
     struct h2_qdata *free;
     
-    int terminated;
+    int aborted;
     h2_queue_free_fn free_fn;
 } h2_queue;
 
@@ -46,7 +46,7 @@ typedef struct h2_queue {
 
 h2_queue *h2_queue_create(apr_pool_t *pool, h2_queue_free_fn free_fn);
 void h2_queue_destroy(h2_queue *q);
-void h2_queue_term(h2_queue *q);
+void h2_queue_abort(h2_queue *q);
 
 apr_status_t h2_queue_append(h2_queue *q, void *entry);
 apr_status_t h2_queue_append_id(h2_queue *q, int id, void *entry);

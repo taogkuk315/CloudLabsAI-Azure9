@@ -28,7 +28,7 @@
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_stream_set.h"
-#include "h2_response.h"
+#include "h2_resp_head.h"
 #include "h2_task.h"
 #include "h2_workers.h"
 #include "h2_conn.h"
@@ -104,7 +104,6 @@ apr_status_t h2_conn_process(conn_rec *c)
     
     while (status == APR_SUCCESS || status == APR_EAGAIN) {
         int got_streams = !h2_stream_set_is_empty(session->streams);
-        int data_write = h2_bucket_queue_is_empty(session->data_in);
         int have_written = 0;
         
         status = h2_session_write(session, wait_micros);
@@ -117,7 +116,7 @@ apr_status_t h2_conn_process(conn_rec *c)
             if (wait_micros > MAX_WAIT_MICROS) {
                 wait_micros = MAX_WAIT_MICROS;
             }
-            ap_log_cerror( APLOG_MARK, APLOG_TRACE1, status, c,
+            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, c,
                           "timeout waiting %f ms", wait_micros/1000.0);
             status = APR_EAGAIN;
         }
@@ -126,16 +125,20 @@ apr_status_t h2_conn_process(conn_rec *c)
             break;
         }
         
-        /* Get a stream that is ready to be submitted, e.g. that has all
+        /* Got a stream that is ready to be submitted, e.g. that has all
          * response headers ready?
          */
-        h2_stream *stream = h2_session_pop_ready_response(session);
-        if (stream != NULL) {
-            status = h2_session_submit_response(session, stream);
-            if (status != APR_SUCCESS) {
-                break;
+        h2_resp_head *head = h2_session_pop_response(session);
+        if (head) {
+            h2_stream *stream = h2_session_get_stream(session, head->stream_id);
+            if (stream) {
+                status = h2_session_submit_response(session, stream, head);
+                if (status != APR_SUCCESS) {
+                    break;
+                }
+                h2_resp_head_destroy(head);
+                have_written = 1;
             }
-            have_written = 1;
         }
         
         status = h2_session_read(session, got_streams?

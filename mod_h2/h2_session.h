@@ -39,10 +39,9 @@
  *
  */
 
-struct apr_thread_mutex_t;
-struct apr_thread_cond_t;
-
 struct h2_config;
+struct h2_mplx;
+struct h2_resp_head;
 struct h2_session;
 struct h2_stream;
 struct h2_task;
@@ -59,15 +58,9 @@ typedef struct h2_session {
 
     int aborted;                    /* this session is being aborted */
     
-    h2_io_ctx io;                     /* io on httpd conn filters */
-    struct h2_bucket_queue *data_in;  /* stream data coming in */
-    struct h2_bucket_queue *data_out; /* stream data going out */
-
+    h2_io_ctx io;                   /* io on httpd conn filters */
+    struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_stream_set *streams;  /* streams handled by this session */
-    struct h2_stream_set *readies;  /* streams ready for submit */
-    
-    struct apr_thread_mutex_t *lock;
-    struct apr_thread_cond_t *has_data; /* there is data to be written */
     
     on_new_task *on_new_task_cb;    /* notify of new h2_task creations */
 
@@ -120,7 +113,8 @@ apr_status_t h2_session_write(h2_session *session,
 /* Start submitting the response to a stream request. This is possible
  * once we have all the response headers. */
 apr_status_t h2_session_submit_response(h2_session *session,
-                                        struct h2_stream *stream);
+                                        struct h2_stream *stream,
+                                        struct h2_resp_head *head);
 
 /* Set the callback to be invoked when new h2_task instances are created.  */
 void h2_session_set_new_task_cb(h2_session *session, on_new_task *callback);
@@ -128,9 +122,8 @@ void h2_session_set_new_task_cb(h2_session *session, on_new_task *callback);
 /* Get the h2_stream for the given stream idenrtifier. */
 struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);
 
-/* Get the first h2_session that has a response ready and not submitted
- * yet. Returns NULL if no such session is available. Will only return
- * a stream once. */
-struct h2_stream *h2_session_pop_ready_response(h2_session *session);
+/* Get the first h2_stream that has a response ready and is submitted
+ * yet. */
+struct h2_resp_head *h2_session_pop_response(h2_session *session);
 
 #endif /* defined(__mod_h2__h2_session__) */

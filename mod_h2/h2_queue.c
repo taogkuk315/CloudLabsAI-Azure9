@@ -53,18 +53,13 @@ void h2_queue_destroy(h2_queue *q)
             }
             qdata->entry = NULL;
         }
-        free(qdata);
-    }
-    while (q->free) {
-        h2_qdata *qdata = q->free;
-        q->free = qdata->next;
-        free(qdata);
     }
 }
 
-void h2_queue_term(h2_queue *q)
+void h2_queue_abort(h2_queue *q)
 {
-     q->terminated = 1;
+     q->aborted = 1;
+    h2_queue_remove_all(q);
 }
 
 static void queue_unlink(h2_queue *q, h2_qdata *qdata) {
@@ -183,7 +178,7 @@ apr_status_t h2_queue_append(h2_queue *q, void *entry)
 
 apr_status_t h2_queue_append_id(h2_queue *q, int id, void *entry)
 {
-    if (q->terminated) {
+    if (q->aborted) {
         return APR_EOF;
     }
     else {
@@ -193,7 +188,7 @@ apr_status_t h2_queue_append_id(h2_queue *q, int id, void *entry)
             memset(qdata, 0, sizeof(h2_qdata));
         }
         else {
-            qdata = calloc(1, sizeof(h2_qdata));
+            qdata = apr_pcalloc(q->pool, sizeof(h2_qdata));
         }
         
         qdata->entry = entry;
@@ -219,7 +214,7 @@ apr_status_t h2_queue_push(h2_queue *q, void *entry)
 
 apr_status_t h2_queue_push_id(h2_queue *q, int id, void *entry)
 {
-    if (q->terminated) {
+    if (q->aborted) {
         return APR_EOF;
     }
     else {
@@ -229,7 +224,7 @@ apr_status_t h2_queue_push_id(h2_queue *q, int id, void *entry)
             memset(qdata, 0, sizeof(h2_qdata));
         }
         else {
-            qdata = calloc(1, sizeof(h2_qdata));
+            qdata = apr_pcalloc(q->pool, sizeof(h2_qdata));
         }
         
         qdata->entry = entry;
@@ -260,9 +255,9 @@ void h2_queue_remove_all(h2_queue *q)
     }
 }
 
-int h2_queue_is_terminated(h2_queue *q)
+int h2_queue_is_aborted(h2_queue *q)
 {
-    return q->terminated;
+    return q->aborted;
 }
 
 int h2_queue_is_empty(h2_queue *q)

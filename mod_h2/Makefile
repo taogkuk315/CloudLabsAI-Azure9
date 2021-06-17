@@ -31,6 +31,7 @@ C_SRC   = \
         h2_ctx.c \
         h2_frame.c \
         h2_io.c \
+        h2_mplx.c \
         h2_queue.c \
         h2_response.c \
         h2_resp_head.c \

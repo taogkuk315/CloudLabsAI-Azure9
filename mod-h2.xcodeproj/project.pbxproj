@@ -245,6 +245,8 @@
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27BBD2E1A65927E00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = httpd/Makefile; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = "<none>"; };
 		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
+		B27D32E81A9487B4003DBAF4 /* h2_mplx.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_mplx.c; sourceTree = "<group>"; };
+		B27D32E91A9487B4003DBAF4 /* h2_mplx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_mplx.h; sourceTree = "<group>"; };
 		B284ACC31A792AC600C35863 /* h2_bucket_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_bucket_queue.c; sourceTree = "<group>"; };
 		B284ACC41A792AC600C35863 /* h2_bucket_queue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_bucket_queue.h; sourceTree = "<group>"; };
 		B284ACC51A7944F700C35863 /* h2_frame.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_frame.c; sourceTree = "<group>"; };
@@ -894,6 +896,8 @@
 				B284ACC61A7944F700C35863 /* h2_frame.h */,
 				B225493A1A711985004BDEC9 /* h2_io.c */,
 				B225493B1A711985004BDEC9 /* h2_io.h */,
+				B27D32E81A9487B4003DBAF4 /* h2_mplx.c */,
+				B27D32E91A9487B4003DBAF4 /* h2_mplx.h */,
 				B22549371A6FCE13004BDEC9 /* h2_private.h */,
 				B2546D9B1A810A450033A875 /* h2_queue.c */,
 				B2546D9C1A810A450033A875 /* h2_queue.h */,

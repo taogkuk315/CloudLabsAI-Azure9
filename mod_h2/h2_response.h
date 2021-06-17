@@ -60,7 +60,7 @@ typedef struct h2_response {
     apr_size_t offset;
     struct h2_bucket *rawhead;
     
-    char *status;
+    const char *status;
     apr_array_header_t *hlines;
     
     struct h2_resp_head *head;
@@ -77,5 +77,7 @@ apr_status_t h2_response_http_convert(struct h2_bucket *bucket,
                                       void *conv_ctrx,
                                       const char *data, apr_size_t len,
                                       apr_size_t *pconsumed);
+
+struct h2_resp_head *h2_response_get_head(h2_response *resp);
 
 #endif /* defined(__mod_h2__h2_response__) */

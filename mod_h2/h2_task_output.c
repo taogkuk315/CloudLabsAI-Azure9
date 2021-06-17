@@ -23,9 +23,10 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
-#include "h2_bucket_queue.h"
+#include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
+#include "h2_resp_head.h"
 #include "h2_task_output.h"
 
 
@@ -39,13 +40,15 @@ static apr_status_t copy_unchanged(h2_bucket *bucket,
 }
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
-                                          int stream_id,
-                                          h2_bucket_queue *q)
+                                      int session_id, int stream_id,
+                                      h2_mplx *m)
 {
     h2_task_output *output = apr_pcalloc(pool, sizeof(h2_task_output));
     if (output) {
-        output->queue = q;
+        output->m = m;
+        h2_mplx_reference(m);
         output->stream_id = stream_id;
+        output->session_id = session_id;
         output->conv = copy_unchanged;
     }
     return output;
@@ -56,6 +59,10 @@ void h2_task_output_destroy(h2_task_output *output)
     if (output->cur) {
         h2_bucket_destroy(output->cur);
         output->cur = NULL;
+    }
+    if (output->m) {
+        h2_mplx_release(output->m);
+        output->m = NULL;
     }
 }
 
@@ -90,9 +97,11 @@ static apr_status_t flush_cur(h2_task_output *output,
 {
     if (output->cur) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                      "h2_stream(%d): flush %d bytes",
-                      output->stream_id, (int)output->cur->data_len);
-        h2_bucket_queue_append(output->queue, output->cur, output->stream_id);
+                      "h2_task_output(%d-%d): flush %d bytes",
+                      output->session_id, output->stream_id,
+                      (int)output->cur->data_len);
+        h2_mplx_out_write(output->m, APR_BLOCK_READ,
+                          output->stream_id, output->cur);
         output->cur = NULL;
     }
     
@@ -105,8 +114,8 @@ static apr_status_t process_data(h2_task_output *output,
 {
     apr_status_t status = APR_SUCCESS;
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                  "h2_stream(%d): output writing %d bytes",
-                  output->stream_id, (int)len);
+                  "h2_task_output(%d-%d): writing %d bytes",
+                  output->session_id, output->stream_id, (int)len);
     while (len > 0) {
         status = prepare_cur(output);
         if (status != APR_SUCCESS) {
@@ -127,19 +136,22 @@ static apr_status_t process_data(h2_task_output *output,
     return APR_SUCCESS;
 }
 
+apr_status_t h2_task_output_open(h2_task_output *output,
+                                  h2_resp_head *head)
+{
+    return h2_mplx_out_open(output->m, output->stream_id, head);
+}
+
 apr_status_t h2_task_output_write(h2_task_output *output,
                                     ap_filter_t* filter,
                                     apr_bucket_brigade* brigade)
 {
     apr_status_t status = APR_SUCCESS;
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                  "h2_stream(%d): output write", output->stream_id);
-    
     if (filter->next != NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, filter->c,
-                      "h2_stream(%d): output has unexpected filter",
-                      output->stream_id);
+                      "h2_task_output(%d-%d): unexpected filter",
+                      output->session_id, output->stream_id);
     }
     
     if (APR_BRIGADE_EMPTY(brigade)) {
@@ -153,17 +165,17 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         if (APR_BUCKET_IS_METADATA(bucket)) {
             if (APR_BUCKET_IS_EOS(bucket)) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, filter->c,
-                              "h2_stream(%d): output, got eos from brigade",
-                              output->stream_id);
+                              "h2_task_output(%d-%d): got eos from brigade",
+                              output->session_id, output->stream_id);
                 output->eos = 1;
                 flush_cur(output, filter);
-                h2_bucket_queue_append_eos(output->queue, output->stream_id);
+                h2_mplx_out_close(output->m, output->stream_id);
                 got_eos = 1;
             }
             else if (APR_BUCKET_IS_FLUSH(bucket)) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, filter->c,
-                              "h2_stream(%d): output, got flush from brigade",
-                              output->stream_id);
+                              "h2_task_output(%d-%d): got flush from brigade",
+                              output->session_id, output->stream_id);
                 flush_cur(output, filter);
             }
             else {
@@ -172,8 +184,8 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         }
         else if (got_eos) {
             ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, filter->c,
-                          "h2_stream(%d): output has data after eos",
-                          output->stream_id);
+                          "h2_task_output(%d-%d): has data after eos",
+                          output->session_id, output->stream_id);
         }
         else {
             // Data
@@ -183,8 +195,9 @@ apr_status_t h2_task_output_write(h2_task_output *output,
             status = apr_bucket_read(bucket, &data, &data_length,
                                      APR_NONBLOCK_READ);
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
-                          "h2_stream(%d): output, got %d bytes from brigade",
-                          output->stream_id, (int)data_length);
+                          "h2_task_output(%d-%d): got %d bytes from brigade",
+                          output->session_id, output->stream_id,
+                          (int)data_length);
             if (status == APR_SUCCESS) {
                 status = process_data(output, filter, data, data_length);
             }
@@ -193,8 +206,8 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                                          APR_BLOCK_READ);
                 if (status != APR_SUCCESS) {
                     ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, filter->c,
-                                  "h2_stream(%d): output read failed",
-                                  output->stream_id);
+                                  "h2_task_output(%d-%d): read failed",
+                                  output->session_id, output->stream_id);
                     return status;
                 }
                 status = process_data(output, filter, data, data_length);

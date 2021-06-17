@@ -18,7 +18,8 @@
 #define __mod_h2__h2_task_output__
 
 struct h2_bucket;
-struct h2_bucket_queue;
+struct h2_mplx;
+struct h2_resp_head;
 
 typedef apr_status_t (*h2_output_converter)(struct h2_bucket *bucket,
                                             void *conv_data,
@@ -26,7 +27,8 @@ typedef apr_status_t (*h2_output_converter)(struct h2_bucket *bucket,
                                             apr_size_t *pconsumed);
 
 typedef struct h2_task_output {
-    struct h2_bucket_queue *queue;
+    struct h2_mplx *m;
+    int session_id;
     int stream_id;
     int eos;
     struct h2_bucket *cur;
@@ -37,10 +39,14 @@ typedef struct h2_task_output {
 } h2_task_output;
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
-                                      int stream_id,
-                                      h2_bucket_queue *q);
+                                      int session_id, int stream_id,
+                                      struct h2_mplx *m);
 
 void h2_task_output_destroy(h2_task_output *output);
+
+apr_status_t h2_task_output_open(h2_task_output *output,
+                                 struct h2_resp_head *head);
+
 
 apr_status_t h2_task_output_write(h2_task_output *output,
                                   ap_filter_t* filter,

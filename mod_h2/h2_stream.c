@@ -28,7 +28,7 @@
 
 #include "h2_private.h"
 #include "h2_resp_head.h"
-#include "h2_bucket_queue.h"
+#include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_task.h"
@@ -67,10 +67,6 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
     if (stream->work) {
         h2_bucket_destroy(stream->work);
         stream->work = NULL;
-    }
-    if (stream->resp_head) {
-        //h2_resp_head_destroy(stream->resp_head);
-        stream->resp_head = NULL;
     }
     stream->session = NULL;
     return APR_SUCCESS;
@@ -145,12 +141,10 @@ apr_status_t h2_stream_push(h2_stream *stream)
                   stream->session->id, (int)stream->id,
                   stream->work->data);
     
-    apr_status_t status = h2_bucket_queue_append(stream->session->data_in,
-                                                 stream->work, stream->id);
-    if (status == APR_SUCCESS) {
-        stream->work = NULL;
-    }
-    else {
+    apr_status_t status = h2_mplx_in_write(stream->session->mplx, stream->id,
+                                           stream->work);
+    stream->work = NULL;
+    if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, stream->session->c,
                       "h2_stream(%d-%d): pushing request data",
                       stream->session->id, (int)stream->id);
@@ -214,8 +208,7 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
                       "h2_stream(%d-%d): closing input, append eos",
                       stream->session->id, stream->id);
-        status = h2_bucket_queue_append_eos(stream->session->data_in,
-                                            stream->id);
+        status = h2_mplx_in_close(stream->session->mplx, stream->id);
     }
     return status;
 }
@@ -230,9 +223,6 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
         return status;
     }
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
-                  "h2_stream(%d-%d): adding header %s",
-                  stream->session->id, stream->id, name);
     if (name[0] == ':') {
         /* pseudo header, see ch. 8.1.2.3, always should come first */
         if (stream->work) {
@@ -327,14 +317,13 @@ apr_status_t h2_stream_add_data(h2_stream *stream,
     return APR_SUCCESS;
 }
 
-void h2_stream_set_deferred(h2_stream *stream, int deferred)
+void h2_stream_set_suspended(h2_stream *stream, int suspended)
 {
-    stream->deferred = !!deferred;
+    stream->suspended = !!suspended;
 }
 
-int h2_stream_is_deferred(h2_stream *stream)
+int h2_stream_is_suspended(h2_stream *stream)
 {
-    return stream->deferred;
+    return stream->suspended;
 }
-
 

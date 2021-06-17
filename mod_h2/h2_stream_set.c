@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include <stddef.h>
 
-#include <apr_thread_mutex.h>
-#include <apr_thread_cond.h>
 #include <apr_strings.h>
 
 #include <httpd.h>
@@ -35,110 +34,64 @@
 h2_stream_set *h2_stream_set_create(apr_pool_t *pool)
 {
     h2_stream_set *sp = apr_pcalloc(pool, sizeof(h2_stream_set));
-    if (!sp) {
-        return NULL;
+    if (sp) {
+        sp->queue = h2_queue_create(pool, NULL);
+        if (!sp->queue) {
+            return NULL;
+        }
     }
-    
-    sp->queue = h2_queue_create(pool, NULL);
-    if (!sp->queue) {
-        return NULL;
-    }
-    
-    if (APR_SUCCESS == apr_thread_mutex_create(&sp->lock,
-                                               APR_THREAD_MUTEX_DEFAULT,
-                                               pool)) {
-        return sp;
-    }
-    h2_stream_set_destroy(sp);
-    return NULL;
+    return sp;
 }
 
 void h2_stream_set_destroy(h2_stream_set *sp)
 {
-    if (sp->lock) {
-        apr_thread_mutex_destroy(sp->lock);
-        sp->lock = NULL;
-    }
     if (sp->queue) {
         h2_queue_destroy(sp->queue);
         sp->queue = NULL;
     }
 }
 
-apr_status_t h2_stream_set_term(h2_stream_set *sp)
+void h2_stream_set_term(h2_stream_set *sp)
 {
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        h2_queue_term(sp->queue);
-        apr_thread_mutex_unlock(sp->lock);
-    }
-    return status;
+    h2_queue_abort(sp->queue);
 }
 
 apr_status_t h2_stream_set_add(h2_stream_set *sp, h2_stream *stream)
 {
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        if (!h2_queue_find_id(sp->queue, stream->id)) {
-            h2_queue_push_id(sp->queue, stream->id, stream);
-        }
-        apr_thread_mutex_unlock(sp->lock);
+    if (h2_stream_set_get(sp, stream->id) == NULL) {
+        return h2_queue_push_id(sp->queue, stream->id, stream);
     }
-    return status;
+    return APR_SUCCESS;
 }
 
 h2_stream *h2_stream_set_get(h2_stream_set *sp, int stream_id)
 {
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        h2_stream *stream = h2_queue_find_id(sp->queue, stream_id);
-        apr_thread_mutex_unlock(sp->lock);
-        return stream;
-    }
-    return NULL;
+    return (h2_stream *)h2_queue_find_id(sp->queue, stream_id);
 }
 
 h2_stream *h2_stream_set_remove(h2_stream_set *sp, h2_stream *stream)
 {
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        h2_stream *s = h2_queue_remove(sp->queue, stream);
-        apr_thread_mutex_unlock(sp->lock);
-        return stream;
-    }
-    return NULL;
+    return (h2_stream *)h2_queue_remove(sp->queue, stream);
 }
 
 void h2_stream_set_remove_all(h2_stream_set *sp)
 {
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        h2_queue_remove_all(sp->queue);
-        apr_thread_mutex_unlock(sp->lock);
-    }
+    h2_queue_remove_all(sp->queue);
 }
 
 void h2_stream_set_destroy_all(h2_stream_set *sp)
 {
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        h2_stream *stream;
-        while ((stream = h2_queue_pop(sp->queue)) != NULL) {
-            h2_stream_destroy(stream);
-        }
-        apr_thread_mutex_unlock(sp->lock);
+    h2_stream *stream;
+    while ((stream = h2_queue_pop(sp->queue)) != NULL) {
+        h2_stream_destroy(stream);
     }
 }
 
 int h2_stream_set_is_empty(h2_stream_set *sp)
 {
-    int empty = 0;
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        empty = h2_queue_is_empty(sp->queue);
-        apr_thread_mutex_unlock(sp->lock);
-    }
-    return empty;
+    assert(sp);
+    assert(sp->queue);
+    return h2_queue_is_empty(sp->queue);
 }
 
 typedef struct {
@@ -155,14 +108,8 @@ static void *find_match(void *ctx, int id, void *entry)
 h2_stream *h2_stream_set_find(h2_stream_set *sp,
                               h2_stream_set_match_fn match, void *ctx)
 {
-    h2_stream *stream = NULL;
-    apr_status_t status = apr_thread_mutex_lock(sp->lock);
-    if (status == APR_SUCCESS) {
-        h2_stream_match_ctx mctx = { match, ctx };
-        stream = h2_queue_find(sp->queue, find_match, &mctx);
-        apr_thread_mutex_unlock(sp->lock);
-    }
-    return stream;
+    h2_stream_match_ctx mctx = { match, ctx };
+    return h2_queue_find(sp->queue, find_match, &mctx);
 }
 
 

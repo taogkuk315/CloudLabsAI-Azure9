@@ -82,6 +82,13 @@ void h2_response_set_state_change_cb(h2_response *resp,
     resp->state_cb_ctx = cb_ctx;
 }
 
+struct h2_resp_head *h2_response_get_head(h2_response *resp)
+{
+    h2_resp_head *head = resp->head;
+    resp->head = NULL;
+    return head;
+}
+
 static apr_status_t ensure_buffer(h2_response *resp)
 {
     if (!resp->rawhead) {
@@ -96,7 +103,7 @@ static apr_status_t ensure_buffer(h2_response *resp)
 
 static apr_status_t make_h2_headers(h2_response *resp)
 {
-    resp->head = h2_resp_head_create(resp->rawhead,
+    resp->head = h2_resp_head_create(resp->rawhead, resp->stream_id, 
                                      resp->status, resp->hlines);
     if (resp->head == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->c,
@@ -210,7 +217,7 @@ static apr_status_t parse_status_line(h2_response *resp)
                 *s = '\0';
             }
             
-            resp->status = apr_pstrdup(resp->c->pool, sword);
+            resp->status = sword;
             resp->offset = i + 2;
             set_state(resp, H2_RESP_ST_HEADERS);
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, resp->c,
