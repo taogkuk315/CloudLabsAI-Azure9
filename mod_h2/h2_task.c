@@ -46,6 +46,7 @@ static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
                                            apr_read_type_e block,
                                            apr_off_t readbytes) {
     h2_task *task = (h2_task *)filter->ctx;
+    assert(task);
     if (!task->input) {
         return APR_ECONNABORTED;
     }
@@ -56,6 +57,7 @@ static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
 static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
                                             apr_bucket_brigade* brigade) {
     h2_task *task = (h2_task *)filter->ctx;
+    assert(task);
     if (!task->output) {
         return APR_ECONNABORTED;
     }
@@ -167,12 +169,14 @@ static apr_status_t output_convert(h2_bucket *bucket,
                                    apr_size_t *pconsumed)
 {
     h2_task *task = (h2_task *)conv_ctx;
+    assert(task);
     return h2_response_http_convert(bucket, task->response,
                                     data, len, pconsumed);
 }
 
 static void set_state(h2_task *task, h2_task_state_t state)
 {
+    assert(task);
     if (task->state != state) {
         h2_task_state_t oldstate = task->state;
         task->state = state;
@@ -201,6 +205,7 @@ static void response_state_change(h2_response *resp,
         case H2_RESP_ST_BODY:
         case H2_RESP_ST_DONE: {
             h2_task *task = (h2_task *)cb_ctx;
+            assert(task);
             if (task->state < H2_TASK_ST_READY) {
                 set_state(task, H2_TASK_ST_READY);
             }
@@ -254,9 +259,10 @@ h2_task *h2_task_create(int session_id, int stream_id,
     return task;
 }
 
-apr_status_t h2_task_destroy(h2_task *task, apr_pool_t *pool)
+apr_status_t h2_task_destroy(h2_task *task)
 {
-    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, pool,
+    assert(task);
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_task(%d-%d): destroy started",
                   task->session_id, task->stream_id);
     if (task->response) {
@@ -272,17 +278,16 @@ apr_status_t h2_task_destroy(h2_task *task, apr_pool_t *pool)
         task->output = NULL;
     }
     if (task->c->pool) {
-        apr_pool_destroy(task->c->pool);
+        apr_pool_t *mypool = task->c->pool;
         task->c->pool = NULL;
+        apr_pool_destroy(mypool);
     }
-    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, pool,
-                  "h2_task(%d-%d): destroy finished",
-                  task->session_id, task->stream_id);
     return APR_SUCCESS;
 }
 
 apr_status_t h2_task_do(h2_task *task)
 {
+    assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_task(%d-%d): do", task->session_id, task->stream_id);
     apr_status_t status;
@@ -317,6 +322,7 @@ apr_status_t h2_task_do(h2_task *task)
 
 void h2_task_abort(h2_task *task)
 {
+    assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_task(%d-%d): aborting task",
                   task->session_id, task->stream_id);

@@ -626,6 +626,8 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
                               void *puser)
 {
     h2_session *session = (h2_session *)puser;
+    assert(session);
+    
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
@@ -649,6 +651,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
              * runs in the connection thread alone and is the sole owner
              * of data in this queue.
              */
+            assert(bucket);
             size_t nread = h2_bucket_move(bucket, (char*)buf, length);
             if (bucket->data_len > 0) {
                 /* we could not move all, put it back to the head of the queue.

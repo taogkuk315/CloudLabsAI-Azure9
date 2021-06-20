@@ -73,9 +73,8 @@ static void task_done(h2_worker *worker, h2_task *task,
                      "h2_worker(%d): task(%d-%d) done",
                      worker->id, task->session_id, task->stream_id);
         
-        h2_queue_remove(workers->tasks_active, task);
         apr_thread_cond_broadcast(workers->task_done);
-        h2_task_destroy(task, workers->pool);
+        h2_task_destroy(task);
         
         apr_thread_mutex_unlock(workers->lock);
     }
@@ -146,7 +145,6 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         
         workers->workers = h2_queue_create(workers->pool, free_worker);
         workers->tasks_todo = h2_queue_create(workers->pool, free_task);
-        workers->tasks_active = h2_queue_create(workers->pool, free_task);
         
         status = apr_thread_mutex_create(&workers->lock,
                                          APR_THREAD_MUTEX_DEFAULT,
@@ -189,10 +187,6 @@ void h2_workers_destroy(h2_workers *workers)
         h2_queue_destroy(workers->tasks_todo);
         workers->tasks_todo = NULL;
     }
-    if (workers->tasks_active) {
-        h2_queue_destroy(workers->tasks_active);
-        workers->tasks_active = NULL;
-    }
     if (workers->workers) {
         h2_queue_destroy(workers->workers);
         workers->workers = NULL;
@@ -205,6 +199,7 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task,
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         h2_queue_append_id(workers->tasks_todo, session_id, task);
+        
         apr_thread_cond_signal(workers->task_added);
         apr_thread_mutex_unlock(workers->lock);
     }
@@ -231,7 +226,7 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, int session_id)
                 break;
             }
             h2_task_abort(task);
-            h2_task_destroy(task, workers->pool);
+            h2_task_destroy(task);
         }
         apr_thread_mutex_unlock(workers->lock);
         ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,

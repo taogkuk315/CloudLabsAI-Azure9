@@ -34,7 +34,6 @@ typedef struct h2_workers {
     
     struct h2_queue *workers;
     struct h2_queue *tasks_todo;
-    struct h2_queue *tasks_active;
     
     struct apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *task_added;
