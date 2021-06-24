@@ -33,11 +33,6 @@ static void free_worker(void *w)
     // TODO
 }
 
-static void free_task(void *t)
-{
-    // TODO
-}
-
 static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
 {
     h2_workers *workers = (h2_workers *)ctx;
@@ -51,7 +46,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
                 *ptask = task;
                 status = APR_SUCCESS;
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
-                             "h2_worker(%d): get task(%d-%d)",
+                             "h2_worker(%d): start task(%ld-%d)",
                              worker->id, task->session_id, task->stream_id);
                 break;
             }
@@ -70,7 +65,7 @@ static void task_done(h2_worker *worker, h2_task *task,
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
-                     "h2_worker(%d): task(%d-%d) done",
+                     "h2_worker(%d): task(%ld-%d) done",
                      worker->id, task->session_id, task->stream_id);
         
         apr_thread_cond_broadcast(workers->task_done);
@@ -129,9 +124,6 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
 {
     assert(s);
     assert(pool);
-    assert(min_size > 0);
-    assert(max_size >= min_size);
-    
     apr_status_t status = APR_SUCCESS;
 
     h2_workers *workers = apr_pcalloc(pool, sizeof(h2_workers));
@@ -144,7 +136,7 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         apr_threadattr_create(&workers->thread_attr, workers->pool);
         
         workers->workers = h2_queue_create(workers->pool, free_worker);
-        workers->tasks_todo = h2_queue_create(workers->pool, free_task);
+        workers->tasks_todo = h2_queue_create(workers->pool, NULL);
         
         status = apr_thread_mutex_create(&workers->lock,
                                          APR_THREAD_MUTEX_DEFAULT,
@@ -193,12 +185,14 @@ void h2_workers_destroy(h2_workers *workers)
     }
 }
 
-apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task,
-                                 int session_id)
+apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        h2_queue_append_id(workers->tasks_todo, session_id, task);
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
+                     "h2_workers: scheduling task(%ld-%d)",
+                     task->session_id, task->stream_id);
+        h2_queue_append(workers->tasks_todo, task);
         
         apr_thread_cond_signal(workers->task_added);
         apr_thread_mutex_unlock(workers->lock);
@@ -212,16 +206,25 @@ static int abort_task(void *ctx, int id, void *entry, int index)
     return 1;
 }
 
-apr_status_t h2_workers_shutdown(h2_workers *workers, int session_id)
+static void *match_session_id(void *ctx, int id, void *entry)
+{
+    long *psession_id = (long *)ctx;
+    if (((h2_task*)entry)->session_id == *psession_id) {
+        return entry;
+    }
+    return NULL;
+}
+
+apr_status_t h2_workers_shutdown(h2_workers *workers, long session_id)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
-                     "h2_workers: shutdown session(%d) started",
-                     session_id);
-        /* remove all tasks still pending for the given owner */
+                     "h2_workers: shutdown session(%ld) started", session_id);
+        /* remove all tasks still pending for the given session */
         while (1) {
-            h2_task *task = h2_queue_pop_id(workers->tasks_todo, session_id);
+            h2_task *task = h2_queue_pop_find(workers->tasks_todo,
+                                              match_session_id, &session_id);
             if (!task) {
                 break;
             }
@@ -230,8 +233,19 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, int session_id)
         }
         apr_thread_mutex_unlock(workers->lock);
         ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
-                     "h2_workers: shutdown session(%d) done",
-                     session_id);
+                     "h2_workers: shutdown session(%ld) done", session_id);
     }
     return status;
+}
+
+void h2_workers_log_stats(h2_workers *workers)
+{
+    apr_status_t status = apr_thread_mutex_lock(workers->lock);
+    if (status == APR_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
+                     "h2_workers: %ld threads, %ld tasks todo",
+                     h2_queue_size(workers->workers),
+                     h2_queue_size(workers->tasks_todo));
+        apr_thread_mutex_unlock(workers->lock);
+    }
 }

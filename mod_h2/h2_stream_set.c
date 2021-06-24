@@ -95,7 +95,7 @@ int h2_stream_set_is_empty(h2_stream_set *sp)
 }
 
 typedef struct {
-    h2_stream_set_match_fn match;
+    h2_stream_set_match_fn *match;
     void *ctx;
 } h2_stream_match_ctx;
 
@@ -112,4 +112,26 @@ h2_stream *h2_stream_set_find(h2_stream_set *sp,
     return h2_queue_find(sp->queue, find_match, &mctx);
 }
 
+typedef struct {
+    h2_stream_set_iter_fn *iter;
+    void *ctx;
+} h2_stream_iter_ctx;
+
+static int iter_wrap(void *ctx, int id, void *entry, int index)
+{
+    h2_stream_iter_ctx *ictx = (h2_stream_iter_ctx*)ctx;
+    return ictx->iter(ictx->ctx, (h2_stream *)entry);
+}
+
+void h2_stream_set_iter(h2_stream_set *sp,
+                        h2_stream_set_iter_fn *iter, void *ctx)
+{
+    h2_stream_iter_ctx ictx = { iter, ctx };
+    h2_queue_iter(sp->queue, iter_wrap, &ictx);
+}
+
+apr_size_t h2_stream_set_size(h2_stream_set *sp)
+{
+    return h2_queue_size(sp->queue);
+}
 

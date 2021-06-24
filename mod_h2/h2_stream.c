@@ -103,13 +103,13 @@ static apr_status_t insert_request_line(h2_stream *stream)
     apr_status_t status = APR_SUCCESS;
     if (!stream->method) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                      "h2_stream(%d-%d): header start but :method missing",
+                      "h2_stream(%ld-%d): header start but :method missing",
                       stream->session->id, stream->id);
         return APR_EGENERAL;
     }
     if (!stream->path) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                      "h2_stream(%d-%d): header start but :path missing",
+                      "h2_stream(%ld-%d): header start but :path missing",
                       stream->session->id, stream->id);
         return APR_EGENERAL;
     }
@@ -122,7 +122,7 @@ static apr_status_t insert_request_line(h2_stream *stream)
                                     stream->method, stream->path);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, stream->session->c,
-                      "h2_stream(%d-%d): adding request line",
+                      "h2_stream(%ld-%d): adding request line",
                       stream->session->id, stream->id);
     }
     if (stream->authority) {
@@ -137,7 +137,7 @@ static apr_status_t insert_request_line(h2_stream *stream)
 apr_status_t h2_stream_push(h2_stream *stream)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                  "h2_stream(%d-%d): pushing request: %s",
+                  "h2_stream(%ld-%d): pushing request: %s",
                   stream->session->id, (int)stream->id,
                   stream->work->data);
     
@@ -146,7 +146,7 @@ apr_status_t h2_stream_push(h2_stream *stream)
     stream->work = NULL;
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, stream->session->c,
-                      "h2_stream(%d-%d): pushing request data",
+                      "h2_stream(%ld-%d): pushing request data",
                       stream->session->id, (int)stream->id);
     }
     return status;
@@ -174,7 +174,7 @@ apr_status_t h2_stream_end_headers(h2_stream *stream)
         status = h2_stream_push(stream);
     }
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, stream->session->c,
-                  "h2_stream(%d-%d): headers done",
+                  "h2_stream(%ld-%d): headers done",
                   stream->session->id, stream->id);
     return status;
 }
@@ -182,7 +182,7 @@ apr_status_t h2_stream_end_headers(h2_stream *stream)
 apr_status_t h2_stream_close_input(h2_stream *stream)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                  "h2_stream(%d-%d): closing input",
+                  "h2_stream(%ld-%d): closing input",
                   stream->session->id, stream->id);
     apr_status_t status = APR_SUCCESS;
     switch (stream->state) {
@@ -200,13 +200,13 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
     }
     if (stream->work) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                      "h2_stream(%d-%d): closing input, pushing work",
+                      "h2_stream(%ld-%d): closing input, pushing work",
                       stream->session->id, stream->id);
         status = h2_stream_push(stream);
     }
     if (status == APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                      "h2_stream(%d-%d): closing input, append eos",
+                      "h2_stream(%ld-%d): closing input, append eos",
                       stream->session->id, stream->id);
         status = h2_mplx_in_close(stream->session->mplx, stream->id);
     }
@@ -227,7 +227,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
         /* pseudo header, see ch. 8.1.2.3, always should come first */
         if (stream->work) {
             ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                          "h2_stream(%d-%d): pseudo header after request start",
+                          "h2_stream(%ld-%d): pseudo header after request start",
                           stream->session->id, stream->id);
             return APR_EGENERAL;
         }
@@ -237,7 +237,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
             memset(buffer, 0, 32);
             strncpy(buffer, name, (nlen > 31)? 31 : nlen);
             ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                          "h2_stream(%d-%d): pseudo header without value %s",
+                          "h2_stream(%ld-%d): pseudo header without value %s",
                           stream->session->id, stream->id, buffer);
             status = APR_EGENERAL;
         }
@@ -262,7 +262,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
             memset(buffer, 0, 32);
             strncpy(buffer, name, (nlen > 31)? 31 : nlen);
             ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, stream->session->c,
-                          "h2_stream(%d-%d): ignoring unknown pseudo header %s",
+                          "h2_stream(%ld-%d): ignoring unknown pseudo header %s",
                           stream->session->id, stream->id, buffer);
         }
     }

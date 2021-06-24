@@ -84,7 +84,7 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
      * h2_session->response_data bucket queue.
      */
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                  "h2_stream(%d-%d): task_pre_conn, installing filters",
+                  "h2_stream(%ld-%d): task_pre_conn, installing filters",
                   task->session_id, task->stream_id);
     ap_add_input_filter_handle(h2_input_filter_handle,
                                task, NULL, c);
@@ -93,7 +93,7 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
     
     /* prevent processing by anyone else, including httpd core */
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                  "h2_stream(%d-%d): task_pre_conn, taking over",
+                  "h2_stream(%ld-%d): task_pre_conn, taking over",
                   task->session_id, task->stream_id);
     return DONE;
 }
@@ -181,7 +181,7 @@ static void set_state(h2_task *task, h2_task_state_t state)
         h2_task_state_t oldstate = task->state;
         task->state = state;
         ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, task->c,
-                      "h2_task(%d-%d): state now %d, was %d",
+                      "h2_task(%ld-%d): state now %d, was %d",
                       task->session_id, task->stream_id,
                       task->state, oldstate);
         if (state == H2_TASK_ST_READY) {
@@ -190,7 +190,7 @@ static void set_state(h2_task *task, h2_task_state_t state)
                 task->output, h2_response_get_head(task->response));
             if (status != APR_SUCCESS) {
                 ap_log_cerror( APLOG_MARK, APLOG_ERR, status, task->c,
-                              "task(%d-%d): starting response",
+                              "task(%ld-%d): starting response",
                               task->session_id, task->stream_id);
             }
         }
@@ -217,7 +217,7 @@ static void response_state_change(h2_response *resp,
     }
 }
 
-h2_task *h2_task_create(int session_id, int stream_id,
+h2_task *h2_task_create(long session_id, int stream_id,
                         conn_rec *master,
                         h2_mplx *mplx)
 {
@@ -225,7 +225,7 @@ h2_task *h2_task_create(int session_id, int stream_id,
     apr_status_t status = h2_conn_create(&c, master);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, master,
-                      "h2_task(%d-%d): unable to create stream task",
+                      "h2_task(%ld-%d): unable to create stream task",
                       session_id, stream_id);
         return NULL;
     }
@@ -233,7 +233,7 @@ h2_task *h2_task_create(int session_id, int stream_id,
     h2_task *task = apr_pcalloc(c->pool, sizeof(h2_task));
     if (task == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, master,
-                      "h2_task(%d-%d): unable to create stream task",
+                      "h2_task(%ld-%d): unable to create stream task",
                       session_id, stream_id);
         return NULL;
     }
@@ -255,7 +255,7 @@ h2_task *h2_task_create(int session_id, int stream_id,
     h2_ctx_create_for(task->c, task);
     
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_task(%d-%d): created", task->session_id, task->stream_id);
+                  "h2_task(%ld-%d): created", task->session_id, task->stream_id);
     return task;
 }
 
@@ -263,7 +263,7 @@ apr_status_t h2_task_destroy(h2_task *task)
 {
     assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_task(%d-%d): destroy started",
+                  "h2_task(%ld-%d): destroy started",
                   task->session_id, task->stream_id);
     if (task->response) {
         h2_response_destroy(task->response);
@@ -289,7 +289,7 @@ apr_status_t h2_task_do(h2_task *task)
 {
     assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_task(%d-%d): do", task->session_id, task->stream_id);
+                  "h2_task(%ld-%d): do", task->session_id, task->stream_id);
     apr_status_t status;
     
     /* Furthermore, other code might want to see the socket for
@@ -324,7 +324,7 @@ void h2_task_abort(h2_task *task)
 {
     assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_task(%d-%d): aborting task",
+                  "h2_task(%ld-%d): aborting task",
                   task->session_id, task->stream_id);
     task->aborted =  1;
     if (task->input) {

@@ -55,7 +55,7 @@ typedef enum {
 } h2_task_state_t;
 
 typedef struct h2_task {
-    int session_id;
+    long session_id;
     int stream_id;
     h2_task_state_t state;
     int aborted;
@@ -67,7 +67,7 @@ typedef struct h2_task {
     
 } h2_task;
 
-h2_task *h2_task_create(int session_id, int stream_id,
+h2_task *h2_task_create(long session_id, int stream_id,
                         conn_rec *master,
                         struct h2_mplx *mplx);
 

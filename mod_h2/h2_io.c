@@ -110,10 +110,7 @@ apr_status_t h2_io_read(h2_io_ctx *io,
         case APR_EOF:
             return APR_EOF;
         case APR_EAGAIN:
-        case APR_TIMEUP:
-            status = h2_io_bucket_read(io->input_brigade, block,
-                                       on_read_cb, puser, &done);
-            break;
+            return APR_EAGAIN;
         default:
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
                           "h2_io: error reading");

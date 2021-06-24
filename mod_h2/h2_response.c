@@ -359,6 +359,9 @@ static apr_status_t copy_body(h2_response *resp,
         }
         *pconsumed = h2_bucket_append(bucket, data, len);
         resp->remain_len -= *pconsumed;
+        if (resp->remain_len == 0) {
+            set_state(resp, H2_RESP_ST_DONE);
+        }
     }
     return APR_SUCCESS;
 }

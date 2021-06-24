@@ -27,6 +27,7 @@
 
 #include "h2_private.h"
 #include "h2_queue.h"
+#include "h2_bucket.h"
 #include "h2_bucket_queue.h"
 #include "h2_resp_head.h"
 #include "h2_mplx.h"
@@ -37,7 +38,7 @@ static void free_resp_head(void *p)
     h2_resp_head_destroy(head);
 }
 
-h2_mplx *h2_mplx_create(long id)
+h2_mplx *h2_mplx_create(conn_rec *c)
 {
     apr_pool_t *pool = NULL;
     apr_status_t status = apr_pool_create_core(&pool);
@@ -47,10 +48,10 @@ h2_mplx *h2_mplx_create(long id)
     
     h2_mplx *m = apr_pcalloc(pool, sizeof(h2_mplx));
     if (m) {
-        m->id = id;
+        m->id = c->id;
         m->pool = pool;
         m->ref_count = 1;
-        
+        m->debug = APLOGcdebug(c);
         m->heads = h2_queue_create(pool, free_resp_head);
         m->input = h2_bucket_queue_create(pool, 0);
         m->output = h2_bucket_queue_create(pool, 0);
@@ -190,7 +191,14 @@ apr_status_t h2_mplx_out_read(h2_mplx *m,
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = h2_bucket_queue_pop(m->output, channel, pbucket);
-        apr_thread_cond_broadcast(m->removed_output);
+        if (m->debug) {
+            ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
+                          "h2_mplx(%ld): read on channel-out(%d)",
+                          m->id, channel);
+        }
+        if (status == APR_SUCCESS) {
+            apr_thread_cond_broadcast(m->removed_output);
+        }
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
@@ -203,6 +211,11 @@ apr_status_t h2_mplx_out_pushback(h2_mplx *m, int channel,
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = h2_bucket_queue_push(m->output, channel, bucket);
+        if (m->debug) {
+            ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
+                          "h2_mplx(%ld): pushback on channel-out(%d)",
+                          m->id, channel);
+        }
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
@@ -213,6 +226,11 @@ apr_status_t h2_mplx_out_open(h2_mplx *m, int channel, h2_resp_head *head)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_queue_append(m->heads, head);
+        if (m->debug) {
+            ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, m->pool,
+                          "h2_mplx(%ld): open on channel-in(%d)",
+                          m->id, channel);
+        }
         apr_thread_cond_broadcast(m->added_output);
         apr_thread_mutex_unlock(m->lock);
     }
@@ -225,6 +243,11 @@ h2_resp_head *h2_mplx_pop_response(h2_mplx *m)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         head = (h2_resp_head*)h2_queue_pop(m->heads);
+        if (head && m->debug) {
+            ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
+                          "h2_mplx(%ld): popped response(%d)",
+                          m->id, head->stream_id);
+        }
         apr_thread_mutex_unlock(m->lock);
     }
     return head;
@@ -241,6 +264,11 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
             apr_thread_cond_wait(m->removed_output, m->lock);
             status = h2_bucket_queue_append(m->output, channel, bucket);
         }
+        if (m->debug) {
+            ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
+                          "h2_mplx(%ld): write %ld bytes on channel-out(%d)",
+                          m->id, bucket->data_len, channel);
+        }
         if (status == APR_SUCCESS) {
             apr_thread_cond_broadcast(m->added_output);
         }
@@ -254,6 +282,11 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int channel)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = h2_bucket_queue_append_eos(m->output, channel);
+        if (m->debug) {
+            ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
+                          "h2_mplx(%ld): close channel-out(%d)",
+                          m->id, channel);
+        }
         apr_thread_cond_broadcast(m->added_output);
         apr_thread_mutex_unlock(m->lock);
     }
@@ -276,7 +309,7 @@ int h2_mplx_out_has_data_for(h2_mplx *m, int channel)
     int has_data = 0;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        has_data = h2_bucket_queue_has_buckets_for(m->input, channel);
+        has_data = h2_bucket_queue_has_buckets_for(m->output, channel);
         apr_thread_mutex_unlock(m->lock);
     }
     return has_data;
@@ -288,6 +321,11 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = apr_thread_cond_timedwait(m->added_output, m->lock, timeout);
+        if (m->debug) {
+            ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
+                          "h2_mplx(%ld): trywait on data for %f ms)",
+                          m->id, timeout/1000.0);
+        }
         apr_thread_mutex_unlock(m->lock);
     }
     return has_data;

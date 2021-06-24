@@ -101,7 +101,7 @@ static int h2_tls_alpn_propose(conn_rec *c,
                                apr_array_header_t *protos)
 {
     h2_config *cfg = h2_config_get(c);
-    if (!cfg->h2_enabled) {
+    if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
         return DECLINED;
     }
     
@@ -119,7 +119,7 @@ static int h2_tls_alpn_negotiated(conn_rec *c,
                                   apr_size_t proto_name_len)
 {
     h2_config *cfg = h2_config_get(c);
-    if (!cfg->h2_enabled) {
+    if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
         return DECLINED;
     }
     
@@ -153,7 +153,7 @@ int h2_tls_pre_conn(conn_rec* c, void *arg)
                       "h2_tls, pre_connection, no ctx");
         /* We have not seen this one yet, are we active? */
         h2_config *cfg = h2_config_get(c);
-        if (!cfg->h2_enabled) {
+        if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                           "h2_tls, pre_connection, h2 not enabled");
             return DECLINED;

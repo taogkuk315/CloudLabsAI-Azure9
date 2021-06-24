@@ -52,6 +52,8 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                                   ap_filter_t* filter,
                                   apr_bucket_brigade* brigade);
 
+void h2_task_output_close(h2_task_output *output);
+
 void h2_task_output_set_converter(h2_task_output *output,
                                   h2_output_converter conv,
                                   void *conv_ctx);

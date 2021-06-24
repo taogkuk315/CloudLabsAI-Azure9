@@ -24,7 +24,8 @@
 
 struct h2_queue;
 
-typedef h2_stream *(*h2_stream_set_match_fn)(void *ctx, h2_stream *stream);
+typedef h2_stream *h2_stream_set_match_fn(void *ctx, h2_stream *stream);
+typedef int h2_stream_set_iter_fn(void *ctx, h2_stream *stream);
 
 typedef struct h2_stream_set {
     struct h2_queue *queue;
@@ -46,8 +47,12 @@ void h2_stream_set_remove_all(h2_stream_set *sp);
 void h2_stream_set_destroy_all(h2_stream_set *sp);
 
 int h2_stream_set_is_empty(h2_stream_set *sp);
+apr_size_t h2_stream_set_size(h2_stream_set *sp);
 
 h2_stream *h2_stream_set_find(h2_stream_set *sp,
-                              h2_stream_set_match_fn match, void *ctx);
+                              h2_stream_set_match_fn *match, void *ctx);
+
+void h2_stream_set_iter(h2_stream_set *sp,
+                        h2_stream_set_iter_fn *iter, void *ctx);
 
 #endif /* defined(__mod_h2__h2_stream_set__) */

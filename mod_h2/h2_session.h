@@ -52,7 +52,7 @@ typedef void on_new_task(struct h2_session *session,
                          int stream_id, struct h2_task *task);
 
 typedef struct h2_session {
-    int id;                         /* identifier of this session, unique
+    long id;                        /* identifier of this session, unique
                                      * inside a httpd process */
     conn_rec *c;                    /* the connection this session serves */
 
@@ -125,5 +125,7 @@ struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);
 /* Get the first h2_stream that has a response ready and is submitted
  * yet. */
 struct h2_resp_head *h2_session_pop_response(h2_session *session);
+
+void h2_session_log_stats(h2_session *session);
 
 #endif /* defined(__mod_h2__h2_session__) */

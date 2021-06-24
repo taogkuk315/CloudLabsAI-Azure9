@@ -38,19 +38,24 @@ static h2_workers *workers;
 
 static void start_new_task(h2_session *session, int stream_id, h2_task *task)
 {
-    apr_status_t status = h2_workers_schedule(workers, task, session->c->id);
+    apr_status_t status = h2_workers_schedule(workers, task);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                      "scheduling task(%d-%d)", session->id, stream_id);
+                      "scheduling task(%ld-%d)",
+                      task->session_id, task->stream_id);
     }
 }
 
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
     h2_config *config = h2_config_sget(s);
+    ap_log_error(APLOG_MARK, APLOG_INFO, 0, s,
+                 "h2_conn: child init with conf[%s]: "
+                 "min_workers=%d, max_workers=%d",
+                 config->name, config->h2_min_workers, config->h2_max_workers);
     workers = h2_workers_create(s, pool,
-                                config->h2_min_workers,
-                                config->h2_max_workers);
+                                h2_config_geti(config, H2_CONF_MIN_WORKERS),
+                                h2_config_geti(config, H2_CONF_MAX_WORKERS));
     return workers? APR_SUCCESS : APR_ENOMEM;
 }
 
@@ -102,9 +107,15 @@ apr_status_t h2_conn_process(conn_rec *c)
     apr_interval_time_t wait_micros = 0;
     static const int MAX_WAIT_MICROS = 100 * 1000; /* 100 ms */
     
-    while (status == APR_SUCCESS || status == APR_EAGAIN) {
-        int got_streams = !h2_stream_set_is_empty(session->streams);
+    apr_time_t last_dump = apr_time_now();
+    while (!h2_session_is_done(session)) {
         int have_written = 0;
+        
+        if (apr_time_sec(apr_time_now()) - apr_time_sec(last_dump) > 5) {
+            h2_workers_log_stats(workers);
+            h2_session_log_stats(session);
+            last_dump = apr_time_now();
+        }
         
         status = h2_session_write(session, wait_micros);
         if (status == APR_SUCCESS) {
@@ -118,11 +129,6 @@ apr_status_t h2_conn_process(conn_rec *c)
             }
             ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, c,
                           "timeout waiting %f ms", wait_micros/1000.0);
-            status = APR_EAGAIN;
-        }
-        if (status != APR_SUCCESS && status != APR_EAGAIN) {
-            h2_session_abort(session, status);
-            break;
         }
         
         /* Got a stream that is ready to be submitted, e.g. that has all
@@ -133,14 +139,12 @@ apr_status_t h2_conn_process(conn_rec *c)
             h2_stream *stream = h2_session_get_stream(session, head->stream_id);
             if (stream) {
                 status = h2_session_submit_response(session, stream, head);
-                if (status != APR_SUCCESS) {
-                    break;
-                }
                 h2_resp_head_destroy(head);
                 have_written = 1;
             }
         }
         
+        int got_streams = !h2_stream_set_is_empty(session->streams);
         status = h2_session_read(session, got_streams?
                                  APR_NONBLOCK_READ : APR_BLOCK_READ);
         switch (status) {
@@ -162,22 +166,22 @@ apr_status_t h2_conn_process(conn_rec *c)
             case APR_EOF:
             case APR_ECONNABORTED:
                 ap_log_cerror( APLOG_MARK, APLOG_INFO, status, c,
-                              "h2_session(%d): eof on input"
+                              "h2_session(%ld): eof on input"
                               ", terminating", session->id);
                 h2_session_abort(session, status);
                 break;
             default:
                 ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,
-                              "h2_session(%d): error processing"
+                              "h2_session(%ld): error processing"
                               ", terminating", session->id);
                 h2_session_abort(session, status);
                 break;
         }
     }
     
-    ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, c,
+    ap_log_cerror( APLOG_MARK, APLOG_INFO, status, c,
                   "h2_conn_process done");
-    h2_workers_shutdown(workers, c->id);
+    h2_workers_shutdown(workers, session->id);
     h2_session_destroy(session);
     return DONE;
 }

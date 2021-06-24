@@ -40,9 +40,10 @@ typedef struct h2_mplx {
     int ref_count;
     int aborted;
     
+    int debug;
 } h2_mplx;
 
-h2_mplx *h2_mplx_create(long id);
+h2_mplx *h2_mplx_create(conn_rec *c);
 void h2_mplx_destroy(h2_mplx *mplx);
 
 apr_status_t h2_mplx_reference(h2_mplx *mplx);
