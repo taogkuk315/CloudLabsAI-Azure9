@@ -49,9 +49,7 @@ NGHTTP2_DEPS    =
 ifeq ($(OS),Darwin)
     # we need our own zlib
     NGHTTP2_DEPS  += $(INST_DIR)/.zlib-installed $(INST_DIR)/.libev-installed
-#NGHTTP2_CONF  += --disable-threads
-    NGHTTP2_CONF_ENV += PKG_CONFIG_LIBDIR=$(BLD_PREFIX)/lib/pkgconfig \
-        LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
+    NGHTTP2_CONF_ENV += PKG_CONFIG_LIBDIR=$(BLD_PREFIX)/lib/pkgconfig LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
 endif
 
 all: install

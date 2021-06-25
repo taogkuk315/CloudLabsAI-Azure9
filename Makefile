@@ -30,7 +30,7 @@ CURL         = $(INST_DIR)/bin/curl
 
 .PHONY: all test clients httpd nghttp2 start stop clean distclean
 
-all: clients httpd
+all: clients httpd mod_h2
 
 clean:
 	@rm -rf $(GEN)
@@ -45,12 +45,19 @@ start: $(INST_DIR)/.test-setup
 stop:
 	@$(INST_DIR)/bin/apachectl stop
 
-test: \
+test: nghttp2 \
 		$(INST_DIR)/.httpd-installed \
+        mod_h2 \
 		$(INST_DIR)/.curl-installed
 	make -C test test
 
-nghttp2:
+loadtest: nghttp2 \
+		$(INST_DIR)/.httpd-installed \
+        mod_h2 \
+		$(INST_DIR)/.curl-installed
+	make -C test loadtest
+
+nghttp2: httpd
 	make -C nghttp2
 
 clients: nghttp2
@@ -58,6 +65,10 @@ clients: nghttp2
 
 httpd:
 	make -C httpd
+
+mod_h2: \
+    $(INST_DIR)/.httpd-installed
+	make -C mod_h2 install
 
 
 ################################################################################
