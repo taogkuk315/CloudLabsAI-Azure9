@@ -158,7 +158,7 @@ static apr_status_t parse_headers(h2_response *resp)
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, resp->c,
                               "h2_response(%d): end of headers",
                               resp->stream_id);
-                resp->offset = i + 2;
+                resp->offset += 2;
                 return make_h2_headers(resp);
             }
             else {
@@ -399,10 +399,18 @@ apr_status_t h2_response_http_convert(h2_bucket *bucket,
                     if (resp->state == H2_RESP_ST_BODY
                         && resp->rawhead
                         && resp->offset < resp->rawhead->data_len) {
-                        apr_size_t avail = h2_bucket_available(resp->rawhead);
                         /* these bytes belong to the body */
-                        assert(avail < *pconsumed);
-                        *pconsumed -= avail;
+                        long left = resp->rawhead->data_len - resp->offset;
+                        if (left > *pconsumed) {
+                            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, resp->c,
+                                          "h2_response(%d): headers parsed, but"
+                                          " more bytes left (%ld) than "
+                                          "we consumed (%ld)",
+                                          resp->stream_id, left, *pconsumed);
+                        }
+                        else {
+                            *pconsumed -= left;
+                        }
                     }
                 }
                 break;

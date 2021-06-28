@@ -142,6 +142,11 @@ static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
     c->conn_config = ap_create_conn_config(spool);
     c->notes = apr_table_make(spool, 5);
     
+    /* mpm_event needs this, but this is not enough. 
+     mpm_event gives headaches... */
+    c->cs = apr_pcalloc(spool, sizeof(conn_state_t));
+    c->cs->state = CONN_STATE_READ_REQUEST_LINE;
+    
     c->base_server = master->base_server;
     c->local_addr = h2_sockaddr_dup(master->local_addr, spool);
     c->local_ip = apr_pstrdup(spool, master->local_ip);

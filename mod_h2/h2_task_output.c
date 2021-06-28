@@ -164,9 +164,9 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         return APR_SUCCESS;
     }
     
-    while (!APR_BRIGADE_EMPTY(brigade)) {
+    int got_eos = 0;
+    while (status == APR_SUCCESS && !APR_BRIGADE_EMPTY(brigade)) {
         apr_bucket* bucket = APR_BRIGADE_FIRST(brigade);
-        int got_eos = 0;
         
         if (APR_BUCKET_IS_METADATA(bucket)) {
             if (APR_BUCKET_IS_EOS(bucket)) {
@@ -189,44 +189,43 @@ apr_status_t h2_task_output_write(h2_task_output *output,
             }
         }
         else if (got_eos) {
-            ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, filter->c,
+            /* ignore, may happend according to apache documentation */
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, filter->c,
                           "h2_task_output(%d-%d): has data after eos",
                           output->session_id, output->stream_id);
         }
         else {
-            // Data
             const char* data = NULL;
             apr_size_t data_length = 0;
-            
             status = apr_bucket_read(bucket, &data, &data_length,
                                      APR_NONBLOCK_READ);
+            
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
                           "h2_task_output(%d-%d): got %d bytes from brigade",
                           output->session_id, output->stream_id,
                           (int)data_length);
+            
             if (status == APR_SUCCESS) {
                 status = process_data(output, filter, data, data_length);
             }
-            else if (APR_STATUS_IS_EAGAIN(status)) {
+            else if (status == APR_EAGAIN) {
                 status = apr_bucket_read(bucket, &data, &data_length,
                                          APR_BLOCK_READ);
                 if (status != APR_SUCCESS) {
                     ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, filter->c,
                                   "h2_task_output(%d-%d): read failed",
                                   output->session_id, output->stream_id);
-                    return status;
                 }
-                status = process_data(output, filter, data, data_length);
-            }
-            else {
-                return status;
+                else {
+                    status = process_data(output, filter, data, data_length);
+                }
             }
         }
         
         apr_bucket_delete(bucket);
     }
     
-    return APR_SUCCESS;
+    return status;
 }
 
 
