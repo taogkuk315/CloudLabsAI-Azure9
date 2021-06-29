@@ -108,6 +108,12 @@ loadtest: \
 	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 10
 
 
+testh2o: \
+		$(INST_DIR)/.test-setup \
+		$(INST_DIR)/.curl-installed \
+        $(GEN)/load-urls-1.txt
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -c 500 -m 100 -n 2000000
+
 
 ################################################################################
 # Setup the local httpd for our tests
