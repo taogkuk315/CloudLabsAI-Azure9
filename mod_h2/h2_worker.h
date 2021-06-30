@@ -54,6 +54,8 @@ h2_worker *h2_worker_create(int id,
 
 apr_status_t h2_worker_destroy(h2_worker *worker);
 
+void h2_worker_abort(h2_worker *worker);
+
 int h2_worker_is_aborted(h2_worker *worker);
 
 #endif /* defined(__mod_h2__h2_worker__) */

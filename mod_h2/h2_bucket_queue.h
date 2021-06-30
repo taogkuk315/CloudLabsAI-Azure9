@@ -45,23 +45,23 @@ typedef int h2_bucket_queue_iter_fn(void *ctx, int stream_id,
 
 typedef struct h2_bucket_queue {
     struct h2_queue *queue;
-    apr_size_t max_stream_size;
 } h2_bucket_queue;
 
 /* Create a new queue using the given memory pool. The queue will
  * reuse allocated memory, so memory footprint varies with queue length,
  * not number of buckets placed. 
- * If max_stream_size is > 0, an append to the queue for a given stream id
- * will block, until the queue holds less than max_stream_size bytes for
- * this stream.
  */
-h2_bucket_queue *h2_bucket_queue_create(apr_pool_t *pool,
-                                        apr_size_t max_stream_size);
+h2_bucket_queue *h2_bucket_queue_create(apr_pool_t *pool);
 
 /* Destroys this queue and all buckets it still contains. */
 void h2_bucket_queue_destroy(h2_bucket_queue *q);
 
 void h2_bucket_queue_abort(h2_bucket_queue *q);
+
+/* Get the number of bytes in payload currently in the queue for the given
+ * stream.
+ */
+apr_size_t h2_bucket_queue_get_stream_size(h2_bucket_queue *q, int stream_id);
 
 /* Append a bucket, associated with the given id, at the end of the queue. */
 apr_status_t h2_bucket_queue_append(h2_bucket_queue *q,

@@ -21,35 +21,19 @@ struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 struct h2_task;
 
-typedef struct h2_workers {
-    server_rec *s;
-    apr_pool_t *pool;
-    int aborted;
-    
-    int next_worker_id;
-    int min_size;
-    int max_size;
-    
-    apr_threadattr_t *thread_attr;
-    
-    struct h2_queue *workers;
-    struct h2_queue *tasks_todo;
-    
-    struct apr_thread_mutex_t *lock;
-    struct apr_thread_cond_t *task_added;
-    struct apr_thread_cond_t *task_done;
-} h2_workers;
+struct h2_workers;
 
+struct h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
+                                     int min_size, int max_size);
 
-h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
-                              int min_size, int max_size);
+void h2_workers_destroy(struct h2_workers *workers);
 
-void h2_workers_destroy(h2_workers *workers);
+apr_status_t h2_workers_schedule(struct h2_workers *workers,
+                                 struct h2_task *task);
 
-apr_status_t h2_workers_schedule(h2_workers *workers, struct h2_task *task);
+apr_status_t h2_workers_shutdown(struct h2_workers *workers,
+                                 long session_id);
 
-apr_status_t h2_workers_shutdown(h2_workers *workers, long session_id);
-
-void h2_workers_log_stats(h2_workers *workers);
+void h2_workers_log_stats(struct h2_workers *workers);
 
 #endif /* defined(__mod_h2__h2_workers__) */

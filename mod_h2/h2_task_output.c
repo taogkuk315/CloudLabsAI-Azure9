@@ -52,7 +52,7 @@ static apr_status_t flush_cur(h2_task_output *output)
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
                                       int session_id, int stream_id,
-                                      h2_mplx *m)
+                                      struct h2_mplx *m)
 {
     h2_task_output *output = apr_pcalloc(pool, sizeof(h2_task_output));
     if (output) {

@@ -25,59 +25,41 @@ struct h2_bucket;
 struct h2_bucket_queue;
 struct h2_resp_head;
 
-typedef struct h2_mplx {
-    long id;
-    struct apr_pool_t *pool;
-    struct h2_queue *heads;
-    struct h2_bucket_queue *input;
-    struct h2_bucket_queue *output;
-    
-    struct apr_thread_mutex_t *lock;
-    struct apr_thread_cond_t *added_input;
-    struct apr_thread_cond_t *added_output;
-    struct apr_thread_cond_t *removed_output;
-    
-    int ref_count;
-    int aborted;
-    
-    int debug;
-} h2_mplx;
+struct h2_mplx *h2_mplx_create(conn_rec *c);
+void h2_mplx_destroy(struct h2_mplx *mplx);
 
-h2_mplx *h2_mplx_create(conn_rec *c);
-void h2_mplx_destroy(h2_mplx *mplx);
+apr_status_t h2_mplx_reference(struct h2_mplx *mplx);
+apr_status_t h2_mplx_release(struct h2_mplx *mplx);
 
-apr_status_t h2_mplx_reference(h2_mplx *mplx);
-apr_status_t h2_mplx_release(h2_mplx *mplx);
+void h2_mplx_abort(struct h2_mplx *mplx);
 
-void h2_mplx_abort(h2_mplx *mplx);
-
-apr_status_t h2_mplx_in_read(h2_mplx *mplx, apr_read_type_e block,
+apr_status_t h2_mplx_in_read(struct h2_mplx *mplx, apr_read_type_e block,
                              int channel, struct h2_bucket **pbucket);
 
-apr_status_t h2_mplx_in_write(h2_mplx *mplx,
+apr_status_t h2_mplx_in_write(struct h2_mplx *mplx,
                               int channel, struct h2_bucket *bucket);
 
-apr_status_t h2_mplx_in_close(h2_mplx *m, int channel);
+apr_status_t h2_mplx_in_close(struct h2_mplx *m, int channel);
 
-int h2_mplx_in_has_eos_for(h2_mplx *m, int channel);
+int h2_mplx_in_has_eos_for(struct h2_mplx *m, int channel);
 
-apr_status_t h2_mplx_out_read(h2_mplx *mplx,
+apr_status_t h2_mplx_out_read(struct h2_mplx *mplx,
                               int channel, struct h2_bucket **pbucket);
-apr_status_t h2_mplx_out_pushback(h2_mplx *mplx, int channel,
+apr_status_t h2_mplx_out_pushback(struct h2_mplx *mplx, int channel,
                                   struct h2_bucket *bucket);
 
-apr_status_t h2_mplx_out_open(h2_mplx *mplx, int channel,
+apr_status_t h2_mplx_out_open(struct h2_mplx *mplx, int channel,
                               struct h2_resp_head *head);
 
-apr_status_t h2_mplx_out_write(h2_mplx *mplx, apr_read_type_e block,
+apr_status_t h2_mplx_out_write(struct h2_mplx *mplx, apr_read_type_e block,
                                int channel, struct h2_bucket *bucket);
 
-apr_status_t h2_mplx_out_close(h2_mplx *m, int channel);
+apr_status_t h2_mplx_out_close(struct h2_mplx *m, int channel);
 
-apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout);
+apr_status_t h2_mplx_out_trywait(struct h2_mplx *m, apr_interval_time_t timeout);
 
-int h2_mplx_out_has_data_for(h2_mplx *m, int channel);
+int h2_mplx_out_has_data_for(struct h2_mplx *m, int channel);
 
-struct h2_resp_head *h2_mplx_pop_response(h2_mplx *m);
+struct h2_resp_head *h2_mplx_pop_response(struct h2_mplx *m);
 
 #endif /* defined(__mod_h2__h2_mplx__) */

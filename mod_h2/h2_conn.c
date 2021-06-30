@@ -34,7 +34,7 @@
 #include "h2_conn.h"
 
 
-static h2_workers *workers;
+static struct h2_workers *workers;
 
 static void start_new_task(h2_session *session, int stream_id, h2_task *task)
 {
@@ -49,10 +49,10 @@ static void start_new_task(h2_session *session, int stream_id, h2_task *task)
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
     h2_config *config = h2_config_sget(s);
-    ap_log_error(APLOG_MARK, APLOG_INFO, 0, s,
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
                  "h2_conn: child init with conf[%s]: "
                  "min_workers=%d, max_workers=%d",
-                 config->name, config->h2_min_workers, config->h2_max_workers);
+                 config->name, config->min_workers, config->max_workers);
     workers = h2_workers_create(s, pool,
                                 h2_config_geti(config, H2_CONF_MIN_WORKERS),
                                 h2_config_geti(config, H2_CONF_MAX_WORKERS));
@@ -181,8 +181,11 @@ apr_status_t h2_conn_process(conn_rec *c)
     
     ap_log_cerror( APLOG_MARK, APLOG_INFO, status, c,
                   "h2_conn_process done");
+    
     h2_workers_shutdown(workers, session->id);
     h2_session_destroy(session);
+    h2_workers_log_stats(workers);
+    
     return DONE;
 }
 

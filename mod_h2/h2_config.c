@@ -39,7 +39,8 @@ static h2_config defconf = {
     16 * 1024,
     64 * 1024,
     10,
-    256
+    256,
+    64 * 1024,
 };
 
 static void *h2_config_create(apr_pool_t *pool,
@@ -59,8 +60,9 @@ static void *h2_config_create(apr_pool_t *pool,
     conf->h2_max_streams = DEF_VAL;
     conf->h2_max_hl_size = DEF_VAL;
     conf->h2_window_size = DEF_VAL;
-    conf->h2_min_workers = DEF_VAL;
-    conf->h2_max_workers = DEF_VAL;
+    conf->min_workers    = DEF_VAL;
+    conf->max_workers    = DEF_VAL;
+    conf->stream_max_mem_size = DEF_VAL;
     return conf;
 }
 
@@ -93,8 +95,9 @@ void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     n->h2_max_streams = H2_CONFIG_GET(add, base, h2_max_streams);
     n->h2_max_hl_size = H2_CONFIG_GET(add, base, h2_max_hl_size);
     n->h2_window_size = H2_CONFIG_GET(add, base, h2_window_size);
-    n->h2_min_workers = H2_CONFIG_GET(add, base, h2_min_workers);
-    n->h2_max_workers = H2_CONFIG_GET(add, base, h2_max_workers);
+    n->min_workers    = H2_CONFIG_GET(add, base, min_workers);
+    n->max_workers    = H2_CONFIG_GET(add, base, max_workers);
+    n->stream_max_mem_size = H2_CONFIG_GET(add, base, stream_max_mem_size);
 
     return n;
 }
@@ -111,9 +114,11 @@ int h2_config_geti(h2_config *conf, h2_config_var_t var)
         case H2_CONF_WIN_SIZE:
             return H2_CONFIG_GET(conf, &defconf, h2_window_size);
         case H2_CONF_MIN_WORKERS:
-            return H2_CONFIG_GET(conf, &defconf, h2_min_workers);
+            return H2_CONFIG_GET(conf, &defconf, min_workers);
         case H2_CONF_MAX_WORKERS:
-            return H2_CONFIG_GET(conf, &defconf, h2_max_workers);
+            return H2_CONFIG_GET(conf, &defconf, max_workers);
+        case H2_CONF_STREAM_MAX_MEM_SIZE:
+            return H2_CONFIG_GET(conf, &defconf, stream_max_mem_size);
         default:
             return DEF_VAL;
     }
@@ -155,7 +160,7 @@ static const char *h2_conf_set_min_workers(cmd_parms *parms,
                                            void *arg, const char *value)
 {
     h2_config *cfg = h2_config_sget(parms->server);
-    cfg->h2_min_workers = (int)apr_atoi64(value);
+    cfg->min_workers = (int)apr_atoi64(value);
     return NULL;
 }
 
@@ -163,7 +168,15 @@ static const char *h2_conf_set_max_workers(cmd_parms *parms,
                                            void *arg, const char *value)
 {
     h2_config *cfg = h2_config_sget(parms->server);
-    cfg->h2_max_workers = (int)apr_atoi64(value);
+    cfg->max_workers = (int)apr_atoi64(value);
+    return NULL;
+}
+
+static const char *h2_conf_set_stream_max_mem_size(cmd_parms *parms,
+                                                   void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    cfg->stream_max_mem_size = (int)apr_atoi64(value);
     return NULL;
 }
 
@@ -180,6 +193,8 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "minimum number of worker threads per child"),
     AP_INIT_TAKE1("H2MaxWorkers", h2_conf_set_max_workers, NULL,
                   RSRC_CONF, "maximum number of worker threads per child"),
+    AP_INIT_TAKE1("H2StreamMaxMemSize", h2_conf_set_stream_max_mem_size, NULL,
+                  RSRC_CONF, "maximum number of bytes buffered in memory for a stream"),
     {NULL}
 };
 

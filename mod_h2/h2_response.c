@@ -58,7 +58,6 @@ h2_response *h2_response_create(int stream_id, conn_rec *c)
 
 apr_status_t h2_response_destroy(h2_response *response)
 {
-    set_state(response, H2_RESP_ST_DONE);
     if (response->rawhead) {
         h2_bucket_destroy(response->rawhead);
         response->rawhead = NULL;

@@ -31,14 +31,12 @@ static void bucket_free(void *entry)
     h2_bucket_destroy((h2_bucket *)entry);
 }
 
-h2_bucket_queue *h2_bucket_queue_create(apr_pool_t *pool,
-                                        apr_size_t max_stream_size)
+h2_bucket_queue *h2_bucket_queue_create(apr_pool_t *pool)
 {
     h2_bucket_queue *q = apr_pcalloc(pool, sizeof(h2_bucket_queue));
     if (!q) {
         return NULL;
     }
-    q->max_stream_size = max_stream_size;
     q->queue = h2_queue_create(pool, bucket_free);
     if (!q->queue) {
         return NULL;
@@ -61,7 +59,7 @@ int count_stream(void *puser, int id, void *entry, int index)
     return 1;
 }
 
-static apr_size_t get_stream_size(h2_bucket_queue *q, int stream_id) {
+apr_size_t h2_bucket_queue_get_stream_size(h2_bucket_queue *q, int stream_id) {
     count_ctx ctx = { stream_id, 0 };
     h2_queue_iter(q->queue, count_stream, &ctx);
     return ctx.size;

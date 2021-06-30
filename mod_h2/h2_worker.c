@@ -70,6 +70,11 @@ apr_status_t h2_worker_destroy(h2_worker *worker)
     return APR_SUCCESS;
 }
 
+void h2_worker_abort(h2_worker *worker)
+{
+    worker->aborted = 1;
+}
+
 int h2_worker_is_aborted(h2_worker *worker)
 {
     return worker->aborted;

@@ -28,10 +28,28 @@
 #include "h2_worker.h"
 #include "h2_workers.h"
 
-static void free_worker(void *w)
-{
-    // TODO
-}
+typedef struct h2_workers {
+    server_rec *s;
+    apr_pool_t *pool;
+    int aborted;
+    
+    int next_worker_id;
+    int min_size;
+    int max_size;
+    
+    apr_threadattr_t *thread_attr;
+    
+    struct h2_queue *workers;
+    struct h2_queue *tasks_todo;
+    
+    int idle_worker_count;
+    int max_idle_secs;
+    
+    struct apr_thread_mutex_t *lock;
+    struct apr_thread_cond_t *task_added;
+    struct apr_thread_cond_t *task_done;
+} h2_workers;
+
 
 static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
 {
@@ -40,6 +58,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
     if (status == APR_SUCCESS) {
         h2_task *task = NULL;
         status = APR_EOF;
+        ++workers->idle_worker_count;
         while (!h2_worker_is_aborted(worker) && !workers->aborted) {
             h2_task *task = h2_queue_pop(workers->tasks_todo);
             if (task) {
@@ -50,9 +69,29 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
                              worker->id, task->session_id, task->stream_id);
                 break;
             }
-            apr_thread_cond_wait(workers->task_added, workers->lock);
+            
+            /* Need to wait for either a new task to arrive our, if we
+             * are not at the minimum workers count, wait our max idle
+             * time until we reduce the workers */
+            if (h2_queue_size(workers->workers) > workers->min_size) {
+                apr_time_t max_wait = apr_time_from_sec(workers->max_idle_secs);
+                status = apr_thread_cond_timedwait(workers->task_added,
+                                                   workers->lock, max_wait);
+                if (status == APR_TIMEUP) {
+                    /* waited long enough */
+                    if (h2_queue_size(workers->workers) > workers->min_size) {
+                        ap_log_error(APLOG_MARK, APLOG_TRACE2, status, workers->s,
+                                     "h2_workers: aborting idle worker");
+                        h2_worker_abort(worker);
+                        break;
+                    }
+                }
+            }
+            else {
+                apr_thread_cond_wait(workers->task_added, workers->lock);
+            }
         }
-        
+        --workers->idle_worker_count;
         apr_thread_mutex_unlock(workers->lock);
     }
     return status;
@@ -132,10 +171,11 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         workers->pool = pool;
         workers->min_size = min_size;
         workers->max_size = max_size;
+        workers->max_idle_secs = 10;
         
         apr_threadattr_create(&workers->thread_attr, workers->pool);
         
-        workers->workers = h2_queue_create(workers->pool, free_worker);
+        workers->workers = h2_queue_create(workers->pool, NULL);
         workers->tasks_todo = h2_queue_create(workers->pool, NULL);
         
         status = apr_thread_mutex_create(&workers->lock,
@@ -192,6 +232,12 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                      "h2_workers: scheduling task(%ld-%d)",
                      task->session_id, task->stream_id);
+        if (workers->idle_worker_count <= 0
+            && h2_queue_size(workers->workers) < workers->max_size) {
+            ap_log_error(APLOG_MARK, APLOG_TRACE2, status, workers->s,
+                         "h2_workers: adding worker");
+            add_worker(workers);
+        }
         h2_queue_append(workers->tasks_todo, task);
         
         apr_thread_cond_signal(workers->task_added);

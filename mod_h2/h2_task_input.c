@@ -60,7 +60,7 @@ static void cleanup(h2_task_input *input) {
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
                                         int session_id, int stream_id,
-                                        h2_mplx *m)
+                                        struct h2_mplx *m)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {

@@ -224,7 +224,7 @@ static void response_state_change(h2_response *resp,
 
 h2_task *h2_task_create(long session_id, int stream_id,
                         conn_rec *master,
-                        h2_mplx *mplx)
+                        struct h2_mplx *mplx)
 {
     conn_rec *c = NULL;
     apr_status_t status = h2_conn_create(&c, master);
