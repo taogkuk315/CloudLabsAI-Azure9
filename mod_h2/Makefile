@@ -29,10 +29,10 @@ C_SRC   = \
         h2_config.c \
         h2_conn.c \
         h2_ctx.c \
-        h2_frame.c \
         h2_io.c \
         h2_mplx.c \
         h2_queue.c \
+        h2_request.c \
         h2_response.c \
         h2_resp_head.c \
         h2_session.c \

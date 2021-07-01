@@ -26,7 +26,8 @@
  */
 
 struct h2_bucket;
-struct h2_bucket_queue;
+struct h2_mplx;
+struct h2_request;
 
 typedef enum {
     H2_STREAM_ST_IDLE,
@@ -38,60 +39,39 @@ typedef enum {
     H2_STREAM_ST_CLOSED,
 } h2_stream_state_t;
 
-struct h2_stream;
 struct h2_task;
-
-typedef void h2_stream_state_change_cb(struct h2_stream *stream,
-                                       h2_stream_state_t,
-                                       void *cb_ctx);
 
 
 typedef struct h2_stream {
     int id;                     /* http2 stream id */
     h2_stream_state_t state;    /* http/2 state of this stream */
-    struct h2_session *session; /* the session this stream belongs to */
-    
-    int eoh;                    /* end of headers seen */
+    conn_rec *c;                /* the connection this stream is on */
+    struct h2_mplx *m;          /* the multiplexer on this connection */
     int aborted;                /* was aborted */
+    
+    struct h2_request *req;     /* the request made in this stream */
     int suspended;              /* DATA sending has been suspended */
-    int response_started;       /* response was started */
-    
-    h2_stream_state_change_cb *state_change_cb;
-    void *state_change_ctx;
-    
-    /* pseudo header values, see ch. 8.1.2.3 */
-    struct h2_bucket *work;
-    int request_line_inserted;
-    const char *method;
-    const char *path;
-    const char *authority;
-    const char *scheme;
     
 } h2_stream;
 
-apr_status_t h2_stream_create(h2_stream **pstream,
-                              int id, struct h2_session *session);
+h2_stream *h2_stream_create(int id, conn_rec *c, struct h2_mplx *m);
 
 apr_status_t h2_stream_destroy(h2_stream *stream);
 
 void h2_stream_abort(h2_stream *stream);
 
-apr_status_t h2_stream_close_input(h2_stream *stream);
+apr_status_t h2_stream_write_eos(h2_stream *stream);
 
-apr_status_t h2_stream_push(h2_stream *stream);
+apr_status_t h2_stream_write_header(h2_stream *stream,
+                                    const char *name, size_t nlen,
+                                    const char *value, size_t vlen);
 
-apr_status_t h2_stream_add_header(h2_stream *stream,
-                                  const char *name, size_t nlen,
-                                  const char *value, size_t vlen);
+apr_status_t h2_stream_write_eoh(h2_stream *stream);
 
-apr_status_t h2_stream_add_data(h2_stream *stream,
-                                const char *data, size_t len);
+apr_status_t h2_stream_write_data(h2_stream *stream,
+                                  const char *data, size_t len);
 
-apr_status_t h2_stream_end_headers(h2_stream *stream);
-
-void h2_stream_set_state_change_cb(h2_stream *stream,
-                                   h2_stream_state_change_cb cb,
-                                   void *cb_ctx);
+apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket);
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended);
 int h2_stream_is_suspended(h2_stream *stream);

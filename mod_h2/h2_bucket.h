@@ -18,9 +18,9 @@
 #ifndef __mod_h2__h2_bucket__
 #define __mod_h2__h2_bucket__
 
-struct h2_bucket;
+typedef struct h2_bucket h2_bucket;
 
-typedef void h2_bucket_free_func(struct h2_bucket *bucket);
+typedef void h2_bucket_free_func(h2_bucket *bucket);
 
 /* Our own implementation of a data container, invented to 
  * - allocate a fixed, single memory chunk per bucket which
@@ -30,12 +30,12 @@ typedef void h2_bucket_free_func(struct h2_bucket *bucket);
  * - can, once constructed, be passed around safely
  * - can be destroyed, e.g. freed, without knowledge how it was allocated
  */
-typedef struct h2_bucket {
+struct h2_bucket {
     char *data;
     apr_size_t data_len;
     apr_size_t data_size;
     h2_bucket_free_func *free_bucket;
-} h2_bucket;
+};
 
 /* Singular instance, useful in indicating end-of-stream or such */
 extern h2_bucket H2_NULL_BUCKET;

@@ -14,22 +14,27 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_frame__
-#define __mod_h2__h2_frame__
+#ifndef __mod_h2__h2_request__
+#define __mod_h2__h2_request__
 
-#include "h2_bucket.h"
+typedef struct h2_mplx h2_mplx;
+typedef struct h2_request h2_request;
 
-/* Append a HTTP/1.1 request line in the given bucket, including
- * proper CRLF. Expects the bucket to have enough place for it.
- */
-apr_status_t h2_frame_req_add_start(h2_bucket *bucket,
-                                    const char *method, const char *path);
+h2_request *h2_request_create(apr_pool_t *pool, int id);
 
-/* Append a HTTP/1.1 header line to the bucket, including CRLF.
- *  Expects the bucket to have enough place for it.
- */
-apr_status_t h2_frame_req_add_header(h2_bucket *bucket,
+void h2_request_destroy(h2_request *req);
+
+apr_status_t h2_request_write_header(h2_request *req,
                                      const char *name, size_t nlen,
-                                     const char *value, size_t vlen);
+                                     const char *value, size_t vlen,
+                                     h2_mplx *m);
 
-#endif /* defined(__mod_h2__h2_frame__) */
+
+apr_status_t h2_request_write_data(h2_request *request,
+                                   const char *data, size_t len,
+                                   h2_mplx *m);
+
+apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m);
+apr_status_t h2_request_close(h2_request *req, h2_mplx *m);
+
+#endif /* defined(__mod_h2__h2_request__) */

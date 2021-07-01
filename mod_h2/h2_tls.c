@@ -181,12 +181,12 @@ int h2_tls_pre_conn(conn_rec* c, void *arg)
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_tls, pre_connection, end");
     }
-    else if (h2_ctx_is_stream(c)) {
+    else if (h2_ctx_is_task(c)) {
         /* A connection that represents a http2 stream from another connection.
          */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_tls, pre_connection, found stream task");
-        h2_task *task = (h2_task *)ctx->userp;
+        h2_task *task = h2_ctx_get_task(ctx);
         return h2_task_pre_conn(task, c);
     }
     
@@ -198,7 +198,7 @@ int h2_tls_process_conn(conn_rec* c)
     h2_ctx *ctx = h2_ctx_get(c);
     
     if (ctx) {
-        if (h2_ctx_is_stream(c)) {
+        if (h2_ctx_is_task(c)) {
             // This should not happend, as we install our own filters
             // in h2_tls_pre_connection in such cases, so the normal
             // connection hooks get bypassed.
@@ -229,7 +229,7 @@ int h2_tls_process_conn(conn_rec* c)
 int h2_tls_stream_pre_conn(conn_rec* c, void *arg)
 {
     h2_ctx *ctx = h2_ctx_get(c);
-    if (ctx && h2_ctx_is_stream(c)) {
+    if (ctx && h2_ctx_is_task(c)) {
         /* This connection is a pseudo-connection used for a stream.
          * And it uses TLS by default. We need to disable that.
          */

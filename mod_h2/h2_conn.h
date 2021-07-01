@@ -24,7 +24,9 @@
  */
 apr_status_t h2_conn_process(conn_rec *c);
 
-/* Initialize this child process for h2 connection work 
+/* Initialize this child process for h2 connection work,
+ * to be called once during child init before multi processing
+ * starts.
  */
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s);
 

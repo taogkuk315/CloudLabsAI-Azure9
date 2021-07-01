@@ -17,6 +17,8 @@
 #ifndef __mod_h2__h2_queue__
 #define __mod_h2__h2_queue__
 
+typedef struct h2_queue h2_queue;
+
 typedef void *(*h2_queue_match_fn)(void *ctx, int id, void *entry);
 typedef int (*h2_queue_iter_fn)(void *ctx, int id, void *entry, int index);
 typedef void (*h2_queue_free_fn)(void *entry);
@@ -31,7 +33,7 @@ typedef void (*h2_queue_free_fn)(void *entry);
  * 
  * This queue is *not* thread safe.
  */
-typedef struct h2_queue {
+struct h2_queue {
     apr_pool_t *pool;
     struct h2_qdata *first;
     struct h2_qdata *last;
@@ -39,7 +41,7 @@ typedef struct h2_queue {
     
     int aborted;
     h2_queue_free_fn free_fn;
-} h2_queue;
+};
 
 
 #define H2_QUEUE_ID_NONE        (-1)

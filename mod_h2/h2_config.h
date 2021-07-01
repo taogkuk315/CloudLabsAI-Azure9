@@ -17,8 +17,6 @@
 #ifndef __mod_h2__h2_config_h__
 #define __mod_h2__h2_config_h__
 
-#include <http_config.h>
-
 typedef enum {
     H2_CONF_ENABLED,
     H2_CONF_MAX_STREAMS,

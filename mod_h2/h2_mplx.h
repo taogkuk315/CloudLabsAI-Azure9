@@ -45,6 +45,7 @@ int h2_mplx_in_has_eos_for(struct h2_mplx *m, int channel);
 
 apr_status_t h2_mplx_out_read(struct h2_mplx *mplx,
                               int channel, struct h2_bucket **pbucket);
+
 apr_status_t h2_mplx_out_pushback(struct h2_mplx *mplx, int channel,
                                   struct h2_bucket *bucket);
 

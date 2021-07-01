@@ -133,8 +133,6 @@ apr_status_t h2_io_write(h2_io_ctx *io, const char *buf, size_t length,
     APR_BRIGADE_INSERT_TAIL(io->output_brigade,
             apr_bucket_transient_create((const char *)buf, length,
                                         io->output_brigade->bucket_alloc));
-    APR_BRIGADE_INSERT_TAIL(io->output_brigade,
-            apr_bucket_flush_create(io->output_brigade->bucket_alloc));
     
     /* Send it out through installed filters (TLS) to the client */
     apr_status_t status = ap_pass_brigade(io->connection->output_filters,

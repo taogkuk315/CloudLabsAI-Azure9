@@ -17,8 +17,6 @@
 #include <assert.h>
 #include <stddef.h>
 
-#include <apr_strings.h>
-
 #include <httpd.h>
 #include <http_core.h>
 #include <http_connection.h>
@@ -27,13 +25,12 @@
 #include <nghttp2/nghttp2.h>
 
 #include "h2_private.h"
+#include "h2_request.h"
 #include "h2_resp_head.h"
 #include "h2_mplx.h"
-#include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_task.h"
 #include "h2_ctx.h"
-#include "h2_frame.h"
 #include "h2_task_input.h"
 
 
@@ -42,148 +39,47 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
     if (stream->state != state) {
         h2_stream_state_t oldstate = stream->state;
         stream->state = state;
-        if (stream->state_change_cb) {
-            stream->state_change_cb(stream, oldstate, stream->state_change_ctx);
-        }
     }
 }
 
 
-apr_status_t h2_stream_create(h2_stream **pstream,
-                              int id, h2_session *session)
+h2_stream *h2_stream_create(int id, conn_rec *c, struct h2_mplx *m)
 {
-    h2_stream *stream = apr_pcalloc(session->c->pool, sizeof(h2_stream));
-    stream->id = id;
-    stream->state = H2_STREAM_ST_IDLE;
-    stream->eoh = 0;
-    stream->session = session;
-    
-    *pstream = stream;
-    return APR_SUCCESS;
+    h2_stream *stream = apr_pcalloc(c->pool, sizeof(h2_stream));
+    if (stream != NULL) {
+        stream->id = id;
+        stream->state = H2_STREAM_ST_IDLE;
+        stream->c = c;
+        stream->m = m;
+    }
+    return stream;
 }
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
-    if (stream->work) {
-        h2_bucket_destroy(stream->work);
-        stream->work = NULL;
+    if (stream->req) {
+        h2_request_destroy(stream->req);
+        stream->req = NULL;
     }
-    stream->session = NULL;
+    stream->m = NULL;
     return APR_SUCCESS;
 }
 
 void h2_stream_abort(h2_stream *stream)
 {
-    if (!stream->aborted) {
-        stream->aborted = 1;
-    }
+    stream->aborted = 1;
 }
 
-void h2_stream_set_state_change_cb(h2_stream *stream,
-                                   h2_stream_state_change_cb cb,
-                                   void *cb_ctx)
+apr_status_t h2_stream_write_eoh(h2_stream *stream)
 {
-    stream->state_change_cb = cb;
-    stream->state_change_ctx = cb_ctx;
+    return h2_request_end_headers(stream->req, stream->m);
 }
 
-static apr_status_t h2_stream_check_work(h2_stream *stream, apr_size_t size)
+apr_status_t h2_stream_write_eos(h2_stream *stream)
 {
-    if (!stream->work) {
-        stream->work = h2_bucket_alloc(size);
-        if (!stream->work) {
-            return APR_ENOMEM;
-        }
-    }
-    return APR_SUCCESS;
-}
-
-static apr_status_t insert_request_line(h2_stream *stream)
-{
-    apr_status_t status = APR_SUCCESS;
-    if (!stream->method) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                      "h2_stream(%ld-%d): header start but :method missing",
-                      stream->session->id, stream->id);
-        return APR_EGENERAL;
-    }
-    if (!stream->path) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                      "h2_stream(%ld-%d): header start but :path missing",
-                      stream->session->id, stream->id);
-        return APR_EGENERAL;
-    }
-    
-    status = h2_stream_check_work(stream, BLOCKSIZE);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    status = h2_frame_req_add_start(stream->work,
-                                    stream->method, stream->path);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, stream->session->c,
-                      "h2_stream(%ld-%d): adding request line",
-                      stream->session->id, stream->id);
-    }
-    if (stream->authority) {
-        status = h2_frame_req_add_header(stream->work,
-                                         "Host", 4,
-                                         stream->authority,
-                                         strlen(stream->authority));
-    }
-    return status;
-}
-
-apr_status_t h2_stream_push(h2_stream *stream)
-{
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                  "h2_stream(%ld-%d): pushing request: %s",
-                  stream->session->id, (int)stream->id,
-                  stream->work->data);
-    
-    apr_status_t status = h2_mplx_in_write(stream->session->mplx, stream->id,
-                                           stream->work);
-    stream->work = NULL;
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, stream->session->c,
-                      "h2_stream(%ld-%d): pushing request data",
-                      stream->session->id, (int)stream->id);
-    }
-    return status;
-}
-
-apr_status_t h2_stream_end_headers(h2_stream *stream)
-{
-    apr_status_t status = h2_stream_check_work(stream, BLOCKSIZE);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    stream->eoh = 1;
-
-    if (!stream->request_line_inserted) {
-        status = insert_request_line(stream);
-        stream->request_line_inserted = 1;
-    }
-    
-    if (!h2_bucket_has_free(stream->work, 2)) {
-        status = h2_stream_push(stream);
-    }
-    
-    if (status == APR_SUCCESS) {
-        h2_bucket_cat(stream->work, "\r\n");
-        status = h2_stream_push(stream);
-    }
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, stream->session->c,
-                  "h2_stream(%ld-%d): headers done",
-                  stream->session->id, stream->id);
-    return status;
-}
-
-apr_status_t h2_stream_close_input(h2_stream *stream)
-{
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->c,
                   "h2_stream(%ld-%d): closing input",
-                  stream->session->id, stream->id);
+                  stream->c->id, stream->id);
     apr_status_t status = APR_SUCCESS;
     switch (stream->state) {
         case H2_STREAM_ST_CLOSED_INPUT:
@@ -198,123 +94,32 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
             set_state(stream, H2_STREAM_ST_CLOSED_INPUT);
             break;
     }
-    if (stream->work) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                      "h2_stream(%ld-%d): closing input, pushing work",
-                      stream->session->id, stream->id);
-        status = h2_stream_push(stream);
-    }
-    if (status == APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
-                      "h2_stream(%ld-%d): closing input, append eos",
-                      stream->session->id, stream->id);
-        status = h2_mplx_in_close(stream->session->mplx, stream->id);
-    }
-    return status;
+    return h2_request_close(stream->req, stream->m);
 }
 
-apr_status_t h2_stream_add_header(h2_stream *stream,
-                                  const char *name, size_t nlen,
-                                  const char *value, size_t vlen)
+apr_status_t h2_stream_write_header(h2_stream *stream,
+                                    const char *name, size_t nlen,
+                                    const char *value, size_t vlen)
 {
-    apr_status_t status = APR_SUCCESS;
-    
-    if (nlen <= 0) {
-        return status;
-    }
-    
-    if (name[0] == ':') {
-        /* pseudo header, see ch. 8.1.2.3, always should come first */
-        if (stream->work) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                          "h2_stream(%ld-%d): pseudo header after request start",
-                          stream->session->id, stream->id);
-            return APR_EGENERAL;
-        }
-        
-        if (vlen <= 0) {
-            char buffer[32];
-            memset(buffer, 0, 32);
-            strncpy(buffer, name, (nlen > 31)? 31 : nlen);
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->session->c,
-                          "h2_stream(%ld-%d): pseudo header without value %s",
-                          stream->session->id, stream->id, buffer);
-            status = APR_EGENERAL;
-        }
-        else if (H2_HEADER_METHOD_LEN == nlen
-                 && !strncmp(H2_HEADER_METHOD, name, nlen)) {
-            stream->method = apr_pstrndup(stream->session->c->pool, value, vlen);
-        }
-        else if (H2_HEADER_SCHEME_LEN == nlen
-                 && !strncmp(H2_HEADER_SCHEME, name, nlen)) {
-            stream->scheme = apr_pstrndup(stream->session->c->pool, value, vlen);
-        }
-        else if (H2_HEADER_PATH_LEN == nlen
-                 && !strncmp(H2_HEADER_PATH, name, nlen)) {
-            stream->path = apr_pstrndup(stream->session->c->pool, value, vlen);
-        }
-        else if (H2_HEADER_AUTH_LEN == nlen
-                 && !strncmp(H2_HEADER_AUTH, name, nlen)) {
-            stream->authority = apr_pstrndup(stream->session->c->pool, value, vlen);
-        }
-        else {
-            char buffer[32];
-            memset(buffer, 0, 32);
-            strncpy(buffer, name, (nlen > 31)? 31 : nlen);
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, stream->session->c,
-                          "h2_stream(%ld-%d): ignoring unknown pseudo header %s",
-                          stream->session->id, stream->id, buffer);
+    if (!stream->req) {
+        stream->req = h2_request_create(stream->c->pool, stream->id);
+        if (!stream->req) {
+            return APR_ENOMEM;
         }
     }
-    else {
-        /* non-pseudo header, append to work bucket of stream */
-        if (!stream->request_line_inserted) {
-            status = insert_request_line(stream);
-            stream->request_line_inserted = 1;
-        }
-        
-        if (status == APR_SUCCESS) {
-            status = h2_frame_req_add_header(stream->work,
-                                             name, nlen, value, vlen);
-            if (status == APR_ENAMETOOLONG && stream->work->data_len > 0) {
-                /* header did not fit into bucket, push bucket to input and
-                 * get a new one */
-                status = h2_stream_push(stream);
-                if (status == APR_SUCCESS) {
-                    status = h2_frame_req_add_header(stream->work,
-                                                     name, nlen, value, vlen);
-                    /* if this still does not work, we fail */
-                }
-            }
-        }
-    }
-    
-    return status;
+    return h2_request_write_header(stream->req, name, nlen,
+                                   value, vlen, stream->m);
 }
 
-apr_status_t h2_stream_add_data(h2_stream *stream,
-                                const char *data, size_t len)
+apr_status_t h2_stream_write_data(h2_stream *stream,
+                                  const char *data, size_t len)
 {
-    apr_status_t status = h2_stream_check_work(stream, DATA_BLOCKSIZE);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    
-    while (len > 0) {
-        apr_size_t written = h2_bucket_append(stream->work, data, len);
-        if (written < len) {
-            len -= written;
-            data += written;
-            apr_status_t status = h2_stream_push(stream);
-            if (status != APR_SUCCESS) {
-                return status;
-            }
-        }
-        else {
-            len = 0;
-        }
-    }
-    return APR_SUCCESS;
+    return h2_request_write_data(stream->req, data, len, stream->m);
+}
+
+apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket)
+{
+    return h2_mplx_out_read(stream->m, stream->id, pbucket);
 }
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended)

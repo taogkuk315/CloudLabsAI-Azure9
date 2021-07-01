@@ -31,7 +31,6 @@
 #include "h2_response.h"
 #include "h2_task.h"
 #include "h2_bucket.h"
-#include "h2_frame.h"
 #include "h2_session.h"
 #include "h2_util.h"
 
@@ -112,11 +111,8 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
                       session->id, (int)stream_id);
         return NGHTTP2_ERR_INVALID_STREAM_ID;
     }
-    if (stream->state != H2_STREAM_ST_OPEN || !stream->eoh) {
-        return NGHTTP2_ERR_INVALID_STREAM_STATE;
-    }
     
-    apr_status_t status = h2_stream_add_data(stream, (const char *)data, len);
+    apr_status_t status = h2_stream_write_data(stream, (const char *)data, len);
     return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_INVALID_STREAM_STATE;
 }
 
@@ -205,18 +201,16 @@ static int on_begin_headers_cb(nghttp2_session *ngh2,
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
-    h2_stream * stream = NULL;
-    
-    apr_status_t status = h2_stream_create(&stream, frame->hd.stream_id,
-                                           session);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+    h2_stream * stream = h2_stream_create(frame->hd.stream_id,
+                                          session->c, session->mplx);
+    if (!stream) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
                       "h2_session: stream(%ld-%d): unable to create",
                       session->id, (int)frame->hd.stream_id);
         return NGHTTP2_ERR_INVALID_STREAM_ID;
     }
     
-    status = h2_stream_set_add(session->streams, stream);
+    apr_status_t status = h2_stream_set_add(session->streams, stream);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
                       "h2_session: stream(%ld-%d): unable to add to pool",
@@ -224,17 +218,10 @@ static int on_begin_headers_cb(nghttp2_session *ngh2,
         return NGHTTP2_ERR_INVALID_STREAM_ID;
     }
     
-    if (stream->state != H2_STREAM_ST_IDLE) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                      "h2_session: stream(%ld-%d): unexpected stream state %d",
-                      session->id, (int)frame->hd.stream_id, stream->state);
-        return NGHTTP2_ERR_INVALID_STREAM_STATE;
-    }
     stream->state = H2_STREAM_ST_OPEN;
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                   "h2_session: stream(%ld-%d): opened",
                   session->id, (int)frame->hd.stream_id);
-    
     return 0;
 }
 
@@ -257,7 +244,7 @@ static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
         return NGHTTP2_ERR_INVALID_STREAM_ID;
     }
     
-    apr_status_t status = h2_stream_add_header(stream,
+    apr_status_t status = h2_stream_write_header(stream,
                                                (const char *)name, namelen,
                                                (const char *)value, valuelen);
     return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_INVALID_STREAM_STATE;
@@ -291,13 +278,13 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             }
             
             if (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS) {
-                h2_stream_end_headers(stream);
+                h2_stream_write_eoh(stream);
                 
                 /* Now would be a good time to actually schedule this
                  * stream for processing in a worker thread */
                 h2_task *task = h2_task_create(session->id,
                                                stream->id,
-                                               stream->session->c,
+                                               stream->c,
                                                session->mplx);
                 if (session->on_new_task_cb) {
                     session->on_new_task_cb(session, stream->id, task);
@@ -321,7 +308,7 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
         h2_stream * stream = h2_stream_set_get(session->streams,
                                                frame->hd.stream_id);
         if (stream != NULL) {
-            status = h2_stream_close_input(stream);
+            status = h2_stream_write_eos(stream);
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
                           "h2_stream(%ld-%d): input closed",
                           session->id, (int)frame->hd.stream_id);
@@ -375,6 +362,7 @@ h2_session *h2_session_create(conn_rec *c, h2_config *config)
         session->id = c->id;
         session->c = c;
         session->ngh2 = NULL;
+        session->loglvl = APLOGcdebug(c)? APLOG_DEBUG : APLOG_NOTICE;
         
         session->streams = h2_stream_set_create(c->pool);
         
@@ -402,7 +390,7 @@ h2_session *h2_session_create(conn_rec *c, h2_config *config)
          */
         nghttp2_option_set_recv_client_preface(options, 1);
         nghttp2_option_set_peer_max_concurrent_streams(options,
-            h2_config_geti(config, H2_CONF_MAX_STREAMS));
+                                                       h2_config_geti(config, H2_CONF_MAX_STREAMS));
         
         rv = nghttp2_session_server_new2(&session->ngh2, callbacks,
                                          session, options);
@@ -524,10 +512,10 @@ static h2_stream *resume_on_data(void *ctx, h2_stream *stream) {
     assert(stream);
     
     if (h2_stream_is_suspended(stream)) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->c,
                       "h2_stream(%ld-%d): suspended, checking for DATA",
-                      stream->session->id, stream->id);
-        if (h2_mplx_out_has_data_for(session->mplx, stream->id)) {
+                      stream->c->id, stream->id);
+        if (h2_mplx_out_has_data_for(stream->m, stream->id)) {
             h2_stream_set_suspended(stream, 0);
             int rv = nghttp2_session_resume_data(session->ngh2, stream->id);
             ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
@@ -650,7 +638,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     }
     
     assert(!h2_stream_is_suspended(stream));
-           
+    
     /* Try to pop data buckets from our queue for this stream
      * until we see EOS or the buffer is full.
      */
@@ -658,7 +646,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     int done = 0;
     while (length > 0 && !done) {
         h2_bucket *bucket = NULL;
-        apr_status_t status = h2_mplx_out_read(session->mplx, stream_id, &bucket);
+        apr_status_t status = h2_stream_read(stream, &bucket);
         switch (status) {
             case APR_SUCCESS: {
                 /* This copies out the data and modifies the bucket to
@@ -720,32 +708,23 @@ apr_status_t h2_session_submit_response(h2_session *session,
 {
     apr_status_t status = APR_SUCCESS;
     int rv = 0;
-    if (stream->response_started) {
-        /* already on its way */
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                      "h2_stream(%ld-%d): response already started",
-                      session->id, stream->id);
-    }
-    else {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                      "h2_stream(%ld-%d): submitting response %s with %d headers",
-                      session->id, stream->id, head->status,
-                      (int)head->nvlen);
-        assert(head->nvlen);
-        stream->response_started = 1;
-        
-        nghttp2_data_provider provider = {
-            stream->id, stream_data_cb
-        };
-        rv = nghttp2_submit_response(session->ngh2, stream->id,
-                                     &head->nv, head->nvlen, &provider);
-        if (nghttp2_is_fatal(rv)) {
-            status = APR_EGENERAL;
-            h2_session_abort_int(session, rv);
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                          "submit_response: %s",
-                          nghttp2_strerror(rv));
-        }
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+                  "h2_stream(%ld-%d): submitting response %s with %d headers",
+                  session->id, stream->id, head->status,
+                  (int)head->nvlen);
+    assert(head->nvlen);
+    
+    nghttp2_data_provider provider = {
+        stream->id, stream_data_cb
+    };
+    rv = nghttp2_submit_response(session->ngh2, stream->id,
+                                 &head->nv, head->nvlen, &provider);
+    if (nghttp2_is_fatal(rv)) {
+        status = APR_EGENERAL;
+        h2_session_abort_int(session, rv);
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                      "submit_response: %s",
+                      nghttp2_strerror(rv));
     }
     return status;
 }

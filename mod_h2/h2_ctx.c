@@ -38,8 +38,7 @@ h2_ctx *h2_ctx_create_for(conn_rec *c, h2_task *task)
 {
     h2_ctx *ctx = h2_ctx_create(c);
     if (ctx) {
-        ctx->is_stream = 1;
-        ctx->userp = task;
+        ctx->task = task;
     }
     return ctx;
 }
@@ -69,13 +68,13 @@ h2_ctx *h2_ctx_set_protocol(conn_rec* c, const char *proto)
 int h2_ctx_is_session(conn_rec * c)
 {
     h2_ctx *ctx = h2_ctx_get(c);
-    return ctx && !ctx->is_stream;
+    return ctx && !ctx->task;
 }
 
-int h2_ctx_is_stream(conn_rec * c)
+int h2_ctx_is_task(conn_rec * c)
 {
     h2_ctx *ctx = h2_ctx_get(c);
-    return ctx && ctx->is_stream;
+    return ctx && !!ctx->task;
 }
 
 int h2_ctx_is_negotiated( conn_rec * c )
@@ -88,4 +87,9 @@ int h2_ctx_is_active(conn_rec * c)
 {
     h2_ctx *ctx = h2_ctx_get(c);
     return ctx && ctx->protocol != NULL;
+}
+
+struct h2_task *h2_ctx_get_task(h2_ctx *ctx)
+{
+    return ctx->task;
 }

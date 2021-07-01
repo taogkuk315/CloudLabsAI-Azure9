@@ -112,7 +112,7 @@ testh2o: \
 		$(INST_DIR)/.test-setup \
 		$(INST_DIR)/.curl-installed \
         $(GEN)/load-urls-1.txt
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -c 500 -m 100 -n 2000000
+	@$(H2LOAD) -c 500 -m 100 -n 200000 https://$(HTTPS_AUTH)/
 
 
 ################################################################################
