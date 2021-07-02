@@ -36,15 +36,8 @@
 
 static struct h2_workers *workers;
 
-static void start_new_task(h2_session *session, int stream_id, h2_task *task)
-{
-    apr_status_t status = h2_workers_schedule(workers, task);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                      "scheduling task(%ld-%d)",
-                      task->session_id, task->stream_id);
-    }
-}
+static apr_status_t h2_session_process(h2_session *session);
+static void start_new_task(h2_session *session, int stream_id, h2_task *task);
 
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
@@ -59,21 +52,47 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     return workers? APR_SUCCESS : APR_ENOMEM;
 }
 
+apr_status_t h2_conn_rprocess(request_rec *r)
+{
+    h2_config *config = h2_config_rget(r);
+    
+    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "h2_conn_process start");
+    if (!workers) {
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "workers not initialized");
+        return APR_EGENERAL;
+    }
+    
+    h2_session *session = h2_session_rcreate(r, config);
+    if (!session) {
+        return APR_EGENERAL;
+    }
+    
+    return h2_session_process(session);
+}
+
 apr_status_t h2_conn_process(conn_rec *c)
 {
-    apr_status_t status = APR_SUCCESS;
     h2_config *config = h2_config_get(c);
     
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_conn_process start");
-    
     if (!workers) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, "workers not initialized");
         return APR_EGENERAL;
     }
     
-    /* Create a h2_session for this connection and start talking
-     * to the client. Except protocol meta data back and forth, we mainly
-     * will see new http/2 streams opened by the client, which
+    h2_session *session = h2_session_create(c, config);
+    if (!session) {
+        return APR_EGENERAL;
+    }
+    
+    return h2_session_process(session);
+}
+
+apr_status_t h2_session_process(h2_session *session)
+{
+    apr_status_t status = APR_SUCCESS;
+    /* Start talking to the client. Apart from protocol meta data,
+     * we mainly will see new http/2 streams opened by the client, which
      * basically are http requests we need to dispatch.
      *
      * There will be bursts of new streams, to be served concurrently,
@@ -96,14 +115,21 @@ apr_status_t h2_conn_process(conn_rec *c)
      *
      * TODO: implement graceful GO_AWAY after configurable idle time
      */
-    h2_session *session = h2_session_create(c, config);
-    if (!session) {
-        return APR_EGENERAL;
-    }
     
+    /* remove the standard timeout handling */
+    /* TODO: install our own? */
+    ap_remove_input_filter_byhandle(session->c->input_filters, "reqtimeout");
+
     h2_session_set_new_task_cb(session, start_new_task);
     
     status = h2_session_start(session);
+    if (status != APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                      "session startup");
+        h2_session_destroy(session);
+        return status;
+    }
+    
     apr_interval_time_t wait_micros = 0;
     static const int MAX_WAIT_MICROS = 100 * 1000; /* 100 ms */
     
@@ -127,7 +153,7 @@ apr_status_t h2_conn_process(conn_rec *c)
             if (wait_micros > MAX_WAIT_MICROS) {
                 wait_micros = MAX_WAIT_MICROS;
             }
-            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, c,
+            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
                           "timeout waiting %f ms", wait_micros/1000.0);
         }
         
@@ -165,13 +191,13 @@ apr_status_t h2_conn_process(conn_rec *c)
                 break;
             case APR_EOF:
             case APR_ECONNABORTED:
-                ap_log_cerror( APLOG_MARK, APLOG_INFO, status, c,
+                ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
                               "h2_session(%ld): eof on input"
                               ", terminating", session->id);
                 h2_session_abort(session, status);
                 break;
             default:
-                ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, c,
+                ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
                               "h2_session(%ld): error processing"
                               ", terminating", session->id);
                 h2_session_abort(session, status);
@@ -179,7 +205,7 @@ apr_status_t h2_conn_process(conn_rec *c)
         }
     }
     
-    ap_log_cerror( APLOG_MARK, APLOG_INFO, status, c,
+    ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
                   "h2_conn_process done");
     
     h2_workers_shutdown(workers, session->id);
@@ -189,4 +215,13 @@ apr_status_t h2_conn_process(conn_rec *c)
     return DONE;
 }
 
+static void start_new_task(h2_session *session, int stream_id, h2_task *task)
+{
+    apr_status_t status = h2_workers_schedule(workers, task);
+    if (status != APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                      "scheduling task(%ld-%d)",
+                      task->session_id, task->stream_id);
+    }
+}
 

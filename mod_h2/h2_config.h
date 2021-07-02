@@ -50,6 +50,7 @@ extern const command_rec h2_cmds[];
 
 h2_config *h2_config_get(conn_rec *c);
 h2_config *h2_config_sget(server_rec *s);
+h2_config *h2_config_rget(request_rec *r);
 
 int h2_config_geti(h2_config *conf, h2_config_var_t var);
 

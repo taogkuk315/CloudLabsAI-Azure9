@@ -15,6 +15,7 @@
  */
 
 #include <assert.h>
+#include <apr_base64.h>
 
 #include <httpd.h>
 #include <http_core.h>
@@ -48,6 +49,53 @@ static int h2_session_status_from_apr_status(apr_status_t rv)
             return NGHTTP2_ERR_PROTO;
     }
 }
+
+static int stream_open(h2_session *session, int stream_id)
+{
+    if (session->aborted) {
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    h2_stream * stream = h2_stream_create(stream_id,
+                                          session->c, session->mplx);
+    if (!stream) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
+                      "h2_session: stream(%ld-%d): unable to create",
+                      session->id, stream_id);
+        return NGHTTP2_ERR_INVALID_STREAM_ID;
+    }
+    
+    apr_status_t status = h2_stream_set_add(session->streams, stream);
+    if (status != APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+                      "h2_session: stream(%ld-%d): unable to add to pool",
+                      session->id, stream->id);
+        return NGHTTP2_ERR_INVALID_STREAM_ID;
+    }
+    
+    stream->state = H2_STREAM_ST_OPEN;
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                  "h2_session: stream(%ld-%d): opened",
+                  session->id, stream_id);
+    return 0;
+}
+
+static apr_status_t stream_end_headers(h2_session *session, h2_stream *stream)
+{
+    apr_status_t status = h2_stream_write_eoh(stream);
+    if (status == APR_SUCCESS) {
+        /* Now would be a good time to actually schedule this
+         * stream for processing in a worker thread */
+        h2_task *task = h2_task_create(session->id,
+                                       stream->id,
+                                       stream->c,
+                                       session->mplx);
+        if (session->on_new_task_cb) {
+            session->on_new_task_cb(session, stream->id, task);
+        }
+    }
+    return status;
+}
+
 
 /*
  * Callback when nghttp2 wants to send bytes back to the client.
@@ -197,32 +245,7 @@ static int on_begin_headers_cb(nghttp2_session *ngh2,
                                const nghttp2_frame *frame, void *userp)
 {
     /* This starts a new stream. */
-    h2_session *session = (h2_session *)userp;
-    if (session->aborted) {
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-    h2_stream * stream = h2_stream_create(frame->hd.stream_id,
-                                          session->c, session->mplx);
-    if (!stream) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
-                      "h2_session: stream(%ld-%d): unable to create",
-                      session->id, (int)frame->hd.stream_id);
-        return NGHTTP2_ERR_INVALID_STREAM_ID;
-    }
-    
-    apr_status_t status = h2_stream_set_add(session->streams, stream);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
-                      "h2_session: stream(%ld-%d): unable to add to pool",
-                      session->id, stream->id);
-        return NGHTTP2_ERR_INVALID_STREAM_ID;
-    }
-    
-    stream->state = H2_STREAM_ST_OPEN;
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                  "h2_session: stream(%ld-%d): opened",
-                  session->id, (int)frame->hd.stream_id);
-    return 0;
+    return stream_open((h2_session *)userp, frame->hd.stream_id);
 }
 
 static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
@@ -278,17 +301,7 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             }
             
             if (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS) {
-                h2_stream_write_eoh(stream);
-                
-                /* Now would be a good time to actually schedule this
-                 * stream for processing in a worker thread */
-                h2_task *task = h2_task_create(session->id,
-                                               stream->id,
-                                               stream->c,
-                                               session->mplx);
-                if (session->on_new_task_cb) {
-                    session->on_new_task_cb(session, stream->id, task);
-                }
+                status = stream_end_headers(session, stream);
             }
             break;
         }
@@ -352,7 +365,9 @@ static apr_status_t init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
     return APR_SUCCESS;
 }
 
-h2_session *h2_session_create(conn_rec *c, h2_config *config)
+static h2_session *h2_session_create_int(conn_rec *c,
+                                         request_rec *r,
+                                         h2_config *config)
 {
     nghttp2_session_callbacks *callbacks = NULL;
     nghttp2_option *options = NULL;
@@ -361,6 +376,7 @@ h2_session *h2_session_create(conn_rec *c, h2_config *config)
     if (session) {
         session->id = c->id;
         session->c = c;
+        session->r = r;
         session->ngh2 = NULL;
         session->loglvl = APLOGcdebug(c)? APLOG_DEBUG : APLOG_NOTICE;
         
@@ -385,12 +401,13 @@ h2_session *h2_session_create(conn_rec *c, h2_config *config)
             h2_session_destroy(session);
             return NULL;
         }
+
+        /* With a request present, we are in 'h2c' mode and do not
+         * expect a preface from the client. */
+        nghttp2_option_set_recv_client_preface(options, session->r == NULL);
         
-        /* Our server nghttp2 options.
-         */
-        nghttp2_option_set_recv_client_preface(options, 1);
-        nghttp2_option_set_peer_max_concurrent_streams(options,
-                                                       h2_config_geti(config, H2_CONF_MAX_STREAMS));
+        nghttp2_option_set_peer_max_concurrent_streams(
+            options, h2_config_geti(config, H2_CONF_MAX_STREAMS));
         
         rv = nghttp2_session_server_new2(&session->ngh2, callbacks,
                                          session, options);
@@ -407,6 +424,16 @@ h2_session *h2_session_create(conn_rec *c, h2_config *config)
         
     }
     return session;
+}
+
+h2_session *h2_session_create(conn_rec *c, h2_config *config)
+{
+    return h2_session_create_int(c, NULL, config);
+}
+
+h2_session *h2_session_rcreate(request_rec *r, h2_config *config)
+{
+    return h2_session_create_int(r->connection, r, config);
 }
 
 void h2_session_destroy(h2_session *session)
@@ -483,6 +510,64 @@ apr_status_t h2_session_start(h2_session *session)
     /* Start the conversation by submitting our SETTINGS frame */
     apr_status_t status = APR_SUCCESS;
     h2_config *config = h2_config_get(session->c);
+    int rv = 0;
+    
+    if (session->r) {
+        /* 'h2c' mode: we should have a 'HTTP2-Settings' header with
+         * base64 encoded client settings. */
+        const char *s = apr_table_get(session->r->headers_in, "HTTP2-Settings");
+        if (!s) {
+            ap_log_rerror(APLOG_MARK, APLOG_ERR, status, session->r,
+                          "HTTP2-Settings header missing in request");
+            return APR_EINVAL;
+        }
+        int cslen = apr_base64_decode_len(s);
+        char *cs = apr_pcalloc(session->r->pool, cslen);
+        --cslen; /* apr also counts the terminating 0 */
+        apr_base64_decode(cs, s);
+        
+        ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, session->r,
+                      "upgrading h2c session with nghttp2 from %s (%d)",
+                      s, cslen);
+        
+        rv = nghttp2_session_upgrade(session->ngh2, (uint8_t*)cs, cslen, NULL);
+        if (rv != 0) {
+            status = APR_EGENERAL;
+            ap_log_rerror(APLOG_MARK, APLOG_ERR, status, session->r,
+                          "nghttp2_session_upgrade: %s", nghttp2_strerror(rv));
+            return status;
+        }
+        
+        /* Now we need to auto-open stream 1 for the request we got. */
+        rv = stream_open(session, 1);
+        if (rv != 0) {
+            status = APR_EGENERAL;
+            ap_log_rerror(APLOG_MARK, APLOG_ERR, status, session->r,
+                          "open stream 1: %s", nghttp2_strerror(rv));
+            return status;
+        }
+        
+        h2_stream * stream = h2_stream_set_get(session->streams, 1);
+        if (stream == NULL) {
+            status = APR_EGENERAL;
+            ap_log_rerror(APLOG_MARK, APLOG_ERR, status, session->r,
+                          "lookup of stream 1");
+            return status;
+        }
+        
+        status = h2_stream_rwrite(stream, session->r);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+        status = stream_end_headers(session, stream);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+        status = h2_stream_write_eos(stream);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+    }
     
     nghttp2_settings_entry settings[] = {
         { NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE,
@@ -490,9 +575,9 @@ apr_status_t h2_session_start(h2_session *session)
         { NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE,
             h2_config_geti(config, H2_CONF_WIN_SIZE) },
     };
-    int rv = nghttp2_submit_settings(session->ngh2, NGHTTP2_FLAG_NONE,
-                                     settings,
-                                     sizeof(settings)/sizeof(settings[0]));
+    rv = nghttp2_submit_settings(session->ngh2, NGHTTP2_FLAG_NONE,
+                                 settings,
+                                 sizeof(settings)/sizeof(settings[0]));
     if (rv != 0) {
         status = APR_EGENERAL;
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,

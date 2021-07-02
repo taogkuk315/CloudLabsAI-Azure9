@@ -79,7 +79,7 @@ void h2_task_abort(h2_task *task);
 
 struct h2_resp_head *h2_task_get_resp_head(h2_task *task);
 
-void h2_task_hooks_init(void);
+void h2_task_register_hooks(void);
 int h2_task_pre_conn(h2_task *task, conn_rec *c);
 
 

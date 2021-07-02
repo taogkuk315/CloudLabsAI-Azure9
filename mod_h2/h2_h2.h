@@ -14,24 +14,36 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_util__
-#define __mod_h2__h2_util__
 
-int h2_util_hex_dump(char *buffer, size_t maxlen,
-                     const char *data, size_t datalen);
-
-int h2_util_frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen);
-
-int h2_util_header_print(char *buffer, size_t maxlen,
-                         const char *name, size_t namelen,
-                         const char *value, size_t valuelen);
-
-char *h2_strlwr(char *s);
+#ifndef __mod_h2__h2_h2__
+#define __mod_h2__h2_h2__
 
 /**
- * Return != 0 iff the string s contains the token, as specified in
- * HTTP header syntax, rfc7230.
+ * One time, post config intialization.
  */
-int h2_util_contains_token(apr_pool_t *pool, const char *s, const char *token);
+apr_status_t h2_h2_init(apr_pool_t *pool, server_rec *s);
 
-#endif /* defined(__mod_h2__h2_util__) */
+/**
+ * Once per child process initialization.
+ */
+apr_status_t h2_h2_child_init(apr_pool_t *pool, server_rec *s);
+
+/**
+ * hooks for processing incoming connections.
+ */
+int h2_h2_pre_conn(conn_rec* c, void *arg);
+int h2_h2_process_conn(conn_rec* c);
+int h2_h2_stream_pre_conn(conn_rec* c, void *arg);
+
+/**
+ * Is the connection a TLS connection?
+ */
+int h2_h2_is_tls(conn_rec *c);
+
+/**
+ * Register apache hooks for h2 protocol
+ */
+void h2_h2_register_hooks(void);
+
+
+#endif /* defined(__mod_h2__h2_h2__) */

@@ -17,8 +17,8 @@
 		B225490C1A6EAC37004BDEC9 /* mod_h2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mod_h2.c; sourceTree = "<group>"; };
 		B225490D1A6EAE9F004BDEC9 /* h2_config.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_config.c; sourceTree = "<group>"; };
 		B225490E1A6EAE9F004BDEC9 /* h2_config.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_config.h; sourceTree = "<group>"; };
-		B225491E1A6FB8DF004BDEC9 /* h2_tls.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_tls.c; sourceTree = "<group>"; };
-		B225491F1A6FB8DF004BDEC9 /* h2_tls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_tls.h; sourceTree = "<group>"; };
+		B225491E1A6FB8DF004BDEC9 /* h2_h2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_h2.c; sourceTree = "<group>"; };
+		B225491F1A6FB8DF004BDEC9 /* h2_h2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_h2.h; sourceTree = "<group>"; };
 		B22549331A6FBEF1004BDEC9 /* h2_ctx.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_ctx.c; sourceTree = "<group>"; };
 		B22549341A6FBEF1004BDEC9 /* h2_ctx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_ctx.h; sourceTree = "<group>"; };
 		B22549361A6FCCAA004BDEC9 /* mod_h2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mod_h2.h; sourceTree = "<group>"; };
@@ -255,6 +255,8 @@
 		B284ACCA1A7B9DF900C35863 /* h2_task_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_input.h; sourceTree = "<group>"; };
 		B2A6EF171A9B598B005DFC5B /* h2_request.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_request.c; sourceTree = "<group>"; };
 		B2A6EF181A9B598B005DFC5B /* h2_request.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_request.h; sourceTree = "<group>"; };
+		B2A6EF281A9C79A6005DFC5B /* h2_h2c.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_h2c.c; sourceTree = "<group>"; };
+		B2A6EF291A9C79A6005DFC5B /* h2_h2c.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_h2c.h; sourceTree = "<group>"; };
 		B2C16D221A778E78000B2297 /* alpn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
 		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
@@ -892,6 +894,10 @@
 				B2CB610F1A88BB9F00D270A6 /* h2_conn.h */,
 				B22549331A6FBEF1004BDEC9 /* h2_ctx.c */,
 				B22549341A6FBEF1004BDEC9 /* h2_ctx.h */,
+				B225491E1A6FB8DF004BDEC9 /* h2_h2.c */,
+				B225491F1A6FB8DF004BDEC9 /* h2_h2.h */,
+				B2A6EF281A9C79A6005DFC5B /* h2_h2c.c */,
+				B2A6EF291A9C79A6005DFC5B /* h2_h2c.h */,
 				B225493A1A711985004BDEC9 /* h2_io.c */,
 				B225493B1A711985004BDEC9 /* h2_io.h */,
 				B27D32E81A9487B4003DBAF4 /* h2_mplx.c */,
@@ -917,8 +923,6 @@
 				B2546D8F1A7FA7D70033A875 /* h2_task_output.h */,
 				B2546D881A7F71F80033A875 /* h2_task.c */,
 				B2546D891A7F71F80033A875 /* h2_task.h */,
-				B225491E1A6FB8DF004BDEC9 /* h2_tls.c */,
-				B225491F1A6FB8DF004BDEC9 /* h2_tls.h */,
 				B225493C1A713D18004BDEC9 /* h2_util.c */,
 				B225493D1A713D18004BDEC9 /* h2_util.h */,
 				B2CB61141A8B698A00D270A6 /* h2_worker.c */,

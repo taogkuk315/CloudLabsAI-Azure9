@@ -24,6 +24,12 @@
  */
 apr_status_t h2_conn_process(conn_rec *c);
 
+/* Process the request that has been upgraded to a HTTP/2
+ * conversation. Return when the HTTP/2 session is done
+ * and the connection will close.
+ */
+apr_status_t h2_conn_rprocess(request_rec *r);
+
 /* Initialize this child process for h2 connection work,
  * to be called once during child init before multi processing
  * starts.

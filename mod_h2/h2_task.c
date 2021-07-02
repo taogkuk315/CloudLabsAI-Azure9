@@ -65,7 +65,7 @@ static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
 }
 
 
-void h2_task_hooks_init(void)
+void h2_task_register_hooks(void)
 {
     h2_input_filter_handle =
     ap_register_input_filter("H2_TO_HTTP", h2_filter_stream_input,

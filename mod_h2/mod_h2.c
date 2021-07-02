@@ -37,7 +37,8 @@
 #include "h2_session.h"
 #include "h2_config.h"
 #include "h2_ctx.h"
-#include "h2_tls.h"
+#include "h2_h2.h"
+#include "h2_h2c.h"
 
 
 
@@ -81,7 +82,7 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, se
     }
     ap_log_error( APLOG_MARK, APLOG_INFO, 0, s, "initializing post config for real");
     
-    apr_status_t status = h2_tls_init(p, s);
+    apr_status_t status = h2_h2_init(p, s);
     return status;
 }
 
@@ -125,26 +126,9 @@ static void h2_hooks(apr_pool_t *pool)
      */
     ap_hook_child_init(h2_child_init, NULL, NULL, APR_HOOK_MIDDLE);
 
-    h2_task_hooks_init();
-    
-    /* This hook runs on new connections before mod_ssl has a say.
-     * Its purpose is to prevent mod_ssl from touching our pseudo-connections
-     * for streams.
-     */
-    ap_hook_pre_connection(h2_tls_stream_pre_conn,
-                           NULL, mod_ssl, APR_HOOK_FIRST);
-   
-    /* This hook runs on new connection after mod_ssl, but before the core
-     * httpd. Its purpose is to register, if TLS is used, the ALPN callbacks
-     * that enable us to chose "h2" as next procotol if the client supports it.
-     */
-    ap_hook_pre_connection(h2_tls_pre_conn, mod_ssl, more_core, APR_HOOK_LAST);
-    
-    /* When the connection processing actually starts, we might to
-     * take over, if h2* was selected by ALPN on a TLS connection.
-     */
-    ap_hook_process_connection(h2_tls_process_conn, NULL, NULL, APR_HOOK_FIRST);
-    
+    h2_h2_register_hooks();
+    h2_h2c_register_hooks();
+    h2_task_register_hooks();
 
     /* We offer a function to other modules that lets them retrieve
      * the h2 protocol used on a connection (if any).

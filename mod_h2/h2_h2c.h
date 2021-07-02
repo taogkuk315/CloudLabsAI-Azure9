@@ -14,32 +14,13 @@
  * limitations under the License.
  */
 
-
-#ifndef __mod_h2__h2_tls__
-#define __mod_h2__h2_tls__
-
-/**
- * One time, post config intialization.
- */
-apr_status_t h2_tls_init(apr_pool_t *pool, server_rec *s);
+#ifndef __mod_h2__h2_h2c__
+#define __mod_h2__h2_h2c__
 
 /**
- * Once per child process initialization.
+ * Register apache hooks for h2c protocol
  */
-apr_status_t h2_tls_child_init(apr_pool_t *pool, server_rec *s);
-
-/**
- * hooks for processing incoming connections.
- */
-int h2_tls_pre_conn(conn_rec* c, void *arg);
-int h2_tls_process_conn(conn_rec* c);
-int h2_tls_stream_pre_conn(conn_rec* c, void *arg);
-
-/**
- * Is the connection a TLS connection?
- */
-int h2_tls_is_tls(conn_rec *c);
+void h2_h2c_register_hooks(void);
 
 
-
-#endif /* defined(__mod_h2__h2_tls__) */
+#endif /* defined(__mod_h2__h2_h2c__) */

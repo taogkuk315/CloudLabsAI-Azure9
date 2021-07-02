@@ -37,4 +37,6 @@ apr_status_t h2_request_write_data(h2_request *request,
 apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m);
 apr_status_t h2_request_close(h2_request *req, h2_mplx *m);
 
+apr_status_t h2_request_rwrite(h2_request *req, request_rec *r, h2_mplx *m);
+
 #endif /* defined(__mod_h2__h2_request__) */

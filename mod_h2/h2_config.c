@@ -199,6 +199,12 @@ const command_rec h2_cmds[] = {
 };
 
 
+h2_config *h2_config_rget(request_rec *r)
+{
+    h2_config *cfg = (h2_config *)ap_get_module_config(r->per_dir_config, &h2_module);
+    return cfg? cfg : h2_config_get(r->connection);
+}
+
 h2_config *h2_config_sget(server_rec *s)
 {
     h2_config *cfg = (h2_config *)ap_get_module_config(s->module_config, &h2_module);

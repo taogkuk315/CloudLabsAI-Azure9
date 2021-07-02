@@ -61,21 +61,20 @@ test: \
 	@$(CURL) -sk --resolv $(HTTP_AUTH):127.0.0.1 http://$(HTTP_AUTH)/index.html > $(GEN)/tmp/http_index.html
 	@diff  htdocs/test.local/index.html $(GEN)/tmp/http_index.html
 	@echo ok.
+	@echo -n checking index.html over h2c...
+	@$(CURL) -sk --http2 --resolv $(HTTP_AUTH):127.0.0.1 http://$(HTTP_AUTH)/index.html > $(GEN)/tmp/http_index.html
+	@diff  htdocs/test.local/index.html $(GEN)/tmp/http_index.html
+	@echo ok.
 	@echo -n checking index.html over https with HTTP/1...
 	@$(CURL) -sk --http1.1 --resolv $(HTTPS_AUTH):127.0.0.1 https://$(HTTPS_AUTH)/index.html > $(GEN)/tmp/https_index.html
 	@diff  htdocs/test.local/index.html $(GEN)/tmp/https_index.html
 	@echo ok.
-	@echo -n checking index.html over https with h2...
+	@echo -n checking index.html over h2...
 	@$(CURL) -sk --http2 --resolv $(HTTPS_AUTH):127.0.0.1 https://$(HTTPS_AUTH)/index.html > $(GEN)/tmp/h2_index.html
 	@diff  htdocs/test.local/index.html $(GEN)/tmp/h2_index.html
 	@echo ok.
-	@echo -n checking 004.html...
-	@$(CURL) -sk --http2 --resolv $(HTTPS_AUTH):127.0.0.1 https://$(HTTPS_AUTH)/004.html > $(GEN)/tmp/004.html
-	@diff  htdocs/test.local/004.html $(GEN)/tmp/004.html
-	@echo ok.
 	@$(NGHTTP) -v https://$(HTTPS_AUTH)/003.html
 	@$(H2LOAD) -v -n 3 https://$(HTTPS_AUTH)/003.html
-	@$(INST_DIR)/bin/apachectl stop
 
 ################################################################################
 # Load Test
@@ -86,11 +85,22 @@ $(GEN)/load-urls-1.txt: \
 	@mkdir -p $(GEN)/tmp
 	@sed -e "s,SUBST_AUTH_SUBST,https://$(HTTPS_AUTH)," < load-urls-1.txt >$(GEN)/load-urls-1.txt
 
+$(GEN)/load-urls-2.txt: \
+		load-urls-1.txt
+	@mkdir -p $(GEN)/tmp
+	@sed -e "s,SUBST_AUTH_SUBST,http://$(HTTP_AUTH)," < load-urls-1.txt >$(GEN)/load-urls-2.txt
+
 test1: \
 		$(INST_DIR)/.test-setup \
 		$(INST_DIR)/.curl-installed \
         $(GEN)/load-urls-1.txt
 	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 100000 -t 1 -c 1
+
+test2: \
+		$(INST_DIR)/.test-setup \
+		$(INST_DIR)/.curl-installed \
+        $(GEN)/load-urls-2.txt
+	@$(H2LOAD) -i $(GEN)/load-urls-2.txt -v -n 10 -t 1 -c 1
 
 loadtest: \
 		$(INST_DIR)/.test-setup \

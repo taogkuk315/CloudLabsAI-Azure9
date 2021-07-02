@@ -75,6 +75,17 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream)
     return h2_request_end_headers(stream->req, stream->m);
 }
 
+apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
+{
+    if (!stream->req) {
+        stream->req = h2_request_create(stream->c->pool, stream->id);
+        if (!stream->req) {
+            return APR_ENOMEM;
+        }
+    }
+    return h2_request_rwrite(stream->req, r, stream->m);
+}
+
 apr_status_t h2_stream_write_eos(h2_stream *stream)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->c,

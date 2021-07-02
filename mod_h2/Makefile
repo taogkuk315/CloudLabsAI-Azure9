@@ -29,6 +29,8 @@ C_SRC   = \
         h2_config.c \
         h2_conn.c \
         h2_ctx.c \
+        h2_h2.c \
+        h2_h2c.c \
         h2_io.c \
         h2_mplx.c \
         h2_queue.c \
@@ -41,7 +43,6 @@ C_SRC   = \
         h2_task.c \
         h2_task_input.c \
         h2_task_output.c \
-        h2_tls.c \
         h2_util.c \
         h2_worker.c \
         h2_workers.c

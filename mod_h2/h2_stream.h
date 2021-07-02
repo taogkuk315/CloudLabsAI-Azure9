@@ -60,6 +60,8 @@ apr_status_t h2_stream_destroy(h2_stream *stream);
 
 void h2_stream_abort(h2_stream *stream);
 
+apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r);
+
 apr_status_t h2_stream_write_eos(h2_stream *stream);
 
 apr_status_t h2_stream_write_header(h2_stream *stream,

@@ -55,7 +55,8 @@ typedef struct h2_session {
     long id;                        /* identifier of this session, unique
                                      * inside a httpd process */
     conn_rec *c;                    /* the connection this session serves */
-
+    request_rec *r;                 /* the request that started this in case
+                                     * of 'h2c', NULL otherwise */
     int aborted;                    /* this session is being aborted */
     
     h2_io_ctx io;                   /* io on httpd conn filters */
@@ -71,11 +72,15 @@ typedef struct h2_session {
 } h2_session;
 
 
-/* Create a new h2_session for the given connection that uses the
- * memory pool of that connection.
- * The session will allow the given maximum of concurrent streams.
+/* Create a new h2_session for the given connection (mode 'h2').
+ * The session will apply the configured parameter.
  */
 h2_session *h2_session_create(conn_rec *c, struct h2_config *cfg);
+
+/* Create a new h2_session for the given request (mode 'h2c').
+ * The session will apply the configured parameter.
+ */
+h2_session *h2_session_rcreate(request_rec *r, struct h2_config *cfg);
 
 /* Destroy the session and all object it still contains. This will not
  * destroy h2_task instances that not finished yet. */
