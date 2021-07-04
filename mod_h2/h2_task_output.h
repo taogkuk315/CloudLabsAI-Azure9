@@ -21,22 +21,12 @@ struct h2_bucket;
 struct h2_mplx;
 struct h2_resp_head;
 
+typedef struct h2_task_output h2_task_output;
+
 typedef apr_status_t (*h2_output_converter)(struct h2_bucket *bucket,
                                             void *conv_data,
                                             const char *data, apr_size_t len,
                                             apr_size_t *pconsumed);
-
-typedef struct h2_task_output {
-    struct h2_mplx *m;
-    int session_id;
-    int stream_id;
-    int eos;
-    struct h2_bucket *cur;
-    apr_size_t cur_offset;
-    
-    h2_output_converter conv;
-    void *conv_ctx;
-} h2_task_output;
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
                                       int session_id, int stream_id,

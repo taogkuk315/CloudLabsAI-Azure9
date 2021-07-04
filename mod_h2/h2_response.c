@@ -129,7 +129,7 @@ static apr_status_t make_h2_headers(h2_response *resp)
                               resp->stream_id, (char*)nv->value);
                 return APR_EINVAL;
             }
-            resp->body_len = clen;
+            resp->head->content_length = clen;
         }
     }
     
@@ -137,10 +137,11 @@ static apr_status_t make_h2_headers(h2_response *resp)
                   "h2_response(%d): converted %d headers, content-length: %ld"
                   ", chunked=%d",
                   resp->stream_id, (int)resp->head->nvlen,
-                  (long)resp->body_len, resp->chunked);
+                  (long)resp->head->content_length, resp->chunked);
     
-    resp->remain_len = resp->body_len;
-    set_state(resp, ((resp->chunked || resp->body_len > 0)?
+    resp->remain_len = resp->head->content_length;
+    
+    set_state(resp, ((resp->chunked || resp->remain_len > 0)?
                      H2_RESP_ST_BODY : H2_RESP_ST_DONE));
     /* We are ready to be sent to the client */
     return APR_SUCCESS;
@@ -351,8 +352,8 @@ static apr_status_t copy_body(h2_response *resp,
         if (len > resp->remain_len) {
             /* body is longer then declared in headers */
             ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->c,
-                          "h2_response(%d): body len %ld exceeded by %ld",
-                          resp->stream_id, (long)resp->body_len,
+                          "h2_response(%d): body/chunk len %ld exceeded by %ld",
+                          resp->stream_id, (long)resp->remain_len,
                           (long)(resp->remain_len - len));
             return APR_EINVAL;
         }

@@ -29,6 +29,20 @@
 #include "h2_resp_head.h"
 #include "h2_task_output.h"
 
+struct h2_task_output {
+    struct h2_mplx *m;
+    int session_id;
+    int stream_id;
+    int eos;
+    struct h2_bucket *cur;
+    apr_size_t cur_offset;
+    
+    h2_resp_head *head;
+    
+    h2_output_converter conv;
+    void *conv_ctx;
+};
+
 
 static apr_status_t copy_unchanged(h2_bucket *bucket,
                                    void *conv_data,
@@ -67,6 +81,10 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
 
 void h2_task_output_destroy(h2_task_output *output)
 {
+    if (output->head) {
+        h2_resp_head_destroy(output->head);
+        output->head = NULL;
+    }
     if (!output->eos) {
         h2_task_output_close(output);
     }
@@ -145,6 +163,14 @@ static apr_status_t process_data(h2_task_output *output,
 apr_status_t h2_task_output_open(h2_task_output *output,
                                   h2_resp_head *head)
 {
+    if (head->content_length > 0 && head->content_length < BLOCKSIZE) {
+        /* For small responses, we wait for the remaining data to
+         * come in before we announce readyness of our output. That
+         * way we have less thread sync to do.
+         */
+        output->head = head;
+        return APR_SUCCESS;
+    }
     return h2_mplx_out_open(output->m, output->stream_id, head);
 }
 
@@ -174,6 +200,11 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                               "h2_task_output(%d-%d): got eos from brigade",
                               output->session_id, output->stream_id);
                 output->eos = 1;
+                if (output->head) {
+                    h2_mplx_out_open(output->m,
+                                     output->stream_id, output->head);
+                    output->head = NULL;
+                }
                 flush_cur(output);
                 h2_mplx_out_close(output->m, output->stream_id);
                 got_eos = 1;
