@@ -153,7 +153,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_
 diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_init.c
 --- gen/httpd-2.4.x/modules/ssl/ssl_engine_init.c	2015-01-19 16:52:30.000000000 +0100
 +++ modules/ssl/ssl_engine_init.c	2015-01-19 15:42:53.908000000 +0100
-@@ -623,6 +613,14 @@
+@@ -623,6 +613,15 @@
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
  
      SSL_CTX_set_info_callback(ctx, ssl_callback_Info);
@@ -161,7 +161,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_in
 +#if defined(HAVE_TLS_ALPN)
 +	SSL_CTX_set_alpn_select_cb(
 +	   ctx, ssl_callback_alpn_select, NULL);
-+#elif defined(HAVE_TLS_NPN)
++#endif
++#if defined(HAVE_TLS_NPN)
 +    SSL_CTX_set_next_protos_advertised_cb(
 +        ctx, ssl_callback_AdvertiseNextProtos, NULL);
 +#endif
@@ -187,7 +188,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
  } bio_filter_in_ctx_t;
  
  /*
-@@ -1412,6 +1414,42 @@
+@@ -1412,6 +1414,45 @@
          APR_BRIGADE_INSERT_TAIL(bb, bucket);
      }
  
@@ -206,9 +207,12 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
 +		if (sslconn->alpn_negofns) {
 +	#ifdef HAVE_TLS_ALPN
 +			SSL_get0_alpn_selected(inctx->ssl, &next_proto, &next_proto_len);
-+	#else
-+			SSL_get0_next_proto_negotiated(
++	#endif
++	#ifdef HAVE_TLS_ALPN
++           if (!next_proto) {
++               SSL_get0_next_proto_negotiated(
 +								   inctx->ssl, &next_proto, &next_proto_len);
++           }
 +	#endif
 +			ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, f->c,
 +						  APLOGNO(02306) "SSL negotiated protocol: '%s'",
@@ -396,8 +400,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 +
 +	return SSL_TLSEXT_ERR_OK;
 +}
-+
-+#elif defined(HAVE_TLS_NPN)
++#endif
++#if defined(HAVE_TLS_NPN)
 +/*
 + * This callback function is executed when SSL needs to decide what protocols
 + * to advertise during Next Protocol Negotiation (NPN).  It must produce a
@@ -575,7 +579,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
  #ifdef HAVE_SRP
  const char *ssl_cmd_SSLSRPVerifierFile(cmd_parms *cmd, void *dcfg, const char *arg);
  const char *ssl_cmd_SSLSRPUnknownUserSeed(cmd_parms *cmd, void *dcfg, const char *arg);
-@@ -796,6 +811,14 @@
+@@ -796,6 +811,15 @@
                                         EVP_CIPHER_CTX *, HMAC_CTX *, int);
  #endif
  
@@ -583,7 +587,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
 +int ssl_callback_alpn_select(SSL *ssl, const unsigned char **out,
 +							 unsigned char *outlen, const unsigned char *in,
 +							 unsigned int inlen, void *arg);
-+#elif defined(HAVE_TLS_NPN)
++#endif
++#if defined(HAVE_TLS_NPN)
 +int ssl_callback_AdvertiseNextProtos(SSL *ssl, const unsigned char **data, unsigned int *len, void *arg);
 +#endif
 +
