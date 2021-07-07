@@ -125,7 +125,7 @@ apr_status_t h2_session_process(h2_session *session)
     status = h2_session_start(session);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                      "session startup");
+                      "h2_session(%ld): startup", session->id);
         h2_session_destroy(session);
         return status;
     }
@@ -156,6 +156,13 @@ apr_status_t h2_session_process(h2_session *session)
             ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
                           "timeout waiting %f ms", wait_micros/1000.0);
         }
+        else {
+            ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
+                          "h2_session(%ld): error writing, terminating",
+                          session->id);
+            h2_session_abort(session, status);
+            break;
+        }
         
         int got_streams = !h2_stream_set_is_empty(session->streams);
         status = h2_session_read(session, got_streams?
@@ -179,21 +186,21 @@ apr_status_t h2_session_process(h2_session *session)
             case APR_EOF:
             case APR_ECONNABORTED:
                 ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
-                              "h2_session(%ld): eof on input"
-                              ", terminating", session->id);
+                              "h2_session(%ld): eof on input, terminating",
+                              session->id);
                 h2_session_abort(session, status);
                 break;
             default:
                 ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
-                              "h2_session(%ld): error processing"
-                              ", terminating", session->id);
+                              "h2_session(%ld): error reading, terminating",
+                              session->id);
                 h2_session_abort(session, status);
                 break;
         }
     }
     
     ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
-                  "h2_conn_process done");
+                  "h2_session(%ld): done", session->id);
     
     h2_workers_shutdown(workers, session->id);
     h2_session_destroy(session);
