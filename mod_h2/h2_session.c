@@ -68,7 +68,7 @@ static int stream_open(h2_session *session, int stream_id)
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
                       "h2_session: stream(%ld-%d): unable to add to pool",
-                      session->id, stream->id);
+                      session->id, h2_stream_get_id(stream));
         return NGHTTP2_ERR_INVALID_STREAM_ID;
     }
     
@@ -86,11 +86,11 @@ static apr_status_t stream_end_headers(h2_session *session, h2_stream *stream)
         /* Now would be a good time to actually schedule this
          * stream for processing in a worker thread */
         h2_task *task = h2_task_create(session->id,
-                                       stream->id,
+                                       h2_stream_get_id(stream),
                                        stream->c,
                                        session->mplx);
         if (session->on_new_task_cb) {
-            session->on_new_task_cb(session, stream->id, task);
+            session->on_new_task_cb(session, h2_stream_get_id(stream), task);
         }
     }
     return status;
@@ -600,9 +600,10 @@ static h2_stream *resume_on_data(void *ctx, h2_stream *stream) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->c,
                       "h2_stream(%ld-%d): suspended, checking for DATA",
                       stream->c->id, stream->id);
-        if (h2_mplx_out_has_data_for(stream->m, stream->id)) {
+        if (h2_mplx_out_has_data_for(stream->m, h2_stream_get_id(stream))) {
             h2_stream_set_suspended(stream, 0);
-            int rv = nghttp2_session_resume_data(session->ngh2, stream->id);
+            int rv = nghttp2_session_resume_data(session->ngh2,
+                                                 h2_stream_get_id(stream));
             ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
                           APLOG_ERR : APLOG_DEBUG, 0, session->c,
                           "h2_stream(%ld-%d): resuming stream %s",
@@ -624,9 +625,22 @@ static void h2_session_resume_streams_with_data(h2_session *session) {
 apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 {
     apr_status_t status = APR_SUCCESS;
+    int have_written = 0;
+    
+    /* First check if we have new streams to submit */
+    for (h2_resp_head *head = h2_session_pop_response(session); head;
+         head = h2_session_pop_response(session)) {
+        h2_stream *stream = h2_session_get_stream(session, head->stream_id);
+        if (stream) {
+            status = h2_session_submit_response(session, stream, head);
+            h2_resp_head_destroy(head);
+            have_written = 1;
+        }
+    }
+    
     h2_session_resume_streams_with_data(session);
     
-    if (timeout > 0 && !h2_session_want_write(session)) {
+    if (!have_written && timeout > 0 && !h2_session_want_write(session)) {
         status = h2_mplx_out_trywait(session->mplx, timeout);
         if (status != APR_TIMEUP) {
             h2_session_resume_streams_with_data(session);

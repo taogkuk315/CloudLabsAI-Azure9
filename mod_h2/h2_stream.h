@@ -25,10 +25,6 @@
  * connection to the client.
  */
 
-struct h2_bucket;
-struct h2_mplx;
-struct h2_request;
-
 typedef enum {
     H2_STREAM_ST_IDLE,
     H2_STREAM_ST_OPEN,
@@ -39,10 +35,14 @@ typedef enum {
     H2_STREAM_ST_CLOSED,
 } h2_stream_state_t;
 
+struct h2_bucket;
+struct h2_mplx;
+struct h2_request;
 struct h2_task;
 
+typedef struct h2_stream h2_stream;
 
-typedef struct h2_stream {
+struct h2_stream {
     int id;                     /* http2 stream id */
     h2_stream_state_t state;    /* http/2 state of this stream */
     conn_rec *c;                /* the connection this stream is on */
@@ -52,11 +52,14 @@ typedef struct h2_stream {
     struct h2_request *req;     /* the request made in this stream */
     int suspended;              /* DATA sending has been suspended */
     
-} h2_stream;
+};
+
 
 h2_stream *h2_stream_create(int id, conn_rec *c, struct h2_mplx *m);
 
 apr_status_t h2_stream_destroy(h2_stream *stream);
+
+int h2_stream_get_id(h2_stream *stream);
 
 void h2_stream_abort(h2_stream *stream);
 

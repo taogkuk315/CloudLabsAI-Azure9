@@ -38,34 +38,13 @@ typedef enum {
 
 struct h2_bucket;
 struct h2_resp_head;
-struct h2_response;
+typedef struct h2_response h2_response;
 
 typedef void h2_response_state_change_cb(struct h2_response *resp,
                                          h2_response_state_t prevstate,
                                          void *cb_ctx);
 
-typedef struct h2_response {
-    int stream_id;
-    conn_rec *c;
-    h2_response_state_t state;
-    
-    h2_response_state_change_cb *state_cb;
-    void *state_cb_ctx;
-    
-    int chunked;
-    apr_size_t remain_len;
-    struct h2_bucket *chunk_work;
-    
-    apr_size_t offset;
-    struct h2_bucket *rawhead;
-    
-    const char *status;
-    apr_array_header_t *hlines;
-    
-    struct h2_resp_head *head;
-} h2_response;
-
-h2_response *h2_response_create(int stream_id, conn_rec *c);
+h2_response *h2_response_create(int stream_id, apr_pool_t *pool);
 apr_status_t h2_response_destroy(h2_response *response);
 
 void h2_response_set_state_change_cb(h2_response *resp,
@@ -77,6 +56,10 @@ apr_status_t h2_response_http_convert(struct h2_bucket *bucket,
                                       const char *data, apr_size_t len,
                                       apr_size_t *pconsumed);
 
+long h2_response_get_content_length(h2_response *resp);
+
 struct h2_resp_head *h2_response_get_head(h2_response *resp);
+
+h2_response_state_t h2_response_get_state(h2_response *resp);
 
 #endif /* defined(__mod_h2__h2_response__) */

@@ -19,7 +19,7 @@
 
 struct h2_bucket;
 struct h2_mplx;
-struct h2_resp_head;
+struct h2_response;
 
 typedef struct h2_task_output h2_task_output;
 
@@ -35,7 +35,7 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
 void h2_task_output_destroy(h2_task_output *output);
 
 apr_status_t h2_task_output_open(h2_task_output *output,
-                                 struct h2_resp_head *head);
+                                 struct h2_response *response);
 
 
 apr_status_t h2_task_output_write(h2_task_output *output,

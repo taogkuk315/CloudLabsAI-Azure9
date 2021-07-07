@@ -54,18 +54,7 @@ typedef enum {
     H2_TASK_ST_DONE
 } h2_task_state_t;
 
-typedef struct h2_task {
-    long session_id;
-    int stream_id;
-    h2_task_state_t state;
-    int aborted;
-    
-    conn_rec *c;
-    struct h2_task_input *input;    /* http/1.1 input data */
-    struct h2_task_output *output;  /* response body data */
-    struct h2_response *response;     /* response meta data */
-    
-} h2_task;
+typedef struct h2_task h2_task;
 
 h2_task *h2_task_create(long session_id, int stream_id,
                         conn_rec *master,
@@ -77,9 +66,13 @@ apr_status_t h2_task_do(h2_task *task);
 
 void h2_task_abort(h2_task *task);
 
+long h2_task_get_session_id(h2_task *task);
+int h2_task_get_stream_id(h2_task *task);
+
 struct h2_resp_head *h2_task_get_resp_head(h2_task *task);
 
 void h2_task_register_hooks(void);
+
 int h2_task_pre_conn(h2_task *task, conn_rec *c);
 
 

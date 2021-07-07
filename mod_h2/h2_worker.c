@@ -24,6 +24,19 @@
 #include "h2_task.h"
 #include "h2_worker.h"
 
+struct h2_worker {
+    int id;
+    apr_thread_t *thread;
+    apr_pool_t *pool;
+    h2_worker_task_next_fn *get_next;
+    h2_worker_task_done_fn *task_done;
+    h2_worker_done_fn *worker_done;
+    void *ctx;
+    int aborted;
+    
+    struct h2_task *current;
+};
+
 static void *execute(apr_thread_t *thread, void *wctx)
 {
     h2_worker *worker = (h2_worker *)wctx;
@@ -68,6 +81,11 @@ h2_worker *h2_worker_create(int id,
 apr_status_t h2_worker_destroy(h2_worker *worker)
 {
     return APR_SUCCESS;
+}
+
+int h2_worker_get_id(h2_worker *worker)
+{
+    return worker->id;
 }
 
 void h2_worker_abort(h2_worker *worker)

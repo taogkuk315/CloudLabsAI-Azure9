@@ -20,14 +20,7 @@
 struct h2_bucket;
 struct h2_mplx;
 
-typedef struct h2_task_input {
-    struct h2_mplx *m;
-    int session_id;
-    int stream_id;
-    int eos;
-    struct h2_bucket *cur;
-    apr_size_t cur_offset;
-} h2_task_input;
+typedef struct h2_task_input h2_task_input;
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
                                         int session_id, int stream_id,

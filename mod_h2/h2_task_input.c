@@ -28,6 +28,16 @@
 #include "h2_stream.h"
 #include "h2_task_input.h"
 
+struct h2_task_input {
+    struct h2_mplx *m;
+    int session_id;
+    int stream_id;
+    int eos;
+    struct h2_bucket *cur;
+    apr_size_t cur_offset;
+};
+
+
 static int check_abort(h2_task_input *input,
                        ap_filter_t *filter,
                        apr_bucket_brigade *brigade)

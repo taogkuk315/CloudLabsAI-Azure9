@@ -31,6 +31,11 @@
 #include "h2_task.h"
 #include "h2_stream_set.h"
 
+
+struct h2_stream_set {
+    h2_queue *queue;
+};
+
 h2_stream_set *h2_stream_set_create(apr_pool_t *pool)
 {
     h2_stream_set *sp = apr_pcalloc(pool, sizeof(h2_stream_set));

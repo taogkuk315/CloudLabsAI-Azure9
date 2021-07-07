@@ -34,7 +34,7 @@
 #include "h2_resp_head.h"
 #include "h2_mplx.h"
 
-typedef struct h2_mplx {
+struct h2_mplx {
     long id;
     struct apr_pool_t *pool;
     struct h2_queue *heads;
@@ -51,7 +51,7 @@ typedef struct h2_mplx {
     
     int debug;
     apr_size_t out_channel_max_size;
-} h2_mplx;
+};
 
 static void free_resp_head(void *p)
 {
@@ -66,6 +66,10 @@ static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
     }
     return 0;
 }
+
+static void have_in_data_for(h2_mplx *m, int channel);
+static void have_out_data_for(h2_mplx *m, int channel);
+static void consumed_out_data_for(h2_mplx *m, int channel);
 
 h2_mplx *h2_mplx_create(conn_rec *c)
 {
@@ -205,7 +209,7 @@ apr_status_t h2_mplx_in_write(h2_mplx *m,
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = h2_bucket_queue_append(m->input, channel, bucket);
-        apr_thread_cond_broadcast(m->added_input);
+        have_in_data_for(m, channel);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
@@ -216,7 +220,7 @@ apr_status_t h2_mplx_in_close(h2_mplx *m, int channel)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = h2_bucket_queue_append_eos(m->input, channel);
-        apr_thread_cond_broadcast(m->added_input);
+        have_in_data_for(m, channel);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
@@ -234,7 +238,7 @@ apr_status_t h2_mplx_out_read(h2_mplx *m,
                           m->id, channel);
         }
         if (status == APR_SUCCESS) {
-            apr_thread_cond_broadcast(m->removed_output);
+            consumed_out_data_for(m, channel);
         }
         apr_thread_mutex_unlock(m->lock);
     }
@@ -268,7 +272,7 @@ apr_status_t h2_mplx_out_open(h2_mplx *m, int channel, h2_resp_head *head)
                           "h2_mplx(%ld): open on channel-in(%d)",
                           m->id, channel);
         }
-        apr_thread_cond_broadcast(m->added_output);
+        have_out_data_for(m, channel);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
@@ -300,16 +304,15 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
          * We will not split buckets to enforce the limit to the last
          * byte. After all, the bucket is already in memory.
          */
-        apr_size_t csize = h2_bucket_queue_get_stream_size(m->output, channel);
         while (!is_aborted(m, &status)
-               && csize > m->out_channel_max_size) {
+               && (m->out_channel_max_size
+                   < h2_bucket_queue_get_stream_size(m->output, channel))) {
             if (m->debug) {
                 ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
-                              "h2_mplx(%ld-%d): blocking on queue size of %ld",
-                              m->id, channel, csize);
+                              "h2_mplx(%ld-%d): blocking on queue size",
+                              m->id, channel);
             }
             apr_thread_cond_wait(m->removed_output, m->lock);
-            csize = h2_bucket_queue_get_stream_size(m->output, channel);
         }
         
         if (!is_aborted(m, &status)) {
@@ -320,7 +323,7 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
                               m->id, bucket->data_len, channel);
             }
             if (status == APR_SUCCESS) {
-                apr_thread_cond_broadcast(m->added_output);
+                have_out_data_for(m, channel);
             }
         }
         apr_thread_mutex_unlock(m->lock);
@@ -338,7 +341,7 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int channel)
                           "h2_mplx(%ld): close channel-out(%d)",
                           m->id, channel);
         }
-        apr_thread_cond_broadcast(m->added_output);
+        have_out_data_for(m, channel);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
@@ -380,5 +383,20 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout)
         apr_thread_mutex_unlock(m->lock);
     }
     return has_data;
+}
+
+static void have_in_data_for(h2_mplx *m, int channel)
+{
+    apr_thread_cond_broadcast(m->added_input);
+}
+
+static void have_out_data_for(h2_mplx *m, int channel)
+{
+    apr_thread_cond_broadcast(m->added_output);
+}
+
+static void consumed_out_data_for(h2_mplx *m, int channel)
+{
+    apr_thread_cond_broadcast(m->removed_output);
 }
 

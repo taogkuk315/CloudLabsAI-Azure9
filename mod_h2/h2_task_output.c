@@ -26,6 +26,7 @@
 #include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
+#include "h2_response.h"
 #include "h2_resp_head.h"
 #include "h2_task_output.h"
 
@@ -160,10 +161,12 @@ static apr_status_t process_data(h2_task_output *output,
     return APR_SUCCESS;
 }
 
-apr_status_t h2_task_output_open(h2_task_output *output,
-                                  h2_resp_head *head)
+apr_status_t h2_task_output_open(h2_task_output *output, h2_response *response)
 {
-    if (head->content_length > 0 && head->content_length < BLOCKSIZE) {
+    h2_resp_head *head = h2_response_get_head(response);
+    
+    long content_length = h2_response_get_content_length(response);
+    if (content_length > 0 && content_length < BLOCKSIZE) {
         /* For small responses, we wait for the remaining data to
          * come in before we announce readyness of our output. That
          * way we have less thread sync to do.

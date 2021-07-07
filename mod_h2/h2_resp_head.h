@@ -22,7 +22,6 @@ struct h2_bucket;
 typedef struct h2_resp_head {
     int stream_id;
     const char *status;
-    apr_size_t content_length;
     struct h2_bucket *data;
 
     apr_size_t nvlen;

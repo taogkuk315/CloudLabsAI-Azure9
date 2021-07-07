@@ -157,19 +157,6 @@ apr_status_t h2_session_process(h2_session *session)
                           "timeout waiting %f ms", wait_micros/1000.0);
         }
         
-        /* Got a stream that is ready to be submitted, e.g. that has all
-         * response headers ready?
-         */
-        h2_resp_head *head = h2_session_pop_response(session);
-        if (head) {
-            h2_stream *stream = h2_session_get_stream(session, head->stream_id);
-            if (stream) {
-                status = h2_session_submit_response(session, stream, head);
-                h2_resp_head_destroy(head);
-                have_written = 1;
-            }
-        }
-        
         int got_streams = !h2_stream_set_is_empty(session->streams);
         status = h2_session_read(session, got_streams?
                                  APR_NONBLOCK_READ : APR_BLOCK_READ);
@@ -221,7 +208,8 @@ static void start_new_task(h2_session *session, int stream_id, h2_task *task)
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
                       "scheduling task(%ld-%d)",
-                      task->session_id, task->stream_id);
+                      h2_task_get_session_id(task),
+                      h2_task_get_stream_id(task));
     }
 }
 

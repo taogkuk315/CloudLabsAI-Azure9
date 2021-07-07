@@ -17,7 +17,6 @@
 #ifndef __mod_h2__h2_request__
 #define __mod_h2__h2_request__
 
-typedef struct h2_mplx h2_mplx;
 typedef struct h2_request h2_request;
 
 h2_request *h2_request_create(apr_pool_t *pool, int id);

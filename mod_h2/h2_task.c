@@ -37,6 +37,19 @@
 #include "h2_task.h"
 #include "h2_ctx.h"
 
+struct h2_task {
+    long session_id;
+    int stream_id;
+    h2_task_state_t state;
+    int aborted;
+    
+    conn_rec *c;
+    struct h2_task_input *input;    /* http/1.1 input data */
+    struct h2_task_output *output;  /* response body data */
+    struct h2_response *response;     /* response meta data */
+    
+};
+
 static ap_filter_rec_t *h2_input_filter_handle;
 static ap_filter_rec_t *h2_output_filter_handle;
 
@@ -171,59 +184,14 @@ static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
     return APR_SUCCESS;
 }
 
+static void set_state(h2_task *task, h2_task_state_t state);
+static void response_state_change(h2_response *resp,
+                                  h2_response_state_t prevstate,
+                                  void *cb_ctx);
 static apr_status_t output_convert(h2_bucket *bucket,
                                    void *conv_ctx,
                                    const char *data, apr_size_t len,
-                                   apr_size_t *pconsumed)
-{
-    h2_task *task = (h2_task *)conv_ctx;
-    assert(task);
-    return h2_response_http_convert(bucket, task->response,
-                                    data, len, pconsumed);
-}
-
-static void set_state(h2_task *task, h2_task_state_t state)
-{
-    assert(task);
-    if (task->state != state) {
-        h2_task_state_t oldstate = task->state;
-        task->state = state;
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, task->c,
-                      "h2_task(%ld-%d): state now %d, was %d",
-                      task->session_id, task->stream_id,
-                      task->state, oldstate);
-        if (state == H2_TASK_ST_READY) {
-            /* task needs to submit the head of the response */
-            apr_status_t status = h2_task_output_open(
-                task->output, h2_response_get_head(task->response));
-            if (status != APR_SUCCESS) {
-                ap_log_cerror( APLOG_MARK, APLOG_ERR, status, task->c,
-                              "task(%ld-%d): starting response",
-                              task->session_id, task->stream_id);
-            }
-        }
-    }
-}
-
-static void response_state_change(h2_response *resp,
-                                  h2_response_state_t prevstate,
-                                  void *cb_ctx)
-{
-    switch (resp->state) {
-        case H2_RESP_ST_BODY:
-        case H2_RESP_ST_DONE: {
-            h2_task *task = (h2_task *)cb_ctx;
-            assert(task);
-            if (task->state < H2_TASK_ST_READY) {
-                set_state(task, H2_TASK_ST_READY);
-            }
-            break;
-        }
-        default:
-            /* nop */
-            break;
-    }
-}
+                                   apr_size_t *pconsumed);
 
 h2_task *h2_task_create(long session_id, int stream_id,
                         conn_rec *master,
@@ -255,7 +223,7 @@ h2_task *h2_task_create(long session_id, int stream_id,
     task->output = h2_task_output_create(task->c->pool,
                                          session_id, stream_id, mplx);
     
-    task->response = h2_response_create(stream_id, task->c);
+    task->response = h2_response_create(stream_id, task->c->pool);
     h2_response_set_state_change_cb(task->response,
                                     response_state_change, task);
     h2_task_output_set_converter(task->output, output_convert, task);
@@ -343,5 +311,70 @@ void h2_task_abort(h2_task *task)
         h2_task_output_destroy(task->output);
         task->output = NULL;
     }
+}
+
+long h2_task_get_session_id(h2_task *task)
+{
+    return task->session_id;
+}
+
+int h2_task_get_stream_id(h2_task *task)
+{
+    return task->stream_id;
+}
+
+static void set_state(h2_task *task, h2_task_state_t state)
+{
+    assert(task);
+    if (task->state != state) {
+        h2_task_state_t oldstate = task->state;
+        task->state = state;
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, task->c,
+                      "h2_task(%ld-%d): state now %d, was %d",
+                      task->session_id, task->stream_id,
+                      task->state, oldstate);
+        if (state == H2_TASK_ST_READY) {
+            /* task needs to submit the head of the response */
+            apr_status_t status =
+            h2_task_output_open(task->output, task->response);
+            if (status != APR_SUCCESS) {
+                ap_log_cerror( APLOG_MARK, APLOG_ERR, status, task->c,
+                              "task(%ld-%d): starting response",
+                              task->session_id, task->stream_id);
+            }
+        }
+    }
+}
+
+
+static void response_state_change(h2_response *resp,
+                                  h2_response_state_t prevstate,
+                                  void *cb_ctx)
+{
+    switch (h2_response_get_state(resp)) {
+        case H2_RESP_ST_BODY:
+        case H2_RESP_ST_DONE: {
+            h2_task *task = (h2_task *)cb_ctx;
+            assert(task);
+            if (task->state < H2_TASK_ST_READY) {
+                set_state(task, H2_TASK_ST_READY);
+            }
+            break;
+        }
+        default:
+            /* nop */
+            break;
+    }
+}
+
+static apr_status_t output_convert(h2_bucket *bucket,
+                                   void *conv_ctx,
+                                   const char *data, apr_size_t len,
+                                   apr_size_t *pconsumed)
+{
+    h2_task *task = (h2_task *)conv_ctx;
+    assert(task);
+    return h2_response_http_convert(bucket, task->response,
+                                    data, len, pconsumed);
 }
 

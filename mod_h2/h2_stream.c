@@ -25,9 +25,9 @@
 #include <nghttp2/nghttp2.h>
 
 #include "h2_private.h"
+#include "h2_mplx.h"
 #include "h2_request.h"
 #include "h2_resp_head.h"
-#include "h2_mplx.h"
 #include "h2_stream.h"
 #include "h2_task.h"
 #include "h2_ctx.h"
@@ -63,6 +63,11 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
     }
     stream->m = NULL;
     return APR_SUCCESS;
+}
+
+int h2_stream_get_id(h2_stream *stream)
+{
+    return stream->id;
 }
 
 void h2_stream_abort(h2_stream *stream)

@@ -22,14 +22,11 @@
  *
  */
 
-struct h2_queue;
-
 typedef h2_stream *h2_stream_set_match_fn(void *ctx, h2_stream *stream);
 typedef int h2_stream_set_iter_fn(void *ctx, h2_stream *stream);
 
-typedef struct h2_stream_set {
-    struct h2_queue *queue;
-} h2_stream_set;
+typedef struct h2_stream_set h2_stream_set;
+
 
 h2_stream_set *h2_stream_set_create(apr_pool_t *pool);
 
@@ -42,11 +39,13 @@ apr_status_t h2_stream_set_add(h2_stream_set *sp, h2_stream *stream);
 h2_stream *h2_stream_set_get(h2_stream_set *sp, int stream_id);
 
 h2_stream *h2_stream_set_remove(h2_stream_set *sp,h2_stream *stream);
+
 void h2_stream_set_remove_all(h2_stream_set *sp);
 
 void h2_stream_set_destroy_all(h2_stream_set *sp);
 
 int h2_stream_set_is_empty(h2_stream_set *sp);
+
 apr_size_t h2_stream_set_size(h2_stream_set *sp);
 
 h2_stream *h2_stream_set_find(h2_stream_set *sp,

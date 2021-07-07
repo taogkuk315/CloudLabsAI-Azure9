@@ -17,32 +17,18 @@
 #ifndef __mod_h2__h2_worker__
 #define __mod_h2__h2_worker__
 
-struct h2_task;
-struct h2_worker;
+typedef struct h2_worker h2_worker;
 
-typedef apr_status_t h2_worker_task_next_fn(struct h2_worker *worker,
-                                            struct h2_task **ptask,
+typedef apr_status_t h2_worker_task_next_fn(h2_worker *worker,
+                                            h2_task **ptask,
                                             void *ctx);
 
-typedef void h2_worker_task_done_fn(struct h2_worker *worker,
-                                    struct h2_task *ptask,
+typedef void h2_worker_task_done_fn(h2_worker *worker,
+                                    h2_task *ptask,
                                     apr_status_t status,
                                     void *ctx);
 
-typedef void h2_worker_done_fn(struct h2_worker *worker, void *ctx);
-
-typedef struct h2_worker {
-    int id;
-    apr_thread_t *thread;
-    apr_pool_t *pool;
-    h2_worker_task_next_fn *get_next;
-    h2_worker_task_done_fn *task_done;
-    h2_worker_done_fn *worker_done;
-    void *ctx;
-    int aborted;
-    
-    struct h2_task *current;
-} h2_worker;
+typedef void h2_worker_done_fn(h2_worker *worker, void *ctx);
 
 h2_worker *h2_worker_create(int id,
                             apr_pool_t *pool,
@@ -55,6 +41,8 @@ h2_worker *h2_worker_create(int id,
 apr_status_t h2_worker_destroy(h2_worker *worker);
 
 void h2_worker_abort(h2_worker *worker);
+
+int h2_worker_get_id(h2_worker *worker);
 
 int h2_worker_is_aborted(h2_worker *worker);
 

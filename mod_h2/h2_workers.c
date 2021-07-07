@@ -28,7 +28,7 @@
 #include "h2_worker.h"
 #include "h2_workers.h"
 
-typedef struct h2_workers {
+struct h2_workers {
     server_rec *s;
     apr_pool_t *pool;
     int aborted;
@@ -48,7 +48,7 @@ typedef struct h2_workers {
     struct apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *task_added;
     struct apr_thread_cond_t *task_done;
-} h2_workers;
+};
 
 
 static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
@@ -66,7 +66,9 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
                 status = APR_SUCCESS;
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                              "h2_worker(%d): start task(%ld-%d)",
-                             worker->id, task->session_id, task->stream_id);
+                             h2_worker_get_id(worker),
+                             h2_task_get_session_id(task),
+                             h2_task_get_stream_id(task));
                 break;
             }
             
@@ -105,9 +107,11 @@ static void task_done(h2_worker *worker, h2_task *task,
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                      "h2_worker(%d): task(%ld-%d) done",
-                     worker->id, task->session_id, task->stream_id);
+                     h2_worker_get_id(worker),
+                     h2_task_get_session_id(task),
+                     h2_task_get_stream_id(task));
         
-        apr_thread_cond_broadcast(workers->task_done);
+        apr_thread_cond_signal(workers->task_done);
         h2_task_destroy(task);
         
         apr_thread_mutex_unlock(workers->lock);
@@ -120,7 +124,7 @@ static void worker_done(h2_worker *worker, void *ctx)
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
-                     "h2_worker(%d): done", worker->id);
+                     "h2_worker(%d): done", h2_worker_get_id(worker));
         h2_queue_remove(workers->workers, worker);
         apr_thread_mutex_unlock(workers->lock);
     }
@@ -137,7 +141,7 @@ static apr_status_t add_worker(h2_workers *workers)
         return APR_ENOMEM;
     }
     ap_log_error(APLOG_MARK, APLOG_TRACE2, 0, workers->s,
-                 "h2_workers: adding worker(%d)", w->id);
+                 "h2_workers: adding worker(%d)", h2_worker_get_id(w));
     return h2_queue_append(workers->workers, w);
 }
 
@@ -231,7 +235,8 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                      "h2_workers: scheduling task(%ld-%d)",
-                     task->session_id, task->stream_id);
+                     h2_task_get_session_id(task),
+                     h2_task_get_stream_id(task));
         if (workers->idle_worker_count <= 0
             && h2_queue_size(workers->workers) < workers->max_size) {
             ap_log_error(APLOG_MARK, APLOG_TRACE2, status, workers->s,
@@ -255,7 +260,7 @@ static int abort_task(void *ctx, int id, void *entry, int index)
 static void *match_session_id(void *ctx, int id, void *entry)
 {
     long *psession_id = (long *)ctx;
-    if (((h2_task*)entry)->session_id == *psession_id) {
+    if (h2_task_get_session_id((h2_task*)entry) == *psession_id) {
         return entry;
     }
     return NULL;
