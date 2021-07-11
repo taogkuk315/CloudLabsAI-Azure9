@@ -56,6 +56,9 @@ apr_status_t h2_mplx_release(h2_mplx *mplx);
  */
 void h2_mplx_abort(h2_mplx *mplx);
 
+/* Get the id of the multiplexer */
+long h2_mplx_get_id(h2_mplx *mplx);
+
 /* Read a h2_bucket for the given stream_id. Will return ARP_EAGAIN when
  * called with APR_NONBLOCK_READ and no data present. Will return APR_EOF
  * when the input of the stream has been closed.

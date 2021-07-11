@@ -257,6 +257,7 @@
 		B2A6EF181A9B598B005DFC5B /* h2_request.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_request.h; sourceTree = "<group>"; };
 		B2A6EF281A9C79A6005DFC5B /* h2_h2c.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_h2c.c; sourceTree = "<group>"; };
 		B2A6EF291A9C79A6005DFC5B /* h2_h2c.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_h2c.h; sourceTree = "<group>"; };
+		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
 		B2C16D221A778E78000B2297 /* alpn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
 		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
@@ -841,7 +842,6 @@
 		B2E06CC81A8E10EA00BE04D5 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E06CC91A8E10EA00BE04D5 /* Makefile.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
 		B2E06CCA1A8E308000BE04D5 /* load-urls-1.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "load-urls-1.txt"; sourceTree = "<group>"; };
-		B2E06CCB1A8E308000BE04D5 /* TemplateIcon2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = TemplateIcon2x.png; sourceTree = "<group>"; };
 		B2E5BADC1A6E65F80031CBD8 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2E5BADE1A6E69810031CBD8 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -854,7 +854,6 @@
 				B2546D9F1A8249A60033A875 /* htdocs */,
 				B22549091A6E8AF9004BDEC9 /* Makefile */,
 				B2E06CCA1A8E308000BE04D5 /* load-urls-1.txt */,
-				B2E06CCB1A8E308000BE04D5 /* TemplateIcon2x.png */,
 			);
 			path = test;
 			sourceTree = "<group>";
@@ -1212,6 +1211,7 @@
 			children = (
 				B2E5BADB1A6E65F80031CBD8 /* clients */,
 				B27BBD311A65928A00C58A41 /* htppd */,
+				B2A6EF2A1A9E3A93005DFC5B /* INSTALL */,
 				B22549011A6E85CF004BDEC9 /* Makefile */,
 				B225490A1A6EAAA3004BDEC9 /* mod_h2 */,
 				B2E5BADD1A6E69810031CBD8 /* nghttp2 */,

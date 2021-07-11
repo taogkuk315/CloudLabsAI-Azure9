@@ -49,7 +49,7 @@ h2_stream *h2_stream_create(int id, conn_rec *c, struct h2_mplx *m)
     if (stream != NULL) {
         stream->id = id;
         stream->state = H2_STREAM_ST_IDLE;
-        stream->c = c;
+        stream->pool = c->pool;
         stream->m = m;
     }
     return stream;
@@ -83,7 +83,7 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream)
 apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 {
     if (!stream->req) {
-        stream->req = h2_request_create(stream->c->pool, stream->id);
+        stream->req = h2_request_create(stream->pool, stream->id);
         if (!stream->req) {
             return APR_ENOMEM;
         }
@@ -93,9 +93,9 @@ apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 
 apr_status_t h2_stream_write_eos(h2_stream *stream)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->c,
+    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream->pool,
                   "h2_stream(%ld-%d): closing input",
-                  stream->c->id, stream->id);
+                  h2_mplx_get_id(stream->m), stream->id);
     apr_status_t status = APR_SUCCESS;
     switch (stream->state) {
         case H2_STREAM_ST_CLOSED_INPUT:
@@ -118,7 +118,7 @@ apr_status_t h2_stream_write_header(h2_stream *stream,
                                     const char *value, size_t vlen)
 {
     if (!stream->req) {
-        stream->req = h2_request_create(stream->c->pool, stream->id);
+        stream->req = h2_request_create(stream->pool, stream->id);
         if (!stream->req) {
             return APR_ENOMEM;
         }

@@ -45,8 +45,8 @@ typedef struct h2_stream h2_stream;
 struct h2_stream {
     int id;                     /* http2 stream id */
     h2_stream_state_t state;    /* http/2 state of this stream */
-    conn_rec *c;                /* the connection this stream is on */
-    struct h2_mplx *m;          /* the multiplexer on this connection */
+    apr_pool_t *pool;           /* the memory pool for this stream */
+    struct h2_mplx *m;          /* the multiplexer to work with */
     int aborted;                /* was aborted */
     
     struct h2_request *req;     /* the request made in this stream */

@@ -175,6 +175,11 @@ apr_status_t h2_mplx_release(h2_mplx *m)
     return status;
 }
 
+long h2_mplx_get_id(h2_mplx *m)
+{
+    return m->id;
+}
+
 void h2_mplx_abort(h2_mplx *m)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);

@@ -1,0 +1,15 @@
+
+mod-h2 - a http/2 modules for apache httpd
+------------------------------------------
+
+In order to build the mod_h2 module, you need to perform the following steps:
+
+
+Ubuntu
+----------------------------------------
+
+Install the prerequisite software:
+
+  > sudo apt-get install libpcre3-dev
+
+...

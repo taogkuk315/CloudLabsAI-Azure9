@@ -87,7 +87,7 @@ static apr_status_t stream_end_headers(h2_session *session, h2_stream *stream)
          * stream for processing in a worker thread */
         h2_task *task = h2_task_create(session->id,
                                        h2_stream_get_id(stream),
-                                       stream->c,
+                                       session->c,
                                        session->mplx);
         if (session->on_new_task_cb) {
             session->on_new_task_cb(session, h2_stream_get_id(stream), task);
@@ -597,9 +597,9 @@ static h2_stream *resume_on_data(void *ctx, h2_stream *stream) {
     assert(stream);
     
     if (h2_stream_is_suspended(stream)) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->c,
+        ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream->pool,
                       "h2_stream(%ld-%d): suspended, checking for DATA",
-                      stream->c->id, stream->id);
+                      h2_mplx_get_id(stream->m), stream->id);
         if (h2_mplx_out_has_data_for(stream->m, h2_stream_get_id(stream))) {
             h2_stream_set_suspended(stream, 0);
             int rv = nghttp2_session_resume_data(session->ngh2,

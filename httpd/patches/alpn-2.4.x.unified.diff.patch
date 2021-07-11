@@ -1,8 +1,8 @@
 diff -ru gen/httpd-2.4.x/modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
---- gen/httpd-2.4.x/modules/ssl/mod_ssl.c	2015-01-19 16:52:30.000000000 +0100
-+++ modules/ssl/mod_ssl.c	2015-01-19 15:42:53.904000000 +0100
+--- gen/httpd-2.4.x/modules/ssl/mod_ssl.c    2015-01-19 16:52:30.000000000 +0100
++++ modules/ssl/mod_ssl.c    2015-01-19 15:42:53.904000000 +0100
 @@ -273,6 +270,12 @@
- 		"OpenSSL configuration command")
+         "OpenSSL configuration command")
  #endif
  
 +#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
@@ -23,27 +23,27 @@ diff -ru gen/httpd-2.4.x/modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
 +                               ssl_alpn_proto_negotiated negotiatedfn)
 +{
 +#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
-+	SSLConnRec *sslconn = myConnConfig(c);
-+	
-+	if (!sslconn) {
-+		return DECLINED;
-+	}
-+	
-+	if (!sslconn->alpn_proposefns) {
-+		sslconn->alpn_proposefns =
-+		apr_array_make(c->pool, 5, sizeof(ssl_alpn_propose_protos));
-+		sslconn->alpn_negofns =
-+		apr_array_make(c->pool, 5, sizeof(ssl_alpn_proto_negotiated));
-+	}
-+	
-+	if (advertisefn)
-+		APR_ARRAY_PUSH(sslconn->alpn_proposefns, ssl_alpn_propose_protos) =
-+			advertisefn;
-+	if (negotiatedfn)
-+		APR_ARRAY_PUSH(sslconn->alpn_negofns, ssl_alpn_proto_negotiated) =
-+			negotiatedfn;
-+	
-+	return OK;
++    SSLConnRec *sslconn = myConnConfig(c);
++    
++    if (!sslconn) {
++        return DECLINED;
++    }
++    
++    if (!sslconn->alpn_proposefns) {
++        sslconn->alpn_proposefns =
++        apr_array_make(c->pool, 5, sizeof(ssl_alpn_propose_protos));
++        sslconn->alpn_negofns =
++        apr_array_make(c->pool, 5, sizeof(ssl_alpn_proto_negotiated));
++    }
++    
++    if (advertisefn)
++        APR_ARRAY_PUSH(sslconn->alpn_proposefns, ssl_alpn_propose_protos) =
++            advertisefn;
++    if (negotiatedfn)
++        APR_ARRAY_PUSH(sslconn->alpn_negofns, ssl_alpn_proto_negotiated) =
++            negotiatedfn;
++    
++    return OK;
 +#else
 +    return DECLINED;
 +#endif
@@ -61,8 +61,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
      ap_register_auth_provider(p, AUTHZ_PROVIDER_GROUP, "ssl",
                                AUTHZ_PROVIDER_VERSION,
 diff -ru gen/httpd-2.4.x/modules/ssl/mod_ssl.h modules/ssl/mod_ssl.h
---- gen/httpd-2.4.x/modules/ssl/mod_ssl.h	2015-01-07 17:03:34.000000000 +0100
-+++ modules/ssl/mod_ssl.h	2015-01-19 15:42:53.904000000 +0100
+--- gen/httpd-2.4.x/modules/ssl/mod_ssl.h    2015-01-07 17:03:34.000000000 +0100
++++ modules/ssl/mod_ssl.h    2015-01-19 15:42:53.904000000 +0100
 @@ -63,5 +63,46 @@
  
  APR_DECLARE_OPTIONAL_FN(int, ssl_engine_disable, (conn_rec *));
@@ -81,8 +81,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/mod_ssl.h modules/ssl/mod_ssl.h
 + * callbacks, return DONE.
 + */
 +typedef int (*ssl_alpn_propose_protos)(conn_rec *connection,
-+									apr_array_header_t *client_protos,
-+									apr_array_header_t *proposed_protos);
++                                    apr_array_header_t *client_protos,
++                                    apr_array_header_t *proposed_protos);
 +
 +/** The alpn_proto_negotiated callback allows other modules to discover
 + * the name of the protocol that was chosen during the Application-Layer
@@ -104,15 +104,15 @@ diff -ru gen/httpd-2.4.x/modules/ssl/mod_ssl.h modules/ssl/mod_ssl.h
 + * mod_ssl does not support ALPN).
 + */
 +APR_DECLARE_OPTIONAL_FN(int, modssl_register_alpn,
-+						(conn_rec *conn,
-+						 ssl_alpn_propose_protos proposefn,
-+						 ssl_alpn_proto_negotiated negotiatedfn));
++                        (conn_rec *conn,
++                         ssl_alpn_propose_protos proposefn,
++                         ssl_alpn_proto_negotiated negotiatedfn));
 +
  #endif /* __MOD_SSL_H__ */
  /** @} */
 diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_config.c
---- gen/httpd-2.4.x/modules/ssl/ssl_engine_config.c	2015-01-19 16:52:30.000000000 +0100
-+++ modules/ssl/ssl_engine_config.c	2015-01-19 16:34:55.944000000 +0100
+--- gen/httpd-2.4.x/modules/ssl/ssl_engine_config.c    2015-01-19 16:52:30.000000000 +0100
++++ modules/ssl/ssl_engine_config.c    2015-01-19 16:34:55.944000000 +0100
 @@ -159,6 +159,9 @@
      SSL_CONF_CTX_set_flags(mctx->ssl_ctx_config, SSL_CONF_FLAG_CERTIFICATE);
      mctx->ssl_ctx_param = apr_array_make(p, 5, sizeof(ssl_ctx_param_t));
@@ -151,16 +151,16 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_
  #ifdef HAVE_SRP
  
 diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_init.c
---- gen/httpd-2.4.x/modules/ssl/ssl_engine_init.c	2015-01-19 16:52:30.000000000 +0100
-+++ modules/ssl/ssl_engine_init.c	2015-01-19 15:42:53.908000000 +0100
+--- gen/httpd-2.4.x/modules/ssl/ssl_engine_init.c    2015-01-19 16:52:30.000000000 +0100
++++ modules/ssl/ssl_engine_init.c    2015-01-19 15:42:53.908000000 +0100
 @@ -623,6 +613,15 @@
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
  
      SSL_CTX_set_info_callback(ctx, ssl_callback_Info);
 +
 +#if defined(HAVE_TLS_ALPN)
-+	SSL_CTX_set_alpn_select_cb(
-+	   ctx, ssl_callback_alpn_select, NULL);
++    SSL_CTX_set_alpn_select_cb(
++       ctx, ssl_callback_alpn_select, NULL);
 +#endif
 +#if defined(HAVE_TLS_NPN)
 +    SSL_CTX_set_next_protos_advertised_cb(
@@ -170,8 +170,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_in
  
  static apr_status_t ssl_init_ctx_verify(server_rec *s,
 diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
---- gen/httpd-2.4.x/modules/ssl/ssl_engine_io.c	2015-01-19 16:52:30.000000000 +0100
-+++ modules/ssl/ssl_engine_io.c	2015-01-19 15:42:53.908000000 +0100
+--- gen/httpd-2.4.x/modules/ssl/ssl_engine_io.c    2015-01-19 16:52:30.000000000 +0100
++++ modules/ssl/ssl_engine_io.c    2015-01-19 15:42:53.908000000 +0100
 @@ -28,6 +28,7 @@
                                    core keeps dumping.''
                                              -- Unknown    */
@@ -193,42 +193,42 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
      }
  
 +#if defined(HAVE_TLS_ALPN) || defined(HAVE_TLS_NPN)
-+	/* By this point, Application-Layer Protocol Negotiation (ALPN) should be 
-+	 * completed (if our version of OpenSSL supports it). If we haven't already, 
-+	 * find out which protocol was decided upon and inform other modules 
-+	 * by calling alpn_proto_negotiated_hook. 
-+	 */
-+	if (!inctx->alpn_finished) {
-+		SSLConnRec *sslconn = myConnConfig(f->c);
-+		const unsigned char *next_proto = NULL;
-+		unsigned next_proto_len = 0;
-+		int n;
-+		
-+		if (sslconn->alpn_negofns) {
-+	#ifdef HAVE_TLS_ALPN
-+			SSL_get0_alpn_selected(inctx->ssl, &next_proto, &next_proto_len);
-+	#endif
-+	#ifdef HAVE_TLS_NPN
++    /* By this point, Application-Layer Protocol Negotiation (ALPN) should be 
++     * completed (if our version of OpenSSL supports it). If we haven't already, 
++     * find out which protocol was decided upon and inform other modules 
++     * by calling alpn_proto_negotiated_hook. 
++     */
++    if (!inctx->alpn_finished) {
++        SSLConnRec *sslconn = myConnConfig(f->c);
++        const unsigned char *next_proto = NULL;
++        unsigned next_proto_len = 0;
++        int n;
++        
++        if (sslconn->alpn_negofns) {
++    #ifdef HAVE_TLS_ALPN
++            SSL_get0_alpn_selected(inctx->ssl, &next_proto, &next_proto_len);
++    #endif
++    #ifdef HAVE_TLS_NPN
 +           if (!next_proto) {
 +               SSL_get0_next_proto_negotiated(
-+								   inctx->ssl, &next_proto, &next_proto_len);
++                                   inctx->ssl, &next_proto, &next_proto_len);
 +           }
-+	#endif
-+			ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, f->c,
-+						  APLOGNO(02306) "SSL negotiated protocol: '%s'",
-+						  (next_proto && next_proto_len)?
++    #endif
++            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, f->c,
++                          APLOGNO(02306) "SSL negotiated protocol: '%s'",
++                          (next_proto && next_proto_len)?
 +                         apr_pstrmemdup(f->c->pool, (const char *)next_proto,
 +                              next_proto_len) : "(null)");
-+			for (n = 0; n < sslconn->alpn_negofns->nelts; n++) {
-+				ssl_alpn_proto_negotiated fn =
-+				APR_ARRAY_IDX(sslconn->alpn_negofns, n, ssl_alpn_proto_negotiated);
-+				
-+				if (fn(f->c, (const char *)next_proto, next_proto_len) == DONE)
-+				break;
-+			}
-+		}
-+		inctx->alpn_finished = 1;
-+	}
++            for (n = 0; n < sslconn->alpn_negofns->nelts; n++) {
++                ssl_alpn_proto_negotiated fn =
++                APR_ARRAY_IDX(sslconn->alpn_negofns, n, ssl_alpn_proto_negotiated);
++                
++                if (fn(f->c, (const char *)next_proto, next_proto_len) == DONE)
++                break;
++            }
++        }
++        inctx->alpn_finished = 1;
++    }
 +#endif
 +
      return APR_SUCCESS;
@@ -243,8 +243,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
  
  /* The request_rec pointer is passed in here only to ensure that the
 diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_kernel.c
---- gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c	2015-01-19 16:52:30.000000000 +0100
-+++ modules/ssl/ssl_engine_kernel.c	2015-01-19 16:37:09.536000000 +0100
+--- gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c    2015-01-19 16:52:30.000000000 +0100
++++ modules/ssl/ssl_engine_kernel.c    2015-01-19 16:37:09.536000000 +0100
 @@ -29,6 +29,7 @@
                                    time I was too famous.''
                                              -- Unknown                */
@@ -276,10 +276,10 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 + * 0 gives same precedence, >0 means proto1 is prefered.
 + */
 +static int ssl_cmp_alpn_protos(modssl_ctx_t *ctx,
-+							   const char *proto1,
-+							   const char *proto2)
++                               const char *proto1,
++                               const char *proto2)
 +{
-+	/* TODO: we should have a mod_ssl configuration parameter. */
++    /* TODO: we should have a mod_ssl configuration parameter. */
 +    if (ctx && ctx->ssl_alpn_pref) {
 +        int index1 = ssl_array_index(ctx->ssl_alpn_pref, proto1);
 +        int index2 = ssl_array_index(ctx->ssl_alpn_pref, proto2);
@@ -293,7 +293,7 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 +    /* both have the same index (mabye -1 or no pref configured) and we compare
 +     * the names so that spdy3 gets precedence over spdy2. That makes
 +     * the outcome at least deterministic. */
-+	return strcmp((const char *)proto1, (const char *)proto2);
++    return strcmp((const char *)proto1, (const char *)proto2);
 +}
 +
 +/*
@@ -309,96 +309,96 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 + * characters (not null-terminated), followed by the next protocol name.
 + */
 +int ssl_callback_alpn_select(SSL *ssl,
-+							 const unsigned char **out, unsigned char *outlen,
-+							 const unsigned char *in, unsigned int inlen, void *arg)
++                             const unsigned char **out, unsigned char *outlen,
++                             const unsigned char *in, unsigned int inlen, void *arg)
 +{
-+	conn_rec *c = (conn_rec*)SSL_get_app_data(ssl);
-+	SSLConnRec *sslconn = myConnConfig(c);
++    conn_rec *c = (conn_rec*)SSL_get_app_data(ssl);
++    SSLConnRec *sslconn = myConnConfig(c);
 +    server_rec *s       = mySrvFromConn(c);
 +    SSLSrvConfigRec *sc = mySrvConfig(s);
 +    modssl_ctx_t *mctx  = myCtxConfig(sslconn, sc);
-+	const char *alpn_http1 = "http/1.1";
-+	apr_array_header_t *client_protos;
-+	apr_array_header_t *proposed_protos;
-+	int i;
++    const char *alpn_http1 = "http/1.1";
++    apr_array_header_t *client_protos;
++    apr_array_header_t *proposed_protos;
++    int i;
 +
-+	/* If the connection object is not available,
-+	 * then there's nothing for us to do. */
-+	if (c == NULL) {
-+		return SSL_TLSEXT_ERR_OK;
-+	}
-+	
-+	if (inlen == 0) {
-+		// someone tries to trick us?
-+		ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02306)
-+					  "alpn client protocol list empty");
-+		return SSL_TLSEXT_ERR_ALERT_FATAL;
-+	}
-+	
-+	client_protos = apr_array_make(c->pool, 0, sizeof(char *));
-+	for (i = 0; i < inlen; /**/) {
-+		unsigned int plen = in[i++];
-+		if (plen + i > inlen) {
-+			// someone tries to trick us?
-+			ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02306)
-+						  "alpn protocol identier too long");
-+			return SSL_TLSEXT_ERR_ALERT_FATAL;
-+		}
-+		APR_ARRAY_PUSH(client_protos, char*) =
-+			apr_pstrndup(c->pool, (const char *)in+i, plen);
-+		i += plen;
-+	}
-+	
-+	/* Regardless of installed hooks, the http/1.1 protocol is always
-+	 * supported by us. Add it to the proposals if the client also
-+	 * offers it. */
-+	proposed_protos = apr_array_make(c->pool, client_protos->nelts+1,
-+									 sizeof(char *));
-+	if (ssl_array_index(client_protos, alpn_http1) >= 0) {
-+		APR_ARRAY_PUSH(proposed_protos, const char*) = alpn_http1;
-+	}
-+	
-+	if (sslconn->alpn_proposefns != NULL) {
-+		/* Invoke our alpn_propos_proto hooks, giving other modules a chance to
-+		 * propose protocol names for selection. We might have several such
-+		 * hooks installed and if two make a proposal, we need to give 
-+		 * preference to one.
-+		 */
-+		for (i = 0; i < sslconn->alpn_proposefns->nelts; i++) {
-+			ssl_alpn_propose_protos fn =
-+				APR_ARRAY_IDX(sslconn->alpn_proposefns, i,
-+							  ssl_alpn_propose_protos);
-+			
-+			if (fn(c, client_protos, proposed_protos) == DONE)
-+				break;
-+		}
-+	}
++    /* If the connection object is not available,
++     * then there's nothing for us to do. */
++    if (c == NULL) {
++        return SSL_TLSEXT_ERR_OK;
++    }
++    
++    if (inlen == 0) {
++        // someone tries to trick us?
++        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02306)
++                      "alpn client protocol list empty");
++        return SSL_TLSEXT_ERR_ALERT_FATAL;
++    }
++    
++    client_protos = apr_array_make(c->pool, 0, sizeof(char *));
++    for (i = 0; i < inlen; /**/) {
++        unsigned int plen = in[i++];
++        if (plen + i > inlen) {
++            // someone tries to trick us?
++            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02306)
++                          "alpn protocol identier too long");
++            return SSL_TLSEXT_ERR_ALERT_FATAL;
++        }
++        APR_ARRAY_PUSH(client_protos, char*) =
++            apr_pstrndup(c->pool, (const char *)in+i, plen);
++        i += plen;
++    }
++    
++    /* Regardless of installed hooks, the http/1.1 protocol is always
++     * supported by us. Add it to the proposals if the client also
++     * offers it. */
++    proposed_protos = apr_array_make(c->pool, client_protos->nelts+1,
++                                     sizeof(char *));
++    if (ssl_array_index(client_protos, alpn_http1) >= 0) {
++        APR_ARRAY_PUSH(proposed_protos, const char*) = alpn_http1;
++    }
++    
++    if (sslconn->alpn_proposefns != NULL) {
++        /* Invoke our alpn_propos_proto hooks, giving other modules a chance to
++         * propose protocol names for selection. We might have several such
++         * hooks installed and if two make a proposal, we need to give 
++         * preference to one.
++         */
++        for (i = 0; i < sslconn->alpn_proposefns->nelts; i++) {
++            ssl_alpn_propose_protos fn =
++                APR_ARRAY_IDX(sslconn->alpn_proposefns, i,
++                              ssl_alpn_propose_protos);
++            
++            if (fn(c, client_protos, proposed_protos) == DONE)
++                break;
++        }
++    }
 +
-+	if (proposed_protos->nelts <= 0) {
-+		ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02306)
-+					  "none of the client alpn protocols are supported");
-+		return SSL_TLSEXT_ERR_ALERT_FATAL;
-+	}
-+	
-+	/* Now select the most preferred protocol from the proposals. */
-+	*out = APR_ARRAY_IDX(proposed_protos, 0, const unsigned char *);
-+	for (i = 1; i < proposed_protos->nelts; ++i) {
-+		const char *proto = APR_ARRAY_IDX(proposed_protos, i, const char*);
-+		/* Do we prefer it over existing candidate? */
-+		if (ssl_cmp_alpn_protos(mctx, (const char *)*out, proto) < 0) {
-+			*out = (const unsigned char*)proto;
-+		}
-+	}
-+	
-+	size_t len = strlen((const char*)*out);
-+	if (len > 255) {
-+		ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02306)
-+					  "alpn negotiated protocol name too long");
-+		return SSL_TLSEXT_ERR_ALERT_FATAL;
-+	}
-+	*outlen = (unsigned char)len;
++    if (proposed_protos->nelts <= 0) {
++        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02306)
++                      "none of the client alpn protocols are supported");
++        return SSL_TLSEXT_ERR_ALERT_FATAL;
++    }
++    
++    /* Now select the most preferred protocol from the proposals. */
++    *out = APR_ARRAY_IDX(proposed_protos, 0, const unsigned char *);
++    for (i = 1; i < proposed_protos->nelts; ++i) {
++        const char *proto = APR_ARRAY_IDX(proposed_protos, i, const char*);
++        /* Do we prefer it over existing candidate? */
++        if (ssl_cmp_alpn_protos(mctx, (const char *)*out, proto) < 0) {
++            *out = (const unsigned char*)proto;
++        }
++    }
++    
++    size_t len = strlen((const char*)*out);
++    if (len > 255) {
++        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02306)
++                      "alpn negotiated protocol name too long");
++        return SSL_TLSEXT_ERR_ALERT_FATAL;
++    }
++    *outlen = (unsigned char)len;
 +
-+	return SSL_TLSEXT_ERR_OK;
++    return SSL_TLSEXT_ERR_OK;
 +}
 +#endif
 +#if defined(HAVE_TLS_NPN)
@@ -448,28 +448,28 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
 +            break;
 +    }
 +    if (ssl_array_index(protos, http11) < 0) {
-+		APR_ARRAY_PUSH(protos, const char*) = http11;
++        APR_ARRAY_PUSH(protos, const char*) = http11;
 +    }
 +    num_protos = protos->nelts;
 +
 +    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, c, APLOGNO(02306)
 +                  "alpn protos %d to advertise, %d in pref config", num_protos, mctx->ssl_alpn_pref->nelts );
-+	if (num_protos > 1 && mctx->ssl_alpn_pref && mctx->ssl_alpn_pref->nelts > 0) {
-+		/* Sort the protocol names according to our configured preferences. */
-+		int insert_idx = 0;
-+		for (i = 0; i < mctx->ssl_alpn_pref->nelts; ++i) {
-+			const char *proto = APR_ARRAY_IDX(mctx->ssl_alpn_pref, i, const char*);
-+			int idx = ssl_array_index(protos, proto);
-+			if (idx > insert_idx) {
-+				/* bubble found protocol up */
-+				for (j = idx; j > insert_idx; --j) {
++    if (num_protos > 1 && mctx->ssl_alpn_pref && mctx->ssl_alpn_pref->nelts > 0) {
++        /* Sort the protocol names according to our configured preferences. */
++        int insert_idx = 0;
++        for (i = 0; i < mctx->ssl_alpn_pref->nelts; ++i) {
++            const char *proto = APR_ARRAY_IDX(mctx->ssl_alpn_pref, i, const char*);
++            int idx = ssl_array_index(protos, proto);
++            if (idx > insert_idx) {
++                /* bubble found protocol up */
++                for (j = idx; j > insert_idx; --j) {
 +       ((const char **)protos->elts)[j] = ((const char **)protos->elts)[j-1];
-+				}
-+				((const char **)protos->elts)[insert_idx] = proto;
-+				++insert_idx;
-+			}
-+		}
-+	}
++                }
++                ((const char **)protos->elts)[insert_idx] = proto;
++                ++insert_idx;
++            }
++        }
++    }
 +    
 +    /* We now have a list of null-terminated strings; we need to concatenate
 +     * them together into a single string, where each protocol name is prefixed
@@ -525,8 +525,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_
  
  int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
 diff -ru gen/httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
---- gen/httpd-2.4.x/modules/ssl/ssl_private.h	2015-01-19 16:52:30.000000000 +0100
-+++ modules/ssl/ssl_private.h	2015-01-19 15:42:53.908000000 +0100
+--- gen/httpd-2.4.x/modules/ssl/ssl_private.h    2015-01-19 16:52:30.000000000 +0100
++++ modules/ssl/ssl_private.h    2015-01-19 15:42:53.908000000 +0100
 @@ -176,6 +169,16 @@
  #endif
  #endif
@@ -585,8 +585,8 @@ diff -ru gen/httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
  
 +#ifdef HAVE_TLS_ALPN
 +int ssl_callback_alpn_select(SSL *ssl, const unsigned char **out,
-+							 unsigned char *outlen, const unsigned char *in,
-+							 unsigned int inlen, void *arg);
++                             unsigned char *outlen, const unsigned char *in,
++                             unsigned int inlen, void *arg);
 +#endif
 +#if defined(HAVE_TLS_NPN)
 +int ssl_callback_AdvertiseNextProtos(SSL *ssl, const unsigned char **data, unsigned int *len, void *arg);
