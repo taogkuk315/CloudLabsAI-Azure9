@@ -1,5 +1,100 @@
 
-mod-h2 - a http/2 modules for apache httpd
-------------------------------------------
+mod_h2 - a http/2 modules for apache httpd
+==========================================
+This repository contains a Apache httpd module implementing the HTTP2
+protocol. It uses nghttp2 (https://nghttp2.org) as base engine and connects
+it with the Apache infrastructure.
+
+
+Status
+------
+In development. Definitely not ready for a production environment. Use at
+your own risk.
+
+
+Features
+--------
+This module supports the "h2" (HTTP2 over TLS) and "h2c" (HTTP2 over plain
+HTTP connections via Upgrade). You can enable it for the whole server or
+for specific virtual hosts only. More on this below on "Configuration".
+
+
+Dependencies
+------------
+1. The module is written in plain C and links to libnghttp2 and nothing else.
+2. For "h2" support - the part of HTTP2 that uses TLS - a patched mod_ssl
+   needs to be present in the server. For ALPN/NPN protocol negotiation
+   (the basic TLS HELLO part) to work, this needs at least OpenSSL 1.0.1
+   (OpenSSL 1.0.2 perferred).
+3. mod_h2 currently only supports the mpm_worker module.
+
+Installation
+------------
+Due to the dependencies mentioned above, the project currently builds a
+local https, with patches applied, and installs it in gen/install for
+testing purposes. More on this in INSTALL.
+
+
+Configuration
+-------------
+The test setup in test/conf/* that gets installed in gen/install for the
+local httpd build contains some simple examples of how this module can
+be configured.
+
+There are several configuration commands available when mod_h2 is loaded,
+such as:
+- H2Engine (on/off), "on" to enable HTTP/2 protocol handling
+- H2MaxSessionStreams n, maximum number of open streams per session
+- H2InitialWindowSize n, initial window size on client DATA
+- H2MaxHeaderListSize n, maximum acceptable size of request headers
+- H2MinWorkers n, minimum number of worker threads per child
+- H2MaxWorkers n, maximum number of worker threads per child
+- H2StreamMaxMemSize n, maximum number of bytes buffered in memory for a stream
+
+
+Architecture, Limits, Details
+-----------------------------
+See DISCUSS.
+
+
+TODO
+----
+- Thanks to the excellent nghttp2, the module currently supports h2-14 and
+  h2c-14. Piority handling is implemented in nghttp2, but not tested with the
+  mod_h2 and there are several areas in work scheduling where priority handling
+  needs to be added to mod_h2.
+- Memory handling: each stream eats some small amount of memory now, so long
+  connections will eat up memory.
+- Performance is not where it should be, request/s suffer from current
+  pseudo-connection handling and other things. See DISCUSS
+- Proper documentation needs to be added
+- Test cases need to be written to cover edge cases with connection abort,
+  stream reset, priority requests, etc.
+
+
+License
+-------
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to You under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+
+Credits
+-------
+This work has been funded by the GSM Association (http://gsma.com). The module
+itself was heavily influenced by mod_spdy, the Google implementation of their
+SPDY protocol. And without Tatsuhiro Tsujikawa excellent nghttp2 work, this
+would not have been possible.
 
 

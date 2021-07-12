@@ -1,0 +1,12 @@
+
+mod_h2 - a http/2 modules for apache httpd
+==========================================
+The mod_h2 Apache httpd module implements the HTTP2 protocol (h2+h2c) on
+top of libnghttp2 for httpd 2.4 servers. For a general description, see
+the README, installation issues are detailed in INSTALL.
+
+This document is for discussion of the module's internals, current issues
+and exploration of ideas.
+
+
+

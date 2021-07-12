@@ -1,15 +1,80 @@
 
 mod-h2 - a http/2 modules for apache httpd
-------------------------------------------
+==========================================
+On how to build mod_h2.
 
-In order to build the mod_h2 module, you need to perform the following steps:
+
+Platforms
+---------
+mod_h2 has been developed under Ubuntu 14.04 LTS and OS X 10.10. The module
+itself depends only on an installed APXS (the Apache runtime platform) and
+libnghttp2. As long as both are present, the module itself should build
+just fine.
+
+
+Runtime Dependencies
+--------------------
+- Apache httpd 2.4
+  - for HTTP2 over TLS ("h2" variant) a patched mod_ssl is needed,
+  see httpd/README, and the installed OpenSSL needs to be at least 1.0.1
+- libnghttp2 (https://nghttp2.org), at least version 0.7.3
+
+
+Build Dependencies
+------------------
+All of the above and an APXS (Apache runtime) matching the server version,
+plus the nghttp2 include files.
+
+if all this is installed on your system, just
+
+  checkout> cd mod_h2
+  checkout/mod_h2> make install
+
+
+
+Test Setup Dependencies
+-----------------------
+If you build with the top level Makefile of the project, it will setup a
+test environment with a local, patched httpd, the nghttp2 library and apps,
+curl and possibly even openssl.
+
+All this will be installed with ./gen/install as prefix, so there will be
+a ./gen/install/bin/apachectl afterwards. Installed libraries will be in
+./gen/install/lib etc. The Apache httpd configuration is placed in
+./gen/install/conf
+
+The Makefile will download several source tar balls, the exact number depends
+on the local OS and installation. Some prerequisites have to be met which are
+listed in the specific OS descriptions below:
 
 
 Ubuntu
-----------------------------------------
-
+------
 Install the prerequisite software:
+  - pcre
+  - openssl
+  - pkg-config
+  - libev-dev
 
   > sudo apt-get install libpcre3-dev
 
 ...
+
+
+OS X
+----
+On OS X 10.10, building the project requires a homebrew installation and
+the following packages installed via brew:
+  - pkg-config
+
+* for httpd the Makefile will download and install:
+  - pcre
+  - apr + apr-util
+  - openssl
+  exact versions and download urls in httpd/Makefile
+
+* for nghttp2 the Makefile will download and install:
+  - zlib
+  - libev
+  exact versions and download urls in httpd/Makefile
+

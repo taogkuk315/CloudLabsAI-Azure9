@@ -28,7 +28,7 @@ SUB_DIRS     = nghttp2 httpd clients test
 CURL         = $(INST_DIR)/bin/curl
 
 
-.PHONY: all test clients httpd nghttp2 start stop clean distclean
+.PHONY: all test clients httpd nghttp2 start stop clean distclean mod_h2
 
 all: clients httpd mod_h2
 
@@ -66,9 +66,15 @@ clients: nghttp2
 httpd:
 	make -C httpd
 
+$(INST_DIR)/.mod_h2-installed: \
+        $(INST_DIR)/.httpd-installed \
+        $(wildcard mod_h2/*.c) \
+        $(wildcard mod_h2/*.h)
+	make -C mod_h2 install APXS=../$(INST_DIR)/bin/apxs
+	@touch $(INST_DIR)/.mod_h2-installed
+
 mod_h2: \
-    $(INST_DIR)/.httpd-installed
-	make -C mod_h2 install
+    $(INST_DIR)/.mod_h2-installed
 
 
 ################################################################################

@@ -14,14 +14,8 @@
 # limitations under the License.
 
 
-
-
-INST_DIR     = ../gen/install
-
-APXS    = $(INST_DIR)/bin/apxs
+APXS    = apxs
 APXS_FLAGS =
-
-LIBTOOL = libtool
 
 C_SRC   = \
         h2_bucket.c \
@@ -47,29 +41,22 @@ C_SRC   = \
         h2_worker.c \
         h2_workers.c
 
-CPP_SRC =
-
-SRC     = $(C_SRC) $(CPP_SRC)
-OBJ     = $(C_SRC:%.c=%.o) $(CPP_SRC:%.cc=%.o)
+SRC     = $(C_SRC)
+OBJ     = $(C_SRC:%.c=%.o)
 LOBJ    = $(OBJ:%.o=%.lo)
 
 INCLUDES=-I.
 
-LIBS    = -L$(INST_DIR)/lib -lnghttp2
-
-# use the following rules in order to build .o files from .c and .cpp files
-.cc.o : $(wildcard *.h)
-	$(LIBTOOL) --mode=compile $(CXX) $(CFLAGS) $(INCLUDES) -c $<
-
-.cpp.o : $(wildcard *.h)
-	$(CXX) $(CFLAGS) $(INCLUDES) -c $<
-
-.c.o : $(wildcard *.h)
-	$(APXS) $(INCLUDES) -o $@ $(INCLUDES) -c $<
+LIBS    = -L$(shell $(APXS) -q exp_libdir) -lnghttp2
 
 all: build
 
 build: mod_h2.la
+
+$(OBJ): *.h
+
+.c.o: $(wildcard *.h)
+	$(APXS) -o $@ $(INCLUDES) -c $<
 
 mod_h2.la : mod_h2.c $(OBJ) Makefile
 	$(APXS) $(APXS_FLAGS) $(INCLUDES) -o $@ -c mod_h2.c $(LOBJ) $(LIBS)
@@ -79,10 +66,4 @@ install: mod_h2.la
 
 clean:
 	rm -f *.o *.la *.lo *.slo
-
-start: $(INST_DIR)/.test-setup
-	@$(INST_DIR)/bin/apachectl restart
-
-stop:
-	@$(INST_DIR)/bin/apachectl stop
 

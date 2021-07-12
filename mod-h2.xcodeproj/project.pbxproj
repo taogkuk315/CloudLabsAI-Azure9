@@ -258,6 +258,7 @@
 		B2A6EF281A9C79A6005DFC5B /* h2_h2c.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_h2c.c; sourceTree = "<group>"; };
 		B2A6EF291A9C79A6005DFC5B /* h2_h2c.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_h2c.h; sourceTree = "<group>"; };
 		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
+		B2A6EF2C1A9F2452005DFC5B /* DISCUSS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = DISCUSS; sourceTree = "<group>"; };
 		B2C16D221A778E78000B2297 /* alpn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; lastKnownFileType = text; path = "alpn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
 		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
@@ -1210,6 +1211,7 @@
 			isa = PBXGroup;
 			children = (
 				B2E5BADB1A6E65F80031CBD8 /* clients */,
+				B2A6EF2C1A9F2452005DFC5B /* DISCUSS */,
 				B27BBD311A65928A00C58A41 /* htppd */,
 				B2A6EF2A1A9E3A93005DFC5B /* INSTALL */,
 				B22549011A6E85CF004BDEC9 /* Makefile */,
