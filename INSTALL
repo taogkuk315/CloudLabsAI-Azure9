@@ -51,10 +51,10 @@ listed in the specific OS descriptions below:
 Ubuntu
 ------
 Install the prerequisite software:
-  - pcre
-  - openssl
   - pkg-config
+  - libpcre3-dev
   - libev-dev
+  - openssl
 
   > sudo apt-get install libpcre3-dev
 

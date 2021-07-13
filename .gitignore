@@ -1,3 +1,4 @@
 *.xcuserstate
 gen
 httpd/packages/httpd-2.4.x.tar.gz
+test/conf/sites/mod-h2.greenbytes.de.conf
