@@ -41,7 +41,6 @@ struct h2_response {
     void *state_cb_ctx;
 
     long content_length;
-    
     int chunked;
     apr_size_t remain_len;
     struct h2_bucket *chunk_work;

@@ -40,7 +40,9 @@ struct h2_workers {
     apr_threadattr_t *thread_attr;
     
     struct h2_queue *workers;
-    struct h2_queue *tasks_todo;
+    
+    struct h2_queue *tasks_scheduled;
+    struct h2_queue *tasks_ongoing;
     
     int idle_worker_count;
     int max_idle_secs;
@@ -60,10 +62,11 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
         status = APR_EOF;
         ++workers->idle_worker_count;
         while (!h2_worker_is_aborted(worker) && !workers->aborted) {
-            h2_task *task = h2_queue_pop(workers->tasks_todo);
+            h2_task *task = h2_queue_pop(workers->tasks_scheduled);
             if (task) {
                 *ptask = task;
                 status = APR_SUCCESS;
+                h2_queue_push(workers->tasks_ongoing, task);
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                              "h2_worker(%d): start task(%ld-%d)",
                              h2_worker_get_id(worker),
@@ -111,9 +114,11 @@ static void task_done(h2_worker *worker, h2_task *task,
                      h2_task_get_session_id(task),
                      h2_task_get_stream_id(task));
         
-        apr_thread_cond_signal(workers->task_done);
+        
+        h2_queue_remove(workers->tasks_ongoing, task);
         h2_task_destroy(task);
         
+        apr_thread_cond_signal(workers->task_done);
         apr_thread_mutex_unlock(workers->lock);
     }
 }
@@ -180,7 +185,8 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         apr_threadattr_create(&workers->thread_attr, workers->pool);
         
         workers->workers = h2_queue_create(workers->pool, NULL);
-        workers->tasks_todo = h2_queue_create(workers->pool, NULL);
+        workers->tasks_scheduled = h2_queue_create(workers->pool, NULL);
+        workers->tasks_ongoing = h2_queue_create(workers->pool, NULL);
         
         status = apr_thread_mutex_create(&workers->lock,
                                          APR_THREAD_MUTEX_DEFAULT,
@@ -219,9 +225,13 @@ void h2_workers_destroy(h2_workers *workers)
         apr_thread_mutex_destroy(workers->lock);
         workers->lock = NULL;
     }
-    if (workers->tasks_todo) {
-        h2_queue_destroy(workers->tasks_todo);
-        workers->tasks_todo = NULL;
+    if (workers->tasks_scheduled) {
+        h2_queue_destroy(workers->tasks_scheduled);
+        workers->tasks_scheduled = NULL;
+    }
+    if (workers->tasks_ongoing) {
+        h2_queue_destroy(workers->tasks_ongoing);
+        workers->tasks_ongoing = NULL;
     }
     if (workers->workers) {
         h2_queue_destroy(workers->workers);
@@ -243,9 +253,57 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
                          "h2_workers: adding worker");
             add_worker(workers);
         }
-        h2_queue_append(workers->tasks_todo, task);
+        h2_queue_append(workers->tasks_scheduled, task);
         
         apr_thread_cond_signal(workers->task_added);
+        apr_thread_mutex_unlock(workers->lock);
+    }
+    return status;
+}
+
+typedef struct {
+    long session_id;
+    int n;
+} stream_id_t;
+
+static void *match_stream_id(void *ctx, int i, void *entry)
+{
+    stream_id_t *id = (stream_id_t*)ctx;
+    if ((h2_task_get_session_id((h2_task*)entry) == id->session_id)
+        && (h2_task_get_stream_id((h2_task*)entry) == id->n)) {
+        return entry;
+    }
+    return NULL;
+}
+
+apr_status_t h2_workers_join(h2_workers *workers,
+                             long session_id, int stream_id)
+{
+    apr_status_t status = apr_thread_mutex_lock(workers->lock);
+    if (status == APR_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
+                     "h2_workers: join stream(%ld-%d) started",
+                     session_id, stream_id);
+        stream_id_t id = { session_id, stream_id };
+        /* get the task, if it is still awaiting execution */
+        h2_task *task = h2_queue_pop_find(workers->tasks_scheduled,
+                                          match_stream_id, &id);
+        if (task) {
+            h2_task_abort(task);
+            h2_task_destroy(task);
+        }
+        else {
+            /* maybe the task is still being processed */
+            task = h2_queue_find(workers->tasks_ongoing,
+                                 match_stream_id, &id);
+            while (task && status == APR_SUCCESS) {
+                /* Ok, need for the task to finish */
+                status = apr_thread_cond_wait(workers->task_done, workers->lock);
+                task = h2_queue_find(workers->tasks_ongoing,
+                                     match_stream_id, &id);
+            }
+        }
+        
         apr_thread_mutex_unlock(workers->lock);
     }
     return status;
@@ -274,7 +332,7 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, long session_id)
                      "h2_workers: shutdown session(%ld) started", session_id);
         /* remove all tasks still pending for the given session */
         while (1) {
-            h2_task *task = h2_queue_pop_find(workers->tasks_todo,
+            h2_task *task = h2_queue_pop_find(workers->tasks_scheduled,
                                               match_session_id, &session_id);
             if (!task) {
                 break;
@@ -296,7 +354,7 @@ void h2_workers_log_stats(h2_workers *workers)
         ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
                      "h2_workers: %ld threads, %ld tasks todo",
                      h2_queue_size(workers->workers),
-                     h2_queue_size(workers->tasks_todo));
+                     h2_queue_size(workers->tasks_scheduled));
         apr_thread_mutex_unlock(workers->lock);
     }
 }

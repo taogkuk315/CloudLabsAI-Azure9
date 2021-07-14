@@ -17,25 +17,45 @@
 #ifndef __mod_h2__h2_request__
 #define __mod_h2__h2_request__
 
+struct h2_bucket;
+struct h2_mplx;
+
 typedef struct h2_request h2_request;
 
-h2_request *h2_request_create(apr_pool_t *pool, int id);
+struct h2_request {
+    int id;                     /* http2 stream id */
+    
+    int eoh;                    /* end of headers seen */
+    int eos;                    /* end of input seen */
+    int started;                /* request line under way */
+    
+    /* pseudo header values, see ch. 8.1.2.3 */
+    const char *method;
+    const char *path;
+    const char *authority;
+    const char *scheme;
+    
+    struct h2_bucket *work;
+};
 
+
+void h2_request_init(h2_request *req, int id);
 void h2_request_destroy(h2_request *req);
 
 apr_status_t h2_request_write_header(h2_request *req,
                                      const char *name, size_t nlen,
                                      const char *value, size_t vlen,
-                                     h2_mplx *m);
+                                     struct h2_mplx *m, apr_pool_t *pool);
 
 
 apr_status_t h2_request_write_data(h2_request *request,
                                    const char *data, size_t len,
-                                   h2_mplx *m);
+                                   struct h2_mplx *m);
 
 apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m);
-apr_status_t h2_request_close(h2_request *req, h2_mplx *m);
+apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m);
 
-apr_status_t h2_request_rwrite(h2_request *req, request_rec *r, h2_mplx *m);
+apr_status_t h2_request_rwrite(h2_request *req, request_rec *r,
+                               struct h2_mplx *m, apr_pool_t *pool);
 
 #endif /* defined(__mod_h2__h2_request__) */

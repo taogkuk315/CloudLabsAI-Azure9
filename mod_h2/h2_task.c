@@ -43,6 +43,7 @@ struct h2_task {
     h2_task_state_t state;
     int aborted;
     
+    apr_pool_t *pool;
     conn_rec *c;
     struct h2_task_input *input;    /* http/1.1 input data */
     struct h2_task_output *output;  /* response body data */
@@ -135,39 +136,32 @@ static apr_sockaddr_t *h2_sockaddr_dup(apr_sockaddr_t *in, apr_pool_t *pool)
     return out;
 }
 
-static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
+static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master,
+                                   apr_pool_t *pool)
 {
-    apr_pool_t *spool = NULL;
-    apr_status_t status = apr_pool_create(&spool, NULL);
-    if (status != APR_SUCCESS || spool == NULL) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, master,
-                      "h2_task, unable to alloc new pool");
-        return APR_ENOMEM;
-    }
-    
     /* Setup a apache connection record for this stream.
      * Most of the know how borrowed from mod_spdy::slave_connection.cc
      */
-    conn_rec *c = apr_pcalloc(spool, sizeof(conn_rec));
+    conn_rec *c = apr_pcalloc(pool, sizeof(conn_rec));
     
-    c->pool = spool;
-    c->bucket_alloc = apr_bucket_alloc_create(spool);
-    c->conn_config = ap_create_conn_config(spool);
-    c->notes = apr_table_make(spool, 5);
+    c->pool = pool;
+    c->bucket_alloc = apr_bucket_alloc_create(pool);
+    c->conn_config = ap_create_conn_config(pool);
+    c->notes = apr_table_make(pool, 5);
     
     /* We work only with mpm_worker at the moment. We need
      * more magic incantations to satisfy mpm_event.
      * 
      */
-    c->cs = apr_pcalloc(spool, sizeof(conn_state_t));
+    c->cs = apr_pcalloc(pool, sizeof(conn_state_t));
     c->cs->state = CONN_STATE_READ_REQUEST_LINE;
     
     
     c->base_server = master->base_server;
-    c->local_addr = h2_sockaddr_dup(master->local_addr, spool);
-    c->local_ip = apr_pstrdup(spool, master->local_ip);
-    c->client_addr = h2_sockaddr_dup(master->client_addr, spool);
-    c->client_ip = apr_pstrdup(spool, master->client_ip);
+    c->local_addr = h2_sockaddr_dup(master->local_addr, pool);
+    c->local_ip = apr_pstrdup(pool, master->local_ip);
+    c->client_addr = h2_sockaddr_dup(master->client_addr, pool);
+    c->client_ip = apr_pstrdup(pool, master->client_ip);
     
     /* The juicy bit here is to guess a new connection id, as it
      * needs to be unique in this httpd instance, but there is
@@ -177,7 +171,7 @@ static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master)
     c->id = (long)master->id^(long)c;
     *pc = c;
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, master,
+    ap_log_perror(APLOG_MARK, APLOG_TRACE3, 0, pool,
                   "h2_task: created con %ld from master %ld",
                   c->id, master->id);
     
@@ -194,21 +188,21 @@ static apr_status_t output_convert(h2_bucket *bucket,
                                    apr_size_t *pconsumed);
 
 h2_task *h2_task_create(long session_id, int stream_id,
-                        conn_rec *master,
+                        conn_rec *master, apr_pool_t *pool,
                         struct h2_mplx *mplx)
 {
     conn_rec *c = NULL;
-    apr_status_t status = h2_conn_create(&c, master);
+    apr_status_t status = h2_conn_create(&c, master, pool);
     if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, master,
+        ap_log_perror(APLOG_MARK, APLOG_ERR, status, pool,
                       "h2_task(%ld-%d): unable to create stream task",
                       session_id, stream_id);
         return NULL;
     }
     
-    h2_task *task = apr_pcalloc(c->pool, sizeof(h2_task));
+    h2_task *task = apr_pcalloc(pool, sizeof(h2_task));
     if (task == NULL) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, master,
+        ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, pool,
                       "h2_task(%ld-%d): unable to create stream task",
                       session_id, stream_id);
         return NULL;
@@ -216,6 +210,7 @@ h2_task *h2_task_create(long session_id, int stream_id,
     
     task->stream_id = stream_id;
     task->session_id = session_id;
+    task->pool = pool;
     task->c = c;
     task->state = H2_TASK_ST_IDLE;
     task->input = h2_task_input_create(task->c->pool,
@@ -253,10 +248,10 @@ apr_status_t h2_task_destroy(h2_task *task)
         h2_task_output_destroy(task->output);
         task->output = NULL;
     }
-    if (task->c->pool) {
-        apr_pool_t *mypool = task->c->pool;
-        task->c->pool = NULL;
-        apr_pool_destroy(mypool);
+    if (task->pool) {
+        apr_pool_t *pool = task->pool;
+        task->pool = NULL;
+        //apr_pool_destroy(pool);
     }
     return APR_SUCCESS;
 }
@@ -274,7 +269,7 @@ apr_status_t h2_task_do(h2_task *task)
     apr_socket_t *socket = NULL;
     status = apr_socket_create(&socket,
                                APR_INET, SOCK_STREAM,
-                               APR_PROTO_TCP, task->c->pool);
+                               APR_PROTO_TCP, task->pool);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, task->c,
                       "h2_stream_process, unable to alloc socket");

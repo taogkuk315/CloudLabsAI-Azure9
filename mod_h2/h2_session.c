@@ -83,14 +83,9 @@ static apr_status_t stream_end_headers(h2_session *session, h2_stream *stream)
 {
     apr_status_t status = h2_stream_write_eoh(stream);
     if (status == APR_SUCCESS) {
-        /* Now would be a good time to actually schedule this
-         * stream for processing in a worker thread */
-        h2_task *task = h2_task_create(session->id,
-                                       h2_stream_get_id(stream),
-                                       session->c,
-                                       session->mplx);
+        h2_task *task = h2_stream_create_task(stream);
         if (session->on_new_task_cb) {
-            session->on_new_task_cb(session, h2_stream_get_id(stream), task);
+            session->on_new_task_cb(session, stream, task);
         }
     }
     return status;
@@ -229,7 +224,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
                       "h2_stream(%ld-%d): closing",
                       session->id, (int)stream_id);
         h2_stream_set_remove(session->streams, stream);
-        h2_stream_destroy(stream);
+        h2_stream_set_add(session->zombies, stream);
     }
     
     if (error_code) {
@@ -381,6 +376,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->loglvl = APLOGcdebug(c)? APLOG_DEBUG : APLOG_NOTICE;
         
         session->streams = h2_stream_set_create(c->pool);
+        session->zombies = h2_stream_set_create(c->pool);
         
         session->mplx = h2_mplx_create(c);
         
@@ -622,6 +618,25 @@ static void h2_session_resume_streams_with_data(h2_session *session) {
     }
 }
 
+static int zombie_reap(void *ctx, h2_stream *stream)
+{
+    h2_session *session = (h2_session*)ctx;
+    if (session->on_zombie_cb) {
+        if (session->on_zombie_cb(session, stream)) {
+            h2_stream_set_remove(session->zombies, stream);
+        }
+    }
+    return 1;
+}
+
+static void h2_session_reap_zombies(h2_session *session)
+{
+    /* Cleanup and destroy zombie streams, once the h2_task they
+     * might have created, is done, since stream and task share
+     * a memory pool */
+    h2_stream_set_iter(session->zombies, zombie_reap, session);
+}
+
 apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 {
     apr_status_t status = APR_SUCCESS;
@@ -658,6 +673,8 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
             }
         }
     }
+    
+    h2_session_reap_zombies(session);
     
     return status;
 }
@@ -704,6 +721,11 @@ apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
 void h2_session_set_new_task_cb(h2_session *session, on_new_task *callback)
 {
     session->on_new_task_cb = callback;
+}
+
+void h2_session_set_zombie_cb(h2_session *session, on_zombie *cb)
+{
+    session->on_zombie_cb = cb;
 }
 
 static h2_stream *match_any(void *ctx, h2_stream *stream) {

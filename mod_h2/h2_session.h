@@ -48,10 +48,24 @@ struct h2_task;
 
 struct nghttp2_session;
 
-typedef void on_new_task(struct h2_session *session,
-                         int stream_id, struct h2_task *task);
+typedef struct h2_session h2_session;
 
-typedef struct h2_session {
+/* Callback when a new task for a stream has been created. The callback
+   should schedule the task for execution and return immediately. */
+typedef void on_new_task(h2_session *session,
+                         struct h2_stream *stream,
+                         struct h2_task *task);
+
+/* Callback on a stream that is no longer needed, but may have resources,
+ * such as a running task, still lingering around. The callback should 
+ * destroy the stream if it can make sure that any task for this stream
+ * has been destroyed. In this case it should return != 0. 
+ * It can 0, to indicate that the stream was not destroyed, in which case
+ * it will be invoked with the same stream at a future point in time.
+ */
+typedef int on_zombie(h2_session *session, struct h2_stream *stream);
+
+struct h2_session {
     long id;                        /* identifier of this session, unique
                                      * inside a httpd process */
     conn_rec *c;                    /* the connection this session serves */
@@ -62,14 +76,16 @@ typedef struct h2_session {
     h2_io_ctx io;                   /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_stream_set *streams;  /* streams handled by this session */
+    struct h2_stream_set *zombies;  /* finished streams, reap back memory carefully */
     
     on_new_task *on_new_task_cb;    /* notify of new h2_task creations */
+    on_zombie *on_zombie_cb;        /* notify of new h2_stream gone zombie */
 
     int loglvl;
     
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
 
-} h2_session;
+};
 
 
 /* Create a new h2_session for the given connection (mode 'h2').
@@ -122,7 +138,10 @@ apr_status_t h2_session_submit_response(h2_session *session,
                                         struct h2_resp_head *head);
 
 /* Set the callback to be invoked when new h2_task instances are created.  */
-void h2_session_set_new_task_cb(h2_session *session, on_new_task *callback);
+void h2_session_set_new_task_cb(h2_session *session, on_new_task *cb);
+
+/* Set the callback to be invoked when a h2_stream has become zombie.  */
+void h2_session_set_zombie_cb(h2_session *session, on_zombie *cb);
 
 /* Get the h2_stream for the given stream idenrtifier. */
 struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);

@@ -16,6 +16,7 @@
 
 
 #include <assert.h>
+#include <apr_thread_pool.h>
 
 #include <httpd.h>
 #include <http_core.h>
@@ -33,23 +34,32 @@
 #include "h2_workers.h"
 #include "h2_conn.h"
 
-
 static struct h2_workers *workers;
+static apr_thread_pool_t *tworkers;
 
 static apr_status_t h2_session_process(h2_session *session);
-static void start_new_task(h2_session *session, int stream_id, h2_task *task);
+static void start_new_task(h2_session *session,
+                           h2_stream *stream, h2_task *task);
+static int reap_zombie_stream(h2_session *session, h2_stream *zombie);
 
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
     h2_config *config = h2_config_sget(s);
+    apr_status_t status = APR_SUCCESS;
+    int minw = h2_config_geti(config, H2_CONF_MIN_WORKERS);
+    int maxw = h2_config_geti(config, H2_CONF_MAX_WORKERS);
+    
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
                  "h2_conn: child init with conf[%s]: "
                  "min_workers=%d, max_workers=%d",
                  config->name, config->min_workers, config->max_workers);
-    workers = h2_workers_create(s, pool,
-                                h2_config_geti(config, H2_CONF_MIN_WORKERS),
-                                h2_config_geti(config, H2_CONF_MAX_WORKERS));
-    return workers? APR_SUCCESS : APR_ENOMEM;
+    if (1) {
+        workers = h2_workers_create(s, pool, minw, maxw);
+    }
+    else {
+        status = apr_thread_pool_create(&tworkers, minw, maxw, pool);
+    }
+    return status;
 }
 
 apr_status_t h2_conn_rprocess(request_rec *r)
@@ -57,7 +67,7 @@ apr_status_t h2_conn_rprocess(request_rec *r)
     h2_config *config = h2_config_rget(r);
     
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "h2_conn_process start");
-    if (!workers) {
+    if (!workers && !tworkers) {
         ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "workers not initialized");
         return APR_EGENERAL;
     }
@@ -75,7 +85,7 @@ apr_status_t h2_conn_process(conn_rec *c)
     h2_config *config = h2_config_get(c);
     
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_conn_process start");
-    if (!workers) {
+    if (!workers && !tworkers) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, "workers not initialized");
         return APR_EGENERAL;
     }
@@ -121,6 +131,7 @@ apr_status_t h2_session_process(h2_session *session)
     ap_remove_input_filter_byhandle(session->c->input_filters, "reqtimeout");
 
     h2_session_set_new_task_cb(session, start_new_task);
+    h2_session_set_zombie_cb(session, reap_zombie_stream);
     
     status = h2_session_start(session);
     if (status != APR_SUCCESS) {
@@ -138,7 +149,9 @@ apr_status_t h2_session_process(h2_session *session)
         int have_written = 0;
         
         if (apr_time_sec(apr_time_now()) - apr_time_sec(last_dump) > 5) {
-            h2_workers_log_stats(workers);
+            if (workers) {
+                h2_workers_log_stats(workers);
+            }
             h2_session_log_stats(session);
             last_dump = apr_time_now();
         }
@@ -202,21 +215,58 @@ apr_status_t h2_session_process(h2_session *session)
     ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
                   "h2_session(%ld): done", session->id);
     
-    h2_workers_shutdown(workers, session->id);
+    if (workers) {
+        h2_workers_shutdown(workers, session->id);
+    }
     h2_session_destroy(session);
-    h2_workers_log_stats(workers);
     
     return DONE;
 }
 
-static void start_new_task(h2_session *session, int stream_id, h2_task *task)
+static void *run_task(apr_thread_t *thread, void *param)
 {
-    apr_status_t status = h2_workers_schedule(workers, task);
+    h2_task *task = (h2_task *)param;
+    
+    apr_status_t status = h2_task_do(task);
+    h2_task_destroy(task);
+
+    return NULL;
+}
+
+static void start_new_task(h2_session *session,
+                           h2_stream *stream, h2_task *task)
+{
+    int priority = APR_THREAD_TASK_PRIORITY_NORMAL;
+    apr_status_t status;
+    if (workers) {
+        status = h2_workers_schedule(workers, task);
+    }
+    else {
+        status = apr_thread_pool_schedule(tworkers, run_task, task,
+                                          priority, stream);
+    }
+    
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
                       "scheduling task(%ld-%d)",
-                      h2_task_get_session_id(task),
-                      h2_task_get_stream_id(task));
+                      session->id, stream->id);
     }
 }
 
+static int reap_zombie_stream(h2_session *session, h2_stream *zombie)
+{
+    apr_status_t status;
+    if (workers) {
+        status = h2_workers_join(workers, session->id, zombie->id);
+    }
+    else {
+        status = apr_thread_pool_tasks_cancel(tworkers, zombie);
+    }
+    
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, session->c,
+                  "reaped zombie(%ld-%d)", session->id, zombie->id);
+    if (status == APR_SUCCESS) {
+        h2_stream_destroy(zombie);
+    }
+    return (status == APR_SUCCESS);
+}

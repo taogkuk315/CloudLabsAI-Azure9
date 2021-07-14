@@ -24,6 +24,7 @@
  * A stream always belongs to a h2_session, the one managing the
  * connection to the client.
  */
+#include "h2_request.h"
 
 typedef enum {
     H2_STREAM_ST_IDLE,
@@ -45,23 +46,25 @@ typedef struct h2_stream h2_stream;
 struct h2_stream {
     int id;                     /* http2 stream id */
     h2_stream_state_t state;    /* http/2 state of this stream */
+    conn_rec *master;           /* main connection this stream belongs to */
     apr_pool_t *pool;           /* the memory pool for this stream */
     struct h2_mplx *m;          /* the multiplexer to work with */
     int aborted;                /* was aborted */
     
-    struct h2_request *req;     /* the request made in this stream */
+    h2_request request;  /* the request made in this stream */
     int suspended;              /* DATA sending has been suspended */
-    
 };
 
 
-h2_stream *h2_stream_create(int id, conn_rec *c, struct h2_mplx *m);
+h2_stream *h2_stream_create(int id, conn_rec *master, struct h2_mplx *m);
 
 apr_status_t h2_stream_destroy(h2_stream *stream);
 
 int h2_stream_get_id(h2_stream *stream);
 
 void h2_stream_abort(h2_stream *stream);
+
+struct h2_task *h2_stream_create_task(h2_stream *stream);
 
 apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r);
 

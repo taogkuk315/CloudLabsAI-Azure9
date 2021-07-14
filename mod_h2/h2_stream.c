@@ -32,6 +32,7 @@
 #include "h2_task.h"
 #include "h2_ctx.h"
 #include "h2_task_input.h"
+#include "h2_task.h"
 
 
 static void set_state(h2_stream *stream, h2_stream_state_t state)
@@ -43,25 +44,34 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
 }
 
 
-h2_stream *h2_stream_create(int id, conn_rec *c, struct h2_mplx *m)
+h2_stream *h2_stream_create(int id, conn_rec *master, struct h2_mplx *m)
 {
-    h2_stream *stream = apr_pcalloc(c->pool, sizeof(h2_stream));
+    apr_pool_t *spool = NULL;
+    apr_status_t status = apr_pool_create_ex(&spool, NULL, NULL, NULL);
+    if (status != APR_SUCCESS) {
+        return NULL;
+    }
+    
+    h2_stream *stream = apr_pcalloc(spool, sizeof(h2_stream));
     if (stream != NULL) {
         stream->id = id;
         stream->state = H2_STREAM_ST_IDLE;
-        stream->pool = c->pool;
+        stream->pool = spool;
+        stream->master = master;
         stream->m = m;
+        
+        h2_request_init(&stream->request, id);
     }
     return stream;
 }
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
-    if (stream->req) {
-        h2_request_destroy(stream->req);
-        stream->req = NULL;
-    }
+    h2_request_destroy(&stream->request);
     stream->m = NULL;
+    if (stream->pool) {
+        apr_pool_destroy(stream->pool);
+    }
     return APR_SUCCESS;
 }
 
@@ -75,25 +85,33 @@ void h2_stream_abort(h2_stream *stream)
     stream->aborted = 1;
 }
 
+h2_task *h2_stream_create_task(h2_stream *stream)
+{
+    h2_task *task = h2_task_create(h2_mplx_get_id(stream->m),
+                                   stream->id, stream->master,
+                                   stream->pool, stream->m);
+    if (task) {
+        /* we pass our pool to the task. we do not expect
+         * to make any allocations hereafter, since we expect
+         * all headers to be written. */
+        assert(stream->request.eoh);
+    }
+    return task;
+}
+
 apr_status_t h2_stream_write_eoh(h2_stream *stream)
 {
-    return h2_request_end_headers(stream->req, stream->m);
+    return h2_request_end_headers(&stream->request, stream->m);
 }
 
 apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 {
-    if (!stream->req) {
-        stream->req = h2_request_create(stream->pool, stream->id);
-        if (!stream->req) {
-            return APR_ENOMEM;
-        }
-    }
-    return h2_request_rwrite(stream->req, r, stream->m);
+    return h2_request_rwrite(&stream->request, r, stream->m, stream->pool);
 }
 
 apr_status_t h2_stream_write_eos(h2_stream *stream)
 {
-    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream->pool,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->master,
                   "h2_stream(%ld-%d): closing input",
                   h2_mplx_get_id(stream->m), stream->id);
     apr_status_t status = APR_SUCCESS;
@@ -110,27 +128,22 @@ apr_status_t h2_stream_write_eos(h2_stream *stream)
             set_state(stream, H2_STREAM_ST_CLOSED_INPUT);
             break;
     }
-    return h2_request_close(stream->req, stream->m);
+    return h2_request_close(&stream->request, stream->m);
 }
 
 apr_status_t h2_stream_write_header(h2_stream *stream,
                                     const char *name, size_t nlen,
                                     const char *value, size_t vlen)
 {
-    if (!stream->req) {
-        stream->req = h2_request_create(stream->pool, stream->id);
-        if (!stream->req) {
-            return APR_ENOMEM;
-        }
-    }
-    return h2_request_write_header(stream->req, name, nlen,
-                                   value, vlen, stream->m);
+    return h2_request_write_header(&stream->request, name, nlen,
+                                   value, vlen, stream->m,
+                                   stream->pool);
 }
 
 apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len)
 {
-    return h2_request_write_data(stream->req, data, len, stream->m);
+    return h2_request_write_data(&stream->request, data, len, stream->m);
 }
 
 apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket)

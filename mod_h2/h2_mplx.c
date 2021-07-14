@@ -36,15 +36,17 @@
 
 struct h2_mplx {
     long id;
-    struct apr_pool_t *pool;
-    struct h2_queue *heads;
-    struct h2_bucket_queue *input;
-    struct h2_bucket_queue *output;
+    apr_pool_t *pool;
+    conn_rec *c;
     
-    struct apr_thread_mutex_t *lock;
-    struct apr_thread_cond_t *added_input;
-    struct apr_thread_cond_t *added_output;
-    struct apr_thread_cond_t *removed_output;
+    h2_queue *heads;
+    h2_bucket_queue *input;
+    h2_bucket_queue *output;
+    
+    apr_thread_mutex_t *lock;
+    apr_thread_cond_t *added_input;
+    apr_thread_cond_t *added_output;
+    apr_thread_cond_t *removed_output;
     
     int ref_count;
     int aborted;
@@ -82,6 +84,7 @@ h2_mplx *h2_mplx_create(conn_rec *c)
     h2_mplx *m = apr_pcalloc(pool, sizeof(h2_mplx));
     if (m) {
         m->id = c->id;
+        m->c = c;
         m->pool = pool;
         m->ref_count = 1;
         
@@ -178,6 +181,11 @@ apr_status_t h2_mplx_release(h2_mplx *m)
 long h2_mplx_get_id(h2_mplx *m)
 {
     return m->id;
+}
+
+conn_rec *h2_mplx_get_connection(h2_mplx *m)
+{
+    return m->c;
 }
 
 void h2_mplx_abort(h2_mplx *m)

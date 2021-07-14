@@ -20,7 +20,14 @@
 typedef struct h2_queue h2_queue;
 
 typedef void *(*h2_queue_match_fn)(void *ctx, int id, void *entry);
+
+/* A function to be called for every queue member when iterating
+ * the queue. The queue should not be manipulated by the callback function
+ * with the only exception that the entry passed as argument may be
+ * removed from the queue.
+ */
 typedef int (*h2_queue_iter_fn)(void *ctx, int id, void *entry, int index);
+
 typedef void (*h2_queue_free_fn)(void *entry);
 
 /**

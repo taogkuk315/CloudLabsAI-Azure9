@@ -2109,7 +2109,7 @@
 /* Begin PBXLegacyTarget section */
 		B2546D8A1A7F76FA0033A875 /* mod_h2 make */ = {
 			isa = PBXLegacyTarget;
-			buildArgumentsString = "$(ACTION)";
+			buildArgumentsString = "$(ACTION) APXS=../gen/install/bin/apxs";
 			buildConfigurationList = B2546D8B1A7F76FA0033A875 /* Build configuration list for PBXLegacyTarget "mod_h2 make" */;
 			buildPhases = (
 			);

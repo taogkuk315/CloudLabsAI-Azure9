@@ -156,7 +156,11 @@ void h2_queue_iter(h2_queue *q, h2_queue_iter_fn iter, void *ctx)
 {
     assert(q);
     int index = 0;
-    for (h2_qdata *qdata = q->first; qdata; qdata = qdata->next, ++index) {
+    h2_qdata *next = q->first;
+    while (next) {
+        /* This needs to work should the iterator remove the current entry */
+        h2_qdata *qdata = next;
+        next = qdata->next;
         if (!iter(ctx, qdata->id, qdata->entry, index)) {
             break;
         }
