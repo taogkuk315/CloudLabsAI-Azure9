@@ -47,7 +47,7 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
 h2_stream *h2_stream_create(int id, conn_rec *master, struct h2_mplx *m)
 {
     apr_pool_t *spool = NULL;
-    apr_status_t status = apr_pool_create_ex(&spool, NULL, NULL, NULL);
+    apr_status_t status = apr_pool_create_ex(&spool, master->pool, NULL, NULL);
     if (status != APR_SUCCESS) {
         return NULL;
     }
@@ -89,7 +89,7 @@ h2_task *h2_stream_create_task(h2_stream *stream)
 {
     h2_task *task = h2_task_create(h2_mplx_get_id(stream->m),
                                    stream->id, stream->master,
-                                   stream->pool, stream->m);
+                                   stream->m);
     if (task) {
         /* we pass our pool to the task. we do not expect
          * to make any allocations hereafter, since we expect

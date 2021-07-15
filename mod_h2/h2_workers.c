@@ -40,9 +40,7 @@ struct h2_workers {
     apr_threadattr_t *thread_attr;
     
     struct h2_queue *workers;
-    
     struct h2_queue *tasks_scheduled;
-    struct h2_queue *tasks_ongoing;
     
     int idle_worker_count;
     int max_idle_secs;
@@ -66,7 +64,6 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
             if (task) {
                 *ptask = task;
                 status = APR_SUCCESS;
-                h2_queue_push(workers->tasks_ongoing, task);
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                              "h2_worker(%d): start task(%ld-%d)",
                              h2_worker_get_id(worker),
@@ -115,7 +112,6 @@ static void task_done(h2_worker *worker, h2_task *task,
                      h2_task_get_stream_id(task));
         
         
-        h2_queue_remove(workers->tasks_ongoing, task);
         h2_task_destroy(task);
         
         apr_thread_cond_signal(workers->task_done);
@@ -165,8 +161,6 @@ static apr_status_t h2_workers_start(h2_workers *workers) {
     return status;
 }
 
-void h2_workers_destroy(h2_workers *workers);
-
 h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
                               int min_size, int max_size)
 {
@@ -186,7 +180,6 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         
         workers->workers = h2_queue_create(workers->pool, NULL);
         workers->tasks_scheduled = h2_queue_create(workers->pool, NULL);
-        workers->tasks_ongoing = h2_queue_create(workers->pool, NULL);
         
         status = apr_thread_mutex_create(&workers->lock,
                                          APR_THREAD_MUTEX_DEFAULT,
@@ -228,10 +221,6 @@ void h2_workers_destroy(h2_workers *workers)
     if (workers->tasks_scheduled) {
         h2_queue_destroy(workers->tasks_scheduled);
         workers->tasks_scheduled = NULL;
-    }
-    if (workers->tasks_ongoing) {
-        h2_queue_destroy(workers->tasks_ongoing);
-        workers->tasks_ongoing = NULL;
     }
     if (workers->workers) {
         h2_queue_destroy(workers->workers);
@@ -276,8 +265,8 @@ static void *match_stream_id(void *ctx, int i, void *entry)
     return NULL;
 }
 
-apr_status_t h2_workers_join(h2_workers *workers,
-                             long session_id, int stream_id)
+apr_status_t h2_workers_unschedule(h2_workers *workers,
+                                   long session_id, int stream_id)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
@@ -292,18 +281,6 @@ apr_status_t h2_workers_join(h2_workers *workers,
             h2_task_abort(task);
             h2_task_destroy(task);
         }
-        else {
-            /* maybe the task is still being processed */
-            task = h2_queue_find(workers->tasks_ongoing,
-                                 match_stream_id, &id);
-            while (task && status == APR_SUCCESS) {
-                /* Ok, need for the task to finish */
-                status = apr_thread_cond_wait(workers->task_done, workers->lock);
-                task = h2_queue_find(workers->tasks_ongoing,
-                                     match_stream_id, &id);
-            }
-        }
-        
         apr_thread_mutex_unlock(workers->lock);
     }
     return status;

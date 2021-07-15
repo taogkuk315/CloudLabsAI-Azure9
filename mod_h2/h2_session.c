@@ -224,7 +224,10 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
                       "h2_stream(%ld-%d): closing",
                       session->id, (int)stream_id);
         h2_stream_set_remove(session->streams, stream);
-        h2_stream_set_add(session->zombies, stream);
+        if (session->on_stream_close_cb) {
+            session->on_stream_close_cb(session, stream);
+        }
+        h2_stream_destroy(stream);
     }
     
     if (error_code) {
@@ -376,7 +379,6 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->loglvl = APLOGcdebug(c)? APLOG_DEBUG : APLOG_NOTICE;
         
         session->streams = h2_stream_set_create(c->pool);
-        session->zombies = h2_stream_set_create(c->pool);
         
         session->mplx = h2_mplx_create(c);
         
@@ -618,25 +620,6 @@ static void h2_session_resume_streams_with_data(h2_session *session) {
     }
 }
 
-static int zombie_reap(void *ctx, h2_stream *stream)
-{
-    h2_session *session = (h2_session*)ctx;
-    if (session->on_zombie_cb) {
-        if (session->on_zombie_cb(session, stream)) {
-            h2_stream_set_remove(session->zombies, stream);
-        }
-    }
-    return 1;
-}
-
-static void h2_session_reap_zombies(h2_session *session)
-{
-    /* Cleanup and destroy zombie streams, once the h2_task they
-     * might have created, is done, since stream and task share
-     * a memory pool */
-    h2_stream_set_iter(session->zombies, zombie_reap, session);
-}
-
 apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 {
     apr_status_t status = APR_SUCCESS;
@@ -673,8 +656,6 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
             }
         }
     }
-    
-    h2_session_reap_zombies(session);
     
     return status;
 }
@@ -723,9 +704,9 @@ void h2_session_set_new_task_cb(h2_session *session, on_new_task *callback)
     session->on_new_task_cb = callback;
 }
 
-void h2_session_set_zombie_cb(h2_session *session, on_zombie *cb)
+void h2_session_set_stream_close_cb(h2_session *session, on_stream_close *cb)
 {
-    session->on_zombie_cb = cb;
+    session->on_stream_close_cb = cb;
 }
 
 static h2_stream *match_any(void *ctx, h2_stream *stream) {

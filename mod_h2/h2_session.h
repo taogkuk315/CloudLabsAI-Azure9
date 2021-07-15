@@ -56,14 +56,8 @@ typedef void on_new_task(h2_session *session,
                          struct h2_stream *stream,
                          struct h2_task *task);
 
-/* Callback on a stream that is no longer needed, but may have resources,
- * such as a running task, still lingering around. The callback should 
- * destroy the stream if it can make sure that any task for this stream
- * has been destroyed. In this case it should return != 0. 
- * It can 0, to indicate that the stream was not destroyed, in which case
- * it will be invoked with the same stream at a future point in time.
- */
-typedef int on_zombie(h2_session *session, struct h2_stream *stream);
+/* Callback when a stream is closed and will be destroyed. */
+typedef void on_stream_close(h2_session *session, struct h2_stream *stream);
 
 struct h2_session {
     long id;                        /* identifier of this session, unique
@@ -76,10 +70,9 @@ struct h2_session {
     h2_io_ctx io;                   /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_stream_set *streams;  /* streams handled by this session */
-    struct h2_stream_set *zombies;  /* finished streams, reap back memory carefully */
     
     on_new_task *on_new_task_cb;    /* notify of new h2_task creations */
-    on_zombie *on_zombie_cb;        /* notify of new h2_stream gone zombie */
+    on_stream_close *on_stream_close_cb; /* notify that stream was closed */
 
     int loglvl;
     
@@ -140,8 +133,9 @@ apr_status_t h2_session_submit_response(h2_session *session,
 /* Set the callback to be invoked when new h2_task instances are created.  */
 void h2_session_set_new_task_cb(h2_session *session, on_new_task *cb);
 
-/* Set the callback to be invoked when a h2_stream has become zombie.  */
-void h2_session_set_zombie_cb(h2_session *session, on_zombie *cb);
+/* Set the callback to be invoked when a stream has been closed and
+ * will be destroyed.  */
+void h2_session_set_stream_close_cb(h2_session *session, on_stream_close *cb);
 
 /* Get the h2_stream for the given stream idenrtifier. */
 struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);

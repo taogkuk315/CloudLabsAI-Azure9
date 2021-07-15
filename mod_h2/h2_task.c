@@ -188,11 +188,16 @@ static apr_status_t output_convert(h2_bucket *bucket,
                                    apr_size_t *pconsumed);
 
 h2_task *h2_task_create(long session_id, int stream_id,
-                        conn_rec *master, apr_pool_t *pool,
-                        struct h2_mplx *mplx)
+                        conn_rec *master, struct h2_mplx *mplx)
 {
+    apr_pool_t *pool = NULL;
+    apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
+    if (status != APR_SUCCESS) {
+        return NULL;
+    }
+    
     conn_rec *c = NULL;
-    apr_status_t status = h2_conn_create(&c, master, pool);
+    status = h2_conn_create(&c, master, pool);
     if (status != APR_SUCCESS) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, status, pool,
                       "h2_task(%ld-%d): unable to create stream task",
@@ -251,7 +256,7 @@ apr_status_t h2_task_destroy(h2_task *task)
     if (task->pool) {
         apr_pool_t *pool = task->pool;
         task->pool = NULL;
-        //apr_pool_destroy(pool);
+        apr_pool_destroy(pool);
     }
     return APR_SUCCESS;
 }
