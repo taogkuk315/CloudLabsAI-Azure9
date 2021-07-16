@@ -47,12 +47,13 @@ struct h2_stream {
     int id;                     /* http2 stream id */
     h2_stream_state_t state;    /* http/2 state of this stream */
     conn_rec *master;           /* main connection this stream belongs to */
-    apr_pool_t *pool;           /* the memory pool for this stream */
     struct h2_mplx *m;          /* the multiplexer to work with */
-    int aborted;                /* was aborted */
     
-    h2_request request;  /* the request made in this stream */
+    int aborted;                /* was aborted */
     int suspended;              /* DATA sending has been suspended */
+    
+    apr_pool_t *pool;           /* the memory pool for this stream */
+    h2_request request;         /* the request made in this stream */
 };
 
 

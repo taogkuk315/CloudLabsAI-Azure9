@@ -25,6 +25,7 @@
 #include <nghttp2/nghttp2.h>
 
 #include "h2_private.h"
+#include "h2_bucket.h"
 #include "h2_mplx.h"
 #include "h2_request.h"
 #include "h2_resp_head.h"
@@ -87,15 +88,15 @@ void h2_stream_abort(h2_stream *stream)
 
 h2_task *h2_stream_create_task(h2_stream *stream)
 {
+    /* we pass our pool to the task. we do not expect
+     * to make any allocations hereafter, since we expect
+     * all headers to be written. */
+    assert(stream->request.eoh);
+    
+    h2_bucket *data = h2_request_get_http1_start(&stream->request);
     h2_task *task = h2_task_create(h2_mplx_get_id(stream->m),
                                    stream->id, stream->master,
-                                   stream->m);
-    if (task) {
-        /* we pass our pool to the task. we do not expect
-         * to make any allocations hereafter, since we expect
-         * all headers to be written. */
-        assert(stream->request.eoh);
-    }
+                                   data, stream->m);
     return task;
 }
 

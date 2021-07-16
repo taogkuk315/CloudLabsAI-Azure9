@@ -45,6 +45,7 @@ struct h2_mplx;
 struct h2_task;
 struct h2_resp_head;
 struct h2_response;
+struct h2_bucket;
 struct h2_bucket_queue;
 
 typedef enum {
@@ -56,8 +57,11 @@ typedef enum {
 
 typedef struct h2_task h2_task;
 
-h2_task *h2_task_create(long session_id, int stream_id,
-                        conn_rec *master, struct h2_mplx *mplx);
+h2_task *h2_task_create(long session_id,
+                        int stream_id,
+                        conn_rec *master,
+                        struct h2_bucket *input,
+                        struct h2_mplx *mplx);
 
 apr_status_t h2_task_destroy(h2_task *task);
 

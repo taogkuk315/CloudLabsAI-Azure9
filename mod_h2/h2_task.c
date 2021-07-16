@@ -187,8 +187,11 @@ static apr_status_t output_convert(h2_bucket *bucket,
                                    const char *data, apr_size_t len,
                                    apr_size_t *pconsumed);
 
-h2_task *h2_task_create(long session_id, int stream_id,
-                        conn_rec *master, struct h2_mplx *mplx)
+h2_task *h2_task_create(long session_id,
+                        int stream_id,
+                        conn_rec *master,
+                        h2_bucket *input,
+                        h2_mplx *mplx)
 {
     apr_pool_t *pool = NULL;
     apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
@@ -219,7 +222,8 @@ h2_task *h2_task_create(long session_id, int stream_id,
     task->c = c;
     task->state = H2_TASK_ST_IDLE;
     task->input = h2_task_input_create(task->c->pool,
-                                       session_id, stream_id, mplx);
+                                       session_id, stream_id,
+                                       input, mplx);
     task->output = h2_task_output_create(task->c->pool,
                                          session_id, stream_id, mplx);
     

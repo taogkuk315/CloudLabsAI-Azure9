@@ -38,7 +38,6 @@ static apr_status_t h2_req_head_add_header(h2_request *req, h2_mplx *m,
                                            const char *name, size_t nlen,
                                            const char *value, size_t vlen);
 static apr_status_t ensure_work(h2_request *req, apr_size_t size);
-static apr_status_t h2_request_push(h2_request *req, struct h2_mplx *m);
 static apr_status_t insert_request_line(h2_request *req, h2_mplx *m);
 
 
@@ -78,18 +77,15 @@ apr_status_t h2_request_rwrite(h2_request *req, request_rec *r,
     
     if (status == APR_SUCCESS) {
         status = h2_request_end_headers(req, m);
-        if (status == APR_SUCCESS) {
-            status = h2_request_end_headers(req, m);
-        }
     }
     return status;
 }
 
 void h2_request_destroy(h2_request *req)
 {
-    if (req->work) {
-        h2_bucket_destroy(req->work);
-        req->work = NULL;
+    if (req->http1) {
+        h2_bucket_destroy(req->http1);
+        req->http1 = NULL;
     }
 }
 
@@ -106,7 +102,7 @@ apr_status_t h2_request_write_header(h2_request *req,
     
     if (name[0] == ':') {
         /* pseudo header, see ch. 8.1.2.3, always should come first */
-        if (req->work) {
+        if (req->http1) {
             ap_log_perror(APLOG_MARK, APLOG_ERR, 0, pool,
                           "h2_request(%d): pseudo header after request start",
                           req->id);
@@ -175,11 +171,11 @@ apr_status_t h2_request_write_data(h2_request *req,
     }
     
     while (len > 0) {
-        apr_size_t written = h2_bucket_append(req->work, data, len);
+        apr_size_t written = h2_bucket_append(req->http1, data, len);
         if (written < len) {
             len -= written;
             data += written;
-            apr_status_t status = h2_request_push(req, m);
+            apr_status_t status = h2_request_flush(req, m);
             if (status != APR_SUCCESS) {
                 return status;
             }
@@ -204,13 +200,12 @@ apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m)
         req->started = 1;
     }
     
-    if (!h2_bucket_has_free(req->work, 2)) {
-        status = h2_request_push(req, m);
+    if (!h2_bucket_has_free(req->http1, 2)) {
+        status = h2_request_flush(req, m);
     }
     
     if (status == APR_SUCCESS) {
-        h2_bucket_cat(req->work, "\r\n");
-        status = h2_request_push(req, m);
+        h2_bucket_cat(req->http1, "\r\n");
     }
     return status;
 }
@@ -220,12 +215,12 @@ apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m)
 apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m)
 {
     apr_status_t status = APR_SUCCESS;
-    if (req->work) {
-        status = h2_request_push(req, m);
-    }
-    req->eos = 1;
-    if (status == APR_SUCCESS) {
-        status = h2_mplx_in_close(m, req->id);
+    if (!req->eos) {
+        status = h2_request_flush(req, m);
+        req->eos = 1;
+        if (status == APR_SUCCESS) {
+            status = h2_mplx_in_close(m, req->id);
+        }
     }
     return status;
 }
@@ -270,14 +265,14 @@ static apr_status_t h2_req_head_add_header(h2_request *req,
                                            const char *name, size_t nlen,
                                            const char *value, size_t vlen)
 {
-    apr_status_t status = h2_req_head_add_header_int(req->work,
+    apr_status_t status = h2_req_head_add_header_int(req->http1,
                                                      name, nlen, value, vlen);
-    if (status == APR_ENAMETOOLONG && req->work->data_len > 0) {
+    if (status == APR_ENAMETOOLONG && req->http1->data_len > 0) {
         /* header did not fit into bucket, push bucket to input and
          * get a new one */
-        status = h2_request_push(req, m);
+        status = h2_request_flush(req, m);
         if (status == APR_SUCCESS) {
-            status = h2_req_head_add_header_int(req->work,
+            status = h2_req_head_add_header_int(req->http1,
                                                 name, nlen, value, vlen);
             /* if this still does not work, we fail */
         }
@@ -287,26 +282,41 @@ static apr_status_t h2_req_head_add_header(h2_request *req,
 
 static apr_status_t ensure_work(h2_request *req, apr_size_t size)
 {
-    if (!req->work) {
-        req->work = h2_bucket_alloc(size);
-        if (!req->work) {
+    if (!req->http1) {
+        req->http1 = h2_bucket_alloc(size);
+        if (!req->http1) {
             return APR_ENOMEM;
         }
     }
     return APR_SUCCESS;
 }
 
-static apr_status_t h2_request_push(h2_request *req, struct h2_mplx *m)
+apr_status_t h2_request_flush(h2_request *req, struct h2_mplx *m)
 {
-    apr_status_t status = h2_mplx_in_write(m, req->id, req->work);
-    req->work = NULL;
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, h2_mplx_get_connection(m),
-                      "h2_request(%d): pushing request data", req->id);
+    apr_status_t status = APR_SUCCESS;
+    if (req->http1) {
+        status = h2_mplx_in_write(m, req->id, req->http1);
+        req->http1 = NULL;
+        req->flushed = 1;
+        if (status != APR_SUCCESS) {
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, status,
+                          h2_mplx_get_connection(m),
+                          "h2_request(%d): pushing request data", req->id);
+        }
     }
     return status;
 }
 
+h2_bucket *h2_request_get_http1_start(h2_request *req)
+{
+    if (!req->flushed && req->http1) {
+        h2_bucket *data = req->http1;
+        req->http1 = NULL;
+        req->flushed = 1;
+        return data;
+    }
+    return NULL;
+}
 
 static apr_status_t insert_request_line(h2_request *req, h2_mplx *m)
 {
@@ -328,7 +338,7 @@ static apr_status_t insert_request_line(h2_request *req, h2_mplx *m)
     if (status != APR_SUCCESS) {
         return status;
     }
-    status = h2_req_head_add_start(req->work, req->method, req->path);
+    status = h2_req_head_add_start(req->http1, req->method, req->path);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, h2_mplx_get_connection(m),
                       "h2_request(%d): adding request line",

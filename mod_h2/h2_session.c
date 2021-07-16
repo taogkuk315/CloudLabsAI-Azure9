@@ -79,12 +79,17 @@ static int stream_open(h2_session *session, int stream_id)
     return 0;
 }
 
-static apr_status_t stream_end_headers(h2_session *session, h2_stream *stream)
+static apr_status_t stream_end_headers(h2_session *session,
+                                       h2_stream *stream, int eos)
 {
     apr_status_t status = h2_stream_write_eoh(stream);
     if (status == APR_SUCCESS) {
-        h2_task *task = h2_stream_create_task(stream);
-        if (session->on_new_task_cb) {
+        if (eos) {
+            status = h2_stream_write_eos(stream);
+        }
+        
+        if (status == APR_SUCCESS && session->on_new_task_cb) {
+            h2_task *task = h2_stream_create_task(stream);
             session->on_new_task_cb(session, stream, task);
         }
     }
@@ -299,7 +304,8 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             }
             
             if (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS) {
-                status = stream_end_headers(session, stream);
+                int eos = (frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
+                status = stream_end_headers(session, stream, eos);
             }
             break;
         }
@@ -557,7 +563,7 @@ apr_status_t h2_session_start(h2_session *session)
         if (status != APR_SUCCESS) {
             return status;
         }
-        status = stream_end_headers(session, stream);
+        status = stream_end_headers(session, stream, 1);
         if (status != APR_SUCCESS) {
             return status;
         }

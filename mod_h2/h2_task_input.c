@@ -70,11 +70,12 @@ static void cleanup(h2_task_input *input) {
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
                                         int session_id, int stream_id,
-                                        struct h2_mplx *m)
+                                        h2_bucket *data, h2_mplx *m)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
         input->m = m;
+        input->cur = data;
         h2_mplx_reference(m);
         input->session_id = session_id;
         input->stream_id = stream_id;

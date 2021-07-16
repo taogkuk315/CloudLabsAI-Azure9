@@ -23,11 +23,12 @@ struct h2_mplx;
 typedef struct h2_request h2_request;
 
 struct h2_request {
-    int id;                     /* http2 stream id */
+    int id;            /* http2 stream id */
     
-    int eoh;                    /* end of headers seen */
-    int eos;                    /* end of input seen */
-    int started;                /* request line under way */
+    int eoh;           /* end of headers seen */
+    int eos;           /* end of input seen */
+    int started;       /* request line serialized */
+    int flushed;       /* http1 data has already been flushed at least once */
     
     /* pseudo header values, see ch. 8.1.2.3 */
     const char *method;
@@ -35,12 +36,21 @@ struct h2_request {
     const char *authority;
     const char *scheme;
     
-    struct h2_bucket *work;
+    struct h2_bucket *http1; /* The request serialized in HTTP/1.1 format*/
 };
-
 
 void h2_request_init(h2_request *req, int id);
 void h2_request_destroy(h2_request *req);
+
+apr_status_t h2_request_flush(h2_request *req, struct h2_mplx *m);
+
+/* Return the first bucket of the request in http1 format if not
+ * already flushed to the multiplexer. This data will be removed from
+ * the request and is not writte out. 
+ * Will return NULL of data has been flushed already.
+ * Useful to directly retrieving the input for new stream tasks. 
+ */
+struct h2_bucket *h2_request_get_http1_start(h2_request *req);
 
 apr_status_t h2_request_write_header(h2_request *req,
                                      const char *name, size_t nlen,
