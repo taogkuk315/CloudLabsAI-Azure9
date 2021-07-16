@@ -17,8 +17,11 @@
 #ifndef __mod_h2__h2_h2c__
 #define __mod_h2__h2_h2c__
 
-/**
- * Register apache hooks for h2c protocol
+/* Specific function to handle the "h2c" part of a HTTP2 connection, the
+ * one where plain HTTP/1 connections get Upgraded.
+ */
+
+/* Registers apache hooks for h2c protocol
  */
 void h2_h2c_register_hooks(void);
 

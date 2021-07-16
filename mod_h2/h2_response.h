@@ -27,6 +27,11 @@
  * All data is allocated from the connection memory pool. Body data
  * is passed "through" into the given h2_bucket(s) and will not
  * cause allocations.
+ *
+ * Again, see comments in h2_request: ideally we would take the headers
+ * and status from the httpd structures instead of parsing them here, but
+ * we need to have all handlers and filters involved in request/response
+ * processing, so this seems to be the way for now.
  */
 
 typedef enum {

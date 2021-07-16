@@ -216,10 +216,12 @@ apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m)
 {
     apr_status_t status = APR_SUCCESS;
     if (!req->eos) {
-        status = h2_request_flush(req, m);
         req->eos = 1;
-        if (status == APR_SUCCESS) {
-            status = h2_mplx_in_close(m, req->id);
+        if (req->flushed) {
+            status = h2_request_flush(req, m);
+            if (status == APR_SUCCESS) {
+                status = h2_mplx_in_close(m, req->id);
+            }
         }
     }
     return status;
@@ -294,25 +296,35 @@ static apr_status_t ensure_work(h2_request *req, apr_size_t size)
 apr_status_t h2_request_flush(h2_request *req, struct h2_mplx *m)
 {
     apr_status_t status = APR_SUCCESS;
+    int write_close = !req->flushed && req->eos;
     if (req->http1) {
         status = h2_mplx_in_write(m, req->id, req->http1);
         req->http1 = NULL;
-        req->flushed = 1;
-        if (status != APR_SUCCESS) {
+        if (status == APR_SUCCESS) {
+            
+            req->flushed = 1;
+        }
+        else {
             ap_log_cerror(APLOG_MARK, APLOG_ERR, status,
                           h2_mplx_get_connection(m),
                           "h2_request(%d): pushing request data", req->id);
         }
     }
+    
+    if (write_close) {
+        h2_mplx_in_close(m, req->id);
+    }
     return status;
 }
 
-h2_bucket *h2_request_get_http1_start(h2_request *req)
+h2_bucket *h2_request_get_http1_start(h2_request *req, int *peos)
 {
+    *peos = 0;
     if (!req->flushed && req->http1) {
         h2_bucket *data = req->http1;
         req->http1 = NULL;
         req->flushed = 1;
+        *peos = req->eos;
         return data;
     }
     return NULL;

@@ -17,6 +17,12 @@
 #ifndef __mod_h2__h2_task_output__
 #define __mod_h2__h2_task_output__
 
+/* h2_task_output reads a HTTP/1 response from the brigade and applies
+ * them to a h2_output_converter. The brigade is setup as the output brigade
+ * for our pseudo httpd conn_rec that is handling a specific h2_task.
+ * 
+ * The conversion is implemented in h2_response.
+ */
 struct h2_bucket;
 struct h2_mplx;
 struct h2_response;

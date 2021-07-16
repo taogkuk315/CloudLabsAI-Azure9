@@ -64,14 +64,14 @@ TODO
   mod_h2 and there are several areas in work scheduling where priority handling
   needs to be added to mod_h2.
 - Replace own thread pool with the ones from apr-util, use priority scheduling
-- Memory handling: each stream eats some small amount of memory now, so long
-connections will eat up memory.
+  (Initial tests show a 10% perf penalty, why?)
 - Performance is not where it should be, request/s suffer from current
   pseudo-connection handling and other things. See DISCUSS
 - Proper documentation needs to be added
 - Test cases need to be written to cover edge cases with connection abort,
   stream reset, priority requests, etc.
-
+- mpm_event: can we support it?
+- Chunk handling for request input data (h2_request).
 
 License
 -------

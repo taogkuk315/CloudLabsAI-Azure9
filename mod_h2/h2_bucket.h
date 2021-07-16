@@ -29,6 +29,10 @@ typedef void h2_bucket_free_func(h2_bucket *bucket);
  * - can serve as a scratch buffer inside a single thread
  * - can, once constructed, be passed around safely
  * - can be destroyed, e.g. freed, without knowledge how it was allocated
+ *
+ * And yes, apr_buckets are much more powerful, but seem to be tight to
+ * a apr_pool_t, which seems not to work with passing buckets around
+ * between threads.
  */
 struct h2_bucket {
     char *data;

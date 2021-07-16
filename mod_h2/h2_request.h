@@ -17,6 +17,13 @@
 #ifndef __mod_h2__h2_request__
 #define __mod_h2__h2_request__
 
+/* h2_request is the transformer of HTTP2 streams into HTTP/1.1 internal
+ * format that will be fed to various httpd input filters to finally
+ * become a request_rec to be handled by soemone.
+ *
+ * Ideally, we would make a request_rec without serializing the headers
+ * we have only to make someone else parse them back.
+ */
 struct h2_bucket;
 struct h2_mplx;
 
@@ -50,7 +57,7 @@ apr_status_t h2_request_flush(h2_request *req, struct h2_mplx *m);
  * Will return NULL of data has been flushed already.
  * Useful to directly retrieving the input for new stream tasks. 
  */
-struct h2_bucket *h2_request_get_http1_start(h2_request *req);
+struct h2_bucket *h2_request_get_http1_start(h2_request *req, int *peos);
 
 apr_status_t h2_request_write_header(h2_request *req,
                                      const char *name, size_t nlen,

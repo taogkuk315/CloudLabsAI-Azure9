@@ -48,12 +48,12 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
 h2_stream *h2_stream_create(int id, conn_rec *master, struct h2_mplx *m)
 {
     apr_pool_t *spool = NULL;
-    apr_status_t status = apr_pool_create_ex(&spool, master->pool, NULL, NULL);
+    apr_status_t status = apr_pool_create_ex(&spool, NULL, NULL, NULL);
     if (status != APR_SUCCESS) {
         return NULL;
     }
     
-    h2_stream *stream = apr_pcalloc(spool, sizeof(h2_stream));
+    h2_stream *stream = calloc(1, sizeof(h2_stream));
     if (stream != NULL) {
         stream->id = id;
         stream->state = H2_STREAM_ST_IDLE;
@@ -73,6 +73,7 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
     if (stream->pool) {
         apr_pool_destroy(stream->pool);
     }
+    free(stream);
     return APR_SUCCESS;
 }
 
@@ -93,10 +94,20 @@ h2_task *h2_stream_create_task(h2_stream *stream)
      * all headers to be written. */
     assert(stream->request.eoh);
     
-    h2_bucket *data = h2_request_get_http1_start(&stream->request);
+    int input_eos = 0;
+    h2_bucket *data = h2_request_get_http1_start(&stream->request, &input_eos);
+    if (!data) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->master,
+                      "h2_stream(%ld-%d): task input is NULL, flushed=%d",
+                      h2_mplx_get_id(stream->m), stream->id,
+                      stream->request.flushed);
+    }
+    h2_request_flush(&stream->request, stream->m);
     h2_task *task = h2_task_create(h2_mplx_get_id(stream->m),
                                    stream->id, stream->master,
-                                   data, stream->m);
+                                   stream->pool,
+                                   data, input_eos, stream->m);
+    stream->pool = NULL;
     return task;
 }
 

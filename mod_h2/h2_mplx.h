@@ -19,8 +19,28 @@
 #define __mod_h2__h2_mplx__
 
 /**
- * The stream multiplexer.
+ * The stream multiplexer. It pushes h2_buckets from the connection
+ * thread (httpd worker) to the stream task threads and vice versa.
  *
+ * Currently there is no forced join between ongoing task threads and
+ * the main connection thread. So h2_mplx implements reference counting
+ * and auto-destructs when the last reference goes away.
+ *
+ * There is one h2_mplx instance for each h2_session, which sits on top
+ * of a particular httpd conn_rec. Input goes from the connection to
+ * the stream tasks. Output goes from the stream tasks to the connection,
+ * e.g. the client.
+ *
+ * Each h2_bucket is associated with a particular stream identifier (the
+ * id from the HTTP2 protocol). It is possible to read for a particular
+ * stream id or do other operations connected to it.
+ *
+ * For each stream, there can be at most "H2StreamMaxMemSize" bytes
+ * queued in the multiplexer. If a task thread tries to write more
+ * data, it is blocked until space becomes available.
+ *
+ * Writing input is never blocked. The HTTP2 flow control will prevent
+ * too much data becoming available.
  */
 
 struct apr_pool_t;

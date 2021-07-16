@@ -18,8 +18,8 @@
 #define __mod_h2__h2_stream_set__
 
 /**
- * A set of h2_stream instances. Thread safe.
- *
+ * A set of h2_stream instances. Allows lookup by stream id
+ * and other criteria.
  */
 
 typedef h2_stream *h2_stream_set_match_fn(void *ctx, h2_stream *stream);

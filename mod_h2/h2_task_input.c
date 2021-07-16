@@ -33,6 +33,7 @@ struct h2_task_input {
     int session_id;
     int stream_id;
     int eos;
+    int is_last;
     struct h2_bucket *cur;
     apr_size_t cur_offset;
 };
@@ -65,17 +66,22 @@ static void cleanup(h2_task_input *input) {
         h2_bucket_destroy(input->cur);
         input->cur = NULL;
         input->cur_offset = 0;
+        if (input->is_last) {
+            input->eos = 1;
+        }
     }
 }
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
-                                        int session_id, int stream_id,
-                                        h2_bucket *data, h2_mplx *m)
+                                    int session_id, int stream_id,
+                                    h2_bucket *data, int is_last,
+                                    h2_mplx *m)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
         input->m = m;
         input->cur = data;
+        input->is_last = is_last;
         h2_mplx_reference(m);
         input->session_id = session_id;
         input->stream_id = stream_id;
@@ -96,11 +102,11 @@ void h2_task_input_destroy(h2_task_input *input)
 }
 
 apr_status_t h2_task_input_read(h2_task_input *input,
-                                  ap_filter_t* filter,
-                                  apr_bucket_brigade* brigade,
-                                  ap_input_mode_t mode,
-                                  apr_read_type_e block,
-                                  apr_off_t readbytes)
+                                ap_filter_t* filter,
+                                apr_bucket_brigade* brigade,
+                                ap_input_mode_t mode,
+                                apr_read_type_e block,
+                                apr_off_t readbytes)
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t nread = 0;
@@ -130,7 +136,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         }
         
         status = h2_mplx_in_read(input->m, all_there? APR_NONBLOCK_READ : block,
-                                     input->stream_id, &input->cur);
+                                 input->stream_id, &input->cur);
         input->cur_offset = 0;
         if (status == APR_EOF) {
             input->eos = 1;

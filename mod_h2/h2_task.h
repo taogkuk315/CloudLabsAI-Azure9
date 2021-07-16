@@ -18,9 +18,8 @@
 #define __mod_h2__h2_task__
 
 /**
- * A h2_task represents a faked HTTP/1.1 request from the client that
- * is created for every HTTP/2 stream (HEADER+CONT.+DATA) we receive
- * from the client.
+ * A h2_task fakes a HTTP/1.1 request from the data in a HTTP/2 stream 
+ * (HEADER+CONT.+DATA) the module recieves.
  *
  * In order to answer a HTTP/2 stream, we want all Apache httpd infrastructure
  * to be involved as usual, as if this stream can as a separate HTTP/1.1
@@ -60,7 +59,9 @@ typedef struct h2_task h2_task;
 h2_task *h2_task_create(long session_id,
                         int stream_id,
                         conn_rec *master,
+                        apr_pool_t *pool, 
                         struct h2_bucket *input,
+                        int input_eos,
                         struct h2_mplx *mplx);
 
 apr_status_t h2_task_destroy(h2_task *task);

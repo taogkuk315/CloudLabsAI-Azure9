@@ -17,19 +17,29 @@
 #ifndef __mod_h2__h2_worker__
 #define __mod_h2__h2_worker__
 
+/* h2_worker is a basically a apr_thread_t that reads fromt he h2_workers
+ * task queue and runs h2_tasks it is given.
+ */
+
 typedef struct h2_worker h2_worker;
 
+/* Invoked when the worker wants a new task- */
 typedef apr_status_t h2_worker_task_next_fn(h2_worker *worker,
                                             h2_task **ptask,
                                             void *ctx);
 
+/* Invoked when the worker has finished a task */
 typedef void h2_worker_task_done_fn(h2_worker *worker,
                                     h2_task *ptask,
                                     apr_status_t status,
                                     void *ctx);
 
+/* Invoked just before the worker thread exits. */
 typedef void h2_worker_done_fn(h2_worker *worker, void *ctx);
 
+/* Create a new worker with given id, pool and attributes, callbacks
+ * callback parameter.
+ */
 h2_worker *h2_worker_create(int id,
                             apr_pool_t *pool,
                             apr_threadattr_t *attr,

@@ -190,13 +190,17 @@ static apr_status_t output_convert(h2_bucket *bucket,
 h2_task *h2_task_create(long session_id,
                         int stream_id,
                         conn_rec *master,
+                        apr_pool_t *pool,
                         h2_bucket *input,
+                        int input_eos,
                         h2_mplx *mplx)
 {
-    apr_pool_t *pool = NULL;
-    apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
-    if (status != APR_SUCCESS) {
-        return NULL;
+    apr_status_t status = APR_SUCCESS;
+    if (pool == NULL) {
+        apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
+        if (status != APR_SUCCESS) {
+            return NULL;
+        }
     }
     
     conn_rec *c = NULL;
@@ -223,7 +227,7 @@ h2_task *h2_task_create(long session_id,
     task->state = H2_TASK_ST_IDLE;
     task->input = h2_task_input_create(task->c->pool,
                                        session_id, stream_id,
-                                       input, mplx);
+                                       input, input_eos, mplx);
     task->output = h2_task_output_create(task->c->pool,
                                          session_id, stream_id, mplx);
     

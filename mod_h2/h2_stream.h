@@ -20,9 +20,20 @@
 
 /**
  * A HTTP/2 stream, e.g. a client request+response in HTTP/1.1 terms.
+ * 
+ * Ok, not quite, but close enough, since we do not implement server
+ * pushes yet.
  *
  * A stream always belongs to a h2_session, the one managing the
- * connection to the client.
+ * connection to the client. The h2_session writes to the h2_stream,
+ * adding HEADERS and DATA and finally an EOS. When headers are done,
+ * h2_stream can create a h2_task that can be scheduled to fullfill the
+ * request.
+ * 
+ * This response headers are added directly to the h2_mplx of the session,
+ * but the response DATA can be read via h2_stream. Reading data will
+ * never block but return APR_EAGAIN when there currently is no data (and
+ * no eos) in the multiplexer for this stream.
  */
 #include "h2_request.h"
 
