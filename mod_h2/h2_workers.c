@@ -270,7 +270,7 @@ apr_status_t h2_workers_unschedule(h2_workers *workers,
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
+        ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                      "h2_workers: join stream(%ld-%d) started",
                      session_id, stream_id);
         stream_id_t id = { session_id, stream_id };

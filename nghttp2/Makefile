@@ -20,7 +20,7 @@ NGHTTP2_TAR     = $(NGHTTP2_DIR).tar.gz
 NGHTTP2_URL     = https://github.com/tatsuhiro-t/nghttp2/releases/download/v$(NGHTTP2_VERSION)/$(NGHTTP2_TAR)
 
 NGHTTP2_CONF_ENV=
-NGHTTP2_CONF    = --prefix=$(BLD_PREFIX) --enable-app
+NGHTTP2_CONF    = --prefix=$(BLD_PREFIX) --enable-apps
 
 ZLIB_VERSION    = 1.2.8
 ZLIB_DIR        = zlib-$(ZLIB_VERSION)
@@ -49,7 +49,8 @@ NGHTTP2_DEPS    =
 ifeq ($(OS),Darwin)
     # we need our own zlib
     NGHTTP2_DEPS  += $(INST_DIR)/.zlib-installed $(INST_DIR)/.libev-installed
-    NGHTTP2_CONF_ENV += PKG_CONFIG_LIBDIR=$(BLD_PREFIX)/lib/pkgconfig LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
+    NGHTTP2_CONF_ENV += PKG_CONFIG_LIBDIR=$(BLD_PREFIX)/lib/pkgconfig \
+        LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
 endif
 
 all: install
@@ -91,12 +92,22 @@ $(GEN)/$(NGHTTP2_DIR)/.nghttp2-built: \
 #
 $(GEN)/$(NGHTTP2_DIR)/.nghttp2-configured: \
 		$(NGHTTP2_DEPS) \
-		$(GEN)/$(NGHTTP2_DIR)/.nghttp2-extracted
+		$(GEN)/$(NGHTTP2_DIR)/.nghttp2-patched
 	@echo -n configuring nghttp2...
 	cd $(GEN)/$(NGHTTP2_DIR)/ && \
 	$(NGHTTP2_CONF_ENV) ./configure $(NGHTTP2_CONF) #>> ../build.log
 	@echo done.
 	@touch $(GEN)/$(NGHTTP2_DIR)/.nghttp2-configured
+
+################################################################################
+# Patch the local nghtp2 sources
+#
+$(GEN)/$(NGHTTP2_DIR)/.nghttp2-patched: \
+		$(GEN)/$(NGHTTP2_DIR)/.nghttp2-extracted
+	@echo applying patches...
+	@cd gen/$(NGHTTP2_DIR) && patch -p0 < ../../patches/nghttp2-pthread-getspecific-unified.diff.patch
+	@echo nghttp2 patched.
+	@touch $(GEN)/$(NGHTTP2_DIR)/.nghttp2-patched
 
 ################################################################################
 # Extract nghttp2 source tree

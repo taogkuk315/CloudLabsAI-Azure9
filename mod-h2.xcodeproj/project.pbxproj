@@ -299,6 +299,7 @@
 		B2D05D5C1A6D11C0004DF5C0 /* ssl_util_ssl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util_ssl.c; sourceTree = "<group>"; };
 		B2D05D5D1A6D11C0004DF5C0 /* ssl_util_ssl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ssl_util_ssl.h; sourceTree = "<group>"; };
 		B2D05D5E1A6D11C0004DF5C0 /* ssl_util_stapling.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util_stapling.c; sourceTree = "<group>"; };
+		B2D15C561AA0CBB20054A420 /* nghttp2-pthread-getspecific-unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "nghttp2-pthread-getspecific-unified.diff.patch"; sourceTree = "<group>"; };
 		B2E06A8C1A8E10EA00BE04D5 /* .nghttp2-configured */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ".nghttp2-configured"; sourceTree = "<group>"; };
 		B2E06A8D1A8E10EA00BE04D5 /* .nghttp2-extracted */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ".nghttp2-extracted"; sourceTree = "<group>"; };
 		B2E06A8E1A8E10EA00BE04D5 /* aclocal.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = aclocal.m4; sourceTree = "<group>"; };
@@ -1288,6 +1289,14 @@
 			path = "httpd/mod_ssl-alpn";
 			sourceTree = "<group>";
 		};
+		B2D15C551AA0CBB20054A420 /* patches */ = {
+			isa = PBXGroup;
+			children = (
+				B2D15C561AA0CBB20054A420 /* nghttp2-pthread-getspecific-unified.diff.patch */,
+			);
+			path = patches;
+			sourceTree = "<group>";
+		};
 		B2E06A8B1A8E10EA00BE04D5 /* nghttp2-0.7.3 */ = {
 			isa = PBXGroup;
 			children = (
@@ -2098,6 +2107,7 @@
 		B2E5BADD1A6E69810031CBD8 /* nghttp2 */ = {
 			isa = PBXGroup;
 			children = (
+				B2D15C551AA0CBB20054A420 /* patches */,
 				B2E06A8B1A8E10EA00BE04D5 /* nghttp2-0.7.3 */,
 				B2E5BADE1A6E69810031CBD8 /* Makefile */,
 			);

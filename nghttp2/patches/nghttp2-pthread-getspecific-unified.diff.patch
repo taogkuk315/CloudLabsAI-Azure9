@@ -1,0 +1,334 @@
+diff -ru src/shrpx.cc src/shrpx.cc
+--- src/shrpx.cc	2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx.cc	2015-02-18 09:29:32.000000000 +0100
+@@ -406,13 +406,13 @@
+                                  int revents) {
+   auto conn_handler = static_cast<ConnectionHandler *>(w->data);
+ 
+-  if (worker_config->graceful_shutdown) {
++  if (worker_config()->graceful_shutdown) {
+     return;
+   }
+ 
+   LOG(NOTICE) << "Graceful shutdown signal received";
+ 
+-  worker_config->graceful_shutdown = true;
++  worker_config()->graceful_shutdown = true;
+ 
+   conn_handler->disable_acceptor();
+ 
+@@ -440,7 +440,7 @@
+ 
+   // In multi threaded mode (get_config()->num_worker > 1), we have to
+   // wait for event notification to workers to finish.
+-  if (get_config()->num_worker == 1 && worker_config->graceful_shutdown &&
++  if (get_config()->num_worker == 1 && worker_config()->graceful_shutdown &&
+       (!worker_stat || worker_stat->num_connections == 0)) {
+     ev_break(loop);
+   }
+@@ -450,7 +450,7 @@
+ namespace {
+ void renew_ticket_key_cb(struct ev_loop *loop, ev_timer *w, int revents) {
+   auto conn_handler = static_cast<ConnectionHandler *>(w->data);
+-  const auto &old_ticket_keys = worker_config->ticket_keys;
++  const auto &old_ticket_keys = worker_config()->ticket_keys;
+ 
+   auto ticket_keys = std::make_shared<TicketKeys>();
+   if (LOG_ENABLED(INFO)) {
+@@ -484,7 +484,7 @@
+     }
+   }
+ 
+-  worker_config->ticket_keys = ticket_keys;
++  worker_config()->ticket_keys = ticket_keys;
+ 
+   conn_handler->worker_renew_ticket_keys(ticket_keys);
+ }
+@@ -1688,15 +1688,15 @@
+   }
+ 
+   if (get_config()->uid != 0) {
+-    if (worker_config->accesslog_fd != -1 &&
+-        fchown(worker_config->accesslog_fd, get_config()->uid,
++    if (worker_config()->accesslog_fd != -1 &&
++        fchown(worker_config()->accesslog_fd, get_config()->uid,
+                get_config()->gid) == -1) {
+       auto error = errno;
+       LOG(WARN) << "Changing owner of access log file failed: "
+                 << strerror(error);
+     }
+-    if (worker_config->errorlog_fd != -1 &&
+-        fchown(worker_config->errorlog_fd, get_config()->uid,
++    if (worker_config()->errorlog_fd != -1 &&
++        fchown(worker_config()->errorlog_fd, get_config()->uid,
+                get_config()->gid) == -1) {
+       auto error = errno;
+       LOG(WARN) << "Changing owner of error log file failed: "
+@@ -1765,7 +1765,7 @@
+     if (!ticket_keys) {
+       LOG(WARN) << "Use internal session ticket key generator";
+     } else {
+-      worker_config->ticket_keys = std::move(ticket_keys);
++      worker_config()->ticket_keys = std::move(ticket_keys);
+       mod_config()->auto_tls_ticket_key = false;
+     }
+   }
+diff -ru src/shrpx_client_handler.cc src/shrpx_client_handler.cc
+--- src/shrpx_client_handler.cc	2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_client_handler.cc	2015-02-18 09:29:33.000000000 +0100
+@@ -555,7 +555,7 @@
+ 
+   // TODO If backend is http/2, and it is in CONNECTED state, signal
+   // it and make it loopbreak when output is zero.
+-  if (worker_config->graceful_shutdown && worker_stat_->num_connections == 0) {
++  if (worker_config()->graceful_shutdown && worker_stat_->num_connections == 0) {
+     ev_break(loop_);
+   }
+ 
+diff -ru src/shrpx_connection_handler.cc src/shrpx_connection_handler.cc
+--- src/shrpx_connection_handler.cc	2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_connection_handler.cc	2015-02-18 09:29:33.000000000 +0100
+@@ -50,7 +50,7 @@
+ 
+   // If we are in graceful shutdown period, we must not enable
+   // acceptors again.
+-  if (worker_config->graceful_shutdown) {
++  if (worker_config()->graceful_shutdown) {
+     return;
+   }
+ 
+@@ -108,8 +108,8 @@
+ 
+   for (size_t i = 0; i < num; ++i) {
+     workers_.push_back(util::make_unique<Worker>(sv_ssl_ctx_, cl_ssl_ctx_,
+-                                                 worker_config->cert_tree,
+-                                                 worker_config->ticket_keys));
++                                                 worker_config()->cert_tree,
++                                                 worker_config()->ticket_keys));
+ 
+     if (LOG_ENABLED(INFO)) {
+       LLOG(INFO, this) << "Created thread #" << workers_.size() - 1;
+diff -ru src/shrpx_http2_upstream.cc src/shrpx_http2_upstream.cc
+--- src/shrpx_http2_upstream.cc	2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_http2_upstream.cc	2015-02-18 09:29:33.000000000 +0100
+@@ -635,7 +635,7 @@
+   if (shutdown_handled_) {
+     return;
+   }
+-  if (worker_config->graceful_shutdown) {
++  if (worker_config()->graceful_shutdown) {
+     shutdown_handled_ = true;
+     rv = nghttp2_submit_shutdown_notice(session_);
+     if (rv != 0) {
+diff -ru src/shrpx_http_downstream_connection.cc src/shrpx_http_downstream_connection.cc
+--- src/shrpx_http_downstream_connection.cc	2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_http_downstream_connection.cc	2015-02-18 09:29:33.000000000 +0100
+@@ -340,7 +340,7 @@
+   if (LOG_ENABLED(INFO)) {
+     const char *hdrp;
+     std::string nhdrs;
+-    if (worker_config->errorlog_tty) {
++    if (worker_config()->errorlog_tty) {
+       nhdrs = http::colorizeHeaders(hdrs.c_str());
+       hdrp = nhdrs.c_str();
+     } else {
+diff -ru src/shrpx_https_upstream.cc src/shrpx_https_upstream.cc
+--- src/shrpx_https_upstream.cc	2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_https_upstream.cc	2015-02-18 09:29:33.000000000 +0100
+@@ -666,7 +666,7 @@
+ 
+   // after graceful shutdown commenced, add connection: close header
+   // field.
+-  if (worker_config->graceful_shutdown) {
++  if (worker_config()->graceful_shutdown) {
+     downstream->set_response_connection_close(true);
+   }
+ 
+@@ -806,7 +806,7 @@
+ void HttpsUpstream::log_response_headers(const std::string &hdrs) const {
+   const char *hdrp;
+   std::string nhdrs;
+-  if (worker_config->errorlog_tty) {
++  if (worker_config()->errorlog_tty) {
+     nhdrs = http::colorizeHeaders(hdrs.c_str());
+     hdrp = nhdrs.c_str();
+   } else {
+diff -ru src/shrpx_log.cc src/shrpx_log.cc
+--- src/shrpx_log.cc	2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_log.cc	2015-02-18 09:29:33.000000000 +0100
+@@ -99,7 +99,7 @@
+     return;
+   }
+ 
+-  auto wconf = worker_config;
++  auto wconf = worker_config();
+ 
+   if (!log_enabled(severity_) ||
+       (wconf->errorlog_fd == -1 && !get_config()->errorlog_syslog)) {
+@@ -159,7 +159,7 @@
+ } // namespace
+ 
+ void upstream_accesslog(const std::vector<LogFragment> &lfv, LogSpec *lgsp) {
+-  auto wconf = worker_config;
++  auto wconf = worker_config();
+ 
+   if (wconf->accesslog_fd == -1 && !get_config()->accesslog_syslog) {
+     return;
+@@ -270,7 +270,7 @@
+ int reopen_log_files() {
+   int res = 0;
+ 
+-  auto wconf = worker_config;
++  auto wconf = worker_config();
+ 
+   if (wconf->accesslog_fd != -1) {
+     close(wconf->accesslog_fd);
+diff -ru src/shrpx_ssl.cc src/shrpx_ssl.cc
+--- src/shrpx_ssl.cc	2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_ssl.cc	2015-02-18 09:29:33.000000000 +0100
+@@ -129,7 +129,7 @@
+ 
+ namespace {
+ int servername_callback(SSL *ssl, int *al, void *arg) {
+-  auto cert_tree = worker_config->cert_tree;
++  auto cert_tree = worker_config()->cert_tree;
+   if (cert_tree) {
+     const char *hostname = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+     if (hostname) {
+@@ -149,7 +149,7 @@
+ int ticket_key_cb(SSL *ssl, unsigned char *key_name, unsigned char *iv,
+                   EVP_CIPHER_CTX *ctx, HMAC_CTX *hctx, int enc) {
+   auto handler = static_cast<ClientHandler *>(SSL_get_app_data(ssl));
+-  const auto &ticket_keys = worker_config->ticket_keys;
++  const auto &ticket_keys = worker_config()->ticket_keys;
+ 
+   if (!ticket_keys) {
+     // No ticket keys available.
+@@ -956,7 +956,7 @@
+ 
+   auto cert_tree = cert_lookup_tree_new();
+ 
+-  worker_config->cert_tree = cert_tree;
++  worker_config()->cert_tree = cert_tree;
+ 
+   for (auto &keycert : get_config()->subcerts) {
+     auto ssl_ctx =
+diff -ru src/shrpx_worker.cc src/shrpx_worker.cc
+--- src/shrpx_worker.cc	2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_worker.cc	2015-02-18 09:29:33.000000000 +0100
+@@ -62,7 +62,7 @@
+       sv_ssl_ctx_ = ssl::setup_server_ssl_context();
+       cl_ssl_ctx_ = ssl::setup_client_ssl_context();
+     } else {
+-      worker_config->cert_tree = cert_tree;
++      worker_config()->cert_tree = cert_tree;
+     }
+ 
+     if (get_config()->downstream_proto == PROTO_HTTP2) {
+@@ -71,7 +71,7 @@
+       http1_connect_blocker_ = util::make_unique<ConnectBlocker>(loop_);
+     }
+ 
+-    worker_config->ticket_keys = ticket_keys;
++    worker_config()->ticket_keys = ticket_keys;
+     (void)reopen_log_files();
+     ev_run(loop_);
+   });
+@@ -149,7 +149,7 @@
+                          << ")";
+       }
+ 
+-      worker_config->ticket_keys = wev.ticket_keys;
++      worker_config()->ticket_keys = wev.ticket_keys;
+ 
+       break;
+     case REOPEN_LOG:
+@@ -164,7 +164,7 @@
+     case GRACEFUL_SHUTDOWN:
+       WLOG(NOTICE, this) << "Graceful shutdown commencing";
+ 
+-      worker_config->graceful_shutdown = true;
++      worker_config()->graceful_shutdown = true;
+ 
+       if (worker_stat_->num_connections == 0) {
+         ev_break(loop_);
+diff -ru src/shrpx_worker_config.h src/shrpx_worker_config.h
+--- src/shrpx_worker_config.h     2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_worker_config.h      2015-02-18 09:29:33.000000000 +0100
+@@ -54,11 +54,7 @@
+ };
+ 
+ // We need WorkerConfig per thread
+-extern
+-#ifndef NOTHREADS
+-    thread_local
+-#endif // NOTHREADS
+-    WorkerConfig *worker_config;
++WorkerConfig *worker_config(void);
+ 
+ } // namespace shrpx
+
+diff -ru src/shrpx_log.h src/shrpx_log.h
+--- src/shrpx_log.h       2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_log.h        2015-02-18 09:29:33.000000000 +0100
+@@ -95,8 +95,8 @@
+   static int severity_thres_;
+ };
+ 
+-#define TTY_HTTP_HD (worker_config->errorlog_tty ? "\033[1;34m" : "")
+-#define TTY_RST (worker_config->errorlog_tty ? "\033[0m" : "")
++#define TTY_HTTP_HD (worker_config()->errorlog_tty ? "\033[1;34m" : "")
++#define TTY_RST (worker_config()->errorlog_tty ? "\033[0m" : "")
+ 
+ enum LogFragmentType {
+   SHRPX_LOGF_NONE,
+diff -ru src/shrpx_worker_config.cc src/shrpx_worker_config.cc
+--- src/shrpx_worker_config.cc    2015-01-25 15:01:44.000000000 +0100
++++ src/shrpx_worker_config.cc     2015-02-18 09:29:33.000000000 +0100
+@@ -22,9 +22,15 @@
+  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+  */
++
++#ifndef NOTHREADS
++#include <pthread.h>
++#endif // NOTHREADS
++
+ #include "shrpx_worker_config.h"
+ #include "util.h"
+ 
++
+ using namespace nghttp2;
+ 
+ namespace shrpx {
+@@ -34,9 +40,28 @@
+       errorlog_tty(false), graceful_shutdown(false) {}
+ 
+ #ifndef NOTHREADS
+-thread_local
++    static pthread_key_t wckey;
++    static pthread_once_t wckey_once = PTHREAD_ONCE_INIT;
++    
++    static void make_key(void) {
++        pthread_key_create(&wckey, NULL);
++    }
++    
++    WorkerConfig *worker_config(void) {
++        pthread_once(&wckey_once, make_key);
++        WorkerConfig *config = (WorkerConfig *)pthread_getspecific(wckey);
++        if (!config) {
++            config = new WorkerConfig();
++            pthread_setspecific(wckey, config);
++        }
++        return config;
++    }
++#else
++    static WorkerConfig *config = new WorkerConfig();
++    WorkerConfig *worker_config(void) {
++        return config;
++    }
+ #endif // NOTHREADS
+-    WorkerConfig *worker_config = new WorkerConfig();
+ 
+ void
+ WorkerConfig::update_tstamp(const std::chrono::system_clock::time_point &now) {
