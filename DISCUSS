@@ -9,4 +9,105 @@ This document is for discussion of the module's internals, current issues
 and exploration of ideas.
 
 
+THE GOALS
+---------
+The goals of this module can be stated as follows:
+- make the full htpp2 standard available in Apache httpd
+- provide it as a module on top of httpd 2.4.x
+- support deployment on standard unix platforms
+
+
+HOW IT WORKS
+------------
+The architecture of this module is heavily inspired by Google's mod_spdy:
+The incoming, parallel requests (http2 streams) are dispatched to a thread
+pool, responses are collected and multiplexed on the original connection.
+
+The major players in ascii art:
+
+  h2_conn -> h2_session ------> h2_mplx ----> h2_task / h2_worker
+  (socket)   (nghttp2_sesion)             |-> h2_task / h2_worker
+                                          |-> h2_task / h2_worker
+                                                ...
+
+h2_session: by using nghttp2 API, is doing the http2 frame work, stream
+            states, flow control, etc. Sits as connection level filter
+            on standard httpd connections. Gets active either by ALPN
+            selection or as HTTP/1.1 Upgrade from a request.
+
+h2_mplx:    is a somewhat specialized bucket_brigate. It multiplexes data
+            buckets associated with stream IDs in both directions and
+            has some specials to reset streams or announce response headers.
+            It also performs flow control on the downlink of streams.
+
+h2_task:    having own conn_rec instance, plus in/out filters at connection
+            level, is converting http2 streams into http/1.1 requests and
+            parses back responses to http2 usable headers and data.
+
+
+PREREQUISITES:
+- for "h2" supprt, the ALPN patch to mod_ssl is needed
+  (see https://bz.apache.org/bugzilla/show_bug.cgi?id=52210).
+- libnghttp2 (at least v0.7.3) installed
+
+TEST ENV:
+The project is setup to build a test envivonment with own, patched httpd
+and all necessary libs. Runs without admin privileges. Tested on
+Ubuntu 14.04 LTS and OS X 10.10.
+
+
+DISCUSSION / OPEN QUESTIONS
+---------------------------
+While HTTP2 clients will be happy to have low lags in using the protocol,
+httpd owners will notice performance degradations. Early measurements
+indicate that for small requests, like the famous gopher tile page
+(https://http2.golang.org/gophertiles), requests/s in loadtests show only
+50% - 70% of the original HTTP/1.1 + TLS values. These tests were done
+with h2load, a nghttp2 client working with multiple threads.
+
+The main causes for this performance penalty are not hard to find:
+- the mod_h2 architecture serializes HTTP2 headers into a HTTP/1.1 request
+  and parses back a HTTP/1.1 response into headers and data for the HTTP2
+  engine.
+  We know currently of no way to directly have httpd processing a request_rec.
+  Maybe that can be done with some internal know-how use as temporary
+  work around...
+- Data copying:
+  APR and httpd have wonderful bucket brigades, but mod_h2 is not using them
+  to the fullest capabilities. There are questions regarding multi-thread use
+  of pools, subpools and brigades that make expert advice needed.
+  So, what copying is done?
+  INPUT:
+    brigade(socket) --> nghttp2 read --> h2_bucket --> brigade(h2_task)
+  OUTPUT
+    brigade(h2_task) --> h2_bucket --> nghttp2 buffer --> brigade(socket)
+  Due to async handling and the capabilities of nghttp2, we have to make
+  copies at certain points in the process. Maybe we could avoid one copy
+  in the OUTPUT queue, if we get a grip on multi-threaded bucket brigade
+  handling...
+- MPM MODULES:
+  mod_h2 currently works with mpm_worker only. mpm_event currently crashes as
+  connection and connection config setup does not yet make the necessary
+  incantations for mpm_event to be happy. We think there is no inherent
+  problem with running inside mpm_event, since mod_h2 handles pseudo-connection
+  in- and output itself, using thread_mutex/cond to block/signal.
+  Since mpm_event is standard in most distros nowadays, it would be good to
+  get that working.
+- MEMORY:
+  mod_h2 creates new pools for every stream and allocates h2_buckets from the
+  heap. Cleanup is done and memory use seems to be stable for long living
+  connections. The current implementation keeps h2_session and its h2_tasks
+  memory-wise independant. It therefore is possible to close a session and
+  free the main thread/connection without waiting for all tasks to actually
+  finish. All tasks get the proper APR_ECONNABORTED status for IO against
+  the h2_mplx afterwards, so all tasks should finish in short time after the
+  session has been closed.
+  The alternative is to establish a master-slave relationship between session
+  and tasks which would require closing sessions to wait for all tasks to
+  complete.
+- THREADS
+  The own worker thread pool does not share resources with the mpm worker pools.
+  Seems like a module in 2.4 is limited here. Maybe something to discuss in
+  future development.
+
 

@@ -31,14 +31,13 @@
 #include "h2_resp_head.h"
 
 
-h2_resp_head *h2_resp_head_create(h2_bucket *data, int stream_id,
-                                  const char *status,
-                                  apr_array_header_t *hlines)
+h2_resp_head *h2_resp_head_create(int stream_id,
+                                  apr_status_t task_status,
+                                  const char *http_status,
+                                  apr_array_header_t *hlines,
+                                  h2_bucket *data)
 {
-    assert(status);
-    assert(hlines);
-    
-    apr_size_t nvlen = 1 + hlines->nelts;
+    apr_size_t nvlen = 1 + (hlines? hlines->nelts : 0);
     /* we allocate one block for the h2_resp_head and the array of
      * nghtt2_nv structures.
      */
@@ -48,44 +47,45 @@ h2_resp_head *h2_resp_head_create(h2_bucket *data, int stream_id,
         return NULL;
     }
     
-    nghttp2_nv *nvs = (nghttp2_nv *)&head->nv;
-    
-    nvs->name = (uint8_t *)":status";
-    nvs->namelen = strlen(":status");
-    nvs->value = (uint8_t *)status;
-    nvs->valuelen = strlen(status);
-    
-    int seen_clen = 0;
-    for (int i = 0; i < hlines->nelts; ++i) {
-        char *hline = ((char **)hlines->elts)[i];
-        nghttp2_nv *nv = &nvs[i + 1];
-        char *sep = strchr(hline, ':');
-        if (!sep) {
-            /* not valid format, abort */
-            return NULL;
-        }
-        (*sep++) = '\0';
-        nv->name = (uint8_t *)h2_strlwr(hline);
-        nv->namelen = strlen(hline);
-        while (*sep == ' ' || *sep == '\t') {
-            ++sep;
-        }
-        if (*sep) {
-            nv->value = (uint8_t *)sep;
-            nv->valuelen = strlen(sep);
-        }
-        else {
-            /* reached end of line, an empty header value */
-            nv->value = (uint8_t *)"";
-            nv->valuelen = 0;
-        }
-    }
-    
     head->stream_id = stream_id;
-    head->status = status;
+    head->task_status = task_status;
+    head->http_status = http_status;
     head->data = data;
-    head->nvlen = nvlen;
-
+    
+    if (hlines) {
+        nghttp2_nv *nvs = (nghttp2_nv *)&head->nv;
+        nvs->name = (uint8_t *)":status";
+        nvs->namelen = strlen(":status");
+        nvs->value = (uint8_t *)http_status;
+        nvs->valuelen = strlen(http_status);
+        
+        int seen_clen = 0;
+        for (int i = 0; i < hlines->nelts; ++i) {
+            char *hline = ((char **)hlines->elts)[i];
+            nghttp2_nv *nv = &nvs[i + 1];
+            char *sep = strchr(hline, ':');
+            if (!sep) {
+                /* not valid format, abort */
+                return NULL;
+            }
+            (*sep++) = '\0';
+            nv->name = (uint8_t *)h2_strlwr(hline);
+            nv->namelen = strlen(hline);
+            while (*sep == ' ' || *sep == '\t') {
+                ++sep;
+            }
+            if (*sep) {
+                nv->value = (uint8_t *)sep;
+                nv->valuelen = strlen(sep);
+            }
+            else {
+                /* reached end of line, an empty header value */
+                nv->value = (uint8_t *)"";
+                nv->valuelen = 0;
+            }
+        }
+        head->nvlen = nvlen;
+    }
     return head;
 }
 

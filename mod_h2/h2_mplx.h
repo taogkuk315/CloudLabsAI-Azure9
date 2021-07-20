@@ -133,6 +133,10 @@ apr_status_t h2_mplx_out_write(h2_mplx *mplx, apr_read_type_e block,
  */
 apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id);
 
+/* Reset the given stream. Indicate, which error occured, if any.
+ */
+apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t status);
+
 /* Wait on output data from any stream to become available. Returns
  * APR_TIMEUP if no data arrived in the given time.
  */

@@ -25,7 +25,8 @@ struct h2_bucket;
 
 typedef struct h2_resp_head {
     int stream_id;
-    const char *status;
+    apr_status_t task_status;
+    const char *http_status;
     struct h2_bucket *data;
 
     apr_size_t nvlen;
@@ -33,10 +34,11 @@ typedef struct h2_resp_head {
 
 } h2_resp_head;
 
-h2_resp_head *h2_resp_head_create(struct h2_bucket *data,
-                                  int stream_id,
-                                  const char *status,
-                                  apr_array_header_t *hlines);
+h2_resp_head *h2_resp_head_create(int stream_id,
+                                  apr_status_t task_status,
+                                  const char *http_status,
+                                  apr_array_header_t *hlines,
+                                  struct h2_bucket *data);
 
 void h2_resp_head_destroy(h2_resp_head *head);
 

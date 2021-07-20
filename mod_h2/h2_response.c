@@ -136,8 +136,8 @@ static apr_status_t ensure_buffer(h2_response *resp)
 
 static apr_status_t make_h2_headers(h2_response *resp)
 {
-    resp->head = h2_resp_head_create(resp->rawhead, resp->stream_id, 
-                                     resp->status, resp->hlines);
+    resp->head = h2_resp_head_create(resp->stream_id, APR_SUCCESS,
+                                     resp->status, resp->hlines, resp->rawhead);
     if (resp->head == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->pool,
                       "h2_response(%d): unable to create resp_head",

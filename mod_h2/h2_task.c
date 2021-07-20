@@ -43,8 +43,11 @@ struct h2_task {
     h2_task_state_t state;
     int aborted;
     
+    h2_mplx *mplx;
     apr_pool_t *pool;
     conn_rec *c;
+    apr_socket_t *socket;
+    
     struct h2_task_input *input;    /* http/1.1 input data */
     struct h2_task_output *output;  /* response body data */
     struct h2_response *response;     /* response meta data */
@@ -136,45 +139,36 @@ static apr_sockaddr_t *h2_sockaddr_dup(apr_sockaddr_t *in, apr_pool_t *pool)
     return out;
 }
 
-static apr_status_t h2_conn_create(conn_rec **pc, conn_rec *master,
-                                   apr_pool_t *pool)
+static apr_status_t h2_conn_create(h2_task *task, conn_rec *master)
 {
     /* Setup a apache connection record for this stream.
-     * Most of the know how borrowed from mod_spdy::slave_connection.cc
+     * General idea is borrowed from mod_spdy::slave_connection.cc,
+     * partly replaced with some more modern calls to ap infrastructure.
+     *
+     * Here, we are tasting some sweet, internal knowledge, e.g. that
+     * the core module is storing the connection socket as its config.
+     * "ap_run_create_connection() needs a real socket as it tries to
+     * detect local and client address information and fails if it is
+     * unable to get it.
+     * In case someone ever replaces these core hooks, this will probably
+     * break miserably.
      */
-    conn_rec *c = apr_pcalloc(pool, sizeof(conn_rec));
+    task->socket = ap_get_module_config(master->conn_config,
+                                        &core_module);
     
-    c->pool = pool;
-    c->bucket_alloc = apr_bucket_alloc_create(pool);
-    c->conn_config = ap_create_conn_config(pool);
-    c->notes = apr_table_make(pool, 5);
+    task->c = ap_run_create_connection(task->pool, master->base_server,
+                                       task->socket,
+                                       master->id, master->sbh,
+                                       apr_bucket_alloc_create(task->pool));
+    if (task->c == NULL) {
+        ap_log_perror(APLOG_MARK, APLOG_ERR, 0, task->pool,
+                      "h2_task: creating conn failed");
+        return APR_EGENERAL;
+    }
     
-    /* We work only with mpm_worker at the moment. We need
-     * more magic incantations to satisfy mpm_event.
-     * 
-     */
-    c->cs = apr_pcalloc(pool, sizeof(conn_state_t));
-    c->cs->state = CONN_STATE_READ_REQUEST_LINE;
-    
-    
-    c->base_server = master->base_server;
-    c->local_addr = h2_sockaddr_dup(master->local_addr, pool);
-    c->local_ip = apr_pstrdup(pool, master->local_ip);
-    c->client_addr = h2_sockaddr_dup(master->client_addr, pool);
-    c->client_ip = apr_pstrdup(pool, master->client_ip);
-    
-    /* The juicy bit here is to guess a new connection id, as it
-     * needs to be unique in this httpd instance, but there is
-     * no API to allocate one.
-     */
-    // FIXME
-    c->id = (long)master->id^(long)c;
-    *pc = c;
-    
-    ap_log_perror(APLOG_MARK, APLOG_TRACE3, 0, pool,
+    ap_log_perror(APLOG_MARK, APLOG_TRACE3, 0, task->pool,
                   "h2_task: created con %ld from master %ld",
-                  c->id, master->id);
-    
+                  task->c->id, master->id);
     return APR_SUCCESS;
 }
 
@@ -199,17 +193,9 @@ h2_task *h2_task_create(long session_id,
     if (pool == NULL) {
         apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
         if (status != APR_SUCCESS) {
+            h2_mplx_out_reset(mplx, stream_id, status);
             return NULL;
         }
-    }
-    
-    conn_rec *c = NULL;
-    status = h2_conn_create(&c, master, pool);
-    if (status != APR_SUCCESS) {
-        ap_log_perror(APLOG_MARK, APLOG_ERR, status, pool,
-                      "h2_task(%ld-%d): unable to create stream task",
-                      session_id, stream_id);
-        return NULL;
     }
     
     h2_task *task = apr_pcalloc(pool, sizeof(h2_task));
@@ -217,14 +203,26 @@ h2_task *h2_task_create(long session_id,
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, pool,
                       "h2_task(%ld-%d): unable to create stream task",
                       session_id, stream_id);
+        h2_mplx_out_reset(mplx, task->stream_id, APR_ENOMEM);
         return NULL;
     }
     
     task->stream_id = stream_id;
     task->session_id = session_id;
     task->pool = pool;
-    task->c = c;
+    h2_mplx_reference(mplx);
+    task->mplx = mplx;
     task->state = H2_TASK_ST_IDLE;
+    
+    status = h2_conn_create(task, master);
+    if (status != APR_SUCCESS) {
+        ap_log_perror(APLOG_MARK, APLOG_ERR, status, pool,
+                      "h2_task(%ld-%d): unable to create stream task",
+                      session_id, stream_id);
+        h2_mplx_out_reset(mplx, stream_id, status);
+        return NULL;
+    }
+    
     task->input = h2_task_input_create(task->c->pool,
                                        session_id, stream_id,
                                        input, input_eos, mplx);
@@ -261,6 +259,10 @@ apr_status_t h2_task_destroy(h2_task *task)
         h2_task_output_destroy(task->output);
         task->output = NULL;
     }
+    if (task->mplx) {
+        h2_mplx_release(task->mplx);
+        task->mplx = NULL;
+    }
     if (task->pool) {
         apr_pool_t *pool = task->pool;
         task->pool = NULL;
@@ -276,29 +278,31 @@ apr_status_t h2_task_do(h2_task *task)
                   "h2_task(%ld-%d): do", task->session_id, task->stream_id);
     apr_status_t status;
     
+    set_state(task, H2_TASK_ST_STARTED);
+    
     /* Furthermore, other code might want to see the socket for
      * this connection. Allocate one without further function...
      */
-    apr_socket_t *socket = NULL;
-    status = apr_socket_create(&socket,
+    
+    status = apr_socket_create(&task->socket,
                                APR_INET, SOCK_STREAM,
                                APR_PROTO_TCP, task->pool);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, task->c,
                       "h2_stream_process, unable to alloc socket");
+        h2_mplx_out_reset(task->mplx, task->stream_id, status);
         return status;
     }
     
-    set_state(task, H2_TASK_ST_STARTED);
+    ap_set_module_config(task->c->conn_config, &core_module, task->socket);
     
-    /* Incantations from mod_spdy. Peek and poke until the core
-     * and other modules like mod_reqtimeout are happy */
-    ap_set_module_config(task->c->conn_config, &core_module, socket);
+    ap_process_connection(task->c, task->socket);
+
+    if (task->state < H2_TASK_ST_READY) {
+        h2_mplx_out_reset(task->mplx, task->stream_id, status);
+    }
     
-    ap_process_connection(task->c, socket);
-    
-    apr_socket_close(socket);
-    
+    apr_socket_close(task->socket);
     set_state(task, H2_TASK_ST_DONE);
     
     return APR_SUCCESS;

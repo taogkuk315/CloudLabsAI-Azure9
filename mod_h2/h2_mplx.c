@@ -52,7 +52,7 @@ struct h2_mplx {
     int aborted;
     
     int debug;
-    apr_size_t out_channel_max_size;
+    apr_size_t out_stream_max_size;
 };
 
 static void free_resp_head(void *p)
@@ -69,9 +69,9 @@ static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
     return 0;
 }
 
-static void have_in_data_for(h2_mplx *m, int channel);
-static void have_out_data_for(h2_mplx *m, int channel);
-static void consumed_out_data_for(h2_mplx *m, int channel);
+static void have_in_data_for(h2_mplx *m, int stream_id);
+static void have_out_data_for(h2_mplx *m, int stream_id);
+static void consumed_out_data_for(h2_mplx *m, int stream_id);
 
 h2_mplx *h2_mplx_create(conn_rec *c)
 {
@@ -95,7 +95,7 @@ h2_mplx *h2_mplx_create(conn_rec *c)
         m->heads = h2_queue_create(pool, free_resp_head);
         
         m->input = h2_bucket_queue_create(pool);
-        m->out_channel_max_size =
+        m->out_stream_max_size =
             h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM_SIZE);
         m->output = h2_bucket_queue_create(pool);
         
@@ -201,15 +201,15 @@ void h2_mplx_abort(h2_mplx *m)
 }
 
 apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
-                             int channel, struct h2_bucket **pbucket)
+                             int stream_id, struct h2_bucket **pbucket)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        status = h2_bucket_queue_pop(m->input, channel, pbucket);
+        status = h2_bucket_queue_pop(m->input, stream_id, pbucket);
         while (!is_aborted(m, &status)
                && block == APR_BLOCK_READ && status == APR_EAGAIN) {
             apr_thread_cond_wait(m->added_input, m->lock);
-            status = h2_bucket_queue_pop(m->input, channel, pbucket);
+            status = h2_bucket_queue_pop(m->input, stream_id, pbucket);
         }
         apr_thread_mutex_unlock(m->lock);
     }
@@ -217,75 +217,87 @@ apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
 }
 
 apr_status_t h2_mplx_in_write(h2_mplx *m,
-                              int channel, struct h2_bucket *bucket)
+                              int stream_id, struct h2_bucket *bucket)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        status = h2_bucket_queue_append(m->input, channel, bucket);
-        have_in_data_for(m, channel);
+        status = h2_bucket_queue_append(m->input, stream_id, bucket);
+        have_in_data_for(m, stream_id);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
 }
 
-apr_status_t h2_mplx_in_close(h2_mplx *m, int channel)
+apr_status_t h2_mplx_in_close(h2_mplx *m, int stream_id)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        status = h2_bucket_queue_append_eos(m->input, channel);
-        have_in_data_for(m, channel);
+        status = h2_bucket_queue_append_eos(m->input, stream_id);
+        have_in_data_for(m, stream_id);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
 }
 
 apr_status_t h2_mplx_out_read(h2_mplx *m,
-                              int channel, struct h2_bucket **pbucket)
+                              int stream_id, struct h2_bucket **pbucket)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        status = h2_bucket_queue_pop(m->output, channel, pbucket);
+        status = h2_bucket_queue_pop(m->output, stream_id, pbucket);
         if (m->debug) {
             ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
-                          "h2_mplx(%ld): read on channel-out(%d)",
-                          m->id, channel);
+                          "h2_mplx(%ld): read on stream_id-out(%d)",
+                          m->id, stream_id);
         }
         if (status == APR_SUCCESS) {
-            consumed_out_data_for(m, channel);
+            consumed_out_data_for(m, stream_id);
         }
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
 }
 
-apr_status_t h2_mplx_out_pushback(h2_mplx *m, int channel,
+apr_status_t h2_mplx_out_pushback(h2_mplx *m, int stream_id,
                                   struct h2_bucket *bucket)
 
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        status = h2_bucket_queue_push(m->output, channel, bucket);
+        status = h2_bucket_queue_push(m->output, stream_id, bucket);
         if (m->debug) {
             ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
-                          "h2_mplx(%ld): pushback on channel-out(%d)",
-                          m->id, channel);
+                          "h2_mplx(%ld): pushback on stream_id-out(%d)",
+                          m->id, stream_id);
         }
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
 }
 
-apr_status_t h2_mplx_out_open(h2_mplx *m, int channel, h2_resp_head *head)
+apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_resp_head *head)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_queue_append(m->heads, head);
         if (m->debug) {
             ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, m->pool,
-                          "h2_mplx(%ld): open on channel-in(%d)",
-                          m->id, channel);
+                          "h2_mplx(%ld): open on stream_id-in(%d)",
+                          m->id, stream_id);
         }
-        have_out_data_for(m, channel);
+        have_out_data_for(m, stream_id);
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}
+
+apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
+{
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_queue_append(m->heads, h2_resp_head_create(stream_id, ss,
+                                                      NULL, NULL, NULL));
+        have_out_data_for(m, stream_id);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
@@ -308,35 +320,35 @@ h2_resp_head *h2_mplx_pop_response(h2_mplx *m)
 }
 
 apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
-                               int channel, struct h2_bucket *bucket)
+                               int stream_id, struct h2_bucket *bucket)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        /* We check the memory footprint queued for this channel
+        /* We check the memory footprint queued for this stream_id
          * and block if it exceeds our configured limit.
          * We will not split buckets to enforce the limit to the last
          * byte. After all, the bucket is already in memory.
          */
         while (!is_aborted(m, &status)
-               && (m->out_channel_max_size
-                   < h2_bucket_queue_get_stream_size(m->output, channel))) {
+               && (m->out_stream_max_size
+                   < h2_bucket_queue_get_stream_size(m->output, stream_id))) {
             if (m->debug) {
                 ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
                               "h2_mplx(%ld-%d): blocking on queue size",
-                              m->id, channel);
+                              m->id, stream_id);
             }
             apr_thread_cond_wait(m->removed_output, m->lock);
         }
         
         if (!is_aborted(m, &status)) {
-            status = h2_bucket_queue_append(m->output, channel, bucket);
+            status = h2_bucket_queue_append(m->output, stream_id, bucket);
             if (m->debug) {
                 ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
-                              "h2_mplx(%ld): write %ld bytes on channel-out(%d)",
-                              m->id, bucket->data_len, channel);
+                              "h2_mplx(%ld): write %ld bytes on stream_id-out(%d)",
+                              m->id, bucket->data_len, stream_id);
             }
             if (status == APR_SUCCESS) {
-                have_out_data_for(m, channel);
+                have_out_data_for(m, stream_id);
             }
         }
         apr_thread_mutex_unlock(m->lock);
@@ -344,39 +356,39 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
     return status;
 }
 
-apr_status_t h2_mplx_out_close(h2_mplx *m, int channel)
+apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        status = h2_bucket_queue_append_eos(m->output, channel);
+        status = h2_bucket_queue_append_eos(m->output, stream_id);
         if (m->debug) {
             ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
-                          "h2_mplx(%ld): close channel-out(%d)",
-                          m->id, channel);
+                          "h2_mplx(%ld): close stream_id-out(%d)",
+                          m->id, stream_id);
         }
-        have_out_data_for(m, channel);
+        have_out_data_for(m, stream_id);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
 }
 
-int h2_mplx_in_has_eos_for(h2_mplx *m, int channel)
+int h2_mplx_in_has_eos_for(h2_mplx *m, int stream_id)
 {
     int has_eos = 0;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        has_eos = h2_bucket_queue_has_eos_for(m->input, channel);
+        has_eos = h2_bucket_queue_has_eos_for(m->input, stream_id);
         apr_thread_mutex_unlock(m->lock);
     }
     return has_eos;
 }
 
-int h2_mplx_out_has_data_for(h2_mplx *m, int channel)
+int h2_mplx_out_has_data_for(h2_mplx *m, int stream_id)
 {
     int has_data = 0;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        has_data = h2_bucket_queue_has_buckets_for(m->output, channel);
+        has_data = h2_bucket_queue_has_buckets_for(m->output, stream_id);
         apr_thread_mutex_unlock(m->lock);
     }
     return has_data;
@@ -398,17 +410,17 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout)
     return has_data;
 }
 
-static void have_in_data_for(h2_mplx *m, int channel)
+static void have_in_data_for(h2_mplx *m, int stream_id)
 {
     apr_thread_cond_broadcast(m->added_input);
 }
 
-static void have_out_data_for(h2_mplx *m, int channel)
+static void have_out_data_for(h2_mplx *m, int stream_id)
 {
     apr_thread_cond_broadcast(m->added_output);
 }
 
-static void consumed_out_data_for(h2_mplx *m, int channel)
+static void consumed_out_data_for(h2_mplx *m, int stream_id)
 {
     apr_thread_cond_broadcast(m->removed_output);
 }

@@ -636,7 +636,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
          head = h2_session_pop_response(session)) {
         h2_stream *stream = h2_session_get_stream(session, head->stream_id);
         if (stream) {
-            status = h2_session_submit_response(session, stream, head);
+            status = h2_session_handle_response(session, stream, head);
             h2_resp_head_destroy(head);
             have_written = 1;
         }
@@ -811,22 +811,29 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
  * once we have all the response headers. The response body will be
  * read by the session using the callback we supply.
  */
-apr_status_t h2_session_submit_response(h2_session *session,
+apr_status_t h2_session_handle_response(h2_session *session,
                                         h2_stream *stream, h2_resp_head *head)
 {
     apr_status_t status = APR_SUCCESS;
     int rv = 0;
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                  "h2_stream(%ld-%d): submitting response %s with %d headers",
-                  session->id, stream->id, head->status,
-                  (int)head->nvlen);
-    assert(head->nvlen);
+    if (head->http_status) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+                      "h2_stream(%ld-%d): submitting response %s with %d headers",
+                      session->id, stream->id, head->http_status,
+                      (int)head->nvlen);
+        assert(head->nvlen);
+        
+        nghttp2_data_provider provider = {
+            stream->id, stream_data_cb
+        };
+        rv = nghttp2_submit_response(session->ngh2, stream->id,
+                                     &head->nv, head->nvlen, &provider);
+    }
+    else {
+        rv = nghttp2_submit_rst_stream(session->ngh2, 0,
+                                       stream->id, NGHTTP2_ERR_INVALID_STATE);
+    }
     
-    nghttp2_data_provider provider = {
-        stream->id, stream_data_cb
-    };
-    rv = nghttp2_submit_response(session->ngh2, stream->id,
-                                 &head->nv, head->nvlen, &provider);
     if (nghttp2_is_fatal(rv)) {
         status = APR_EGENERAL;
         h2_session_abort_int(session, rv);

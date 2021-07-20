@@ -126,7 +126,7 @@ apr_status_t h2_session_write(h2_session *session,
 
 /* Start submitting the response to a stream request. This is possible
  * once we have all the response headers. */
-apr_status_t h2_session_submit_response(h2_session *session,
+apr_status_t h2_session_handle_response(h2_session *session,
                                         struct h2_stream *stream,
                                         struct h2_resp_head *head);
 
