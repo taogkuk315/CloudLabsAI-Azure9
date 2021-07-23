@@ -22,39 +22,40 @@
 
 #include "h2_private.h"
 #include "h2_io.h"
+#include "h2_util.h"
 
 apr_status_t h2_io_init(h2_io_ctx *io, conn_rec *c)
 {
     io->connection = c;
-    io->input_brigade = apr_brigade_create(c->pool, c->bucket_alloc);
-    io->output_brigade = apr_brigade_create(c->pool, c->bucket_alloc);
+    io->input = apr_brigade_create(c->pool, c->bucket_alloc);
+    io->output = apr_brigade_create(c->pool, c->bucket_alloc);
     return APR_SUCCESS;
 }
 
 void h2_io_destroy(h2_io_ctx *io)
 {
-    if (io->input_brigade) {
-        apr_brigade_destroy(io->input_brigade);
-        io->input_brigade = NULL;
+    if (io->input) {
+        apr_brigade_destroy(io->input);
+        io->input = NULL;
     }
-    if (io->output_brigade) {
-        apr_brigade_destroy(io->output_brigade);
-        io->output_brigade = NULL;
+    if (io->output) {
+        apr_brigade_destroy(io->output);
+        io->output = NULL;
     }
 }
 
-apr_status_t h2_io_bucket_read(apr_bucket_brigade *input,
-                               apr_read_type_e block,
-                               h2_io_on_read_cb on_read_cb,
-                               void *puser, int *pdone)
+static apr_status_t h2_io_bucket_read(h2_io_ctx *io,
+                                      apr_read_type_e block,
+                                      h2_io_on_read_cb on_read_cb,
+                                      void *puser, int *pdone)
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t readlen = 0;
     
     while (status == APR_SUCCESS && !*pdone
-           && !APR_BRIGADE_EMPTY(input)) {
+           && !APR_BRIGADE_EMPTY(io->input)) {
         
-        apr_bucket* bucket = APR_BRIGADE_FIRST(input);
+        apr_bucket* bucket = APR_BRIGADE_FIRST(io->input);
         if (APR_BUCKET_IS_METADATA(bucket)) {
             /* we do nothing regarding any meta here */
         }
@@ -64,6 +65,14 @@ apr_status_t h2_io_bucket_read(apr_bucket_brigade *input,
             status = apr_bucket_read(bucket, &bucket_data,
                                      &bucket_length, block);
             if (status == APR_SUCCESS && bucket_length > 0) {
+                if (APLOGctrace2(io->connection)) {
+                    char buffer[32];
+                    h2_util_hex_dump(buffer, sizeof(buffer)/sizeof(buffer[0]),
+                                     bucket_data, bucket_length);
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->connection,
+                                  "h2_io(%ld): read %s",
+                                  io->connection->id, buffer);
+                }
                 apr_size_t readlen = 0;
                 status = on_read_cb(bucket_data, bucket_length,
                                     &readlen, pdone, puser);
@@ -89,24 +98,22 @@ apr_status_t h2_io_read(h2_io_ctx *io,
     apr_status_t status;
     int done = 0;
     
-    if (!APR_BRIGADE_EMPTY(io->input_brigade)) {
+    if (!APR_BRIGADE_EMPTY(io->input)) {
         /* Seems something is left from a previous read, lets
          * satisfy our caller with the data we already have. */
-        status = h2_io_bucket_read(io->input_brigade, block,
-                                   on_read_cb, puser, &done);
+        status = h2_io_bucket_read(io, block, on_read_cb, puser, &done);
         if (status != APR_SUCCESS || done) {
             return status;
         }
-        apr_brigade_cleanup(io->input_brigade);
+        apr_brigade_cleanup(io->input);
     }
     
     status = ap_get_brigade(io->connection->input_filters,
-                        io->input_brigade, AP_MODE_READBYTES,
+                        io->input, AP_MODE_READBYTES,
                         block, BLOCKSIZE);
     switch (status) {
         case APR_SUCCESS:
-            return h2_io_bucket_read(io->input_brigade, block,
-                                     on_read_cb, puser, &done);
+            return h2_io_bucket_read(io, block, on_read_cb, puser, &done);
         case APR_EOF:
             return APR_EOF;
         case APR_EAGAIN:
@@ -124,20 +131,20 @@ apr_status_t h2_io_write(h2_io_ctx *io, const char *buf, size_t length,
 {
     *written = 0;
     /* we do not want to send something leftover in the brigade */
-    assert(APR_BRIGADE_EMPTY(io->output_brigade));
+    assert(APR_BRIGADE_EMPTY(io->output));
     
     /* Append our data and a flush, since we most likely have a complete
      * frame that must be send now. 
      * TODO: is there a flush indication maybe from higher up???
      */
-    APR_BRIGADE_INSERT_TAIL(io->output_brigade,
+    APR_BRIGADE_INSERT_TAIL(io->output,
             apr_bucket_transient_create((const char *)buf, length,
-                                        io->output_brigade->bucket_alloc));
+                                        io->output->bucket_alloc));
     
     /* Send it out through installed filters (TLS) to the client */
     apr_status_t status = ap_pass_brigade(io->connection->output_filters,
-                                          io->output_brigade);
-    apr_brigade_cleanup(io->output_brigade);
+                                          io->output);
+    apr_brigade_cleanup(io->output);
     
     if (status == APR_SUCCESS
         || APR_STATUS_IS_ECONNABORTED(status)
@@ -158,13 +165,13 @@ apr_status_t h2_io_flush(h2_io_ctx *io)
 {
     /* Append flush.
      */
-    APR_BRIGADE_INSERT_TAIL(io->output_brigade,
-                            apr_bucket_flush_create(io->output_brigade->bucket_alloc));
+    APR_BRIGADE_INSERT_TAIL(io->output,
+                            apr_bucket_flush_create(io->output->bucket_alloc));
     
     /* Send it out through installed filters (TLS) to the client */
     apr_status_t status = ap_pass_brigade(io->connection->output_filters,
-                                          io->output_brigade);
-    apr_brigade_cleanup(io->output_brigade);
+                                          io->output);
+    apr_brigade_cleanup(io->output);
     
     if (status == APR_SUCCESS
         || APR_STATUS_IS_ECONNABORTED(status)

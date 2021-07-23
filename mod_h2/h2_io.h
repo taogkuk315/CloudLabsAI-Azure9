@@ -25,8 +25,8 @@
  */
 typedef struct {
     conn_rec *connection;
-    apr_bucket_brigade *input_brigade;
-    apr_bucket_brigade *output_brigade;
+    apr_bucket_brigade *input;
+    apr_bucket_brigade *output;
 } h2_io_ctx;
 
 apr_status_t h2_io_init(h2_io_ctx *io, conn_rec *c);

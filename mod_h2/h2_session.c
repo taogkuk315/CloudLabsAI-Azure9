@@ -408,7 +408,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
 
         /* With a request present, we are in 'h2c' mode and do not
          * expect a preface from the client. */
-        nghttp2_option_set_recv_client_preface(options, session->r == NULL);
+        nghttp2_option_set_recv_client_preface(options, 1);
         
         nghttp2_option_set_peer_max_concurrent_streams(
             options, h2_config_geti(config, H2_CONF_MAX_STREAMS));

@@ -14,7 +14,7 @@
 # limitations under the License.
 
 
-NGHTTP2_VERSION = 0.7.3
+NGHTTP2_VERSION = 0.7.5
 NGHTTP2_DIR     = nghttp2-$(NGHTTP2_VERSION)
 NGHTTP2_TAR     = $(NGHTTP2_DIR).tar.gz
 NGHTTP2_URL     = https://github.com/tatsuhiro-t/nghttp2/releases/download/v$(NGHTTP2_VERSION)/$(NGHTTP2_TAR)
@@ -105,7 +105,7 @@ $(GEN)/$(NGHTTP2_DIR)/.nghttp2-configured: \
 $(GEN)/$(NGHTTP2_DIR)/.nghttp2-patched: \
 		$(GEN)/$(NGHTTP2_DIR)/.nghttp2-extracted
 	@echo applying patches...
-	@cd gen/$(NGHTTP2_DIR) && patch -p0 < ../../patches/nghttp2-pthread-getspecific-unified.diff.patch
+	@cd gen/$(NGHTTP2_DIR) && patch -p0 < ../../patches/nghttp2-0.7.5-pthread-getspecific-unified.diff.patch
 	@echo nghttp2 patched.
 	@touch $(GEN)/$(NGHTTP2_DIR)/.nghttp2-patched
 
