@@ -901,6 +901,8 @@
 		B2E09AD51AA5CBC100A00E92 /* nghttp2-0.7.5-pthread-getspecific-unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "nghttp2-0.7.5-pthread-getspecific-unified.diff.patch"; sourceTree = "<group>"; };
 		B2E5BADC1A6E65F80031CBD8 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2E5BADE1A6E69810031CBD8 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		B2FE998A1AA5ECA000A5CE5A /* test_001.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_001.sh; sourceTree = "<group>"; };
+		B2FE998C1AA5F40F00A5CE5A /* test_common.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_common.sh; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -909,8 +911,10 @@
 			children = (
 				B22549031A6E8949004BDEC9 /* conf */,
 				B2546D9F1A8249A60033A875 /* htdocs */,
-				B22549091A6E8AF9004BDEC9 /* Makefile */,
 				B2E06CCA1A8E308000BE04D5 /* load-urls-1.txt */,
+				B22549091A6E8AF9004BDEC9 /* Makefile */,
+				B2FE998A1AA5ECA000A5CE5A /* test_001.sh */,
+				B2FE998C1AA5F40F00A5CE5A /* test_common.sh */,
 			);
 			path = test;
 			sourceTree = "<group>";

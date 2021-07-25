@@ -57,24 +57,8 @@ test: \
 	@rm -rf $(GEN)/tmp
 	@mkdir -p $(GEN)/tmp
 	@$(INST_DIR)/bin/apachectl restart
-	@echo -n checking index.html over http...
-	@$(CURL) -sk --resolv $(HTTP_AUTH):127.0.0.1 http://$(HTTP_AUTH)/index.html > $(GEN)/tmp/http_index.html
-	@diff  htdocs/test.local/index.html $(GEN)/tmp/http_index.html
-	@echo ok.
-	@echo -n checking index.html over h2c...
-	@$(CURL) -sk --http2 --resolv $(HTTP_AUTH):127.0.0.1 http://$(HTTP_AUTH)/index.html > $(GEN)/tmp/http_index.html
-	@diff  htdocs/test.local/index.html $(GEN)/tmp/http_index.html
-	@echo ok.
-	@echo -n checking index.html over https with HTTP/1...
-	@$(CURL) -sk --http1.1 --resolv $(HTTPS_AUTH):127.0.0.1 https://$(HTTPS_AUTH)/index.html > $(GEN)/tmp/https_index.html
-	@diff  htdocs/test.local/index.html $(GEN)/tmp/https_index.html
-	@echo ok.
-	@echo -n checking index.html over h2...
-	@$(CURL) -sk --http2 --resolv $(HTTPS_AUTH):127.0.0.1 https://$(HTTPS_AUTH)/index.html > $(GEN)/tmp/h2_index.html
-	@diff  htdocs/test.local/index.html $(GEN)/tmp/h2_index.html
-	@echo ok.
-	@$(NGHTTP) -v https://$(HTTPS_AUTH)/003.html
-	@$(H2LOAD) -v -n 3 https://$(HTTPS_AUTH)/003.html
+	@bash test_001.sh https://$(HTTPS_AUTH)
+	@bash test_001.sh http://$(HTTP_AUTH)
 
 ################################################################################
 # Load Test
@@ -96,12 +80,6 @@ test1: \
         $(GEN)/load-urls-1.txt
 	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 100000 -t 1 -c 1
 
-test2: \
-		$(INST_DIR)/.test-setup \
-		$(INST_DIR)/.curl-installed \
-        $(GEN)/load-urls-2.txt
-	@$(H2LOAD) -i $(GEN)/load-urls-2.txt -v -n 10 -t 1 -c 1
-
 loadtest: \
 		$(INST_DIR)/.test-setup \
 		$(INST_DIR)/.curl-installed \
@@ -116,13 +94,6 @@ loadtest: \
 	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 8
 	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 9
 	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 10
-
-
-testh2o: \
-		$(INST_DIR)/.test-setup \
-		$(INST_DIR)/.curl-installed \
-        $(GEN)/load-urls-1.txt
-	@$(H2LOAD) -c 500 -m 100 -n 200000 https://$(HTTPS_AUTH)/
 
 
 ################################################################################
