@@ -46,7 +46,7 @@ nghttp_check_assets() {
     echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
     rm -rf $TMP &&
     mkdir -p $TMP &&
-    cat > $TMP/reference
+    sort > $TMP/reference
     ${NGHTTP} -uans $ARGS $URL_PREFIX/$DOC > $TMP/out || fail
     fgrep " /" $TMP/out | while read begin end dur stat size path; do
         echo "$path $size $stat"
