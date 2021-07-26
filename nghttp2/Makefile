@@ -95,7 +95,7 @@ $(GEN)/$(NGHTTP2_DIR)/.nghttp2-configured: \
 		$(GEN)/$(NGHTTP2_DIR)/.nghttp2-patched
 	@echo -n configuring nghttp2...
 	cd $(GEN)/$(NGHTTP2_DIR)/ && \
-	$(NGHTTP2_CONF_ENV) ./configure $(NGHTTP2_CONF) #>> ../build.log
+	$(NGHTTP2_CONF_ENV) ./configure $(NGHTTP2_CONF) >> ../build.log
 	@echo done.
 	@touch $(GEN)/$(NGHTTP2_DIR)/.nghttp2-configured
 
