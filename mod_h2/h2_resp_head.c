@@ -35,7 +35,8 @@ h2_resp_head *h2_resp_head_create(int stream_id,
                                   apr_status_t task_status,
                                   const char *http_status,
                                   apr_array_header_t *hlines,
-                                  h2_bucket *data)
+                                  h2_bucket *data,
+                                  apr_pool_t *pool)
 {
     apr_size_t nvlen = 1 + (hlines? hlines->nelts : 0);
     /* we allocate one block for the h2_resp_head and the array of
@@ -51,6 +52,7 @@ h2_resp_head *h2_resp_head_create(int stream_id,
     head->task_status = task_status;
     head->http_status = http_status;
     head->data = data;
+    head->content_length = -1;
     
     if (hlines) {
         nghttp2_nv *nvs = (nghttp2_nv *)&head->nv;
@@ -85,6 +87,26 @@ h2_resp_head *h2_resp_head_create(int stream_id,
             }
         }
         head->nvlen = nvlen;
+
+        for (int i = 1; i < head->nvlen; ++i) {
+            const nghttp2_nv *nv = &(&head->nv)[i];
+            
+            if (!strcmp("transfer-encoding", (char*)nv->name)) {
+                if (!strcmp("chunked", (char *)nv->value)) {
+                    head->chunked = 1;
+                }
+            }
+            else if (!head->chunked && !strcmp("content-length", (char*)nv->name)) {
+                apr_int64_t clen = apr_atoi64((char*)nv->value);
+                if (clen <= 0) {
+                    ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, pool,
+                                  "h2_response(%d): content-length value not parsed: %s",
+                                  head->stream_id, (char*)nv->value);
+                    return NULL;
+                }
+                head->content_length = clen;
+            }
+        }
     }
     return head;
 }
@@ -96,4 +118,9 @@ void h2_resp_head_destroy(h2_resp_head *head)
         head->data = NULL;
     }
     free(head);
+}
+
+long h2_resp_head_get_content_length(h2_resp_head *resp)
+{
+    return resp->content_length;
 }

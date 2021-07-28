@@ -40,7 +40,6 @@ struct h2_response {
     h2_response_state_change_cb *state_cb;
     void *state_cb_ctx;
 
-    long content_length;
     int chunked;
     apr_size_t remain_len;
     struct h2_bucket *chunk_work;
@@ -64,7 +63,6 @@ h2_response *h2_response_create(int stream_id, apr_pool_t *pool)
         resp->pool = pool;
         resp->state = H2_RESP_ST_STATUS_LINE;
         resp->hlines = apr_array_make(pool, 10, sizeof(char *));
-        resp->content_length = -1;
     }
     return resp;
 }
@@ -84,11 +82,6 @@ apr_status_t h2_response_destroy(h2_response *response)
         response->chunk_work = NULL;
     }
     return APR_SUCCESS;
-}
-
-long h2_response_get_content_length(h2_response *resp)
-{
-    return resp->content_length;
 }
 
 h2_response_state_t h2_response_get_state(h2_response *resp)
@@ -137,43 +130,24 @@ static apr_status_t ensure_buffer(h2_response *resp)
 static apr_status_t make_h2_headers(h2_response *resp)
 {
     resp->head = h2_resp_head_create(resp->stream_id, APR_SUCCESS,
-                                     resp->status, resp->hlines, resp->rawhead);
+                                     resp->status, resp->hlines,
+                                     resp->rawhead, resp->pool);
     if (resp->head == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->pool,
                       "h2_response(%d): unable to create resp_head",
                       resp->stream_id);
         return APR_EINVAL;
     }
-    
     resp->rawhead = NULL; /* h2_resp_head took ownership */
     
-    for (int i = 1; i < resp->head->nvlen; ++i) {
-        const nghttp2_nv *nv = &(&resp->head->nv)[i];
-        
-        if (!strcmp("transfer-encoding", (char*)nv->name)) {
-            if (!strcmp("chunked", (char *)nv->value)) {
-                resp->chunked = 1;
-            }
-        }
-        else if (!resp->chunked && !strcmp("content-length", (char*)nv->name)) {
-            apr_int64_t clen = apr_atoi64((char*)nv->value);
-            if (clen <= 0) {
-                ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, resp->pool,
-                              "h2_response(%d): content-length value not parsed: %s",
-                              resp->stream_id, (char*)nv->value);
-                return APR_EINVAL;
-            }
-            resp->content_length = clen;
-        }
-    }
+    resp->remain_len = h2_resp_head_get_content_length(resp->head);
+    resp->chunked = resp->head->chunked;
     
     ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, resp->pool,
                   "h2_response(%d): converted %d headers, content-length: %ld"
                   ", chunked=%d",
                   resp->stream_id, (int)resp->head->nvlen,
-                  (long)resp->content_length, resp->chunked);
-    
-    resp->remain_len = resp->content_length;
+                  (long)resp->remain_len, resp->chunked);
     
     set_state(resp, ((resp->chunked || resp->remain_len > 0)?
                      H2_RESP_ST_BODY : H2_RESP_ST_DONE));

@@ -161,20 +161,18 @@ static apr_status_t process_data(h2_task_output *output,
     return APR_SUCCESS;
 }
 
-apr_status_t h2_task_output_open(h2_task_output *output, h2_response *response)
+apr_status_t h2_task_output_open(h2_task_output *output, h2_resp_head *response)
 {
-    h2_resp_head *head = h2_response_get_head(response);
-    
-    long content_length = h2_response_get_content_length(response);
+    long content_length = h2_resp_head_get_content_length(response);
     if (content_length > 0 && content_length < BLOCKSIZE) {
         /* For small responses, we wait for the remaining data to
          * come in before we announce readyness of our output. That
          * way we have less thread sync to do.
          */
-        output->head = head;
+        output->head = response;
         return APR_SUCCESS;
     }
-    return h2_mplx_out_open(output->m, output->stream_id, head);
+    return h2_mplx_out_open(output->m, output->stream_id, response);
 }
 
 apr_status_t h2_task_output_write(h2_task_output *output,

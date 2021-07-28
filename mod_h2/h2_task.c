@@ -116,29 +116,6 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
 }
 
 
-static apr_sockaddr_t *h2_sockaddr_dup(apr_sockaddr_t *in, apr_pool_t *pool)
-{
-    apr_sockaddr_t *out = apr_pcalloc(pool, sizeof(apr_sockaddr_t));
-    memcpy(out, in, sizeof(apr_sockaddr_t));
-    out->pool = pool;
-    
-    if (in->hostname != NULL) {
-        out->hostname = apr_pstrdup(pool, in->hostname);
-    }
-    if (in->servname != NULL) {
-        out->servname = apr_pstrdup(pool, in->servname);
-    }
-    if (in->ipaddr_ptr != NULL) {
-        ptrdiff_t offset = (char *)in->ipaddr_ptr - (char *)in;
-        out->ipaddr_ptr = (char *)out + offset;
-    }
-    if (in->next != NULL) {
-        out->next = h2_sockaddr_dup(in->next, pool);
-    }
-    
-    return out;
-}
-
 static apr_status_t h2_conn_create(h2_task *task, conn_rec *master)
 {
     /* Setup a apache connection record for this stream.
@@ -335,6 +312,11 @@ int h2_task_get_stream_id(h2_task *task)
     return task->stream_id;
 }
 
+h2_resp_head *h2_task_get_response(h2_task *task)
+{
+    return h2_response_get_head(task->response);
+}
+
 static void set_state(h2_task *task, h2_task_state_t state)
 {
     assert(task);
@@ -348,7 +330,7 @@ static void set_state(h2_task *task, h2_task_state_t state)
         if (state == H2_TASK_ST_READY) {
             /* task needs to submit the head of the response */
             apr_status_t status =
-            h2_task_output_open(task->output, task->response);
+            h2_task_output_open(task->output, h2_task_get_response(task));
             if (status != APR_SUCCESS) {
                 ap_log_cerror( APLOG_MARK, APLOG_ERR, status, task->c,
                               "task(%ld-%d): starting response",

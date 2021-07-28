@@ -73,7 +73,7 @@ void h2_task_abort(h2_task *task);
 long h2_task_get_session_id(h2_task *task);
 int h2_task_get_stream_id(h2_task *task);
 
-struct h2_resp_head *h2_task_get_resp_head(h2_task *task);
+struct h2_resp_head *h2_task_get_response(h2_task *task);
 
 void h2_task_register_hooks(void);
 

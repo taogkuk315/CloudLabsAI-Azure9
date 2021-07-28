@@ -296,7 +296,8 @@ apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_queue_append(m->heads, h2_resp_head_create(stream_id, ss,
-                                                      NULL, NULL, NULL));
+                                                      NULL, NULL, NULL,
+                                                      m->pool));
         have_out_data_for(m, stream_id);
         apr_thread_mutex_unlock(m->lock);
     }

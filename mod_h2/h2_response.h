@@ -61,8 +61,6 @@ apr_status_t h2_response_http_convert(struct h2_bucket *bucket,
                                       const char *data, apr_size_t len,
                                       apr_size_t *pconsumed);
 
-long h2_response_get_content_length(h2_response *resp);
-
 struct h2_resp_head *h2_response_get_head(h2_response *resp);
 
 h2_response_state_t h2_response_get_state(h2_response *resp);

@@ -32,14 +32,20 @@ typedef struct h2_resp_head {
     apr_size_t nvlen;
     const nghttp2_nv nv;
 
+    long content_length;
+    int chunked;
+    
 } h2_resp_head;
 
 h2_resp_head *h2_resp_head_create(int stream_id,
                                   apr_status_t task_status,
                                   const char *http_status,
                                   apr_array_header_t *hlines,
-                                  struct h2_bucket *data);
+                                  struct h2_bucket *data,
+                                  apr_pool_t *pool);
 
 void h2_resp_head_destroy(h2_resp_head *head);
+
+long h2_resp_head_get_content_length(h2_resp_head *resp);
 
 #endif /* defined(__mod_h2__h2_resp_head__) */
