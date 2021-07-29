@@ -64,7 +64,7 @@ struct h2_stream {
     int suspended;              /* DATA sending has been suspended */
     
     apr_pool_t *pool;           /* the memory pool for this stream */
-    h2_request request;         /* the request made in this stream */
+    h2_request *request;        /* the request made in this stream */
 };
 
 

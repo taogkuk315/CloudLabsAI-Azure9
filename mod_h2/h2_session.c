@@ -228,10 +228,10 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                       "h2_stream(%ld-%d): closing",
                       session->id, (int)stream_id);
-        h2_stream_set_remove(session->streams, stream);
         if (session->on_stream_close_cb) {
             session->on_stream_close_cb(session, stream);
         }
+        h2_stream_set_remove(session->streams, stream);
         h2_stream_destroy(stream);
     }
     
@@ -637,9 +637,9 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         h2_stream *stream = h2_session_get_stream(session, head->stream_id);
         if (stream) {
             status = h2_session_handle_response(session, stream, head);
-            h2_response_destroy(head);
             have_written = 1;
         }
+        h2_response_destroy(head);
     }
     
     h2_session_resume_streams_with_data(session);

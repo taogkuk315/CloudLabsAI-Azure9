@@ -217,9 +217,7 @@ apr_status_t h2_task_destroy(h2_task *task)
         task->mplx = NULL;
     }
     if (task->pool) {
-        apr_pool_t *pool = task->pool;
         task->pool = NULL;
-        apr_pool_destroy(pool);
     }
     return APR_SUCCESS;
 }

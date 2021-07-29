@@ -903,6 +903,8 @@
 		B2E5BADE1A6E69810031CBD8 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2FE998A1AA5ECA000A5CE5A /* test_001.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_001.sh; sourceTree = "<group>"; };
 		B2FE998C1AA5F40F00A5CE5A /* test_common.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_common.sh; sourceTree = "<group>"; };
+		B2FE998E1AA7496B00A5CE5A /* h2_to_h1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_to_h1.c; sourceTree = "<group>"; };
+		B2FE998F1AA7496B00A5CE5A /* h2_to_h1.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_to_h1.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -983,6 +985,8 @@
 				B2546D8F1A7FA7D70033A875 /* h2_task_output.h */,
 				B2546D881A7F71F80033A875 /* h2_task.c */,
 				B2546D891A7F71F80033A875 /* h2_task.h */,
+				B2FE998E1AA7496B00A5CE5A /* h2_to_h1.c */,
+				B2FE998F1AA7496B00A5CE5A /* h2_to_h1.h */,
 				B225493C1A713D18004BDEC9 /* h2_util.c */,
 				B225493D1A713D18004BDEC9 /* h2_util.h */,
 				B2CB61141A8B698A00D270A6 /* h2_worker.c */,

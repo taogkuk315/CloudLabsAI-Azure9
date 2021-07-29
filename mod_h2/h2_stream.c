@@ -43,7 +43,6 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
     }
 }
 
-
 h2_stream *h2_stream_create(int id, conn_rec *master, struct h2_mplx *m)
 {
     apr_pool_t *spool = NULL;
@@ -52,27 +51,28 @@ h2_stream *h2_stream_create(int id, conn_rec *master, struct h2_mplx *m)
         return NULL;
     }
     
-    h2_stream *stream = calloc(1, sizeof(h2_stream));
+    h2_stream *stream = apr_pcalloc(spool, sizeof(h2_stream));
     if (stream != NULL) {
         stream->id = id;
         stream->state = H2_STREAM_ST_IDLE;
         stream->pool = spool;
         stream->master = master;
         stream->m = m;
-        
-        h2_request_init(&stream->request, id);
+        stream->request = h2_request_create(id, spool);
     }
     return stream;
 }
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
-    h2_request_destroy(&stream->request);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->master,
+                  "h2_stream(%ld-%d): destroy",
+                  h2_mplx_get_id(stream->m), stream->id);
+    h2_request_destroy(stream->request);
     stream->m = NULL;
     if (stream->pool) {
         apr_pool_destroy(stream->pool);
     }
-    free(stream);
     return APR_SUCCESS;
 }
 
@@ -88,20 +88,9 @@ void h2_stream_abort(h2_stream *stream)
 
 h2_task *h2_stream_create_task(h2_stream *stream)
 {
-    /* we pass our pool to the task. we do not expect
-     * to make any allocations hereafter, since we expect
-     * all headers to be written. */
-    assert(stream->request.eoh);
-    
     int input_eos = 0;
-    h2_bucket *data = h2_request_get_http1_start(&stream->request, &input_eos);
-    if (!data) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, stream->master,
-                      "h2_stream(%ld-%d): task input is NULL, flushed=%d",
-                      h2_mplx_get_id(stream->m), stream->id,
-                      stream->request.flushed);
-    }
-    h2_request_flush(&stream->request, stream->m);
+    h2_bucket *data = h2_request_steal_first_data(stream->request, &input_eos);
+    h2_request_flush(stream->request, stream->m);
     h2_task *task = h2_task_create(h2_mplx_get_id(stream->m),
                                    stream->id, stream->master,
                                    stream->pool,
@@ -112,12 +101,12 @@ h2_task *h2_stream_create_task(h2_stream *stream)
 
 apr_status_t h2_stream_write_eoh(h2_stream *stream)
 {
-    return h2_request_end_headers(&stream->request, stream->m);
+    return h2_request_end_headers(stream->request, stream->m);
 }
 
 apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 {
-    return h2_request_rwrite(&stream->request, r, stream->m, stream->pool);
+    return h2_request_rwrite(stream->request, r, stream->m, stream->pool);
 }
 
 apr_status_t h2_stream_write_eos(h2_stream *stream)
@@ -139,14 +128,14 @@ apr_status_t h2_stream_write_eos(h2_stream *stream)
             set_state(stream, H2_STREAM_ST_CLOSED_INPUT);
             break;
     }
-    return h2_request_close(&stream->request, stream->m);
+    return h2_request_close(stream->request, stream->m);
 }
 
 apr_status_t h2_stream_write_header(h2_stream *stream,
                                     const char *name, size_t nlen,
                                     const char *value, size_t vlen)
 {
-    return h2_request_write_header(&stream->request, name, nlen,
+    return h2_request_write_header(stream->request, name, nlen,
                                    value, vlen, stream->m,
                                    stream->pool);
 }
@@ -154,7 +143,7 @@ apr_status_t h2_stream_write_header(h2_stream *stream,
 apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len)
 {
-    return h2_request_write_data(&stream->request, data, len, stream->m);
+    return h2_request_write_data(stream->request, data, len, stream->m);
 }
 
 apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket)
