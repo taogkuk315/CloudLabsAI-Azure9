@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 #include <assert.h>
 #include <stdio.h>
 
@@ -23,428 +22,105 @@
 #include <httpd.h>
 #include <http_core.h>
 #include <http_log.h>
-#include <http_connection.h>
+
+#include <nghttp2/nghttp2.h>
 
 #include "h2_private.h"
 #include "h2_bucket.h"
-#include "h2_bucket_queue.h"
-#include "h2_resp_head.h"
-#include "h2_response.h"
 #include "h2_util.h"
+#include "h2_response.h"
 
-struct h2_response {
-    int stream_id;
-    h2_response_state_t state;
-    apr_pool_t *pool;
-    
-    h2_response_state_change_cb *state_cb;
-    void *state_cb_ctx;
 
-    int chunked;
-    apr_size_t remain_len;
-    struct h2_bucket *chunk_work;
-    
-    apr_size_t offset;
-    struct h2_bucket *rawhead;
-    
-    const char *status;
-    apr_array_header_t *hlines;
-    
-    struct h2_resp_head *head;
-};
-
-static void set_state(h2_response *resp, h2_response_state_t state);
-
-h2_response *h2_response_create(int stream_id, apr_pool_t *pool)
+h2_response *h2_response_create(int stream_id,
+                                  apr_status_t task_status,
+                                  const char *http_status,
+                                  apr_array_header_t *hlines,
+                                  h2_bucket *data,
+                                  apr_pool_t *pool)
 {
-    h2_response *resp = apr_pcalloc(pool, sizeof(h2_response));
-    if (resp) {
-        resp->stream_id = stream_id;
-        resp->pool = pool;
-        resp->state = H2_RESP_ST_STATUS_LINE;
-        resp->hlines = apr_array_make(pool, 10, sizeof(char *));
+    apr_size_t nvlen = 1 + (hlines? hlines->nelts : 0);
+    /* we allocate one block for the h2_response and the array of
+     * nghtt2_nv structures.
+     */
+    h2_response *head = calloc(1, sizeof(h2_response)
+                                + (nvlen * sizeof(nghttp2_nv)));
+    if (head == NULL) {
+        return NULL;
     }
-    return resp;
-}
+    
+    head->stream_id = stream_id;
+    head->task_status = task_status;
+    head->http_status = http_status;
+    head->data = data;
+    head->content_length = -1;
+    
+    if (hlines) {
+        nghttp2_nv *nvs = (nghttp2_nv *)&head->nv;
+        nvs->name = (uint8_t *)":status";
+        nvs->namelen = strlen(":status");
+        nvs->value = (uint8_t *)http_status;
+        nvs->valuelen = strlen(http_status);
+        
+        int seen_clen = 0;
+        for (int i = 0; i < hlines->nelts; ++i) {
+            char *hline = ((char **)hlines->elts)[i];
+            nghttp2_nv *nv = &nvs[i + 1];
+            char *sep = strchr(hline, ':');
+            if (!sep) {
+                /* not valid format, abort */
+                return NULL;
+            }
+            (*sep++) = '\0';
+            nv->name = (uint8_t *)h2_strlwr(hline);
+            nv->namelen = strlen(hline);
+            while (*sep == ' ' || *sep == '\t') {
+                ++sep;
+            }
+            if (*sep) {
+                nv->value = (uint8_t *)sep;
+                nv->valuelen = strlen(sep);
+            }
+            else {
+                /* reached end of line, an empty header value */
+                nv->value = (uint8_t *)"";
+                nv->valuelen = 0;
+            }
+        }
+        head->nvlen = nvlen;
 
-apr_status_t h2_response_destroy(h2_response *response)
-{
-    if (response->rawhead) {
-        h2_bucket_destroy(response->rawhead);
-        response->rawhead = NULL;
-    }
-    if (response->head) {
-        h2_resp_head_destroy(response->head);
-        response->head = NULL;
-    }
-    if (response->chunk_work) {
-        h2_bucket_destroy(response->chunk_work);
-        response->chunk_work = NULL;
-    }
-    return APR_SUCCESS;
-}
-
-h2_response_state_t h2_response_get_state(h2_response *resp)
-{
-    return resp->state;
-}
-
-static void set_state(h2_response *resp, h2_response_state_t state)
-{
-    if (resp->state != state) {
-        h2_response_state_t oldstate = resp->state;
-        resp->state = state;
-        if (resp->state_cb) {
-            resp->state_cb(resp, oldstate, resp->state_cb_ctx);
+        for (int i = 1; i < head->nvlen; ++i) {
+            const nghttp2_nv *nv = &(&head->nv)[i];
+            
+            if (!strcmp("transfer-encoding", (char*)nv->name)) {
+                if (!strcmp("chunked", (char *)nv->value)) {
+                    head->chunked = 1;
+                }
+            }
+            else if (!head->chunked && !strcmp("content-length", (char*)nv->name)) {
+                apr_int64_t clen = apr_atoi64((char*)nv->value);
+                if (clen <= 0) {
+                    ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, pool,
+                                  "h2_response(%d): content-length value not parsed: %s",
+                                  head->stream_id, (char*)nv->value);
+                    return NULL;
+                }
+                head->content_length = clen;
+            }
         }
     }
-}
-
-void h2_response_set_state_change_cb(h2_response *resp,
-                                     h2_response_state_change_cb *callback,
-                                     void *cb_ctx)
-{
-    resp->state_cb = callback;
-    resp->state_cb_ctx = cb_ctx;
-}
-
-struct h2_resp_head *h2_response_get_head(h2_response *resp)
-{
-    h2_resp_head *head = resp->head;
-    resp->head = NULL;
     return head;
 }
 
-static apr_status_t ensure_buffer(h2_response *resp)
+void h2_response_destroy(h2_response *head)
 {
-    if (!resp->rawhead) {
-        resp->rawhead = h2_bucket_alloc(BLOCKSIZE);
-        if (resp->rawhead == NULL) {
-            return APR_ENOMEM;
-        }
-        resp->offset = 0;
+    if (head->data) {
+        h2_bucket_destroy(head->data);
+        head->data = NULL;
     }
-    return APR_SUCCESS;
+    free(head);
 }
 
-static apr_status_t make_h2_headers(h2_response *resp)
+long h2_response_get_content_length(h2_response *resp)
 {
-    resp->head = h2_resp_head_create(resp->stream_id, APR_SUCCESS,
-                                     resp->status, resp->hlines,
-                                     resp->rawhead, resp->pool);
-    if (resp->head == NULL) {
-        ap_log_perror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->pool,
-                      "h2_response(%d): unable to create resp_head",
-                      resp->stream_id);
-        return APR_EINVAL;
-    }
-    resp->rawhead = NULL; /* h2_resp_head took ownership */
-    
-    resp->remain_len = h2_resp_head_get_content_length(resp->head);
-    resp->chunked = resp->head->chunked;
-    
-    ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, resp->pool,
-                  "h2_response(%d): converted %d headers, content-length: %ld"
-                  ", chunked=%d",
-                  resp->stream_id, (int)resp->head->nvlen,
-                  (long)resp->remain_len, resp->chunked);
-    
-    set_state(resp, ((resp->chunked || resp->remain_len > 0)?
-                     H2_RESP_ST_BODY : H2_RESP_ST_DONE));
-    /* We are ready to be sent to the client */
-    return APR_SUCCESS;
-}
-
-static apr_status_t parse_headers(h2_response *resp)
-{
-    char *data = resp->rawhead->data;
-    apr_size_t max = resp->rawhead->data_len - 1;
-    for (int i = resp->offset; i < max; ++i) {
-        if (data[i] == '\r' && data[i+1] == '\n') {
-            if (i == resp->offset) {
-                /* empty line -> end of headers */
-                ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, resp->pool,
-                              "h2_response(%d): end of headers",
-                              resp->stream_id);
-                resp->offset += 2;
-                return make_h2_headers(resp);
-            }
-            else {
-                /* non-empty line -> header, null-terminate it */
-                data[i] = '\0';
-                const char *line = data + resp->offset;
-                resp->offset = i + 2;
-                
-                if (line[0] == ' ' || line[0] == '\t') {
-                    /* continuation line from the header before this */
-                    char *last = apr_array_pop(resp->hlines);
-                    if (last == NULL) {
-                        /* not well formed */
-                        return APR_EINVAL;
-                    }
-                    char *last_eos = last + strlen(last);
-                    memmove(last_eos, line, strlen(line)+1);
-                    line = last;
-                }
-                /* new header line */
-                APR_ARRAY_PUSH(resp->hlines, const char*) = line;
-            }
-        }
-    }
-    
-    /* No line end yet, wait for more data if we have not exceeded
-     * our buffer capacities. Otherwise, report an error */
-    if (h2_bucket_available(resp->rawhead) <= 0) {
-        return APR_ENAMETOOLONG;
-    }
-    return APR_SUCCESS;
-}
-
-static apr_status_t parse_status_line(h2_response *resp)
-{
-    char *data = resp->rawhead->data;
-    apr_size_t max = resp->rawhead->data_len - 1;
-    for (int i = resp->offset; i < max; ++i) {
-        if (data[i] == '\r' && data[i+1] == '\n') {
-            /* found first line, make it a null-terminated string */
-            const char *line = data + resp->offset;
-            data[i] = '\0';
-            char *s = strchr(line, ' ');
-            if (s == NULL) {
-                return APR_EINVAL;
-            }
-            while (*s == ' ') {
-                ++s;
-            }
-            if (!*s) {
-                return APR_EINVAL;
-            }
-            const char *sword = s;
-            s = strchr(sword, ' ');
-            if (s) {
-                *s = '\0';
-            }
-            
-            resp->status = sword;
-            resp->offset = i + 2;
-            set_state(resp, H2_RESP_ST_HEADERS);
-            ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, resp->pool,
-                          "h2_response(%d): status is %s",
-                          resp->stream_id, resp->status);
-            
-            return parse_headers(resp);
-        }
-    }
-    
-    /* No line end yet, wait for more data if we have not exceeded
-     * our buffer capacities. Otherwise, report an error */
-    if (h2_bucket_available(resp->rawhead) <= 0) {
-        return APR_ENAMETOOLONG;
-    }
-    return APR_SUCCESS;
-}
-
-static apr_status_t read_chunk_size(h2_response *resp,
-                                    const char *data, apr_size_t len,
-                                    apr_size_t *pconsumed) {
-    if (!resp->chunk_work) {
-        resp->chunk_work = h2_bucket_alloc(256);
-        if (!resp->chunk_work) {
-            return APR_ENOMEM;
-        }
-    }
-    
-    char *p = resp->chunk_work->data;
-    apr_size_t p_start = resp->chunk_work->data_len;
-    apr_size_t copied = h2_bucket_append(resp->chunk_work, data, len);
-    
-    if (copied > 0) {
-        /* we have copied bytes, do we find a line end? */
-        apr_size_t max = resp->chunk_work->data_len - 1;
-        for (int i = 0; i < max; ++i) {
-            if (p[i] == '\r' && p[i+1] == '\n') {
-                /* how many bytes of the data have we consumed
-                 * to find this line? */
-                *pconsumed = ((long)i - p_start) + 2;
-                /* null-terminate our chunk_work buffer */
-                p[i] = '\0';
-                char *end;
-                resp->remain_len = apr_strtoi64(p, &end, 16);
-                if (resp->remain_len == 0) {
-                    if (p == end) {
-                        /* invalid chunk size string */
-                        ap_log_perror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->pool,
-                                      "h2_response(%d): garbled chunk size: %s",
-                                      resp->stream_id,
-                                      apr_pstrndup(resp->pool, resp->chunk_work->data,
-                                                   resp->chunk_work->data_len));
-                        return APR_EINVAL;
-                    }
-                    /* valid chunk size 0, indicates end of body */
-                    if (*pconsumed != len) {
-                        ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, resp->pool,
-                                      "h2_response(%d): end chunk read, but %ld bytes remain",
-                                      resp->stream_id, (long)len - *pconsumed);
-                    }
-                    set_state(resp, H2_RESP_ST_DONE);
-                }
-                h2_bucket_reset(resp->chunk_work);
-                ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, resp->pool,
-                              "h2_response(%d): read chunk size %ld",
-                              resp->stream_id, (long)resp->remain_len);
-                break;
-            }
-        }
-    }
-    
-    if (h2_bucket_available(resp->chunk_work) == 0) {
-        /* our chunk_work buffer is full, yet we have not seen a
-         * line end. Report an error. */
-        ap_log_perror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->pool,
-                      "h2_response(%d): garbled chunk size: %s",
-                      resp->stream_id,
-                      apr_pstrndup(resp->pool, resp->chunk_work->data,
-                                   resp->chunk_work->data_len));
-        return APR_EINVAL;
-    }
-    
-    *pconsumed = copied;
-    return APR_SUCCESS;
-}
-
-static apr_status_t copy_body(h2_response *resp,
-                              h2_bucket *bucket,
-                              const char *data, apr_size_t len,
-                              apr_size_t *pconsumed) {
-    if (resp->chunked) {
-        if (resp->remain_len > 0) {
-            /* inside a chunk, copy out as much as we can */
-            if (len > resp->remain_len) {
-                len = resp->remain_len;
-            }
-            *pconsumed = h2_bucket_append(bucket, data, len);
-            resp->remain_len -= *pconsumed;
-        }
-        
-        if (resp->remain_len == 0) {
-            apr_status_t status = read_chunk_size(resp, data, len, pconsumed);
-            if (status != APR_SUCCESS) {
-                return status;
-            }
-            
-            if (resp->state == H2_RESP_ST_DONE) {
-                /* that was the last, empty chunk that ended the body */
-                return APR_SUCCESS;
-            }
-            
-            if (resp->remain_len > 0) {
-                /* we got a valid chunk size, copy the bytes */
-                data += *pconsumed;
-                len -= *pconsumed;
-                if (len > 0) {
-                    apr_size_t copied = 0;
-                    status = copy_body(resp, bucket, data, len, &copied);
-                    *pconsumed += copied;
-                    return status;
-                }
-            }
-            else {
-                /* no valid chunk yet, need more bytes */
-                assert(*pconsumed == len);
-                return APR_SUCCESS;
-            }
-        }
-    }
-    else {
-        /* nothing to convert, just pass the bytes into bucket */
-        if (len > resp->remain_len) {
-            /* body is longer then declared in headers */
-            ap_log_perror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->pool,
-                          "h2_response(%d): body/chunk len %ld exceeded by %ld",
-                          resp->stream_id, (long)resp->remain_len,
-                          (long)(resp->remain_len - len));
-            return APR_EINVAL;
-        }
-        *pconsumed = h2_bucket_append(bucket, data, len);
-        resp->remain_len -= *pconsumed;
-        if (resp->remain_len == 0) {
-            set_state(resp, H2_RESP_ST_DONE);
-        }
-    }
-    return APR_SUCCESS;
-}
-
-
-apr_status_t h2_response_http_convert(h2_bucket *bucket,
-                                      void *conv_ctx,
-                                      const char *data, apr_size_t len,
-                                      apr_size_t *pconsumed)
-{
-    h2_response *resp = (h2_response *)conv_ctx;
-    apr_status_t status = APR_SUCCESS;
-    *pconsumed = 0;
-    
-    if (len > 0) {
-        switch (resp->state) {
-            case H2_RESP_ST_STATUS_LINE:
-            case H2_RESP_ST_HEADERS:
-                status = ensure_buffer(resp);
-                if (status != APR_SUCCESS) {
-                    return status;
-                }
-                
-                *pconsumed = h2_bucket_append(resp->rawhead, data, len);
-                if (*pconsumed > 0) {
-                    if (resp->state == H2_RESP_ST_STATUS_LINE) {
-                        /* Need to parse a valid HTTP/1.1 status line here */
-                        status = parse_status_line(resp);
-                    }
-                    
-                    if (resp->state == H2_RESP_ST_HEADERS) {
-                        status = parse_headers(resp);
-                    }
-                    
-                    if (resp->state == H2_RESP_ST_BODY
-                        && resp->rawhead
-                        && resp->offset < resp->rawhead->data_len) {
-                        /* these bytes belong to the body */
-                        long left = resp->rawhead->data_len - resp->offset;
-                        if (left > *pconsumed) {
-                            ap_log_perror(APLOG_MARK, APLOG_ERR, 0, resp->pool,
-                                          "h2_response(%d): headers parsed, but"
-                                          " more bytes left (%ld) than "
-                                          "we consumed (%ld)",
-                                          resp->stream_id, left, *pconsumed);
-                        }
-                        else {
-                            *pconsumed -= left;
-                        }
-                    }
-                }
-                break;
-                
-            case H2_RESP_ST_BODY:
-                status = copy_body(resp, bucket, data, len, pconsumed);
-                if (resp->state == H2_RESP_ST_DONE) {
-                    ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, resp->pool,
-                                  "h2_response(%d): body done",
-                                  resp->stream_id);
-                }
-                break;
-                
-            case H2_RESP_ST_DONE:
-                /* We get content after we were done, something is not
-                 * right here */
-                ap_log_perror(APLOG_MARK, APLOG_ERR, APR_EINVAL, resp->pool,
-                              "h2_response(%d): body done, but receiving %ld more bytes",
-                              resp->stream_id, (long)len);
-                status = APR_EINVAL;
-                break;
-                
-            default:
-                /* ??? */
-                break;
-        }
-    }
-    return status;
+    return resp->content_length;
 }

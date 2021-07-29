@@ -31,7 +31,7 @@
 #include "h2_queue.h"
 #include "h2_bucket.h"
 #include "h2_bucket_queue.h"
-#include "h2_resp_head.h"
+#include "h2_response.h"
 #include "h2_mplx.h"
 
 struct h2_mplx {
@@ -55,10 +55,10 @@ struct h2_mplx {
     apr_size_t out_stream_max_size;
 };
 
-static void free_resp_head(void *p)
+static void free_response(void *p)
 {
-    h2_resp_head *head = (h2_resp_head *)p;
-    h2_resp_head_destroy(head);
+    h2_response *head = (h2_response *)p;
+    h2_response_destroy(head);
 }
 
 static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
@@ -92,7 +92,7 @@ h2_mplx *h2_mplx_create(conn_rec *c)
         assert(conf);
         
         m->debug = APLOGcdebug(c);
-        m->heads = h2_queue_create(pool, free_resp_head);
+        m->heads = h2_queue_create(pool, free_response);
         
         m->input = h2_bucket_queue_create(pool);
         m->out_stream_max_size =
@@ -275,7 +275,7 @@ apr_status_t h2_mplx_out_pushback(h2_mplx *m, int stream_id,
     return status;
 }
 
-apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_resp_head *head)
+apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *head)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
@@ -295,7 +295,7 @@ apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        h2_queue_append(m->heads, h2_resp_head_create(stream_id, ss,
+        h2_queue_append(m->heads, h2_response_create(stream_id, ss,
                                                       NULL, NULL, NULL,
                                                       m->pool));
         have_out_data_for(m, stream_id);
@@ -304,12 +304,12 @@ apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
     return status;
 }
 
-h2_resp_head *h2_mplx_pop_response(h2_mplx *m)
+h2_response *h2_mplx_pop_response(h2_mplx *m)
 {
-    h2_resp_head *head = NULL;
+    h2_response *head = NULL;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        head = (h2_resp_head*)h2_queue_pop(m->heads);
+        head = (h2_response*)h2_queue_pop(m->heads);
         if (head && m->debug) {
             ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, m->pool,
                           "h2_mplx(%ld): popped response(%d)",

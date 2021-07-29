@@ -26,33 +26,33 @@
 #include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
+#include "h2_from_h1.h"
 #include "h2_response.h"
-#include "h2_resp_head.h"
 #include "h2_task_output.h"
 
+typedef enum {
+    H2_TASK_OUT_INIT,
+    H2_TASK_OUT_STARTED,
+    H2_TASK_OUT_DONE,
+} h2_task_output_state_t;
+
 struct h2_task_output {
-    struct h2_mplx *m;
-    int session_id;
+    long session_id;
     int stream_id;
-    int eos;
+    apr_pool_t *pool;
+    struct h2_mplx *m;
+    h2_task_output_state_t state;
     struct h2_bucket *cur;
     apr_size_t cur_offset;
     
-    h2_resp_head *head;
-    
-    h2_output_converter conv;
-    void *conv_ctx;
+    h2_from_h1 *from_h1;
+    h2_response *response;
 };
 
 
-static apr_status_t copy_unchanged(h2_bucket *bucket,
-                                   void *conv_data,
-                                   const char *data, apr_size_t len,
-                                   apr_size_t *pconsumed)
-{
-    *pconsumed = h2_bucket_append(bucket, data, len);
-    return APR_SUCCESS;
-}
+static void converter_state_change(h2_from_h1 *resp,
+                                   h2_from_h1_state_t prevstate,
+                                   void *cb_ctx);
 
 static apr_status_t flush_cur(h2_task_output *output)
 {
@@ -71,23 +71,32 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
 {
     h2_task_output *output = apr_pcalloc(pool, sizeof(h2_task_output));
     if (output) {
-        output->m = m;
-        h2_mplx_reference(m);
         output->stream_id = stream_id;
         output->session_id = session_id;
-        output->conv = copy_unchanged;
+        output->pool = pool;
+        output->m = m;
+        h2_mplx_reference(m);
+        output->state = H2_TASK_OUT_INIT;
+        output->from_h1 = h2_from_h1_create(stream_id, pool);
+        if (!output->from_h1) {
+            return NULL;
+        }
+        h2_from_h1_set_state_change_cb(output->from_h1,
+                                        converter_state_change, output);
     }
     return output;
 }
 
 void h2_task_output_destroy(h2_task_output *output)
 {
-    if (output->head) {
-        h2_resp_head_destroy(output->head);
-        output->head = NULL;
+    h2_task_output_close(output);
+    if (output->response) {
+        h2_response_destroy(output->response);
+        output->response = NULL;
     }
-    if (!output->eos) {
-        h2_task_output_close(output);
+    if (output->from_h1) {
+        h2_from_h1_destroy(output->from_h1);
+        output->from_h1 = NULL;
     }
     if (output->cur) {
         h2_bucket_destroy(output->cur);
@@ -101,79 +110,36 @@ void h2_task_output_destroy(h2_task_output *output)
 
 void h2_task_output_close(h2_task_output *output)
 {
-    if (!output->eos) {
+    if (output->state != H2_TASK_OUT_DONE) {
         flush_cur(output);
         h2_mplx_out_close(output->m, output->stream_id);
+        output->state = H2_TASK_OUT_DONE;
     }
 }
 
-void h2_task_output_set_converter(h2_task_output *output,
-                                    h2_output_converter conv,
-                                    void *conv_ctx)
+int h2_task_output_has_started(h2_task_output *output)
 {
-    if (conv) {
-        output->conv = conv;
-        output->conv_ctx = conv_ctx;
-    }
-    else {
-        output->conv = copy_unchanged;
-        output->conv_ctx = NULL;
-    }
+    return output->state >= H2_TASK_OUT_STARTED;
 }
 
-static apr_status_t prepare_cur(h2_task_output *output)
+apr_status_t h2_task_output_open(h2_task_output *output, h2_response *response)
 {
-    if (!output->cur) {
-        output->cur = h2_bucket_alloc(BLOCKSIZE);
-        if (!output->cur) {
-            return APR_ENOMEM;
-        }
-    }
-    return APR_SUCCESS;
-}
-
-
-static apr_status_t process_data(h2_task_output *output,
-                                 ap_filter_t *filter,
-                                 const char *data, apr_size_t len)
-{
-    apr_status_t status = APR_SUCCESS;
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                  "h2_task_output(%d-%d): writing %d bytes",
-                  output->session_id, output->stream_id, (int)len);
-    while (len > 0) {
-        status = prepare_cur(output);
-        if (status != APR_SUCCESS) {
-            return status;
-        }
-        apr_size_t consumed = 0;
-        status = output->conv(output->cur, output->conv_ctx,
-                              data, len, &consumed);
-        if (status != APR_SUCCESS) {
-            return status;
-        }
-        len -= consumed;
-        data += consumed;
-        if (h2_bucket_available(output->cur) <= 0) {
-            flush_cur(output);
-        }
-    }
-    return APR_SUCCESS;
-}
-
-apr_status_t h2_task_output_open(h2_task_output *output, h2_resp_head *response)
-{
-    long content_length = h2_resp_head_get_content_length(response);
+    long content_length = h2_response_get_content_length(response);
     if (content_length > 0 && content_length < BLOCKSIZE) {
         /* For small responses, we wait for the remaining data to
          * come in before we announce readyness of our output. That
          * way we have less thread sync to do.
          */
-        output->head = response;
+        output->response = response;
         return APR_SUCCESS;
     }
+    output->state = H2_TASK_OUT_STARTED;
     return h2_mplx_out_open(output->m, output->stream_id, response);
 }
+
+static apr_status_t convert_data(h2_task_output *output,
+                                 ap_filter_t *filter,
+                                 const char *data, apr_size_t len);
 
 apr_status_t h2_task_output_write(h2_task_output *output,
                                     ap_filter_t* filter,
@@ -183,7 +149,7 @@ apr_status_t h2_task_output_write(h2_task_output *output,
     
     if (filter->next != NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, filter->c,
-                      "h2_task_output(%d-%d): unexpected filter",
+                      "h2_task_output(%ld-%d): unexpected filter",
                       output->session_id, output->stream_id);
     }
     
@@ -198,21 +164,21 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         if (APR_BUCKET_IS_METADATA(bucket)) {
             if (APR_BUCKET_IS_EOS(bucket)) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, filter->c,
-                              "h2_task_output(%d-%d): got eos from brigade",
+                              "h2_task_output(%ld-%d): got eos from brigade",
                               output->session_id, output->stream_id);
-                output->eos = 1;
-                if (output->head) {
+                if (output->response) {
                     h2_mplx_out_open(output->m,
-                                     output->stream_id, output->head);
-                    output->head = NULL;
+                                     output->stream_id, output->response);
+                    output->response = NULL;
                 }
                 flush_cur(output);
                 h2_mplx_out_close(output->m, output->stream_id);
+                output->state = H2_TASK_OUT_DONE;
                 got_eos = 1;
             }
             else if (APR_BUCKET_IS_FLUSH(bucket)) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, filter->c,
-                              "h2_task_output(%d-%d): got flush from brigade",
+                              "h2_task_output(%ld-%d): got flush from brigade",
                               output->session_id, output->stream_id);
                 flush_cur(output);
             }
@@ -221,9 +187,9 @@ apr_status_t h2_task_output_write(h2_task_output *output,
             }
         }
         else if (got_eos) {
-            /* ignore, may happend according to apache documentation */
+            /* ignore, may happen according to apache documentation */
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, filter->c,
-                          "h2_task_output(%d-%d): has data after eos",
+                          "h2_task_output(%ld-%d): has data after eos",
                           output->session_id, output->stream_id);
         }
         else {
@@ -233,23 +199,23 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                                      APR_NONBLOCK_READ);
             
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
-                          "h2_task_output(%d-%d): got %d bytes from brigade",
+                          "h2_task_output(%ld-%d): got %d bytes from brigade",
                           output->session_id, output->stream_id,
                           (int)data_length);
             
             if (status == APR_SUCCESS) {
-                status = process_data(output, filter, data, data_length);
+                status = convert_data(output, filter, data, data_length);
             }
             else if (status == APR_EAGAIN) {
                 status = apr_bucket_read(bucket, &data, &data_length,
                                          APR_BLOCK_READ);
                 if (status != APR_SUCCESS) {
                     ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, filter->c,
-                                  "h2_task_output(%d-%d): read failed",
+                                  "h2_task_output(%ld-%d): read failed",
                                   output->session_id, output->stream_id);
                 }
                 else {
-                    status = process_data(output, filter, data, data_length);
+                    status = convert_data(output, filter, data, data_length);
                 }
             }
         }
@@ -260,4 +226,58 @@ apr_status_t h2_task_output_write(h2_task_output *output,
     return status;
 }
 
+static apr_status_t convert_data(h2_task_output *output,
+                                 ap_filter_t *filter,
+                                 const char *data, apr_size_t len)
+{
+    apr_status_t status = APR_SUCCESS;
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
+                  "h2_task_output(%ld-%d): writing %d bytes",
+                  output->session_id, output->stream_id, (int)len);
+    while (len > 0) {
+        if (!output->cur) {
+            output->cur = h2_bucket_alloc(BLOCKSIZE);
+            if (!output->cur) {
+                return APR_ENOMEM;
+            }
+        }
+        apr_size_t consumed = 0;
+        status = h2_from_h1_http_convert(output->from_h1, output->cur,
+                                         data, len, &consumed);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+        len -= consumed;
+        data += consumed;
+        if (h2_bucket_available(output->cur) <= 0) {
+            flush_cur(output);
+        }
+    }
+    return APR_SUCCESS;
+}
 
+static void converter_state_change(h2_from_h1 *resp,
+                                  h2_from_h1_state_t prevstate,
+                                  void *cb_ctx)
+{
+    switch (h2_from_h1_get_state(resp)) {
+        case H2_RESP_ST_BODY:
+        case H2_RESP_ST_DONE: {
+            h2_task_output *output = (h2_task_output *)cb_ctx;
+            assert(output);
+            if (output->state == H2_TASK_OUT_INIT) {
+                apr_status_t status =
+                h2_task_output_open(output, h2_from_h1_get_response(output->from_h1));
+                if (status != APR_SUCCESS) {
+                    ap_log_perror( APLOG_MARK, APLOG_ERR, status, output->pool,
+                                  "task_output(%ld-%d): starting response",
+                                  output->session_id, output->stream_id);
+                }
+            }
+            break;
+        }
+        default:
+            /* nop */
+            break;
+    }
+}

@@ -23,6 +23,7 @@ C_SRC   = \
         h2_config.c \
         h2_conn.c \
         h2_ctx.c \
+        h2_from_h1.c \
         h2_h2.c \
         h2_h2c.c \
         h2_io.c \
@@ -30,7 +31,6 @@ C_SRC   = \
         h2_queue.c \
         h2_request.c \
         h2_response.c \
-        h2_resp_head.c \
         h2_session.c \
         h2_stream.c \
         h2_stream_set.c \

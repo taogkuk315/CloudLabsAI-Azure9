@@ -33,8 +33,8 @@
 		B2546D891A7F71F80033A875 /* h2_task.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task.h; sourceTree = "<group>"; };
 		B2546D8E1A7FA7D70033A875 /* h2_task_output.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_output.c; sourceTree = "<group>"; };
 		B2546D8F1A7FA7D70033A875 /* h2_task_output.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_output.h; sourceTree = "<group>"; };
-		B2546D971A7FC2A60033A875 /* h2_response.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_response.c; sourceTree = "<group>"; };
-		B2546D981A7FC2A60033A875 /* h2_response.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_response.h; sourceTree = "<group>"; };
+		B2546D971A7FC2A60033A875 /* h2_from_h1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_from_h1.c; sourceTree = "<group>"; };
+		B2546D981A7FC2A60033A875 /* h2_from_h1.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_from_h1.h; sourceTree = "<group>"; };
 		B2546D991A81079D0033A875 /* h2_stream_set.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream_set.c; sourceTree = "<group>"; };
 		B2546D9A1A81079D0033A875 /* h2_stream_set.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream_set.h; sourceTree = "<group>"; };
 		B2546D9B1A810A450033A875 /* h2_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_queue.c; sourceTree = "<group>"; };
@@ -264,8 +264,8 @@
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
 		B2CB610E1A88BB9F00D270A6 /* h2_conn.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_conn.c; sourceTree = "<group>"; };
 		B2CB610F1A88BB9F00D270A6 /* h2_conn.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_conn.h; sourceTree = "<group>"; };
-		B2CB61101A8A0FB400D270A6 /* h2_resp_head.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_resp_head.c; sourceTree = "<group>"; };
-		B2CB61111A8A0FB400D270A6 /* h2_resp_head.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_resp_head.h; sourceTree = "<group>"; };
+		B2CB61101A8A0FB400D270A6 /* h2_response.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_response.c; sourceTree = "<group>"; };
+		B2CB61111A8A0FB400D270A6 /* h2_response.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_response.h; sourceTree = "<group>"; };
 		B2CB61141A8B698A00D270A6 /* h2_worker.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_worker.c; sourceTree = "<group>"; };
 		B2CB61151A8B698A00D270A6 /* h2_worker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_worker.h; sourceTree = "<group>"; };
 		B2CB61161A8B699E00D270A6 /* h2_workers.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_workers.c; sourceTree = "<group>"; };
@@ -954,6 +954,8 @@
 				B2CB610F1A88BB9F00D270A6 /* h2_conn.h */,
 				B22549331A6FBEF1004BDEC9 /* h2_ctx.c */,
 				B22549341A6FBEF1004BDEC9 /* h2_ctx.h */,
+				B2546D971A7FC2A60033A875 /* h2_from_h1.c */,
+				B2546D981A7FC2A60033A875 /* h2_from_h1.h */,
 				B225491E1A6FB8DF004BDEC9 /* h2_h2.c */,
 				B225491F1A6FB8DF004BDEC9 /* h2_h2.h */,
 				B2A6EF281A9C79A6005DFC5B /* h2_h2c.c */,
@@ -967,10 +969,8 @@
 				B2546D9C1A810A450033A875 /* h2_queue.h */,
 				B2A6EF171A9B598B005DFC5B /* h2_request.c */,
 				B2A6EF181A9B598B005DFC5B /* h2_request.h */,
-				B2CB61101A8A0FB400D270A6 /* h2_resp_head.c */,
-				B2CB61111A8A0FB400D270A6 /* h2_resp_head.h */,
-				B2546D971A7FC2A60033A875 /* h2_response.c */,
-				B2546D981A7FC2A60033A875 /* h2_response.h */,
+				B2CB61101A8A0FB400D270A6 /* h2_response.c */,
+				B2CB61111A8A0FB400D270A6 /* h2_response.h */,
 				B22549381A710329004BDEC9 /* h2_session.c */,
 				B22549391A710329004BDEC9 /* h2_session.h */,
 				B2546D991A81079D0033A875 /* h2_stream_set.c */,

@@ -21,18 +21,12 @@
  * them to a h2_output_converter. The brigade is setup as the output brigade
  * for our pseudo httpd conn_rec that is handling a specific h2_task.
  * 
- * The conversion is implemented in h2_response.
  */
 struct h2_bucket;
 struct h2_mplx;
 struct h2_response;
 
 typedef struct h2_task_output h2_task_output;
-
-typedef apr_status_t (*h2_output_converter)(struct h2_bucket *bucket,
-                                            void *conv_data,
-                                            const char *data, apr_size_t len,
-                                            apr_size_t *pconsumed);
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
                                       int session_id, int stream_id,
@@ -41,7 +35,7 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
 void h2_task_output_destroy(h2_task_output *output);
 
 apr_status_t h2_task_output_open(h2_task_output *output,
-                                 struct h2_resp_head *response);
+                                 struct h2_response *response);
 
 
 apr_status_t h2_task_output_write(h2_task_output *output,
@@ -50,8 +44,6 @@ apr_status_t h2_task_output_write(h2_task_output *output,
 
 void h2_task_output_close(h2_task_output *output);
 
-void h2_task_output_set_converter(h2_task_output *output,
-                                  h2_output_converter conv,
-                                  void *conv_ctx);
+int h2_task_output_has_started(h2_task_output *output);
 
 #endif /* defined(__mod_h2__h2_task_output__) */

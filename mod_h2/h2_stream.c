@@ -28,7 +28,6 @@
 #include "h2_bucket.h"
 #include "h2_mplx.h"
 #include "h2_request.h"
-#include "h2_resp_head.h"
 #include "h2_stream.h"
 #include "h2_task.h"
 #include "h2_ctx.h"

@@ -43,16 +43,8 @@
 struct h2_mplx;
 struct h2_task;
 struct h2_resp_head;
-struct h2_response;
 struct h2_bucket;
 struct h2_bucket_queue;
-
-typedef enum {
-    H2_TASK_ST_IDLE,
-    H2_TASK_ST_STARTED,
-    H2_TASK_ST_READY,
-    H2_TASK_ST_DONE
-} h2_task_state_t;
 
 typedef struct h2_task h2_task;
 
@@ -72,8 +64,6 @@ void h2_task_abort(h2_task *task);
 
 long h2_task_get_session_id(h2_task *task);
 int h2_task_get_stream_id(h2_task *task);
-
-struct h2_resp_head *h2_task_get_response(h2_task *task);
 
 void h2_task_register_hooks(void);
 

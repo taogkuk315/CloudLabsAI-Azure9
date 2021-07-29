@@ -26,10 +26,10 @@
 #include "h2_config.h"
 #include "h2_bucket.h"
 #include "h2_mplx.h"
-#include "h2_resp_head.h"
+#include "h2_response.h"
 #include "h2_stream.h"
 #include "h2_stream_set.h"
-#include "h2_response.h"
+#include "h2_from_h1.h"
 #include "h2_task.h"
 #include "h2_bucket.h"
 #include "h2_session.h"
@@ -632,12 +632,12 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     int have_written = 0;
     
     /* First check if we have new streams to submit */
-    for (h2_resp_head *head = h2_session_pop_response(session); head;
+    for (h2_response *head = h2_session_pop_response(session); head;
          head = h2_session_pop_response(session)) {
         h2_stream *stream = h2_session_get_stream(session, head->stream_id);
         if (stream) {
             status = h2_session_handle_response(session, stream, head);
-            h2_resp_head_destroy(head);
+            h2_response_destroy(head);
             have_written = 1;
         }
     }
@@ -719,7 +719,7 @@ static h2_stream *match_any(void *ctx, h2_stream *stream) {
     return stream;
 }
 
-h2_resp_head *h2_session_pop_response(h2_session *session)
+h2_response *h2_session_pop_response(h2_session *session)
 {
     return h2_mplx_pop_response(session->mplx);
 }
@@ -812,7 +812,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
  * read by the session using the callback we supply.
  */
 apr_status_t h2_session_handle_response(h2_session *session,
-                                        h2_stream *stream, h2_resp_head *head)
+                                        h2_stream *stream, h2_response *head)
 {
     apr_status_t status = APR_SUCCESS;
     int rv = 0;

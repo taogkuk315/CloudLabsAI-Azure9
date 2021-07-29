@@ -28,7 +28,6 @@
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_stream_set.h"
-#include "h2_resp_head.h"
 #include "h2_task.h"
 #include "h2_workers.h"
 #include "h2_conn.h"

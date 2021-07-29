@@ -48,7 +48,7 @@ struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 struct h2_bucket;
 struct h2_bucket_queue;
-struct h2_resp_head;
+struct h2_response;
 
 typedef struct h2_mplx h2_mplx;
 
@@ -120,7 +120,7 @@ apr_status_t h2_mplx_out_pushback(h2_mplx *mplx, int stream_id,
 /* Opens the output for the given stream with the specified response.
  */
 apr_status_t h2_mplx_out_open(h2_mplx *mplx, int stream_id,
-                              struct h2_resp_head *head);
+                              struct h2_response *response);
 
 /* Writes data to the output of the given stream. With APR_BLOCK_READ, it
  * is subject to flow control.
@@ -150,6 +150,6 @@ int h2_mplx_out_has_data_for(h2_mplx *m, int stream_id);
  * only once for a particular stream. The stream this response
  * belongs to will be open for reading.
  */
-struct h2_resp_head *h2_mplx_pop_response(h2_mplx *m);
+struct h2_response *h2_mplx_pop_response(h2_mplx *m);
 
 #endif /* defined(__mod_h2__h2_mplx__) */

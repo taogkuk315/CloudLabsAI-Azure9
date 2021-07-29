@@ -41,7 +41,7 @@
 
 struct h2_config;
 struct h2_mplx;
-struct h2_resp_head;
+struct h2_response;
 struct h2_session;
 struct h2_stream;
 struct h2_task;
@@ -128,7 +128,7 @@ apr_status_t h2_session_write(h2_session *session,
  * once we have all the response headers. */
 apr_status_t h2_session_handle_response(h2_session *session,
                                         struct h2_stream *stream,
-                                        struct h2_resp_head *head);
+                                        struct h2_response *head);
 
 /* Set the callback to be invoked when new h2_task instances are created.  */
 void h2_session_set_new_task_cb(h2_session *session, on_new_task *cb);
@@ -142,7 +142,7 @@ struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);
 
 /* Get the first h2_stream that has a response ready and is submitted
  * yet. */
-struct h2_resp_head *h2_session_pop_response(h2_session *session);
+struct h2_response *h2_session_pop_response(h2_session *session);
 
 void h2_session_log_stats(h2_session *session);
 

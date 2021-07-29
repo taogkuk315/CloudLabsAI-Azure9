@@ -17,52 +17,35 @@
 #ifndef __mod_h2__h2_response__
 #define __mod_h2__h2_response__
 
-/**
- * h2_response parses a HTTP/1.1 response into
- * - response status
- * - a list of header values
- * - a series of bytes that represent the response body alone, without
- *   any meta data, such as inserted by chunked transfer encoding.
- *
- * All data is allocated from the connection memory pool. Body data
- * is passed "through" into the given h2_bucket(s) and will not
- * cause allocations.
- *
- * Again, see comments in h2_request: ideally we would take the headers
- * and status from the httpd structures instead of parsing them here, but
- * we need to have all handlers and filters involved in request/response
- * processing, so this seems to be the way for now.
+/* h2_response is just the data belonging the the head of a HTTP response,
+ * suitable prepared to be fed to nghttp2 for response submit. 
  */
 
-typedef enum {
-    H2_RESP_ST_STATUS_LINE, /* parsing http/1 status line */
-    H2_RESP_ST_HEADERS,     /* parsing http/1 response headers */
-    H2_RESP_ST_BODY,        /* transferring response body */
-    H2_RESP_ST_DONE         /* complete response converted */
-} h2_response_state_t;
-
 struct h2_bucket;
-struct h2_resp_head;
-typedef struct h2_response h2_response;
 
-typedef void h2_response_state_change_cb(struct h2_response *resp,
-                                         h2_response_state_t prevstate,
-                                         void *cb_ctx);
+typedef struct h2_response {
+    int stream_id;
+    apr_status_t task_status;
+    const char *http_status;
+    struct h2_bucket *data;
 
-h2_response *h2_response_create(int stream_id, apr_pool_t *pool);
-apr_status_t h2_response_destroy(h2_response *response);
+    apr_size_t nvlen;
+    const nghttp2_nv nv;
 
-void h2_response_set_state_change_cb(h2_response *resp,
-                                     h2_response_state_change_cb *callback,
-                                     void *cb_ctx);
+    long content_length;
+    int chunked;
+    
+} h2_response;
 
-apr_status_t h2_response_http_convert(struct h2_bucket *bucket,
-                                      void *conv_ctrx,
-                                      const char *data, apr_size_t len,
-                                      apr_size_t *pconsumed);
+h2_response *h2_response_create(int stream_id,
+                                  apr_status_t task_status,
+                                  const char *http_status,
+                                  apr_array_header_t *hlines,
+                                  struct h2_bucket *data,
+                                  apr_pool_t *pool);
 
-struct h2_resp_head *h2_response_get_head(h2_response *resp);
+void h2_response_destroy(h2_response *head);
 
-h2_response_state_t h2_response_get_state(h2_response *resp);
+long h2_response_get_content_length(h2_response *resp);
 
 #endif /* defined(__mod_h2__h2_response__) */
