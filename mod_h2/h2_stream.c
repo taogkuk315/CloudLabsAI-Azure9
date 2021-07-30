@@ -95,7 +95,6 @@ h2_task *h2_stream_create_task(h2_stream *stream)
                                    stream->id, stream->master,
                                    stream->pool,
                                    data, input_eos, stream->m);
-    stream->pool = NULL;
     return task;
 }
 

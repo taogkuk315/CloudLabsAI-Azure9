@@ -40,7 +40,7 @@ distclean:
 	$(foreach sd, $(SUB_DIRS), make -C $(sd) distclean; )
 
 start: $(INST_DIR)/.test-setup
-	@ulimit -c unlimited; $(INST_DIR)/bin/apachectl restart
+	@$(INST_DIR)/bin/apachectl restart
 
 stop:
 	@$(INST_DIR)/bin/apachectl stop

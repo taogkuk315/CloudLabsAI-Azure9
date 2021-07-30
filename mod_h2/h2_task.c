@@ -153,7 +153,8 @@ h2_task *h2_task_create(long session_id,
                         h2_mplx *mplx)
 {
     apr_status_t status = APR_SUCCESS;
-    if (pool == NULL) {
+    // TODO: share pool with h2_stream, join task before destroying stream
+    if (1 || pool == NULL) {
         apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
         if (status != APR_SUCCESS) {
             h2_mplx_out_reset(mplx, stream_id, status);
@@ -217,7 +218,7 @@ apr_status_t h2_task_destroy(h2_task *task)
         task->mplx = NULL;
     }
     if (task->pool) {
-        task->pool = NULL;
+        apr_pool_destroy(task->pool);
     }
     return APR_SUCCESS;
 }
