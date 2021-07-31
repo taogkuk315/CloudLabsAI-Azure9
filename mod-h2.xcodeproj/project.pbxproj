@@ -10,7 +10,7 @@
 		B22549011A6E85CF004BDEC9 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B22549041A6E8949004BDEC9 /* httpd.conf */ = {isa = PBXFileReference; lastKnownFileType = text; path = httpd.conf; sourceTree = "<group>"; };
 		B22549051A6E8949004BDEC9 /* modules.conf */ = {isa = PBXFileReference; lastKnownFileType = text; path = modules.conf; sourceTree = "<group>"; };
-		B22549071A6E8949004BDEC9 /* test.local.conf */ = {isa = PBXFileReference; lastKnownFileType = text; path = test.local.conf; sourceTree = "<group>"; };
+		B22549071A6E8949004BDEC9 /* test.example.org.conf */ = {isa = PBXFileReference; lastKnownFileType = text; path = test.example.org.conf; sourceTree = "<group>"; };
 		B22549081A6E8949004BDEC9 /* x509.input */ = {isa = PBXFileReference; lastKnownFileType = text; path = x509.input; sourceTree = "<group>"; };
 		B22549091A6E8AF9004BDEC9 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B225490B1A6EAAA3004BDEC9 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
@@ -937,7 +937,7 @@
 		B22549061A6E8949004BDEC9 /* sites */ = {
 			isa = PBXGroup;
 			children = (
-				B22549071A6E8949004BDEC9 /* test.local.conf */,
+				B22549071A6E8949004BDEC9 /* test.example.org.conf */,
 				B2546E6A1A826E1E0033A875 /* mod-h2.greenbytes.de.conf */,
 			);
 			path = sites;
@@ -1003,12 +1003,12 @@
 		B2546D9F1A8249A60033A875 /* htdocs */ = {
 			isa = PBXGroup;
 			children = (
-				B2546DA01A8249A60033A875 /* test.local */,
+				B2546DA01A8249A60033A875 /* test.example.org */,
 			);
 			path = htdocs;
 			sourceTree = "<group>";
 		};
-		B2546DA01A8249A60033A875 /* test.local */ = {
+		B2546DA01A8249A60033A875 /* test.example.org */ = {
 			isa = PBXGroup;
 			children = (
 				B2546DA11A8249A60033A875 /* 001.html */,
@@ -1027,6 +1027,7 @@
 				B2546E671A8249A70033A875 /* 009.php */,
 				B2546E681A824F9D0033A875 /* index.html */,
 			);
+			name = test.example.org;
 			path = test.local;
 			sourceTree = "<group>";
 		};

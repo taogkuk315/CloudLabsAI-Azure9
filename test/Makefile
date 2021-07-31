@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-HOST_NAME    = test.local
+HOST_NAME    = test.example.org
 
 HTTP_PORT    = 12345
 HTTPS_PORT   = 12346
@@ -116,8 +116,8 @@ $(INST_DIR)/.test-setup: \
 		conf/modules.conf \
 		$(wildcard conf/sites/*.conf) \
         $(wildcard conf/mods/*.*) \
-		$(INST_DIR)/conf/ssl/test.local.key \
-		$(INST_DIR)/conf/ssl/test.local.pem \
+		$(INST_DIR)/conf/ssl/test.example.org.key \
+		$(INST_DIR)/conf/ssl/test.example.org.pem \
 		$(INST_DIR)/.testdocs-setup
 	@echo -n setup httpd locally...
 	@mkdir -p $(INST_DIR)/conf/sites
@@ -134,15 +134,15 @@ $(INST_DIR)/.test-setup: \
 	@echo done.
 	@touch $(INST_DIR)/.test-setup
 
-$(INST_DIR)/conf/ssl/test.local.key:
+$(INST_DIR)/conf/ssl/test.example.org.key:
 	@mkdir -p $(INST_DIR)/conf/ssl
-	openssl genrsa -out $(INST_DIR)/conf/ssl/test.local.key 4096
+	openssl genrsa -out $(INST_DIR)/conf/ssl/test.example.org.key 4096
 
-$(INST_DIR)/conf/ssl/test.local.pem: \
-		$(INST_DIR)/conf/ssl/test.local.key \
+$(INST_DIR)/conf/ssl/test.example.org.pem: \
+		$(INST_DIR)/conf/ssl/test.example.org.key \
 		conf/ssl/x509.input
-	openssl req -new -x509 -key $(INST_DIR)/conf/ssl/test.local.key \
-		-out $(INST_DIR)/conf/ssl/test.local.pem -days 1095 < conf/ssl/x509.input
+	openssl req -new -x509 -key $(INST_DIR)/conf/ssl/test.example.org.key \
+		-out $(INST_DIR)/conf/ssl/test.example.org.pem -days 1095 < conf/ssl/x509.input
 
 ################################################################################
 # Install the local httpd for our tests
