@@ -35,9 +35,10 @@
 static struct h2_workers *workers;
 
 static apr_status_t h2_session_process(h2_session *session);
-static void start_new_task(h2_session *session,
-                           h2_stream *stream, h2_task *task);
-static void stream_closed(h2_session *session, h2_stream *stream);
+static void after_stream_opened_cb(h2_session *session,
+                                h2_stream *stream, h2_task *task);
+static void before_stream_close_cb(h2_session *session,
+                                h2_stream *stream, h2_task *task);
 
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
@@ -122,8 +123,8 @@ apr_status_t h2_session_process(h2_session *session)
     /* TODO: install our own? */
     ap_remove_input_filter_byhandle(session->c->input_filters, "reqtimeout");
 
-    h2_session_set_new_task_cb(session, start_new_task);
-    h2_session_set_stream_close_cb(session, stream_closed);
+    h2_session_set_stream_open_cb(session, after_stream_opened_cb);
+    h2_session_set_stream_close_cb(session, before_stream_close_cb);
     
     status = h2_session_start(session);
     if (status != APR_SUCCESS) {
@@ -215,18 +216,8 @@ apr_status_t h2_session_process(h2_session *session)
     return DONE;
 }
 
-static void *run_task(apr_thread_t *thread, void *param)
-{
-    h2_task *task = (h2_task *)param;
-    
-    apr_status_t status = h2_task_do(task);
-    h2_task_destroy(task);
-
-    return NULL;
-}
-
-static void start_new_task(h2_session *session,
-                           h2_stream *stream, h2_task *task)
+static void after_stream_opened_cb(h2_session *session,
+                                h2_stream *stream, h2_task *task)
 {
     apr_status_t status = h2_workers_schedule(workers, task);
     if (status != APR_SUCCESS) {
@@ -236,8 +227,11 @@ static void start_new_task(h2_session *session,
     }
 }
 
-static void stream_closed(h2_session *session, h2_stream *stream)
+static void before_stream_close_cb(h2_session *session,
+                                h2_stream *stream, h2_task *task)
 {
-    h2_workers_unschedule(workers, session->id, stream->id);
+    if (task) {
+        h2_workers_join(workers, task);
+    }
 }
 

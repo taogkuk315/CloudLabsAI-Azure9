@@ -84,14 +84,6 @@ void h2_stream_set_remove_all(h2_stream_set *sp)
     h2_queue_remove_all(sp->queue);
 }
 
-void h2_stream_set_destroy_all(h2_stream_set *sp)
-{
-    h2_stream *stream;
-    while ((stream = h2_queue_pop(sp->queue)) != NULL) {
-        h2_stream_destroy(stream);
-    }
-}
-
 int h2_stream_set_is_empty(h2_stream_set *sp)
 {
     assert(sp);

@@ -39,6 +39,7 @@ struct h2_task {
     long session_id;
     int stream_id;
     int aborted;
+    apr_uint32_t running;
     
     h2_mplx *mplx;
     apr_pool_t *pool;
@@ -282,6 +283,16 @@ long h2_task_get_session_id(h2_task *task)
 int h2_task_get_stream_id(h2_task *task)
 {
     return task->stream_id;
+}
+
+int h2_task_is_running(h2_task *task)
+{
+    return apr_atomic_read32(&task->running);
+}
+
+void h2_task_set_running(h2_task *task, int running)
+{
+    apr_atomic_set32(&task->running, running);
 }
 
 

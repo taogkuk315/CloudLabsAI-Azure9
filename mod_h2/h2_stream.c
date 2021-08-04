@@ -70,6 +70,10 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
                   h2_mplx_get_id(stream->m), stream->id);
     h2_request_destroy(stream->request);
     stream->m = NULL;
+    if (stream->task) {
+        h2_task_destroy(stream->task);
+        stream->task = NULL;
+    }
     if (stream->pool) {
         apr_pool_destroy(stream->pool);
     }
@@ -91,11 +95,11 @@ h2_task *h2_stream_create_task(h2_stream *stream)
     int input_eos = 0;
     h2_bucket *data = h2_request_steal_first_data(stream->request, &input_eos);
     h2_request_flush(stream->request, stream->m);
-    h2_task *task = h2_task_create(h2_mplx_get_id(stream->m),
-                                   stream->id, stream->master,
-                                   stream->pool,
-                                   data, input_eos, stream->m);
-    return task;
+    stream->task = h2_task_create(h2_mplx_get_id(stream->m),
+                                  stream->id, stream->master,
+                                  stream->pool,
+                                  data, input_eos, stream->m);
+    return stream->task;
 }
 
 apr_status_t h2_stream_write_eoh(h2_stream *stream)

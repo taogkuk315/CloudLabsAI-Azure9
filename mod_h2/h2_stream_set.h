@@ -42,8 +42,6 @@ h2_stream *h2_stream_set_remove(h2_stream_set *sp,h2_stream *stream);
 
 void h2_stream_set_remove_all(h2_stream_set *sp);
 
-void h2_stream_set_destroy_all(h2_stream_set *sp);
-
 int h2_stream_set_is_empty(h2_stream_set *sp);
 
 apr_size_t h2_stream_set_size(h2_stream_set *sp);

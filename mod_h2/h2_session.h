@@ -51,13 +51,19 @@ struct nghttp2_session;
 typedef struct h2_session h2_session;
 
 /* Callback when a new task for a stream has been created. The callback
-   should schedule the task for execution and return immediately. */
-typedef void on_new_task(h2_session *session,
-                         struct h2_stream *stream,
-                         struct h2_task *task);
+ * should schedule the task for execution and return immediately. 
+ */
+typedef void after_stream_open(h2_session *session,
+                               struct h2_stream *stream,
+                               struct h2_task *task);
 
-/* Callback when a stream is closed and will be destroyed. */
-typedef void on_stream_close(h2_session *session, struct h2_stream *stream);
+/* Callback before a stream is closed and the task gets destroyed. The callback
+ * should clean any reference it made to the stream/task, e.g. remove it from
+ * the schedule queue or wait for a running task to complete. 
+ */
+typedef void before_stream_close(h2_session *session,
+                                 struct h2_stream *stream,
+                                 struct h2_task *task);
 
 struct h2_session {
     long id;                        /* identifier of this session, unique
@@ -71,8 +77,8 @@ struct h2_session {
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_stream_set *streams;  /* streams handled by this session */
     
-    on_new_task *on_new_task_cb;    /* notify of new h2_task creations */
-    on_stream_close *on_stream_close_cb; /* notify that stream was closed */
+    after_stream_open *after_stream_opened_cb; /* stream task can start */
+    before_stream_close *before_stream_close_cb; /* stream will close */
 
     int loglvl;
     
@@ -131,11 +137,11 @@ apr_status_t h2_session_handle_response(h2_session *session,
                                         struct h2_response *head);
 
 /* Set the callback to be invoked when new h2_task instances are created.  */
-void h2_session_set_new_task_cb(h2_session *session, on_new_task *cb);
+void h2_session_set_stream_open_cb(h2_session *session, after_stream_open *cb);
 
 /* Set the callback to be invoked when a stream has been closed and
  * will be destroyed.  */
-void h2_session_set_stream_close_cb(h2_session *session, on_stream_close *cb);
+void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb);
 
 /* Get the h2_stream for the given stream idenrtifier. */
 struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);

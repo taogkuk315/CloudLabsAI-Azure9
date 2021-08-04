@@ -63,6 +63,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
             h2_task *task = h2_queue_pop(workers->tasks_scheduled);
             if (task) {
                 *ptask = task;
+                h2_task_set_running(task, 1);
                 status = APR_SUCCESS;
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                              "h2_worker(%d): start task(%ld-%d)",
@@ -111,8 +112,7 @@ static void task_done(h2_worker *worker, h2_task *task,
                      h2_task_get_session_id(task),
                      h2_task_get_stream_id(task));
         
-        
-        h2_task_destroy(task);
+        h2_task_set_running(task, 0);
         
         apr_thread_cond_signal(workers->task_done);
         apr_thread_mutex_unlock(workers->lock);
@@ -265,31 +265,24 @@ static void *match_stream_id(void *ctx, int i, void *entry)
     return NULL;
 }
 
-apr_status_t h2_workers_unschedule(h2_workers *workers,
-                                   long session_id, int stream_id)
+apr_status_t h2_workers_join(h2_workers *workers, h2_task *task)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
-                     "h2_workers: join stream(%ld-%d) started",
-                     session_id, stream_id);
-        stream_id_t id = { session_id, stream_id };
-        /* get the task, if it is still awaiting execution */
-        h2_task *task = h2_queue_pop_find(workers->tasks_scheduled,
-                                          match_stream_id, &id);
-        if (task) {
-            h2_task_abort(task);
-            h2_task_destroy(task);
+                     "h2_workers: join task(%ld-%d) started",
+                     h2_task_get_session_id(task),
+                     h2_task_get_stream_id(task));
+        
+        if (!h2_queue_remove(workers->tasks_scheduled, task)) {
+            /* not on scheduled list, wait until not running */
+            while (h2_task_is_running(task)) {
+                apr_thread_cond_wait(workers->task_done, workers->lock);
+            }
         }
         apr_thread_mutex_unlock(workers->lock);
     }
     return status;
-}
-
-static int abort_task(void *ctx, int id, void *entry, int index)
-{
-    h2_task_abort((h2_task*)entry);
-    return 1;
 }
 
 static void *match_session_id(void *ctx, int id, void *entry)
@@ -315,7 +308,6 @@ apr_status_t h2_workers_shutdown(h2_workers *workers, long session_id)
                 break;
             }
             h2_task_abort(task);
-            h2_task_destroy(task);
         }
         apr_thread_mutex_unlock(workers->lock);
         ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,

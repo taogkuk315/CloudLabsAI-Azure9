@@ -88,9 +88,9 @@ static apr_status_t stream_end_headers(h2_session *session,
             status = h2_stream_write_eos(stream);
         }
         
-        if (status == APR_SUCCESS && session->on_new_task_cb) {
+        if (status == APR_SUCCESS && session->after_stream_opened_cb) {
             h2_task *task = h2_stream_create_task(stream);
-            session->on_new_task_cb(session, stream, task);
+            session->after_stream_opened_cb(session, stream, task);
         }
     }
     return status;
@@ -216,6 +216,18 @@ static int on_frame_not_send_cb(nghttp2_session *ngh2,
     return 0;
 }
 
+static void close_stream(h2_session *session, h2_stream *stream)
+{
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                  "h2_stream(%ld-%d): closing",
+                  session->id, (int)stream->id);
+    if (session->before_stream_close_cb) {
+        session->before_stream_close_cb(session, stream, stream->task);
+    }
+    h2_stream_set_remove(session->streams, stream);
+    h2_stream_destroy(stream);
+}
+
 static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
                               uint32_t error_code, void *userp)
 {
@@ -225,14 +237,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
     }
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (stream) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                      "h2_stream(%ld-%d): closing",
-                      session->id, (int)stream_id);
-        if (session->on_stream_close_cb) {
-            session->on_stream_close_cb(session, stream);
-        }
-        h2_stream_set_remove(session->streams, stream);
-        h2_stream_destroy(stream);
+        close_stream(session, stream);
     }
     
     if (error_code) {
@@ -440,9 +445,16 @@ h2_session *h2_session_rcreate(request_rec *r, h2_config *config)
     return h2_session_create_int(r->connection, r, config);
 }
 
+static int stream_close_iter(void *ctx, h2_stream *stream) {
+    close_stream((h2_session *)ctx, stream);
+    return 1;
+}
+
 void h2_session_destroy(h2_session *session)
 {
     if (session->streams) {
+        /* destroy all sessions, join all existing tasks */
+        h2_stream_set_iter(session->streams, stream_close_iter, session);
         h2_stream_set_destroy(session->streams);
         session->streams = NULL;
     }
@@ -705,14 +717,14 @@ apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
     return h2_io_read(&session->io, block, session_receive, session);
 }
 
-void h2_session_set_new_task_cb(h2_session *session, on_new_task *callback)
+void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb)
 {
-    session->on_new_task_cb = callback;
+    session->before_stream_close_cb = cb;
 }
 
-void h2_session_set_stream_close_cb(h2_session *session, on_stream_close *cb)
+void h2_session_set_stream_open_cb(h2_session *session, after_stream_open *cb)
 {
-    session->on_stream_close_cb = cb;
+    session->after_stream_opened_cb = cb;
 }
 
 static h2_stream *match_any(void *ctx, h2_stream *stream) {

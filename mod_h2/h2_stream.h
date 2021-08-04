@@ -65,6 +65,8 @@ struct h2_stream {
     
     apr_pool_t *pool;           /* the memory pool for this stream */
     h2_request *request;        /* the request made in this stream */
+    
+    struct h2_task *task;       /* task created for this stream */
 };
 
 
