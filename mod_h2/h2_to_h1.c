@@ -82,12 +82,12 @@ apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
 {
     apr_status_t status = APR_SUCCESS;
     if (!method) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_connection(m),
+        ap_log_perror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_pool(m),
                       "h2_to_h1: header start but :method missing");
         return APR_EGENERAL;
     }
     if (!path) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_connection(m),
+        ap_log_perror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_pool(m),
                       "h2_to_h1: header start but :path missing");
         return APR_EGENERAL;
     }
@@ -101,9 +101,8 @@ apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
     size_t plen = strlen(path);
     size_t total = mlen + 1 + plen + HTTP_RLINE_SUFFIX_LEN;
     if (!h2_bucket_has_free(to_h1->data, total)) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENAMETOOLONG,
-                      h2_mplx_get_connection(m),
-                      "h2_to_h1: adding request line");
+        ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENAMETOOLONG,
+                      h2_mplx_get_pool(m), "h2_to_h1: adding request line");
         return APR_ENAMETOOLONG;
     }
     h2_bucket_append(to_h1->data, method, mlen);
@@ -149,8 +148,8 @@ apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1, struct h2_mplx *m)
             to_h1->flushed = 1;
         }
         else {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status,
-                          h2_mplx_get_connection(m),
+            ap_log_perror(APLOG_MARK, APLOG_ERR, status,
+                          h2_mplx_get_pool(m),
                           "h2_request(%d): pushing request data",
                           to_h1->stream_id);
         }

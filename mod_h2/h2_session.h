@@ -73,6 +73,7 @@ struct h2_session {
                                      * of 'h2c', NULL otherwise */
     int aborted;                    /* this session is being aborted */
     
+    apr_pool_t *pool;               /* pool to use in session handling */
     h2_io_ctx io;                   /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_stream_set *streams;  /* streams handled by this session */

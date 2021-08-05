@@ -55,8 +55,8 @@ static int stream_open(h2_session *session, int stream_id)
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
-    h2_stream * stream = h2_stream_create(stream_id,
-                                          session->c, session->mplx);
+    h2_stream * stream = h2_stream_create(stream_id, session->pool,
+                                          session->mplx);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
                       "h2_session: stream(%ld-%d): unable to create",
@@ -89,7 +89,7 @@ static apr_status_t stream_end_headers(h2_session *session,
         }
         
         if (status == APR_SUCCESS && session->after_stream_opened_cb) {
-            h2_task *task = h2_stream_create_task(stream);
+            h2_task *task = h2_stream_create_task(stream, session->c);
             session->after_stream_opened_cb(session, stream, task);
         }
     }
@@ -380,18 +380,24 @@ static h2_session *h2_session_create_int(conn_rec *c,
 {
     nghttp2_session_callbacks *callbacks = NULL;
     nghttp2_option *options = NULL;
-    
-    h2_session *session = apr_pcalloc(c->pool, sizeof(h2_session));
+    apr_pool_t *pool = NULL;
+    apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
+    if (status != APR_SUCCESS) {
+        return NULL;
+    }
+
+    h2_session *session = apr_pcalloc(pool, sizeof(h2_session));
     if (session) {
         session->id = c->id;
+        session->pool = pool;
         session->c = c;
         session->r = r;
         session->ngh2 = NULL;
         session->loglvl = APLOGcdebug(c)? APLOG_DEBUG : APLOG_NOTICE;
         
-        session->streams = h2_stream_set_create(c->pool);
+        session->streams = h2_stream_set_create(session->pool);
         
-        session->mplx = h2_mplx_create(c);
+        session->mplx = h2_mplx_create(c->id, session->pool, h2_config_get(c));
         
         h2_io_init(&session->io, c);
         
@@ -464,10 +470,13 @@ void h2_session_destroy(h2_session *session)
     }
     if (session->mplx) {
         h2_mplx_abort(session->mplx);
-        h2_mplx_release(session->mplx);
+        h2_mplx_destroy(session->mplx);
         session->mplx = NULL;
     }
     h2_io_destroy(&session->io);
+    if (session->pool) {
+        apr_pool_destroy(session->pool);
+    }
 }
 
 apr_status_t h2_session_goaway(h2_session *session, apr_status_t reason)

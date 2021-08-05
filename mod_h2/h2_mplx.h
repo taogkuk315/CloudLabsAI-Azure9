@@ -48,28 +48,24 @@ struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 struct h2_bucket;
 struct h2_bucket_queue;
+struct h2_config;
 struct h2_response;
 
 typedef struct h2_mplx h2_mplx;
 
-/* Create the multiplexer for the given HTTP2 connection.
+/* Create the multiplexer for the given HTTP2 session.
  * The created multiplexer already has a reference count of 1.
  */
-h2_mplx *h2_mplx_create(conn_rec *c);
+h2_mplx *h2_mplx_create(long id, apr_pool_t *master, struct h2_config *conf);
 
 /* Destroy and cleanup the multiplexer. Automatically called when
  * the reference count to this multiplexer goes to 0.
  */
 void h2_mplx_destroy(h2_mplx *mplx);
 
-/* Increases the reference count of the given multiplexer.
+/* Get the memory pool used by the multiplexer.
  */
-apr_status_t h2_mplx_reference(h2_mplx *mplx);
-
-/* Decreases the reference count. Calls h2_mplx_destroy when
- * this reaches 0.
- */
-apr_status_t h2_mplx_release(h2_mplx *mplx);
+apr_pool_t *h2_mplx_get_pool(h2_mplx *mplx);
 
 /* Abort the multiplexer. It will answer all invocation with
  * APR_ECONNABORTED afterwards.
@@ -78,9 +74,6 @@ void h2_mplx_abort(h2_mplx *mplx);
 
 /* Get the id of the multiplexer */
 long h2_mplx_get_id(h2_mplx *mplx);
-
-/* Get the connection this multiplexer belongs to. */
-conn_rec *h2_mplx_get_connection(h2_mplx *m);
 
 /* Read a h2_bucket for the given stream_id. Will return ARP_EAGAIN when
  * called with APR_NONBLOCK_READ and no data present. Will return APR_EOF

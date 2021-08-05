@@ -42,6 +42,9 @@ struct h2_task {
     apr_uint32_t running;
     
     h2_mplx *mplx;
+    conn_rec *master;
+    
+    int own_pool;
     apr_pool_t *pool;
     conn_rec *c;
     apr_socket_t *socket;
@@ -145,27 +148,35 @@ static apr_status_t h2_conn_create(h2_task *task, conn_rec *master)
     return APR_SUCCESS;
 }
 
+static apr_status_t setup_connection(h2_task *task, apr_pool_t *parent) {
+    apr_status_t status = APR_SUCCESS;
+    if (task->own_pool) {
+        status = apr_pool_create_ex(&task->pool, parent, NULL, NULL);
+    }
+    else {
+        task->pool = parent;
+    }
+    
+    if (status == APR_SUCCESS) {
+        status = h2_conn_create(task, task->master);
+        if (status == APR_SUCCESS) {
+            h2_ctx_create_for(task->c, task);
+        }
+    }
+    return status;
+}
+
 h2_task *h2_task_create(long session_id,
                         int stream_id,
                         conn_rec *master,
-                        apr_pool_t *pool,
+                        apr_pool_t *stream_pool,
                         h2_bucket *input,
                         int input_eos,
                         h2_mplx *mplx)
 {
-    apr_status_t status = APR_SUCCESS;
-    // TODO: share pool with h2_stream, join task before destroying stream
-    if (1 || pool == NULL) {
-        apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
-        if (status != APR_SUCCESS) {
-            h2_mplx_out_reset(mplx, stream_id, status);
-            return NULL;
-        }
-    }
-    
-    h2_task *task = apr_pcalloc(pool, sizeof(h2_task));
+    h2_task *task = apr_pcalloc(stream_pool, sizeof(h2_task));
     if (task == NULL) {
-        ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, pool,
+        ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream_pool,
                       "h2_task(%ld-%d): unable to create stream task",
                       session_id, stream_id);
         h2_mplx_out_reset(mplx, task->stream_id, APR_ENOMEM);
@@ -174,29 +185,27 @@ h2_task *h2_task_create(long session_id,
     
     task->stream_id = stream_id;
     task->session_id = session_id;
-    task->pool = pool;
-    h2_mplx_reference(mplx);
     task->mplx = mplx;
+    task->master = master;
     
-    status = h2_conn_create(task, master);
-    if (status != APR_SUCCESS) {
-        ap_log_perror(APLOG_MARK, APLOG_ERR, status, pool,
-                      "h2_task(%ld-%d): unable to create stream task",
-                      session_id, stream_id);
-        h2_mplx_out_reset(mplx, stream_id, status);
-        return NULL;
-    }
-    
-    task->input = h2_task_input_create(task->c->pool,
+    task->input = h2_task_input_create(stream_pool,
                                        session_id, stream_id,
                                        input, input_eos, mplx);
-    task->output = h2_task_output_create(task->c->pool,
-                                         session_id, stream_id, mplx);
-    
-    h2_ctx_create_for(task->c, task);
-    
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_task(%ld-%d): created", task->session_id, task->stream_id);
+    task->output = h2_task_output_create(stream_pool,
+                                         task->session_id, task->stream_id,
+                                         task->mplx);
+    task->own_pool = 1;
+    apr_status_t status = setup_connection(task, stream_pool);
+    if (status != APR_SUCCESS) {
+        ap_log_perror(APLOG_MARK, APLOG_ERR, status, stream_pool,
+                      "h2_task(%ld-%d): create task connection",
+                      session_id, stream_id);
+        h2_mplx_out_reset(mplx, task->stream_id, APR_ENOMEM);
+        return NULL;
+    }
+
+    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
+                  "h2_task(%ld-%d): created", session_id, stream_id);
     return task;
 }
 
@@ -215,10 +224,9 @@ apr_status_t h2_task_destroy(h2_task *task)
         task->output = NULL;
     }
     if (task->mplx) {
-        h2_mplx_release(task->mplx);
         task->mplx = NULL;
     }
-    if (task->pool) {
+    if (task->pool && task->own_pool) {
         apr_pool_destroy(task->pool);
     }
     return APR_SUCCESS;
@@ -226,18 +234,15 @@ apr_status_t h2_task_destroy(h2_task *task)
 
 apr_status_t h2_task_do(h2_task *task)
 {
-    assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_task(%ld-%d): do", task->session_id, task->stream_id);
-    apr_status_t status;
     
     /* Furthermore, other code might want to see the socket for
      * this connection. Allocate one without further function...
      */
-    
-    status = apr_socket_create(&task->socket,
-                               APR_INET, SOCK_STREAM,
-                               APR_PROTO_TCP, task->pool);
+    apr_status_t status = apr_socket_create(&task->socket,
+                                            APR_INET, SOCK_STREAM,
+                                            APR_PROTO_TCP, task->pool);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, task->c,
                       "h2_stream_process, unable to alloc socket");

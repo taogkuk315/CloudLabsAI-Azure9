@@ -82,7 +82,6 @@ h2_task_input *h2_task_input_create(apr_pool_t *pool,
         input->m = m;
         input->cur = data;
         input->is_last = is_last;
-        h2_mplx_reference(m);
         input->session_id = session_id;
         input->stream_id = stream_id;
     }
@@ -94,10 +93,6 @@ void h2_task_input_destroy(h2_task_input *input)
     if (input->cur) {
         h2_bucket_destroy(input->cur);
         input->cur = NULL;
-    }
-    if (input->m) {
-        h2_mplx_release(input->m);
-        input->m = NULL;
     }
 }
 

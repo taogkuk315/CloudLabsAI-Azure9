@@ -39,7 +39,6 @@ typedef enum {
 struct h2_task_output {
     long session_id;
     int stream_id;
-    apr_pool_t *pool;
     struct h2_mplx *m;
     h2_task_output_state_t state;
     struct h2_bucket *cur;
@@ -73,9 +72,7 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
     if (output) {
         output->stream_id = stream_id;
         output->session_id = session_id;
-        output->pool = pool;
         output->m = m;
-        h2_mplx_reference(m);
         output->state = H2_TASK_OUT_INIT;
         output->from_h1 = h2_from_h1_create(stream_id, pool);
         if (!output->from_h1) {
@@ -101,10 +98,6 @@ void h2_task_output_destroy(h2_task_output *output)
     if (output->cur) {
         h2_bucket_destroy(output->cur);
         output->cur = NULL;
-    }
-    if (output->m) {
-        h2_mplx_release(output->m);
-        output->m = NULL;
     }
 }
 
@@ -267,9 +260,11 @@ static void converter_state_change(h2_from_h1 *resp,
             assert(output);
             if (output->state == H2_TASK_OUT_INIT) {
                 apr_status_t status =
-                h2_task_output_open(output, h2_from_h1_get_response(output->from_h1));
+                h2_task_output_open(output,
+                                    h2_from_h1_get_response(output->from_h1));
                 if (status != APR_SUCCESS) {
-                    ap_log_perror( APLOG_MARK, APLOG_ERR, status, output->pool,
+                    ap_log_perror( APLOG_MARK, APLOG_ERR, status,
+                                  h2_mplx_get_pool(output->m),
                                   "task_output(%ld-%d): starting response",
                                   output->session_id, output->stream_id);
                 }

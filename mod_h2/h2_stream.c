@@ -43,10 +43,10 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
     }
 }
 
-h2_stream *h2_stream_create(int id, conn_rec *master, struct h2_mplx *m)
+h2_stream *h2_stream_create(int id, apr_pool_t *master, struct h2_mplx *m)
 {
     apr_pool_t *spool = NULL;
-    apr_status_t status = apr_pool_create_ex(&spool, NULL, NULL, NULL);
+    apr_status_t status = apr_pool_create_ex(&spool, master, NULL, NULL);
     if (status != APR_SUCCESS) {
         return NULL;
     }
@@ -56,7 +56,6 @@ h2_stream *h2_stream_create(int id, conn_rec *master, struct h2_mplx *m)
         stream->id = id;
         stream->state = H2_STREAM_ST_IDLE;
         stream->pool = spool;
-        stream->master = master;
         stream->m = m;
         stream->request = h2_request_create(id, spool);
     }
@@ -65,7 +64,7 @@ h2_stream *h2_stream_create(int id, conn_rec *master, struct h2_mplx *m)
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->master,
+    ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, stream->pool,
                   "h2_stream(%ld-%d): destroy",
                   h2_mplx_get_id(stream->m), stream->id);
     h2_request_destroy(stream->request);
@@ -90,14 +89,13 @@ void h2_stream_abort(h2_stream *stream)
     stream->aborted = 1;
 }
 
-h2_task *h2_stream_create_task(h2_stream *stream)
+h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
 {
     int input_eos = 0;
     h2_bucket *data = h2_request_steal_first_data(stream->request, &input_eos);
     h2_request_flush(stream->request, stream->m);
     stream->task = h2_task_create(h2_mplx_get_id(stream->m),
-                                  stream->id, stream->master,
-                                  stream->pool,
+                                  stream->id, master, stream->pool,
                                   data, input_eos, stream->m);
     return stream->task;
 }
@@ -114,7 +112,7 @@ apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 
 apr_status_t h2_stream_write_eos(h2_stream *stream)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->master,
+    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream->pool,
                   "h2_stream(%ld-%d): closing input",
                   h2_mplx_get_id(stream->m), stream->id);
     apr_status_t status = APR_SUCCESS;
