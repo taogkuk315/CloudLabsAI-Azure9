@@ -37,8 +37,9 @@ static struct h2_workers *workers;
 static apr_status_t h2_session_process(h2_session *session);
 static void after_stream_opened_cb(h2_session *session,
                                 h2_stream *stream, h2_task *task);
-static void before_stream_close_cb(h2_session *session,
-                                h2_stream *stream, h2_task *task);
+static int before_stream_close_cb(h2_session *session,
+                                  h2_stream *stream, h2_task *task,
+                                  int wait);
 
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
@@ -227,11 +228,12 @@ static void after_stream_opened_cb(h2_session *session,
     }
 }
 
-static void before_stream_close_cb(h2_session *session,
-                                h2_stream *stream, h2_task *task)
+static int before_stream_close_cb(h2_session *session,
+                                h2_stream *stream, h2_task *task, int wait)
 {
     if (task) {
-        h2_workers_join(workers, task);
+        return h2_workers_join(workers, task, wait) == APR_SUCCESS;
     }
+    return 1;
 }
 

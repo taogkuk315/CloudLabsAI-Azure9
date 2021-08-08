@@ -35,7 +35,7 @@ void h2_workers_destroy(h2_workers *workers);
 
 apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task);
 
-apr_status_t h2_workers_join(h2_workers *workers, h2_task *task);
+apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait);
 
 apr_status_t h2_workers_shutdown(h2_workers *workers,
                                  long session_id);

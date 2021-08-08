@@ -265,10 +265,10 @@ static void *match_stream_id(void *ctx, int i, void *entry)
     return NULL;
 }
 
-apr_status_t h2_workers_join(h2_workers *workers, h2_task *task)
+apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
-    if (status == APR_SUCCESS) {
+    if (status == APR_SUCCESS && task) {
         ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                      "h2_workers: join task(%ld-%d) started",
                      h2_task_get_session_id(task),
@@ -276,8 +276,11 @@ apr_status_t h2_workers_join(h2_workers *workers, h2_task *task)
         
         if (!h2_queue_remove(workers->tasks_scheduled, task)) {
             /* not on scheduled list, wait until not running */
-            while (h2_task_is_running(task)) {
+            while (wait && h2_task_is_running(task)) {
                 apr_thread_cond_wait(workers->task_done, workers->lock);
+            }
+            if (h2_task_is_running(task)) {
+                status = APR_EAGAIN;
             }
         }
         apr_thread_mutex_unlock(workers->lock);
