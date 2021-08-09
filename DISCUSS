@@ -65,7 +65,7 @@ indicate that for small requests, like the famous gopher tile page
 50% - 70% of the original HTTP/1.1 + TLS values. These tests were done
 with h2load, a nghttp2 client working with multiple threads.
 
-The main causes for this performance penalty are not hard to find:
+The main causes for this performance penalty seem to be:
 - the mod_h2 architecture serializes HTTP2 headers into a HTTP/1.1 request
   and parses back a HTTP/1.1 response into headers and data for the HTTP2
   engine.
@@ -94,17 +94,12 @@ The main causes for this performance penalty are not hard to find:
   Since mpm_event is standard in most distros nowadays, it would be good to
   get that working.
 - MEMORY:
-  mod_h2 creates new pools for every stream and allocates h2_buckets from the
-  heap. Cleanup is done and memory use seems to be stable for long living
-  connections. The current implementation keeps h2_session and its h2_tasks
-  memory-wise independant. It therefore is possible to close a session and
-  free the main thread/connection without waiting for all tasks to actually
-  finish. All tasks get the proper APR_ECONNABORTED status for IO against
-  the h2_mplx afterwards, so all tasks should finish in short time after the
-  session has been closed.
-  The alternative is to establish a master-slave relationship between session
-  and tasks which would require closing sessions to wait for all tasks to
-  complete.
+  mod_h2 creates a new pool for every session, subpools for all streams and
+  sub-sub-pools for each task. Before destroying streams or the session, running
+  tasks are joined. That seems to work stable.
+  Using less pools keeps crashing, also the time/thread of pool creation seems
+  to play a role. Unless we understand this better, more optimization seems
+  difficult.
 - THREADS
   The own worker thread pool does not share resources with the mpm worker pools.
   Seems like a module in 2.4 is limited here. Maybe something to discuss in
