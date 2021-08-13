@@ -61,8 +61,10 @@ apr_status_t h2_task_do(h2_task *task);
 
 void h2_task_abort(h2_task *task);
 
-int h2_task_is_running(h2_task *task);
-void h2_task_set_running(h2_task *task, int running);
+int h2_task_has_started(h2_task *task);
+void h2_task_set_started(h2_task *task, int started);
+int h2_task_has_finished(h2_task *task);
+void h2_task_set_finished(h2_task *task, int finished);
 
 long h2_task_get_session_id(h2_task *task);
 int h2_task_get_stream_id(h2_task *task);

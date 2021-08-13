@@ -16,6 +16,9 @@
 #include <assert.h>
 #include <stddef.h>
 
+#define APR_POOL_DEBUG  7
+
+
 #include <httpd.h>
 #include <http_core.h>
 #include <http_connection.h>
@@ -36,6 +39,7 @@
 
 static void set_state(h2_stream *stream, h2_stream_state_t state)
 {
+    assert(stream);
     if (stream->state != state) {
         h2_stream_state_t oldstate = stream->state;
         stream->state = state;
@@ -63,6 +67,7 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master, struct h2_mplx *m)
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
+    assert(stream);
     ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, stream->pool,
                   "h2_stream(%ld-%d): destroy",
                   h2_mplx_get_id(stream->m), stream->id);
@@ -80,16 +85,19 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
 
 int h2_stream_get_id(h2_stream *stream)
 {
+    assert(stream);
     return stream->id;
 }
 
 void h2_stream_abort(h2_stream *stream)
 {
+    assert(stream);
     stream->aborted = 1;
 }
 
 h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
 {
+    assert(stream);
     int input_eos = 0;
     h2_bucket *data = h2_request_steal_first_data(stream->request, &input_eos);
     h2_request_flush(stream->request, stream->m);
@@ -101,16 +109,19 @@ h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
 
 apr_status_t h2_stream_write_eoh(h2_stream *stream)
 {
+    assert(stream);
     return h2_request_end_headers(stream->request, stream->m);
 }
 
 apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 {
+    assert(stream);
     return h2_request_rwrite(stream->request, r, stream->m, stream->pool);
 }
 
 apr_status_t h2_stream_write_eos(h2_stream *stream)
 {
+    assert(stream);
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream->pool,
                   "h2_stream(%ld-%d): closing input",
                   h2_mplx_get_id(stream->m), stream->id);
@@ -135,6 +146,7 @@ apr_status_t h2_stream_write_header(h2_stream *stream,
                                     const char *name, size_t nlen,
                                     const char *value, size_t vlen)
 {
+    assert(stream);
     return h2_request_write_header(stream->request, name, nlen,
                                    value, vlen, stream->m,
                                    stream->pool);
@@ -143,21 +155,25 @@ apr_status_t h2_stream_write_header(h2_stream *stream,
 apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len)
 {
+    assert(stream);
     return h2_request_write_data(stream->request, data, len, stream->m);
 }
 
 apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket)
 {
+    assert(stream);
     return h2_mplx_out_read(stream->m, stream->id, pbucket);
 }
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended)
 {
+    assert(stream);
     stream->suspended = !!suspended;
 }
 
 int h2_stream_is_suspended(h2_stream *stream)
 {
+    assert(stream);
     return stream->suspended;
 }
 

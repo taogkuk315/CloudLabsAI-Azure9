@@ -84,16 +84,14 @@ loadtest: \
 		$(INST_DIR)/.test-setup \
 		$(INST_DIR)/.curl-installed \
         $(GEN)/load-urls-1.txt
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 1
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 2
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 3
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 4
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 5
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 6
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 7
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 8
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 9
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 20000 -t 1 -c 10
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 1 -c 8
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 2 -c 8
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 3 -c 8
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 4 -c 8
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 5 -c 8
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 6 -c 8
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 7 -c 8
+	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 8 -c 8
 
 
 ################################################################################

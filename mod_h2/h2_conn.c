@@ -35,8 +35,9 @@ static struct h2_workers *workers;
 static apr_status_t h2_session_process(h2_session *session);
 static void after_stream_opened_cb(h2_session *session,
                                 h2_stream *stream, h2_task *task);
-static void before_stream_close_cb(h2_session *session,
-                                h2_stream *stream, h2_task *task);
+static apr_status_t before_stream_close_cb(h2_session *session,
+                                           h2_stream *stream, h2_task *task,
+                                           int wait);
 
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
@@ -133,19 +134,10 @@ apr_status_t h2_session_process(h2_session *session)
     }
     
     apr_interval_time_t wait_micros = 0;
-    static const int MAX_WAIT_MICROS = 100 * 1000; /* 100 ms */
+    static const int MAX_WAIT_MICROS = 200 * 1000; /* 100 ms */
     
-    apr_time_t last_dump = apr_time_now();
     while (!h2_session_is_done(session)) {
         int have_written = 0;
-        
-        if (apr_time_sec(apr_time_now()) - apr_time_sec(last_dump) > 5) {
-            if (workers) {
-                h2_workers_log_stats(workers);
-            }
-            h2_session_log_stats(session);
-            last_dump = apr_time_now();
-        }
         
         status = h2_session_write(session, wait_micros);
         if (status == APR_SUCCESS) {
@@ -206,9 +198,6 @@ apr_status_t h2_session_process(h2_session *session)
     ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
                   "h2_session(%ld): done", session->id);
     
-    if (workers) {
-        h2_workers_shutdown(workers, session->id);
-    }
     h2_session_destroy(session);
     
     return DONE;
@@ -225,11 +214,19 @@ static void after_stream_opened_cb(h2_session *session,
     }
 }
 
-static void before_stream_close_cb(h2_session *session,
-                                h2_stream *stream, h2_task *task)
+static apr_status_t before_stream_close_cb(h2_session *session,
+                                           h2_stream *stream, h2_task *task,
+                                           int wait)
 {
+    apr_status_t status = APR_SUCCESS;
     if (task) {
-        h2_workers_join(workers, task);
+        status = h2_workers_join(workers, task, wait);
+        if (status != APR_SUCCESS && status != APR_EAGAIN) {
+            ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
+                          "h2_session(%ld): error join task(%d)",
+                          session->id, h2_task_get_stream_id(task));
+        }
     }
+    return status;
 }
 

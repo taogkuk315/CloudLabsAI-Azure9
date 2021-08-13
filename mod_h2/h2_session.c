@@ -215,16 +215,20 @@ static int on_frame_not_send_cb(nghttp2_session *ngh2,
     return 0;
 }
 
-static void close_stream(h2_session *session, h2_stream *stream)
+static apr_status_t close_stream(h2_session *session, h2_stream *stream, int wait)
 {
+    apr_status_t status = APR_SUCCESS;
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                   "h2_stream(%ld-%d): closing",
                   session->id, (int)stream->id);
     if (session->before_stream_close_cb) {
-        session->before_stream_close_cb(session, stream, stream->task);
+        status = session->before_stream_close_cb(session, stream,
+                                                 stream->task, wait);
     }
-    h2_stream_set_remove(session->streams, stream);
-    h2_stream_destroy(stream);
+    if (status == APR_SUCCESS) {
+        h2_stream_destroy(stream);
+    }
+    return status;
 }
 
 static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
@@ -236,7 +240,11 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
     }
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (stream) {
-        close_stream(session, stream);
+        h2_stream_set_remove(session->streams, stream);
+        apr_status_t status = close_stream(session, stream, 0);
+        if (status == APR_EAGAIN) {
+            h2_stream_set_add(session->zombies, stream);
+        }
     }
     
     if (error_code) {
@@ -395,6 +403,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->loglvl = APLOGcdebug(c)? APLOG_DEBUG : APLOG_NOTICE;
         
         session->streams = h2_stream_set_create(session->pool);
+        session->zombies = h2_stream_set_create(session->pool);
         
         session->mplx = h2_mplx_create(c->id, session->pool, h2_config_get(c));
         
@@ -440,6 +449,27 @@ static h2_session *h2_session_create_int(conn_rec *c,
     return session;
 }
 
+static int stream_close_finished(void *ctx, h2_stream *stream) {
+    assert(ctx);
+    h2_session *session = (h2_session *)ctx;
+    h2_task *task = stream->task;
+    if (task && h2_task_has_finished(task)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+                      "h2_session(%ld): reaping zombie stream(%d)",
+                      session->id, stream->id);
+        h2_stream_set_remove(session->zombies, stream);
+        h2_stream_destroy(stream);
+    }
+    return 1;
+}
+
+static void reap_zombies(h2_session *session) {
+    if (session->zombies) {
+        /* remove all zombies, where the task has run */
+        h2_stream_set_iter(session->zombies, stream_close_finished, session);
+    }
+}
+
 h2_session *h2_session_create(conn_rec *c, h2_config *config)
 {
     return h2_session_create_int(c, NULL, config);
@@ -451,24 +481,37 @@ h2_session *h2_session_rcreate(request_rec *r, h2_config *config)
 }
 
 static int stream_close_iter(void *ctx, h2_stream *stream) {
-    close_stream((h2_session *)ctx, stream);
+    assert(ctx);
+    close_stream((h2_session *)ctx, stream, 1);
     return 1;
 }
 
 void h2_session_destroy(h2_session *session)
 {
+    assert(session);
     if (session->streams) {
+        ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_EGENERAL, session->c,
+                      "h2_session(%ld): destroy, %ld streams open",
+                      session->id, h2_stream_set_size(session->streams));
         /* destroy all sessions, join all existing tasks */
         h2_stream_set_iter(session->streams, stream_close_iter, session);
         h2_stream_set_destroy(session->streams);
         session->streams = NULL;
+    }
+    if (session->zombies) {
+        ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_EGENERAL, session->c,
+                      "h2_session(%ld): destroy, %ld zombie streams",
+                      session->id, h2_stream_set_size(session->zombies));
+        /* destroy all zombies, join all existing tasks */
+        h2_stream_set_iter(session->zombies, stream_close_iter, session);
+        h2_stream_set_destroy(session->zombies);
+        session->zombies = NULL;
     }
     if (session->ngh2) {
         nghttp2_session_del(session->ngh2);
         session->ngh2 = NULL;
     }
     if (session->mplx) {
-        h2_mplx_abort(session->mplx);
         h2_mplx_destroy(session->mplx);
         session->mplx = NULL;
     }
@@ -480,6 +523,7 @@ void h2_session_destroy(h2_session *session)
 
 apr_status_t h2_session_goaway(h2_session *session, apr_status_t reason)
 {
+    assert(session);
     apr_status_t status = APR_SUCCESS;
     if (session->aborted) {
         return APR_EINVAL;
@@ -506,6 +550,7 @@ apr_status_t h2_session_goaway(h2_session *session, apr_status_t reason)
 
 static apr_status_t h2_session_abort_int(h2_session *session, int reason)
 {
+    assert(session);
     if (!session->aborted) {
         session->aborted = 1;
         nghttp2_session_terminate_session(session->ngh2, reason);
@@ -516,6 +561,7 @@ static apr_status_t h2_session_abort_int(h2_session *session, int reason)
 
 apr_status_t h2_session_abort(h2_session *session, apr_status_t reason)
 {
+    assert(session);
     int err = NGHTTP2_ERR_FATAL;
     switch (reason) {
         case APR_ENOMEM:
@@ -531,6 +577,7 @@ apr_status_t h2_session_abort(h2_session *session, apr_status_t reason)
 
 apr_status_t h2_session_start(h2_session *session)
 {
+    assert(session);
     /* Start the conversation by submitting our SETTINGS frame */
     apr_status_t status = APR_SUCCESS;
     h2_config *config = h2_config_get(session->c);
@@ -612,6 +659,7 @@ apr_status_t h2_session_start(h2_session *session)
 
 static int h2_session_want_write(h2_session *session)
 {
+    assert(session);
     return nghttp2_session_want_write(session->ngh2);
 }
 
@@ -638,6 +686,7 @@ static h2_stream *resume_on_data(void *ctx, h2_stream *stream) {
 }
 
 static void h2_session_resume_streams_with_data(h2_session *session) {
+    assert(session);
     if (!h2_stream_set_is_empty(session->streams)
         && session->mplx && !session->aborted) {
         /* Resume all streams where we have data in the out queue and
@@ -648,6 +697,7 @@ static void h2_session_resume_streams_with_data(h2_session *session) {
 
 apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 {
+    assert(session);
     apr_status_t status = APR_SUCCESS;
     int have_written = 0;
     
@@ -683,11 +733,14 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         }
     }
     
+    reap_zombies(session);
+
     return status;
 }
 
 h2_stream *h2_session_get_stream(h2_session *session, int stream_id)
 {
+    assert(session);
     return h2_stream_set_get(session->streams, stream_id);
 }
 
@@ -699,6 +752,7 @@ static apr_status_t session_receive(const char *data, apr_size_t len,
                                     void *puser)
 {
     h2_session *session = (h2_session *)puser;
+    assert(session);
     if (len > 0) {
         ssize_t n = nghttp2_session_mem_recv(session->ngh2,
                                              (const uint8_t *)data, len);
@@ -722,16 +776,19 @@ static apr_status_t session_receive(const char *data, apr_size_t len,
 
 apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
 {
+    assert(session);
     return h2_io_read(&session->io, block, session_receive, session);
 }
 
 void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb)
 {
+    assert(session);
     session->before_stream_close_cb = cb;
 }
 
 void h2_session_set_stream_open_cb(h2_session *session, after_stream_open *cb)
 {
+    assert(session);
     session->after_stream_opened_cb = cb;
 }
 
@@ -741,6 +798,7 @@ static h2_stream *match_any(void *ctx, h2_stream *stream) {
 
 h2_response *h2_session_pop_response(h2_session *session)
 {
+    assert(session);
     return h2_mplx_pop_response(session->mplx);
 }
 
@@ -834,6 +892,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
 apr_status_t h2_session_handle_response(h2_session *session,
                                         h2_stream *stream, h2_response *head)
 {
+    assert(session);
     apr_status_t status = APR_SUCCESS;
     int rv = 0;
     if (head->http_status) {
@@ -866,6 +925,7 @@ apr_status_t h2_session_handle_response(h2_session *session,
 
 int h2_session_is_done(h2_session *session)
 {
+    assert(session);
     return (session->aborted
             || !session->ngh2
             || (!nghttp2_session_want_read(session->ngh2)
@@ -875,6 +935,7 @@ int h2_session_is_done(h2_session *session)
 static int log_stream(void *ctx, h2_stream *stream)
 {
     h2_session *session = (h2_session *)ctx;
+    assert(session);
     ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
                   "h2_stream(%ld-%d): in set, suspended=%d, aborted=%d, "
                   "has_data=%d",
@@ -885,6 +946,7 @@ static int log_stream(void *ctx, h2_stream *stream)
 
 void h2_session_log_stats(h2_session *session)
 {
+    assert(session);
     ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
                   "h2_session(%ld): %ld open streams",
                   session->id, h2_stream_set_size(session->streams));

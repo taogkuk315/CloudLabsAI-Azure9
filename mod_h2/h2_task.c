@@ -38,7 +38,8 @@ struct h2_task {
     long session_id;
     int stream_id;
     int aborted;
-    apr_uint32_t running;
+    apr_uint32_t has_started;
+    apr_uint32_t has_finished;
     
     h2_mplx *mplx;
     conn_rec *master;
@@ -93,6 +94,7 @@ void h2_task_register_hooks(void)
 
 int h2_task_pre_conn(h2_task *task, conn_rec *c)
 {
+    assert(task);
     /* Add our own, network level in- and output filters.
      * These will take input from the h2_session->request_data
      * bucket queue and place the output into the
@@ -116,6 +118,7 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
 
 static apr_status_t h2_conn_create(h2_task *task, conn_rec *master)
 {
+    assert(task);
     /* Setup a apache connection record for this stream.
      * General idea is borrowed from mod_spdy::slave_connection.cc,
      * partly replaced with some more modern calls to ap infrastructure.
@@ -148,9 +151,10 @@ static apr_status_t h2_conn_create(h2_task *task, conn_rec *master)
 }
 
 static apr_status_t setup_connection(h2_task *task, apr_pool_t *parent) {
+    assert(task);
     apr_status_t status = APR_SUCCESS;
     if (task->own_pool) {
-        status = apr_pool_create_ex(&task->pool, parent, NULL, NULL);
+        status = apr_pool_create_ex(&task->pool, NULL, NULL, NULL);
     }
     else {
         task->pool = parent;
@@ -233,6 +237,7 @@ apr_status_t h2_task_destroy(h2_task *task)
 
 apr_status_t h2_task_do(h2_task *task)
 {
+    assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_task(%ld-%d): do", task->session_id, task->stream_id);
     
@@ -281,23 +286,40 @@ void h2_task_abort(h2_task *task)
 
 long h2_task_get_session_id(h2_task *task)
 {
+    assert(task);
     return task->session_id;
 }
 
 int h2_task_get_stream_id(h2_task *task)
 {
+    assert(task);
     return task->stream_id;
 }
 
-int h2_task_is_running(h2_task *task)
+int h2_task_has_started(h2_task *task)
 {
-    return apr_atomic_read32(&task->running);
+    assert(task);
+    return apr_atomic_read32(&task->has_started);
 }
 
-void h2_task_set_running(h2_task *task, int running)
+void h2_task_set_started(h2_task *task, int started)
 {
-    apr_atomic_set32(&task->running, running);
+    assert(task);
+    apr_atomic_set32(&task->has_started, started);
 }
+
+int h2_task_has_finished(h2_task *task)
+{
+    assert(task);
+    return apr_atomic_read32(&task->has_finished);
+}
+
+void h2_task_set_finished(h2_task *task, int finished)
+{
+    assert(task);
+    apr_atomic_set32(&task->has_finished, finished);
+}
+
 
 
 
