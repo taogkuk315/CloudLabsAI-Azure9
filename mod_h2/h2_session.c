@@ -215,25 +215,15 @@ static int on_frame_not_send_cb(nghttp2_session *ngh2,
     return 0;
 }
 
-static void close_stream(h2_session *session, h2_stream *stream, int wait)
+static void close_stream(h2_session *session, h2_stream *stream)
 {
-    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, session->pool,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                   "h2_stream(%ld-%d): closing",
                   session->id, (int)stream->id);
-    if (session->streams) {
-        h2_stream_set_remove(session->streams, stream);
-    }
-    h2_stream_set_remove(session->zombies, stream);
     if (session->before_stream_close_cb) {
-        /* If the callback says it's not time yet, we add the stream
-         * to our zombie collection and destroy it later.
-         */
-        if (!session->before_stream_close_cb(session, stream,
-                                             stream->task, wait)) {
-            h2_stream_set_add(session->zombies, stream);
-            return;
-        }
+        session->before_stream_close_cb(session, stream, stream->task);
     }
+    h2_stream_set_remove(session->streams, stream);
     h2_stream_destroy(stream);
 }
 
@@ -246,7 +236,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
     }
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (stream) {
-        close_stream(session, stream, 0);
+        close_stream(session, stream);
     }
     
     if (error_code) {
@@ -405,7 +395,6 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->loglvl = APLOGcdebug(c)? APLOG_DEBUG : APLOG_NOTICE;
         
         session->streams = h2_stream_set_create(session->pool);
-        session->zombies = h2_stream_set_create(session->pool);
         
         session->mplx = h2_mplx_create(c->id, session->pool, h2_config_get(c));
         
@@ -461,36 +450,18 @@ h2_session *h2_session_rcreate(request_rec *r, h2_config *config)
     return h2_session_create_int(r->connection, r, config);
 }
 
-static int stream_close_zombie_iter(void *ctx, h2_stream *stream) {
-    if (stream && stream->task && !h2_task_is_running(stream->task)) {
-        close_stream((h2_session *)ctx, stream, 0);
-    }
-    return 1;
-}
-
-static void reap_zombies(h2_session *session)
-{
-    h2_stream_set_iter(session->zombies, stream_close_zombie_iter, session);
-}
-
-static int stream_close_wait_iter(void *ctx, h2_stream *stream) {
-    close_stream((h2_session *)ctx, stream, 1);
+static int stream_close_iter(void *ctx, h2_stream *stream) {
+    close_stream((h2_session *)ctx, stream);
     return 1;
 }
 
 void h2_session_destroy(h2_session *session)
 {
     if (session->streams) {
-        /* destroy all active sessions, join all existing tasks */
-        h2_stream_set_iter(session->streams, stream_close_wait_iter, session);
+        /* destroy all sessions, join all existing tasks */
+        h2_stream_set_iter(session->streams, stream_close_iter, session);
         h2_stream_set_destroy(session->streams);
         session->streams = NULL;
-    }
-    if (session->zombies) {
-        /* destroy all sessions, join all existing tasks */
-        h2_stream_set_iter(session->zombies, stream_close_wait_iter, session);
-        h2_stream_set_destroy(session->zombies);
-        session->zombies = NULL;
     }
     if (session->ngh2) {
         nghttp2_session_del(session->ngh2);
@@ -711,10 +682,6 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
             }
         }
     }
-    
-    /* See, if there are any stream zombies which are ready to be destroyed.
-     */
-    reap_zombies(session);
     
     return status;
 }

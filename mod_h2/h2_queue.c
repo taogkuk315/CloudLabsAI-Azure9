@@ -276,6 +276,16 @@ void h2_queue_remove_all(h2_queue *q)
     }
 }
 
+void h2_queue_remove_id(h2_queue *q, int id)
+{
+    void *entry;
+    while ((entry = h2_queue_pop_find(q, match_id, &id)) != NULL) {
+        if (q->free_fn) {
+            q->free_fn(entry);
+        }
+    }
+}
+
 int h2_queue_is_aborted(h2_queue *q)
 {
     assert(q);

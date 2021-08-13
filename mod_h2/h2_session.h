@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+
 #ifndef __mod_h2__h2_session__
 #define __mod_h2__h2_session__
 
@@ -58,14 +59,10 @@ typedef void after_stream_open(h2_session *session,
 /* Callback before a stream is closed and the task gets destroyed. The callback
  * should clean any reference it made to the stream/task, e.g. remove it from
  * the schedule queue or wait for a running task to complete. 
- * If wait != 0, the callback may block until all references are purged
- * On successful removal of references, the callback should return != 0. If
- * the callback returns 0, closing/destroying of the stream is delayed and
- * the callback will be invoked again at some future time.
  */
-typedef int before_stream_close(h2_session *session,
-                                struct h2_stream *stream,
-                                struct h2_task *task, int wait);
+typedef void before_stream_close(h2_session *session,
+                                 struct h2_stream *stream,
+                                 struct h2_task *task);
 
 struct h2_session {
     long id;                        /* identifier of this session, unique
@@ -79,7 +76,6 @@ struct h2_session {
     h2_io_ctx io;                   /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_stream_set *streams;  /* streams handled by this session */
-    struct h2_stream_set *zombies;  /* streams that are done */
     
     after_stream_open *after_stream_opened_cb; /* stream task can start */
     before_stream_close *before_stream_close_cb; /* stream will close */

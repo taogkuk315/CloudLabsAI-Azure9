@@ -43,12 +43,10 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task);
 
 /* If the task is scheduled, but not been started yet, will remove it from 
  * the schedule and return APR_SUCCESS.
- * If the task is running and wait != 0, will wait for the task to 
+ * If the task is running , will wait for the task to
  * complete. Returns APR_SUCCESS when done.
- * If the task is running and wait == 0, will return immediately 
- * with APR_EAGAIN.
  */
-apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait);
+apr_status_t h2_workers_join(h2_workers *workers, h2_task *task);
 
 /* Shutdown all activities connection to the session.
  */
