@@ -15,6 +15,8 @@
 
 #include <assert.h>
 
+#include <ap_mpm.h>
+
 #include <httpd.h>
 #include <http_core.h>
 #include <http_config.h>
@@ -46,10 +48,26 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     int minw = h2_config_geti(config, H2_CONF_MIN_WORKERS);
     int maxw = h2_config_geti(config, H2_CONF_MAX_WORKERS);
     
-    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
+    int max_threads_per_child = 0;
+    ap_mpm_query(AP_MPMQ_MAX_THREADS, &max_threads_per_child);
+    int threads_limit = 0;
+    ap_mpm_query(AP_MPMQ_HARD_LIMIT_THREADS, &threads_limit);
+    
+    ap_log_error(APLOG_MARK, APLOG_INFO, 0, s,
                  "h2_conn: child init with conf[%s]: "
-                 "min_workers=%d, max_workers=%d",
-                 config->name, config->min_workers, config->max_workers);
+                 "min_workers=%d, max_workers=%d,"
+                 "mpm-threads=%d, mpm-threads-limit=%d",
+                 config->name, config->min_workers, config->max_workers,
+                 max_threads_per_child, threads_limit);
+    if (minw <= 0) {
+        minw = max_threads_per_child / 2;
+    }
+    if (maxw <= 0) {
+        maxw = threads_limit / 2;
+        if (maxw < minw) {
+            maxw = minw;
+        }
+    }
     workers = h2_workers_create(s, pool, minw, maxw);
     return status;
 }
