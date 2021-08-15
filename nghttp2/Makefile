@@ -19,7 +19,7 @@ NGHTTP2_TAR     = $(NGHTTP2_DIR).tar.gz
 NGHTTP2_URL     = https://github.com/tatsuhiro-t/nghttp2/releases/download/v$(NGHTTP2_VERSION)/$(NGHTTP2_TAR)
 
 NGHTTP2_CONF_ENV=
-NGHTTP2_CONF    = --prefix=$(BLD_PREFIX) --enable-apps
+NGHTTP2_CONF    = --prefix=$(BLD_PREFIX)
 
 ZLIB_VERSION    = 1.2.8
 ZLIB_DIR        = zlib-$(ZLIB_VERSION)

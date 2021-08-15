@@ -188,6 +188,7 @@ static int on_frame_send_cb(nghttp2_session *ngh2,
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
+    /*
     apr_status_t status = h2_io_flush(&session->io);
     
     if (session->loglvl >= APLOG_DEBUG) {
@@ -196,6 +197,7 @@ static int on_frame_send_cb(nghttp2_session *ngh2,
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, session->c,
                       "h2_session: callback on_frame_send %s", buffer);
     }
+     */
     return 0;
 }
 
@@ -766,6 +768,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
                 status = APR_EGENERAL;
             }
         }
+        status = h2_io_flush(&session->io);
     }
     
     reap_zombies(session);
