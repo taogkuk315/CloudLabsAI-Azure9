@@ -409,7 +409,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
     nghttp2_session_callbacks *callbacks = NULL;
     nghttp2_option *options = NULL;
     apr_pool_t *pool = NULL;
-    apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
+    apr_status_t status = apr_pool_create_ex(&pool, c->pool, NULL, NULL);
     if (status != APR_SUCCESS) {
         return NULL;
     }
@@ -446,7 +446,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
             return NULL;
         }
 
-        /* With a request present, we are in 'h2c' mode and do not
+        /* With a request present, we are in 'h2c' mode and 
          * expect a preface from the client. */
         nghttp2_option_set_recv_client_preface(options, 1);
         

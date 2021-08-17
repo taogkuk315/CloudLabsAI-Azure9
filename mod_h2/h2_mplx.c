@@ -73,7 +73,7 @@ h2_mplx *h2_mplx_create(long id, apr_pool_t *master, h2_config *conf)
 {
     assert(conf);
     apr_pool_t *pool = NULL;
-    apr_status_t status = apr_pool_create_ex(&pool, NULL, NULL, NULL);
+    apr_status_t status = apr_pool_create_ex(&pool, master, NULL, NULL);
     if (status != APR_SUCCESS) {
         return NULL;
     }
