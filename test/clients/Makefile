@@ -19,8 +19,8 @@ CURL_TAR     = $(CURL_DIR).tar.gz
 CURL_URL     = http://curl.haxx.se/download/$(CURL_TAR)
 
 GEN          = gen
-INST_DIR     = ../gen/install
-BLD_PREFIX   = $(shell dirname $$PWD)/gen/install
+INST_DIR     = ../../gen/install
+BLD_PREFIX   = $(shell dirname $(shell dirname $$PWD))/gen/install
 
 OS           = $(shell uname -s)
 

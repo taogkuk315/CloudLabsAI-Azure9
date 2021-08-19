@@ -17,7 +17,7 @@ Runtime Dependencies
 - Apache httpd 2.4
   - for HTTP2 over TLS ("h2" variant) a patched mod_ssl is needed,
   see httpd/README, and the installed OpenSSL needs to be at least 1.0.1
-- libnghttp2 (https://nghttp2.org), at least version 0.7.3
+- libnghttp2 (https://nghttp2.org), at least version 0.7.5
 
 
 Build Dependencies
@@ -28,7 +28,7 @@ plus the nghttp2 include files.
 if all this is installed on your system, just
 
   checkout> cd mod_h2
-  checkout/mod_h2> make install
+  checkout/mod_h2> make
 
 
 
@@ -50,15 +50,9 @@ listed in the specific OS descriptions below:
 
 Ubuntu
 ------
-Install the prerequisite software:
-  - pkg-config
-  - libpcre3-dev
-  - libev-dev
-  - openssl
+Install the prerequisite software. On a 14.04 LTS server, that should be:
 
-  > sudo apt-get install libpcre3-dev
-
-...
+  > sudo apt-get install git gcc g++ libpcre3-dev libcunit1-dev libev-dev libjansson-dev libjemalloc-dev cython make binutils autoconf automake autotools-dev libtool pkg-config zlib1g-dev libssl-dev libxml2-dev libevent-dev python3.4-dev libevent-openssl-2.0-5
 
 
 OS X

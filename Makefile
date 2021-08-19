@@ -23,17 +23,18 @@ BLD_PREFIX   = $(PWD)/gen/install
 
 OS           = $(shell uname -s)
 
-SUB_DIRS     = nghttp2 httpd clients test
+SUB_DIRS     = nghttp2 httpd test mod_h2
 
 CURL         = $(INST_DIR)/bin/curl
 
 
-.PHONY: all test clients httpd nghttp2 start stop clean distclean mod_h2
+.PHONY: all test httpd nghttp2 start stop clean distclean mod_h2
 
-all: clients httpd mod_h2
+all: httpd mod_h2
 
 clean:
 	@rm -rf $(GEN)
+	@make -C test clean
 
 distclean:
 	@rm -rf $(GEN)
@@ -45,32 +46,23 @@ start: $(INST_DIR)/.test-setup
 stop:
 	@$(INST_DIR)/bin/apachectl stop
 
-test: nghttp2 \
-		$(INST_DIR)/.httpd-installed \
-        mod_h2 \
-		$(INST_DIR)/.curl-installed
+test: httpd mod_h2
 	make -C test test
 
-loadtest: nghttp2 \
-		$(INST_DIR)/.httpd-installed \
-        mod_h2 \
-		$(INST_DIR)/.curl-installed
+loadtest: httpd mod_h2
 	make -C test loadtest
 
 nghttp2: httpd
 	make -C nghttp2
 
-clients: nghttp2
-	make -C clients
-
 httpd:
 	make -C httpd
 
 $(INST_DIR)/.mod_h2-installed: \
-        $(INST_DIR)/.httpd-installed \
+        mod_h2/Makefile \
         $(wildcard mod_h2/*.c) \
         $(wildcard mod_h2/*.h)
-	make -C mod_h2 install APXS=../$(INST_DIR)/bin/apxs
+	make -C mod_h2 install
 	@touch $(INST_DIR)/.mod_h2-installed
 
 mod_h2: \
@@ -78,18 +70,19 @@ mod_h2: \
 
 
 ################################################################################
-# Install the local httpd for our tests
+# auto-thingies
 #
-$(INST_DIR)/.httpd-installed:
-		$(INST_DIR)/.nghttp2-installed
-	make -C httpd install
+mod_h2/Makefile: \
+		$(INST_DIR)/.httpd-installed
+	cd mod_h2 && autoreconf -i
+	cd mod_h2 && ./configure --with-apxs=../$(INST_DIR)/bin/apxs
 
 ################################################################################
-# Install the local curl
+# Install the local httpd for our tests
 #
-$(INST_DIR)/.curl-installed:
+$(INST_DIR)/.httpd-installed: \
 		$(INST_DIR)/.nghttp2-installed
-	make -C clients install
+	make -C httpd install
 
 ################################################################################
 # Install the local nghttp2

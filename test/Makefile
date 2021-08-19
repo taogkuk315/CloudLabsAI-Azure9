@@ -25,7 +25,7 @@ GEN          = gen
 INST_DIR     = ../gen/install
 BLD_PREFIX   = $(shell dirname $$PWD)/gen/install
 
-OS           = $(shell uname -s)
+SUB_DIRS     = clients
 
 CURL         = $(INST_DIR)/bin/curl
 NGHTTP       = $(INST_DIR)/bin/nghttp
@@ -36,6 +36,7 @@ all: test
 
 clean:
 	@rm -rf $(GEN) $(INST_DIR)/.testdocs-setup $(INST_DIR)/.test-setup
+	@make -C clients clean
 
 distclean:
 	@rm -rf $(GEN)
@@ -153,5 +154,4 @@ $(INST_DIR)/.httpd-installed:
 # Install the local curl
 #
 $(INST_DIR)/.curl-installed:
-	@echo "you need to have curl installed locally."
-	@exit 1
+	make -C clients

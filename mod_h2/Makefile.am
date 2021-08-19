@@ -14,10 +14,16 @@
 #
 
 
-APXS    = apxs
-APXS_FLAGS =
+AUTOMAKE_OPTIONS = foreign
 
-C_SRC   = \
+ACLOCAL_AMFLAGS = -I m4
+
+lib_LTLIBRARIES = mod_h2.la
+
+mod_h2_la_CPPFLAGS = -I$(shell $(APXS) -q includedir)
+mod_h2_la_LDFLAGS = -module
+
+mod_h2_la_SOURCES = \
         h2_bucket.c \
         h2_bucket_queue.c \
         h2_config.c \
@@ -40,31 +46,13 @@ C_SRC   = \
         h2_to_h1.c \
         h2_util.c \
         h2_worker.c \
-        h2_workers.c
+        h2_workers.c \
+        mod_h2.c
 
-SRC     = $(C_SRC)
-OBJ     = $(C_SRC:%.c=%.o)
-LOBJ    = $(OBJ:%.o=%.lo)
+install-libLTLIBRARIES:
+	@: # override
 
-INCLUDES=-I.
+install-exec-local: mod_h2.la
+	$(APXS) -i -n h2 mod_h2.la
 
-LIBS    = -L$(shell $(APXS) -q exp_libdir) -lnghttp2
-
-all: build
-
-build: mod_h2.la
-
-$(OBJ): *.h
-
-.c.o: $(wildcard *.h)
-	$(APXS) -o $@ $(INCLUDES) -c $<
-
-mod_h2.la : mod_h2.c $(OBJ) Makefile
-	$(APXS) $(APXS_FLAGS) $(INCLUDES) -o $@ -c mod_h2.c $(LOBJ) $(LIBS)
-
-install: mod_h2.la
-	$(APXS) -i mod_h2.la
-
-clean:
-	rm -f *.o *.la *.lo *.slo
 

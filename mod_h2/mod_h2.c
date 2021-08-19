@@ -15,17 +15,10 @@
 
 #include <apr_optional.h>
 #include <apr_optional_hooks.h>
-#include <apr_strings.h>
-#include <apr_tables.h>
 #include <apr_want.h>
 
 #include <httpd.h>
-#include <http_core.h>
-#include <http_config.h>
 #include <http_log.h>
-#include <http_connection.h>
-#include <http_protocol.h>
-#include <http_request.h>
 
 #include "mod_h2.h"
 
@@ -37,7 +30,6 @@
 #include "h2_ctx.h"
 #include "h2_h2.h"
 #include "h2_h2c.h"
-
 
 
 static void h2_hooks(apr_pool_t *pool);
@@ -52,39 +44,42 @@ AP_DECLARE_MODULE(h2) = {
     h2_hooks
 };
 
-static void (*ap_request_insert_filter_fn) (request_rec * r) = NULL;
-static void (*ap_request_remove_filter_fn) (request_rec * r) = NULL;
-
-/* The module initialization. Called once as apache hook, before any multi processing
- * (threaded or not) happens. It is typically at least called twice, see
+/* The module initialization. Called once as apache hook, before any multi
+ * processing (threaded or not) happens. It is typically at least called twice, 
+ * see
  * http://wiki.apache.org/httpd/ModuleLife
  * Since the first run is just a "practise" run, we want to initialize for real
- * only on the second try. This defeats the purpose of the first dry run a bit, since
- * apache wants to verify that a new configuration actually will work. So if we
- * have trouble with the configuration, this will only be detected when the
- * server has already switched.
- * On the other hand, when we initialize lib nghttp2, all possible crazy things might
- * happen and this might even eat threads. So, better init on the real invocation,
- * for now at least.
+ * only on the second try. This defeats the purpose of the first dry run a bit, 
+ * since apache wants to verify that a new configuration actually will work. 
+ * So if we have trouble with the configuration, this will only be detected 
+ * when the server has already switched.
+ * On the other hand, when we initialize lib nghttp2, all possible crazy things 
+ * might happen and this might even eat threads. So, better init on the real 
+ * invocation, for now at least.
  */
-static int h2_post_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s)
+static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
+                          apr_pool_t *ptemp, server_rec *s)
 {
     void *data = NULL;
     const char *mod_h2_init_key = "mod_h2_init_counter";
     apr_pool_userdata_get(&data, mod_h2_init_key, s->process->pool);
     if ( data == NULL ) {
-        ap_log_error( APLOG_MARK, APLOG_DEBUG, 0, s, "initializing post config dry run");
+        ap_log_error( APLOG_MARK, APLOG_DEBUG, 0, s,
+                     "initializing post config dry run");
         apr_pool_userdata_set((const void *)1, mod_h2_init_key,
                               apr_pool_cleanup_null, s->process->pool);
         return APR_SUCCESS;
     }
-    ap_log_error( APLOG_MARK, APLOG_INFO, 0, s, "initializing post config for real");
+    ap_log_error( APLOG_MARK, APLOG_INFO, 0, s,
+                 "initializing post config, mod_h2, version %s",
+                 PACKAGE_VERSION);
     
     apr_status_t status = h2_h2_init(p, s);
     return status;
 }
 
-/* Runs once per created child process. Perform any process related initionalization here.
+/* Runs once per created child process. Perform any process 
+ * related initionalization here.
  */
 static void h2_child_init(apr_pool_t *pool, server_rec *s)
 {
