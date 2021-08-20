@@ -12,16 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
-
-AUTOMAKE_OPTIONS = foreign
+SUBDIRS =
 
 ACLOCAL_AMFLAGS = -I m4
 
-lib_LTLIBRARIES = mod_h2.la
+lib_LTLIBRARIES    = mod_h2.la
 
-mod_h2_la_CPPFLAGS = -std=c99 -I$(shell $(APXS) -q includedir) -I$(shell $(APXS) -q APR_INCLUDEDIR)
-mod_h2_la_LDFLAGS = -module
+mod_h2_la_CPPFLAGS = -std=c99
+mod_h2_la_LDFLAGS  = -module
 
 mod_h2_la_SOURCES = \
         h2_bucket.c \

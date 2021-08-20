@@ -3703,7 +3703,6 @@
 		B2E09AD51AA5CBC100A00E92 /* nghttp2-0.7.5-pthread-getspecific-unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "nghttp2-0.7.5-pthread-getspecific-unified.diff.patch"; sourceTree = "<group>"; };
 		B2E5BADE1A6E69810031CBD8 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2E5D5061AADA046001FD280 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
-		B2E5D5071AADA823001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; };
 		B2E5D5081AADAD28001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D50B1AADB169001FD280 /* .nghttp2-built */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ".nghttp2-built"; sourceTree = "<group>"; };
 		B2E5D50C1AADB169001FD280 /* .nghttp2-configured */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ".nghttp2-configured"; sourceTree = "<group>"; };
@@ -4302,6 +4301,7 @@
 		B2E5D77E1AADB16A001FD280 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2E5D77F1AADB16A001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D7801AADB16A001FD280 /* Makefile.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
+		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2FE998A1AA5ECA000A5CE5A /* test_001.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_001.sh; sourceTree = "<group>"; };
 		B2FE998C1AA5F40F00A5CE5A /* test_common.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_common.sh; sourceTree = "<group>"; };
 		B2FE998E1AA7496B00A5CE5A /* h2_to_h1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_to_h1.c; sourceTree = "<group>"; };
@@ -4348,7 +4348,6 @@
 		B225490A1A6EAAA3004BDEC9 /* mod_h2 */ = {
 			isa = PBXGroup;
 			children = (
-				B2E5D5071AADA823001FD280 /* configure.ac */,
 				B284ACC31A792AC600C35863 /* h2_bucket_queue.c */,
 				B284ACC41A792AC600C35863 /* h2_bucket_queue.h */,
 				B284ACC71A7A605200C35863 /* h2_bucket.c */,
@@ -9774,6 +9773,7 @@
 		B27BBD1F1A65757700C58A41 = {
 			isa = PBXGroup;
 			children = (
+				B2E5D7841AAEEF8C001FD280 /* configure.ac */,
 				B22D25281AA89A0B0041D8E5 /* LICENSE */,
 				B2A6EF2C1A9F2452005DFC5B /* DISCUSS */,
 				B27BBD311A65928A00C58A41 /* htppd */,

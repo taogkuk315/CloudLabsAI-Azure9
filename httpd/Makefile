@@ -48,17 +48,16 @@ CURL_OPTS    = --progress-bar
 
 OS           = $(shell uname -s)
 
-HTTPD_CONF   = --enable-mpms-shared=all
+HTTPD_CONF   = --enable-mpms-shared=all --with-included-apr
 HTTPD_DEPS   = $(GEN)/$(HTTPD_DIR)/.apr-extracted
 
-# For OS X, we drag our own APR and PCRE lib in as the one installed is not
+# For OS X, we drag our own PCRE lib in as the one installed is not
 # recognized by the httpd configure (and pbly rightly so).
 # On other OS, we expect a proper pcre installation
 #
 ifeq ($(OS),Darwin)
 	# we need our own apr + apr-util
-	HTTPD_DEPS  += $(GEN)/$(HTTPD_DIR)/.apr-extracted
-	HTTPD_CONF  += --with-included-apr --with-crypto
+	HTTPD_CONF  += --with-crypto
 	# we need our own pcre
 	HTTPD_DEPS  += $(INST_DIR)/.pcre-installed
 	HTTPD_CONF  += --with-pcre=$(BLD_PREFIX)

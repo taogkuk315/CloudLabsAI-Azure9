@@ -14,7 +14,7 @@
 #
 
 
-HTTP_PORT = 12345
+HTTP_PORT  = 12345
 HTTPS_PORT = 12346
 
 GEN          = gen
@@ -59,7 +59,8 @@ httpd:
 	make -C httpd
 
 $(INST_DIR)/.mod_h2-installed: \
-        mod_h2/Makefile \
+        $(INST_DIR)/.httpd-installed \
+        $(INST_DIR)/.nghttp2-installed \
         $(wildcard mod_h2/*.c) \
         $(wildcard mod_h2/*.h)
 	make -C mod_h2 install
@@ -68,14 +69,6 @@ $(INST_DIR)/.mod_h2-installed: \
 mod_h2: \
     $(INST_DIR)/.mod_h2-installed
 
-
-################################################################################
-# auto-thingies
-#
-mod_h2/Makefile: \
-		$(INST_DIR)/.httpd-installed
-	cd mod_h2 && autoreconf -i
-	cd mod_h2 && ./configure --with-apxs=../$(INST_DIR)/bin/apxs
 
 ################################################################################
 # Install the local httpd for our tests
