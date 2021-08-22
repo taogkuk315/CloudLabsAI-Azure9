@@ -56,6 +56,7 @@ AC_ARG_WITH([apxs], [AS_HELP_STRING([--with-apxs],
 
 # Checks for programs.
 AC_PROG_CC
+AC_PROG_CC_STDC
 
 AC_MSG_NOTICE("configuring for $build_mode build")
 

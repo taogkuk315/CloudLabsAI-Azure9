@@ -18,7 +18,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 lib_LTLIBRARIES    = mod_h2.la
 
-mod_h2_la_CPPFLAGS = -std=c99
+mod_h2_la_CPPFLAGS = -std=c99 -DPATH_MAX=4096
 mod_h2_la_LDFLAGS  = -module
 
 mod_h2_la_SOURCES = \
