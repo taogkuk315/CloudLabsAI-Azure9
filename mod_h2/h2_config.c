@@ -126,7 +126,7 @@ static const char *h2_conf_set_engine(cmd_parms *parms,
                                       void *arg, const char *value)
 {
     h2_config *cfg = h2_config_sget(parms->server);
-    cfg->h2_enabled = !strcasecmp(value, "On");
+    cfg->h2_enabled = !apr_strnatcasecmp(value, "On");
     return NULL;
 }
 
