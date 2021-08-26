@@ -72,6 +72,11 @@ if test x"$build_mode" == "xlocal"; then
     LDFLAGS="$LDFLAGS -L${prefix}/lib"
     LIBS="$LIBS -lnghttp2"
     CPPFLAGS="$CPPFLAGS -I${prefix}/include"
+
+    # On Ubuntu, we have a propblem with APR 1.5.1 and system includes that
+    # causes compilation to abort since no definition of PATH_MAX can be found.
+    # In local build, we just define it therefore, as a quick workaround
+    CPPFLAGS="$CPPFLAGS -DPATH_MAX=4096"
 else
     # production, we need to find where the apxs is. which then
     # can tell us the various directories we need.
