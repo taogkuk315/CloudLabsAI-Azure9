@@ -21,7 +21,7 @@ lib_LTLIBRARIES    = mod_h2.la
 mod_h2_la_CPPFLAGS = -std=c99
 mod_h2_la_LDFLAGS  = -module
 
-mod_h2_la_SOURCES = \
+OBJECTS = \
         h2_bucket.c \
         h2_bucket_queue.c \
         h2_config.c \
@@ -46,6 +46,36 @@ mod_h2_la_SOURCES = \
         h2_worker.c \
         h2_workers.c \
         mod_h2.c
+
+HFILES = \
+    h2_bucket.h \
+    h2_bucket_queue.h \
+    h2_config.h \
+    h2_conn.h \
+    h2_ctx.h \
+    h2_from_h1.h \
+    h2_h2.h \
+    h2_h2c.h \
+    h2_io.h \
+    h2_mplx.h \
+    h2_private.h \
+    h2_queue.h \
+    h2_request.h \
+    h2_response.h \
+    h2_session.h \
+    h2_stream.h \
+    h2_stream_set.h \
+    h2_task.h \
+    h2_task_input.h \
+    h2_task_output.h \
+    h2_to_h1.h \
+    h2_util.h \
+    h2_worker.h \
+    h2_workers.h \
+    mod_h2.h
+
+
+mod_h2_la_SOURCES = $(HFILES) $(OBJECTS)
 
 install-libLTLIBRARIES:
 	@: # override

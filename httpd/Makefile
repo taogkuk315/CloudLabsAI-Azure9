@@ -89,6 +89,11 @@ clean:
 distclean:
 	@rm -rf $(GEN)
 
+distdir:
+	@mkdir -p $(distdir)
+	@tar cf - Makefile patches packages| (cd $(distdir) && tar xf - )
+
+
 install:  $(INST_DIR)/.httpd-installed
 
 setup: $(INST_DIR)/.httpd-setup

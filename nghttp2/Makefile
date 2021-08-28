@@ -63,6 +63,10 @@ clean:
 distclean:
 	@rm -rf $(GEN)
 
+distdir:
+	@mkdir -p $(distdir)
+	@tar cf - Makefile patches | (cd $(distdir) && tar xf - )
+
 install:  $(INST_DIR)/.nghttp2-installed
 
 

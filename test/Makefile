@@ -42,8 +42,14 @@ distclean:
 	@rm -rf $(GEN)
 	$(foreach sd, $(SUB_DIRS), make -C $(sd) distclean; )
 
+distdir:
+	@mkdir -p $(distdir)
+	@tar cf - Makefile conf htdocs clients/Makefile *.txt *.sh | (cd $(distdir) && tar xf - )
+	@rm -f $(distdir)/conf/ssl/mod-h2.greebytes.de*
+	@rm -f $(distdir)/conf/sites/mod-h2.greebytes.de.conf
+
 start: $(INST_DIR)/.test-setup
-	@ulimit -c unlimited; $(INST_DIR)/bin/apachectl restart
+	@$(INST_DIR)/bin/apachectl restart
 
 stop:
 	@$(INST_DIR)/bin/apachectl stop

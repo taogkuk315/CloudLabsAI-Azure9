@@ -3670,35 +3670,6 @@
 		B2CB61151A8B698A00D270A6 /* h2_worker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_worker.h; sourceTree = "<group>"; };
 		B2CB61161A8B699E00D270A6 /* h2_workers.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_workers.c; sourceTree = "<group>"; };
 		B2CB61171A8B699E00D270A6 /* h2_workers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_workers.h; sourceTree = "<group>"; };
-		B2D05D421A6D11C0004DF5C0 /* config.m4 */ = {isa = PBXFileReference; lastKnownFileType = text; path = config.m4; sourceTree = "<group>"; };
-		B2D05D431A6D11C0004DF5C0 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
-		B2D05D441A6D11C0004DF5C0 /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
-		B2D05D451A6D11C0004DF5C0 /* mod_ssl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mod_ssl.c; sourceTree = "<group>"; };
-		B2D05D461A6D11C0004DF5C0 /* mod_ssl.dsp */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod_ssl.dsp; sourceTree = "<group>"; };
-		B2D05D471A6D11C0004DF5C0 /* mod_ssl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mod_ssl.h; sourceTree = "<group>"; };
-		B2D05D481A6D11C0004DF5C0 /* mod_ssl.la */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod_ssl.la; sourceTree = "<group>"; };
-		B2D05D491A6D11C0004DF5C0 /* modules.mk */ = {isa = PBXFileReference; lastKnownFileType = text; path = modules.mk; sourceTree = "<group>"; };
-		B2D05D4A1A6D11C0004DF5C0 /* NWGNUmakefile */ = {isa = PBXFileReference; lastKnownFileType = text; path = NWGNUmakefile; sourceTree = "<group>"; };
-		B2D05D4B1A6D11C0004DF5C0 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
-		B2D05D4C1A6D11C0004DF5C0 /* README.dsov.fig */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.dsov.fig; sourceTree = "<group>"; };
-		B2D05D4D1A6D11C0004DF5C0 /* README.dsov.ps */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.dsov.ps; sourceTree = "<group>"; };
-		B2D05D4E1A6D11C0004DF5C0 /* ssl_engine_config.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_config.c; sourceTree = "<group>"; };
-		B2D05D4F1A6D11C0004DF5C0 /* ssl_engine_init.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_init.c; sourceTree = "<group>"; };
-		B2D05D501A6D11C0004DF5C0 /* ssl_engine_io.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_io.c; sourceTree = "<group>"; };
-		B2D05D511A6D11C0004DF5C0 /* ssl_engine_kernel.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_kernel.c; sourceTree = "<group>"; };
-		B2D05D521A6D11C0004DF5C0 /* ssl_engine_log.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_log.c; sourceTree = "<group>"; };
-		B2D05D531A6D11C0004DF5C0 /* ssl_engine_mutex.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_mutex.c; sourceTree = "<group>"; };
-		B2D05D541A6D11C0004DF5C0 /* ssl_engine_ocsp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_ocsp.c; sourceTree = "<group>"; };
-		B2D05D551A6D11C0004DF5C0 /* ssl_engine_pphrase.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_pphrase.c; sourceTree = "<group>"; };
-		B2D05D561A6D11C0004DF5C0 /* ssl_engine_rand.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_rand.c; sourceTree = "<group>"; };
-		B2D05D571A6D11C0004DF5C0 /* ssl_engine_vars.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_engine_vars.c; sourceTree = "<group>"; };
-		B2D05D581A6D11C0004DF5C0 /* ssl_private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ssl_private.h; sourceTree = "<group>"; };
-		B2D05D591A6D11C0004DF5C0 /* ssl_scache.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_scache.c; sourceTree = "<group>"; };
-		B2D05D5A1A6D11C0004DF5C0 /* ssl_util.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util.c; sourceTree = "<group>"; };
-		B2D05D5B1A6D11C0004DF5C0 /* ssl_util_ocsp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util_ocsp.c; sourceTree = "<group>"; };
-		B2D05D5C1A6D11C0004DF5C0 /* ssl_util_ssl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util_ssl.c; sourceTree = "<group>"; };
-		B2D05D5D1A6D11C0004DF5C0 /* ssl_util_ssl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ssl_util_ssl.h; sourceTree = "<group>"; };
-		B2D05D5E1A6D11C0004DF5C0 /* ssl_util_stapling.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ssl_util_stapling.c; sourceTree = "<group>"; };
 		B2E06CCA1A8E308000BE04D5 /* load-urls-1.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "load-urls-1.txt"; sourceTree = "<group>"; };
 		B2E09AD51AA5CBC100A00E92 /* nghttp2-0.7.5-pthread-getspecific-unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "nghttp2-0.7.5-pthread-getspecific-unified.diff.patch"; sourceTree = "<group>"; };
 		B2E5BADE1A6E69810031CBD8 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
@@ -4302,6 +4273,11 @@
 		B2E5D77F1AADB16A001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D7801AADB16A001FD280 /* Makefile.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
+		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
+		B2E5D7861AAF1F4D001FD280 /* AUTHORS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = AUTHORS; sourceTree = "<group>"; };
+		B2E5D7871AAF1F4D001FD280 /* ChangeLog */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ChangeLog; sourceTree = "<group>"; };
+		B2E5D7881AAF1F4D001FD280 /* COPYING */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = COPYING; sourceTree = "<group>"; };
+		B2E5D7891AAF1F4D001FD280 /* NEWS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = NEWS; sourceTree = "<group>"; };
 		B2FE998A1AA5ECA000A5CE5A /* test_001.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_001.sh; sourceTree = "<group>"; };
 		B2FE998C1AA5F40F00A5CE5A /* test_common.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_common.sh; sourceTree = "<group>"; };
 		B2FE998E1AA7496B00A5CE5A /* h2_to_h1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_to_h1.c; sourceTree = "<group>"; };
@@ -9773,13 +9749,18 @@
 		B27BBD1F1A65757700C58A41 = {
 			isa = PBXGroup;
 			children = (
+				B2E5D7861AAF1F4D001FD280 /* AUTHORS */,
+				B2E5D7871AAF1F4D001FD280 /* ChangeLog */,
 				B2E5D7841AAEEF8C001FD280 /* configure.ac */,
-				B22D25281AA89A0B0041D8E5 /* LICENSE */,
+				B2E5D7881AAF1F4D001FD280 /* COPYING */,
 				B2A6EF2C1A9F2452005DFC5B /* DISCUSS */,
 				B27BBD311A65928A00C58A41 /* htppd */,
 				B2A6EF2A1A9E3A93005DFC5B /* INSTALL */,
+				B22D25281AA89A0B0041D8E5 /* LICENSE */,
 				B22549011A6E85CF004BDEC9 /* Makefile */,
+				B2E5D7851AAF1D87001FD280 /* Makefile.am */,
 				B225490A1A6EAAA3004BDEC9 /* mod_h2 */,
+				B2E5D7891AAF1F4D001FD280 /* NEWS */,
 				B2E5BADD1A6E69810031CBD8 /* nghttp2 */,
 				B27BBD2D1A6575C200C58A41 /* README */,
 				B22549021A6E8949004BDEC9 /* test */,
@@ -9799,7 +9780,6 @@
 			isa = PBXGroup;
 			children = (
 				B22D252A1AA9A14D0041D8E5 /* httpd-2.4.12 */,
-				B2D05D411A6D11C0004DF5C0 /* mod_ssl-alpn */,
 				B27BBD391A690C9800C58A41 /* patches */,
 				B27BBD2F1A65927E00C58A41 /* packages */,
 				B27BBD2E1A65927E00C58A41 /* Makefile */,
@@ -9814,43 +9794,6 @@
 			);
 			name = patches;
 			path = httpd/patches;
-			sourceTree = "<group>";
-		};
-		B2D05D411A6D11C0004DF5C0 /* mod_ssl-alpn */ = {
-			isa = PBXGroup;
-			children = (
-				B2D05D421A6D11C0004DF5C0 /* config.m4 */,
-				B2D05D431A6D11C0004DF5C0 /* Makefile */,
-				B2D05D441A6D11C0004DF5C0 /* Makefile.in */,
-				B2D05D451A6D11C0004DF5C0 /* mod_ssl.c */,
-				B2D05D461A6D11C0004DF5C0 /* mod_ssl.dsp */,
-				B2D05D471A6D11C0004DF5C0 /* mod_ssl.h */,
-				B2D05D481A6D11C0004DF5C0 /* mod_ssl.la */,
-				B2D05D491A6D11C0004DF5C0 /* modules.mk */,
-				B2D05D4A1A6D11C0004DF5C0 /* NWGNUmakefile */,
-				B2D05D4B1A6D11C0004DF5C0 /* README */,
-				B2D05D4C1A6D11C0004DF5C0 /* README.dsov.fig */,
-				B2D05D4D1A6D11C0004DF5C0 /* README.dsov.ps */,
-				B2D05D4E1A6D11C0004DF5C0 /* ssl_engine_config.c */,
-				B2D05D4F1A6D11C0004DF5C0 /* ssl_engine_init.c */,
-				B2D05D501A6D11C0004DF5C0 /* ssl_engine_io.c */,
-				B2D05D511A6D11C0004DF5C0 /* ssl_engine_kernel.c */,
-				B2D05D521A6D11C0004DF5C0 /* ssl_engine_log.c */,
-				B2D05D531A6D11C0004DF5C0 /* ssl_engine_mutex.c */,
-				B2D05D541A6D11C0004DF5C0 /* ssl_engine_ocsp.c */,
-				B2D05D551A6D11C0004DF5C0 /* ssl_engine_pphrase.c */,
-				B2D05D561A6D11C0004DF5C0 /* ssl_engine_rand.c */,
-				B2D05D571A6D11C0004DF5C0 /* ssl_engine_vars.c */,
-				B2D05D581A6D11C0004DF5C0 /* ssl_private.h */,
-				B2D05D591A6D11C0004DF5C0 /* ssl_scache.c */,
-				B2D05D5A1A6D11C0004DF5C0 /* ssl_util.c */,
-				B2D05D5B1A6D11C0004DF5C0 /* ssl_util_ocsp.c */,
-				B2D05D5C1A6D11C0004DF5C0 /* ssl_util_ssl.c */,
-				B2D05D5D1A6D11C0004DF5C0 /* ssl_util_ssl.h */,
-				B2D05D5E1A6D11C0004DF5C0 /* ssl_util_stapling.c */,
-			);
-			name = "mod_ssl-alpn";
-			path = "httpd/mod_ssl-alpn";
 			sourceTree = "<group>";
 		};
 		B2D15C551AA0CBB20054A420 /* patches */ = {

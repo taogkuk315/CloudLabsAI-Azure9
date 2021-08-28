@@ -26,7 +26,7 @@ pool, responses are collected and multiplexed on the original connection.
 The major players in ascii art:
 
   h2_conn -> h2_session ------> h2_mplx ----> h2_task / h2_worker
-  (socket)   (nghttp2_sesion)             |-> h2_task / h2_worker
+  (socket)   (nghttp2_session)            |-> h2_task / h2_worker
                                           |-> h2_task / h2_worker
                                                 ...
 
@@ -45,15 +45,38 @@ h2_task:    having own conn_rec instance, plus in/out filters at connection
             parses back responses to http2 usable headers and data.
 
 
-PREREQUISITES:
-- for "h2" supprt, the ALPN patch to mod_ssl is needed
-  (see https://bz.apache.org/bugzilla/show_bug.cgi?id=52210).
-- libnghttp2 (at least v0.7.3) installed
+LIFETIMES
+---------
+For each connection that uses HTTP/2, a new h2_session is created. That lives
+as long as all objects it creates: h2_stream and h2_task instances. So, when
+closing a h2_session, this waits until all associated h2_streams have
+been destroyed. h2_streams will only be destroyed when their h2_task is either
+removed from the schedule queue or has terminated.
 
-TEST ENV:
-The project is setup to build a test envivonment with own, patched httpd
-and all necessary libs. Runs without admin privileges. Tested on
-Ubuntu 14.04 LTS and OS X 10.10.
+Insofar, the lifetimes from h2_session/h2_stream have the similar relations as
+conn_rec/request_rec with the exception that there can be many simultaneous
+h2_streams active per h2_session (and in various worker threads).
+
+
+THREAD HANDLING
+---------------
+h2_session is only ever accessed from the thread handling the original
+connection. Same for h2_stream instances. The execution of what is necessary
+for execution of a h2_stream happens in h2_task. h2_task gets instantiated
+in the connection thread, but is the handed to a worker and, apart from
+checking its status atomically, not called by any other thread.
+
+The object that shovels the data packages back and forth and is accessed from
+multiple threads is h2_mplx. h2_tasks use it to retrieve their input and feed
+it their output. h2_mplx blocks h2_tasks when no input is available or
+the amount of output queue has reached a certain maximum.
+
+
+MEMORY HANDLING
+---------------
+Since the parallelism and thread use of h2_session/h2_stream/h2_task is
+different from conn_rec/request_rec, the apr memory pools need to be handled
+carefully.
 
 
 DISCUSSION / OPEN QUESTIONS

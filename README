@@ -1,6 +1,16 @@
 
 mod_h2 - a http/2 modules for apache httpd
 ==========================================
+
+Copyright (C) 2015 greenbytes GmbH
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.  This file is offered as-is,
+without warranty of any kind. See LICENSE for details.
+
+
+
 This repository contains a Apache httpd module implementing the HTTP2
 protocol. It uses nghttp2 (https://nghttp2.org) as base engine and connects
 it with the Apache infrastructure.
@@ -9,7 +19,7 @@ it with the Apache infrastructure.
 Status
 ------
 In development. Definitely not ready for a production environment. Use at
-your own risk.
+your own risk. Very alpha.
 
 
 Features
@@ -17,22 +27,6 @@ Features
 This module supports the "h2" (HTTP2 over TLS) and "h2c" (HTTP2 over plain
 HTTP connections via Upgrade). You can enable it for the whole server or
 for specific virtual hosts only. More on this below on "Configuration".
-
-
-Dependencies
-------------
-1. The module is written in plain C and links to libnghttp2 and nothing else.
-2. For "h2" support - the part of HTTP2 that uses TLS - a patched mod_ssl
-   needs to be present in the server. For ALPN/NPN protocol negotiation
-   (the basic TLS HELLO part) to work, this needs at least OpenSSL 1.0.1
-   (OpenSSL 1.0.2 perferred).
-3. mod_h2 currently only supports the mpm_worker module.
-
-Installation
-------------
-Due to the dependencies mentioned above, the project currently builds a
-local https, with patches applied, and installs it in gen/install for
-testing purposes. More on this in INSTALL.
 
 
 Configuration
@@ -43,13 +37,97 @@ be configured.
 
 There are several configuration commands available when mod_h2 is loaded,
 such as:
-- H2Engine (on/off), "on" to enable HTTP/2 protocol handling
-- H2MaxSessionStreams n, maximum number of open streams per session
-- H2InitialWindowSize n, initial window size on client DATA
-- H2MaxHeaderListSize n, maximum acceptable size of request headers
-- H2MinWorkers n, minimum number of worker threads per child
-- H2MaxWorkers n, maximum number of worker threads per child
-- H2StreamMaxMemSize n, maximum number of bytes buffered in memory for a stream
+- H2Engine (on/off), "on"    to enable HTTP/2 protocol handling
+- H2MaxSessionStreams n      maximum number of open streams per session
+- H2InitialWindowSize n      initial window size on client DATA
+- H2MaxHeaderListSize n      maximum acceptable size of request headers
+- H2MinWorkers n             minimum number of worker threads per child
+- H2MaxWorkers n             maximum number of worker threads per child
+- H2StreamMaxMemSize n       maximum number of bytes buffered in memory for a stream
+
+
+
+Dependencies
+------------
+1. The module is written in plain C and links to libnghttp2 and the
+   apache runtime.
+2. For "h2" support - the part of HTTP2 that uses TLS - a patched mod_ssl
+   needs to be present in the server. The patch is available in httpd/patches
+   and automatically applied in sandbox mode.
+3. For ALPN/NPN protocol negotiation (the basic TLS HELLO part) to work,
+   at least OpenSSL 1.0.1 is needed (OpenSSL 1.0.2 perferred).
+4. mod_h2 currently only supports the mpm_worker module.
+
+
+Installation
+------------
+mod_h2 is using autoconf/automake for configurtion and build handling. If you
+have a git checkout, refer to 'Build from git' below. If you have a release
+extracted, you need to:
+    > cd mod_h2-x.x.x
+    > ./configure
+    > make
+
+For general handling of 'configure', see INSTALL. For mod_h2 specifically,
+there are two arguments to know:
+    --enable-sandbox     build a complete sandbox installation with own httpd,
+                         own libnghttp2
+    --with-apxs=<pathtoapxs>
+                         for a non-sandboxed installation where the apxs
+                         (from the apache development environment) is in an
+                         unusual location.
+
+If you run 'configure' without arguments, it assumes a non-sandbox'ed built
+where apxs and libnghttp2 are properly installed.
+
+
+Sandbox Installation:
+
+The sandbox installation puts everything in ./gen/install: httpd, nghttp2, curl
+and other fine things. For testing the module, or just trying it out, this
+has the following advantages:
+    - conflicts with "wrong" versions already installed on your system are avoided
+    - you can do the installation and test without root privileges
+    - certain patches can be applied that are necessary for all features to work, see "Dependencies"."
+
+
+Build from git
+--------------
+
+Building from git is easy, but please be sure that at least autoconf 2.68 is
+used::
+
+    > autoreconf -i
+    > automake
+    > autoconf
+    > ./configure
+    > make
+
+
+Supported Platforms
+-------------------
+mod_h2 has been developed under Ubuntu 14.04 LTS and OS X 10.10. The module
+itself depends only on an installed APXS (the Apache runtime platform) and
+libnghttp2. As long as both are present, the module itself should build
+just fine.
+
+Ubuntu :Install the prerequisite software. On a 14.04 LTS server, that should be:
+> sudo apt-get install git gcc g++ libpcre3-dev libcunit1-dev libev-dev libjansson-dev libjemalloc-dev cython make binutils autoconf automake autotools-dev libtool pkg-config zlib1g-dev libssl-dev libxml2-dev libevent-dev python3.4-dev libevent-openssl-2.0-5
+
+OS X: on OS X 10.10, building the project requires a homebrew installation and the following packages installed via brew:
+- pkg-config
+
+* for httpd the Makefile will download and install:
+- pcre
+- apr + apr-util
+- openssl
+exact versions and download urls in httpd/Makefile
+
+* for nghttp2 the Makefile will download and install:
+- zlib
+- libev
+exact versions and download urls in httpd/Makefile
+
 
 
 Architecture, Limits, Details
@@ -74,6 +152,7 @@ TODO
 - Chunk handling for request input data (h2_request).
 - Detection at runtime that we are indeed running with mpm_worker, an error
   message to the log and stay inactive otherwise.
+- http trailers are not implemented
 
 Licensing
 ---------
@@ -89,3 +168,6 @@ SPDY protocol. And without Tatsuhiro Tsujikawa excellent nghttp2 work, this
 would not have been possible.
 
 
+Münster, 10.3.2015,
+
+Stefan Eissing, greenbytes GmbH
