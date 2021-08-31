@@ -1,5 +1,5 @@
 
-mod_h2 - a http/2 modules for apache httpd
+mod_h2 - a http/2 module for apache httpd
 ==========================================
 
 Copyright (C) 2015 greenbytes GmbH
