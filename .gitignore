@@ -19,6 +19,7 @@ config.status
 config.sub
 config.h
 config.h.in
+config.h.in~
 configure
 configure.scan
 depcomp
