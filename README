@@ -135,6 +135,34 @@ Architecture, Limits, Details
 See DISCUSS.
 
 
+Sandbox Testing
+---------------
+The sandbox build contains some test cases. In order to run those, you
+need to:
+    > make
+    > make install
+    > make test
+The sandbox creates its own httpd and nghttp2 installation in gen/install
+and configures httpd to run on ports 12345+12346 (TLS). It also generates
+a self-signed certificate for the server under the name test.example.org.
+You should make an entry in /etc/hosts like
+
+127.0.0.1       test.example.org        test
+
+for tests to work properly.
+
+Another issue is testing with browsers like Chrome or Firefox. If you point
+them at test.example.org, the will complain about the self-signed certificate,
+offer you to connect anyway and, if you choose that, refuse to work. I think
+they have a much stricter cert checking for HTTP/2 and the UI needs an update
+here.
+
+I myself configure an additional site into the sandbox server with a real
+certificate and test browsers successfully there. But I cannot share this
+certificate with the world. If there is a better way to test browser interop,
+I am happy to be given pointers.
+
+
 TODO
 ----
 - Thanks to the excellent nghttp2, the module currently supports h2-14 and
