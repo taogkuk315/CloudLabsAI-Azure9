@@ -22,16 +22,19 @@
 
 typedef struct h2_worker h2_worker;
 
-/* Invoked when the worker wants a new task- */
+/* Invoked when the worker wants a new task. Will block
+ * until a task becomes available or the worker itself
+ * gets aborted (idle timeout, for example). */
 typedef apr_status_t h2_worker_task_next_fn(h2_worker *worker,
                                             h2_task **ptask,
                                             void *ctx);
 
-/* Invoked when the worker has finished a task */
-typedef void h2_worker_task_done_fn(h2_worker *worker,
-                                    h2_task *ptask,
-                                    apr_status_t status,
-                                    void *ctx);
+/* Invoked when the worker has finished a task. May return the 
+ * next task to work on or NULL. Will not block. */
+typedef h2_task *h2_worker_task_done_fn(h2_worker *worker,
+                                        h2_task *ptask,
+                                        apr_status_t status,
+                                        void *ctx);
 
 /* Invoked just before the worker thread exits. */
 typedef void h2_worker_done_fn(h2_worker *worker, void *ctx);

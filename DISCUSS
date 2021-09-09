@@ -79,6 +79,16 @@ different from conn_rec/request_rec, the apr memory pools need to be handled
 carefully.
 
 
+THREAD HANDLING
+---------------
+There is a nice thread pool in apr-util which even suports priority scheduling.
+It would be nice to exchange the h2_worker(s) for this pool, except mod_h2
+has the use case that streams can be aborted by the client and the
+corresponding task needs to be removed from the schedule without any
+blocking wait for a possibly running task to complete. This is not offered
+by apr-util.
+
+
 DISCUSSION / OPEN QUESTIONS
 ---------------------------
 While HTTP2 clients will be happy to have low lags in using the protocol,

@@ -30,6 +30,7 @@ typedef enum {
     H2_CONF_WIN_SIZE,
     H2_CONF_MIN_WORKERS,
     H2_CONF_MAX_WORKERS,
+    H2_CONF_MAX_WORKER_IDLE_SECS,
     H2_CONF_STREAM_MAX_MEM_SIZE,
 } h2_config_var_t;
 
@@ -42,6 +43,7 @@ typedef struct h2_config {
     int h2_window_size;         /* stream window size (http2) */
     int min_workers;            /* min # of worker threads/child */
     int max_workers;            /* max # of worker threads/child */
+    int max_worker_idle_secs;   /* max # of idle seconds before worker shuts down */
     int stream_max_mem_size;    /* max # bytes held in memory/stream */
 } h2_config;
 

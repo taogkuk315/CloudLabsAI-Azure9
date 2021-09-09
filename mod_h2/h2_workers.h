@@ -54,4 +54,6 @@ apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait);
  */
 void h2_workers_log_stats(h2_workers *workers);
 
+void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs);
+
 #endif /* defined(__mod_h2__h2_workers__) */

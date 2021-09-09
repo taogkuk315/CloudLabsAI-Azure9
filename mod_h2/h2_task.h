@@ -66,6 +66,8 @@ void h2_task_set_started(h2_task *task, int started);
 int h2_task_has_finished(h2_task *task);
 void h2_task_set_finished(h2_task *task, int finished);
 
+const char *h2_task_get_id(h2_task *task);
+
 long h2_task_get_session_id(h2_task *task);
 int h2_task_get_stream_id(h2_task *task);
 

@@ -40,13 +40,16 @@ static void *execute(apr_thread_t *thread, void *wctx)
 {
     h2_worker *worker = (h2_worker *)wctx;
     apr_status_t status = APR_SUCCESS;
+    worker->current = NULL;
     
     while (!worker->aborted) {
-        status = worker->get_next(worker, &worker->current,worker->ctx);
-        if (status == APR_SUCCESS) {
+        if (worker->current) {
             apr_status_t status = h2_task_do(worker->current);
-            worker->task_done(worker, worker->current, status, worker->ctx);
-            worker->current = NULL;
+            worker->current = worker->task_done(worker, worker->current,
+                                                status, worker->ctx);
+        }
+        if (!worker->current) {
+            status = worker->get_next(worker, &worker->current,worker->ctx);
         }
     }
     

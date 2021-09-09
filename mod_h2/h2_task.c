@@ -35,6 +35,7 @@
 #include "h2_ctx.h"
 
 struct h2_task {
+    const char *id;
     long session_id;
     int stream_id;
     int aborted;
@@ -101,8 +102,8 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
      * h2_session->response_data bucket queue.
      */
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                  "h2_stream(%ld-%d): task_pre_conn, installing filters",
-                  task->session_id, task->stream_id);
+                  "h2_stream(%s): task_pre_conn, installing filters",
+                  task->id);
     ap_add_input_filter_handle(h2_input_filter_handle,
                                task, NULL, c);
     ap_add_output_filter_handle(h2_output_filter_handle,
@@ -110,8 +111,7 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
     
     /* prevent processing by anyone else, including httpd core */
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                  "h2_stream(%ld-%d): task_pre_conn, taking over",
-                  task->session_id, task->stream_id);
+                  "h2_stream(%s): task_pre_conn, taking over", task->id);
     return DONE;
 }
 
@@ -154,7 +154,7 @@ static apr_status_t setup_connection(h2_task *task, apr_pool_t *parent) {
     assert(task);
     apr_status_t status = APR_SUCCESS;
     if (task->own_pool) {
-        status = apr_pool_create_ex(&task->pool, NULL, NULL, NULL);
+        status = apr_pool_create_ex(&task->pool, parent, NULL, NULL);
     }
     else {
         task->pool = parent;
@@ -180,35 +180,40 @@ h2_task *h2_task_create(long session_id,
     h2_task *task = apr_pcalloc(stream_pool, sizeof(h2_task));
     if (task == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream_pool,
-                      "h2_task(%ld-%d): unable to create stream task",
-                      session_id, stream_id);
+                      "h2_task(%s): unable to create stream task", task->id);
         h2_mplx_out_reset(mplx, task->stream_id, APR_ENOMEM);
         return NULL;
     }
     
+    task->id = apr_psprintf(stream_pool, "%ld-%d", session_id, stream_id);
     task->stream_id = stream_id;
     task->session_id = session_id;
     task->mplx = mplx;
     task->master = master;
     
     task->input = h2_task_input_create(stream_pool,
-                                       session_id, stream_id,
-                                       input, input_eos, mplx);
+                                       task->session_id, task->stream_id,
+                                       input, input_eos, task->mplx);
     task->output = h2_task_output_create(stream_pool,
                                          task->session_id, task->stream_id,
                                          task->mplx);
+    /* We need a separate pool for the task execution as this happens
+     * in another thread and pools are not multi-thread safe. 
+     * Since the task lives not longer than the stream, we'd tried
+     * making this new pool a sub pool of the stream one, but that
+     * only led to crashes. With a root pool, this does not happen.
+     */
     task->own_pool = 1;
-    apr_status_t status = setup_connection(task, stream_pool);
+    apr_status_t status = setup_connection(task, NULL);
     if (status != APR_SUCCESS) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, status, stream_pool,
-                      "h2_task(%ld-%d): create task connection",
-                      session_id, stream_id);
+                      "h2_task(%s): create task connection", task->id);
         h2_mplx_out_reset(mplx, task->stream_id, APR_ENOMEM);
         return NULL;
     }
 
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
-                  "h2_task(%ld-%d): created", session_id, stream_id);
+                  "h2_task(%s): created", task->id);
     return task;
 }
 
@@ -216,8 +221,7 @@ apr_status_t h2_task_destroy(h2_task *task)
 {
     assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_task(%ld-%d): destroy started",
-                  task->session_id, task->stream_id);
+                  "h2_task(%s): destroy started", task->id);
     if (task->input) {
         h2_task_input_destroy(task->input);
         task->input = NULL;
@@ -239,7 +243,7 @@ apr_status_t h2_task_do(h2_task *task)
 {
     assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_task(%ld-%d): do", task->session_id, task->stream_id);
+                  "h2_task(%s): do", task->id);
     
     /* Furthermore, other code might want to see the socket for
      * this connection. Allocate one without further function...
@@ -271,8 +275,7 @@ void h2_task_abort(h2_task *task)
 {
     assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                  "h2_task(%ld-%d): aborting task",
-                  task->session_id, task->stream_id);
+                  "h2_task(%s): aborting task", task->id);
     task->aborted =  1;
     if (task->input) {
         h2_task_input_destroy(task->input);
@@ -294,6 +297,11 @@ int h2_task_get_stream_id(h2_task *task)
 {
     assert(task);
     return task->stream_id;
+}
+
+const char *h2_task_get_id(h2_task *task)
+{
+    return task->id;
 }
 
 int h2_task_has_started(h2_task *task)

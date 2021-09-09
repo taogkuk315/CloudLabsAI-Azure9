@@ -69,6 +69,8 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
         }
     }
     workers = h2_workers_create(s, pool, minw, maxw);
+    h2_workers_set_max_idle_secs(
+        workers, h2_config_geti(config, H2_CONF_MAX_WORKER_IDLE_SECS));
     return status;
 }
 
@@ -241,8 +243,8 @@ static apr_status_t before_stream_close_cb(h2_session *session,
         status = h2_workers_join(workers, task, wait);
         if (status != APR_SUCCESS && status != APR_EAGAIN) {
             ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
-                          "h2_session(%ld): error join task(%d)",
-                          session->id, h2_task_get_stream_id(task));
+                          "h2_session: error join task(%s)",
+                          h2_task_get_id(task));
         }
     }
     return status;
