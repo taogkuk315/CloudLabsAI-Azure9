@@ -28,9 +28,9 @@
 #include "h2_task_input.h"
 
 struct h2_task_input {
-    struct h2_mplx *m;
-    int session_id;
+    const char *task_id;
     int stream_id;
+    struct h2_mplx *m;
     int eos;
     int is_last;
     struct h2_bucket *cur;
@@ -72,17 +72,17 @@ static void cleanup(h2_task_input *input) {
 }
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
-                                    int session_id, int stream_id,
+                                    const char *task_id, int stream_id,
                                     h2_bucket *data, int is_last,
                                     h2_mplx *m)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
+        input->task_id = task_id;
+        input->stream_id = stream_id;
         input->m = m;
         input->cur = data;
         input->is_last = is_last;
-        input->session_id = session_id;
-        input->stream_id = stream_id;
     }
     return input;
 }
@@ -107,8 +107,8 @@ apr_status_t h2_task_input_read(h2_task_input *input,
     int all_there = all_queued(input);
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, filter->c,
-                  "h2_task_input(%d-%d): read() asking for %d bytes",
-                  input->session_id, input->stream_id, (int)readbytes);
+                  "h2_task_input(%s): read() asking for %d bytes",
+                  input->task_id, (int)readbytes);
     
     if (input->cur && input->cur_offset >= input->cur->data_len) {
         cleanup(input);
@@ -192,8 +192,8 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         if (mode != AP_MODE_SPECULATIVE) {
             input->cur_offset += nread;
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                          "h2_task_input(%d-%d): forward %d bytes",
-                          input->session_id, input->stream_id, (int)nread);
+                          "h2_task_input(%s): forward %d bytes",
+                          input->task_id, (int)nread);
         }
     }
     else if (all_there) {

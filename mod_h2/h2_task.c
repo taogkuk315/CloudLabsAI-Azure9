@@ -136,7 +136,7 @@ static apr_status_t h2_conn_create(h2_task *task, conn_rec *master)
     
     task->c = ap_run_create_connection(task->pool, master->base_server,
                                        task->socket,
-                                       master->id, master->sbh,
+                                       master->id^((int)task), master->sbh,
                                        apr_bucket_alloc_create(task->pool));
     if (task->c == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, 0, task->pool,
@@ -192,10 +192,10 @@ h2_task *h2_task_create(long session_id,
     task->master = master;
     
     task->input = h2_task_input_create(stream_pool,
-                                       task->session_id, task->stream_id,
+                                       task->id, task->stream_id,
                                        input, input_eos, task->mplx);
     task->output = h2_task_output_create(stream_pool,
-                                         task->session_id, task->stream_id,
+                                         task, task->stream_id,
                                          task->mplx);
     /* We need a separate pool for the task execution as this happens
      * in another thread and pools are not multi-thread safe. 
@@ -285,6 +285,12 @@ void h2_task_abort(h2_task *task)
         h2_task_output_destroy(task->output);
         task->output = NULL;
     }
+}
+
+int h2_task_is_aborted(h2_task *task)
+{
+    assert(task);
+    return task->aborted;
 }
 
 long h2_task_get_session_id(h2_task *task)

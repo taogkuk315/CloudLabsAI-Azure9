@@ -66,6 +66,8 @@ test: \
 	@$(INST_DIR)/bin/apachectl restart
 	@bash test_001.sh https://$(HTTPS_AUTH)
 	@bash test_001.sh http://$(HTTP_AUTH)
+	@bash test_002.sh https://$(HTTPS_AUTH)
+	@bash test_002.sh http://$(HTTP_AUTH)
 
 ################################################################################
 # Load Test
@@ -80,12 +82,6 @@ $(GEN)/load-urls-2.txt: \
 		load-urls-1.txt
 	@mkdir -p $(GEN)/tmp
 	@sed -e "s,SUBST_AUTH_SUBST,http://$(HTTP_AUTH)," < load-urls-1.txt >$(GEN)/load-urls-2.txt
-
-test1: \
-		$(INST_DIR)/.test-setup \
-		$(INST_DIR)/.curl-installed \
-        $(GEN)/load-urls-1.txt
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 100000 -t 1 -c 1
 
 loadtest: \
 		$(INST_DIR)/.test-setup \

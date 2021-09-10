@@ -26,7 +26,7 @@ struct h2_mplx;
 typedef struct h2_task_input h2_task_input;
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
-                                    int session_id, int stream_id,
+                                    const char *task_id, int stream_id,
                                     struct h2_bucket *data, int eos,
                                     struct h2_mplx *mplx);
 void h2_task_input_destroy(h2_task_input *input);

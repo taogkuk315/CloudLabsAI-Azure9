@@ -24,11 +24,12 @@
 struct h2_bucket;
 struct h2_mplx;
 struct h2_response;
+struct h2_task;
 
 typedef struct h2_task_output h2_task_output;
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
-                                      int session_id, int stream_id,
+                                      struct h2_task *task, int stream_id,
                                       struct h2_mplx *m);
 
 void h2_task_output_destroy(h2_task_output *output);

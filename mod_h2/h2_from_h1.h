@@ -56,9 +56,10 @@ void h2_from_h1_set_state_change_cb(h2_from_h1 *from_h1,
                                      void *cb_ctx);
 
 apr_status_t h2_from_h1_http_convert(h2_from_h1 *from_h1,
-                                      struct h2_bucket *bucket,
-                                      const char *data, apr_size_t len,
-                                      apr_size_t *pconsumed);
+                                     conn_rec *connection,
+                                     struct h2_bucket *bucket,
+                                     const char *data, apr_size_t len,
+                                     apr_size_t *pconsumed);
 
 struct h2_response *h2_from_h1_get_response(h2_from_h1 *from_h1);
 

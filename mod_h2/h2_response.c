@@ -85,7 +85,16 @@ h2_response *h2_response_create(int stream_id,
                 ++sep;
             }
             if (*sep) {
-                H2_CREATE_NV_CS_CS(nv, h2_strlwr(hline), sep);
+                const char *hname = h2_strlwr(hline);
+                if (!strcmp("transfer-encoding", hname)) {
+                    /* never forward this header */
+                    if (!strcmp("chunked", sep)) {
+                        head->chunked = 1;
+                    }
+                }
+                else {
+                    H2_CREATE_NV_CS_CS(nv, hname, sep);
+                }
             }
             else {
                 /* reached end of line, an empty header value */
@@ -96,13 +105,7 @@ h2_response *h2_response_create(int stream_id,
 
         for (int i = 1; i < head->nvlen; ++i) {
             const nghttp2_nv *nv = &(&head->nv)[i];
-
-            if (!strcmp("transfer-encoding", (char*)nv->name)) {
-                if (!strcmp("chunked", (char *)nv->value)) {
-                    head->chunked = 1;
-                }
-            }
-            else if (!head->chunked && !strcmp("content-length", (char*)nv->name)) {
+            if (!head->chunked && !strcmp("content-length", (char*)nv->name)) {
                 apr_int64_t clen = apr_atoi64((char*)nv->value);
                 if (clen <= 0) {
                     ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, pool,

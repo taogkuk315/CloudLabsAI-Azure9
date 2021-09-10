@@ -28,12 +28,12 @@ typedef struct h2_response {
     const char *http_status;
     struct h2_bucket *data;
 
-    apr_size_t nvlen;
-    const nghttp2_nv nv;
-
     long content_length;
     int chunked;
     
+    apr_size_t nvlen;
+    const nghttp2_nv nv;
+    /* must be last element */
 } h2_response;
 
 h2_response *h2_response_create(int stream_id,

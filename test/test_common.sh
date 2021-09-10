@@ -17,7 +17,75 @@
 # common test functions
 #
 
+URL_PREFIX="$1"
+AUTH="${URL_PREFIX#*://}"
+HOST="${AUTH%%:*}"
+
+INSTALL_DIR="../gen/install"
+BIN_DIR="${INSTALL_DIR}/bin"
+DOC_ROOT="htdocs/${HOST}"
+GEN="gen"
+TMP="$GEN/tmp"
+
+CURL="${BIN_DIR}/curl  -sk --resolv ${HOST#*://}:127.0.0.1"
+NGHTTP="${BIN_DIR}/nghttp"
+
+
 fail() {
     echo "$@"
     exit 1
+}
+
+
+curl_check_doc() {
+    DOC="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@"
+    echo -n "curl $URL_PREFIX/$DOC: $MSG..."
+    rm -rf $TMP
+    mkdir -p $TMP
+    ${CURL} "$ARGS" $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    diff  $DOC_ROOT/$DOC $TMP/$DOC || fail
+    echo ok.
+}
+
+nghttp_check_doc() {
+    DOC="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@"
+    echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
+    rm -rf $TMP &&
+    mkdir -p $TMP &&
+    ${NGHTTP} -u $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    diff  $DOC_ROOT/$DOC $TMP/$DOC || fail
+    echo ok.
+}
+
+nghttp_check_assets() {
+    DOC="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@"
+    echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
+    rm -rf $TMP &&
+    mkdir -p $TMP &&
+    sort > $TMP/reference
+    ${NGHTTP} -uans $ARGS $URL_PREFIX/$DOC > $TMP/out || fail
+    fgrep " /" $TMP/out | while read begin end dur stat size path; do
+        echo "$path $size $stat"
+    done | sort > $TMP/output || fail
+    diff $TMP/reference $TMP/output  || fail
+    echo ok.
+}
+
+curl_check_content() {
+    DOC="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@"
+    rm -rf $TMP
+    mkdir -p $TMP
+    cat > $TMP/expected
+    echo -n "curl $URL_PREFIX/$DOC: $MSG..."
+    ${CURL} "$ARGS" $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    diff  $TMP/expected $TMP/$DOC || fail
+    echo ok.
 }
