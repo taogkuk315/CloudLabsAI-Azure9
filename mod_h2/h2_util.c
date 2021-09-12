@@ -159,13 +159,13 @@ char *h2_strlwr(char *s)
 int h2_util_contains_token(apr_pool_t *pool, const char *s, const char *token)
 {
     if (s) {
-        if (!strcasecmp(s, token)) {          /* the simple life */
+        if (!apr_strnatcasecmp(s, token)) {   /* the simple life */
             return 1;
         }
         
         for (char *c = ap_get_token(pool, &s, 0); c && *c;
              c = *s? ap_get_token(pool, &s, 0) : NULL) {
-            if (!strcasecmp(c, token)) {     /* seeing the token? */
+            if (!apr_strnatcasecmp(c, token)) { /* seeing the token? */
                 return 1;
             }
             while (*s++ == ';') {            /* skip parameters */
