@@ -108,6 +108,7 @@ $(INST_DIR)/.testdocs-setup: \
 	$(wildcard htdocs/*/*)
 	@echo -n setup htdocs locally...
 	@cp -r htdocs/* $(INST_DIR)/htdocs
+	@chmod +x $(INST_DIR)/htdocs/test.example.org/*.py
 	@echo done.
 	@touch $(INST_DIR)/.testdocs-setup
 
