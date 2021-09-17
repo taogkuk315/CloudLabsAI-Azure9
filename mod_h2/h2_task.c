@@ -136,7 +136,7 @@ static apr_status_t h2_conn_create(h2_task *task, conn_rec *master)
     
     task->c = ap_run_create_connection(task->pool, master->base_server,
                                        task->socket,
-                                       master->id^((int)task), master->sbh,
+                                       master->id^((long)task), master->sbh,
                                        apr_bucket_alloc_create(task->pool));
     if (task->c == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, 0, task->pool,
