@@ -41,6 +41,7 @@ struct h2_to_h1 {
     int eoh;
     int eos;
     int flushed;
+    int seen_host;
 };
 
 h2_to_h1 *h2_to_h1_create(apr_pool_t *pool)
@@ -160,12 +161,22 @@ apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1, struct h2_mplx *m)
     return status;
 }
 
+#define HEADER_MATCH_LIT(l, name, nlen)  \
+    ((nlen == sizeof(l) - 1) && !apr_strnatcasecmp(l, name))
 
 apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
                                  const char *name, size_t nlen,
                                  const char *value, size_t vlen,
                                  h2_mplx *m)
 {
+    if ((to_h1->seen_host && HEADER_MATCH_LIT("host", name, nlen))
+        || HEADER_MATCH_LIT("upgrade", name, nlen)
+        || HEADER_MATCH_LIT("connection", name, nlen)
+        || HEADER_MATCH_LIT("http2-settings", name, nlen)) {
+        // ignore these.
+        return APR_SUCCESS;
+    }
+
     apr_status_t status = append_header(to_h1->data, name, nlen, value, vlen);
     if (status == APR_ENAMETOOLONG && to_h1->data->data_len > 0) {
         /* header did not fit into bucket, push bucket to input and
@@ -175,6 +186,9 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
             status = append_header(to_h1->data, name, nlen, value, vlen);
             /* if this still does not work, we fail */
         }
+    }
+    if (!to_h1->seen_host && HEADER_MATCH_LIT("host", name, nlen)) {
+        to_h1->seen_host = 1;
     }
     return status;
 }
@@ -199,6 +213,14 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, struct h2_mplx *m)
         h2_bucket_cat(to_h1->data, "\r\n");
     }
     to_h1->eoh = 1;
+
+    /* need that sometime, don't want to strdup always
+        ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, h2_mplx_get_pool(m),
+                      "h2_request(%d): pushing request: %s",
+                      to_h1->stream_id,
+                      apr_pstrndup(h2_mplx_get_pool(m), to_h1->data->data, to_h1->data->data_len));
+     */
+    
     return status;
 }
 

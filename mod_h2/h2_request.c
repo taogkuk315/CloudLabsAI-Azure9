@@ -70,17 +70,21 @@ apr_status_t h2_request_rwrite(h2_request *req, request_rec *r,
     req->method = r->method;
     req->path = r->uri;
     req->authority = r->hostname;
+    if (!strchr(req->authority, ':') && r->parsed_uri.port_str) {
+        req->authority = apr_psprintf(pool, "%s:%s", req->authority,
+                                      r->parsed_uri.port_str);
+    }
     req->scheme = NULL;
-    
-    ap_log_rerror(APLOG_MARK, APLOG_TRACE1, 0, r,
-                  "h2_request(%d): writing request %s %s",
-                  req->id, req->method, req->path);
     
     apr_status_t status = insert_request_line(req, m);
     req->started = 1;
-    
     struct whctx ctx = { req->to_h1, m };
     apr_table_do(write_header, &ctx, r->headers_in, NULL);
+    
+    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, status, r,
+                  "h2_request(%d): written request %s %s, host=%s",
+                  req->id, req->method, req->path, req->authority);
+    
     return status;
 }
 
