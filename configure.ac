@@ -92,7 +92,7 @@ else
 
     prefix="$($APXS -q prefix)"
     LDFLAGS="$LDFLAGS -L$($APXS -q libdir)"
-    CPPFLAGS="$CPPFLAGS $($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR)"
+    CPPFLAGS="$CPPFLAGS -I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR)"
 
     # We need nghttp2 to be in our link path, check for it.
     #
