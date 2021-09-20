@@ -251,6 +251,45 @@ EOF
 #EOF
 #
 
+################################################################################
+# check cgi generated content
+################################################################################
+curl_check_content hello.py "default" <<EOF
+<html>
+<body>
+<h2>Hello World!</h2>
+</body>
+</html>
+EOF
+
+curl_check_content hello.py "http/1.1" --http1.1 <<EOF
+<html>
+<body>
+<h2>Hello World!</h2>
+</body>
+</html>
+EOF
+
+curl_check_content hello.py "http2"    --http2 <<EOF
+<html>
+<body>
+<h2>Hello World!</h2>
+</body>
+</html>
+EOF
+
+
+curl_check_content upload.py "http/1.1" --http1.1 <<EOF
+    <html><body>
+    <p>No "file" parameter given</p>
+    </body></html>
+EOF
+
+curl_check_content upload.py "http2"    --http2 <<EOF
+    <html><body>
+    <p>No "file" parameter given</p>
+    </body></html>
+EOF
 
 
 

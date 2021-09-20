@@ -33,4 +33,26 @@ char *h2_strlwr(char *s);
  */
 int h2_util_contains_token(apr_pool_t *pool, const char *s, const char *token);
 
+#define H2_HD_MATCH_LIT(l, name, nlen)  \
+    ((nlen == sizeof(l) - 1) && !apr_strnatcasecmp(l, name))
+
+#define H2_HD_MATCH_LIT_CS(l, name)  \
+    ((strlen(name) == sizeof(l) - 1) && !apr_strnatcasecmp(l, name))
+
+#define H2_CREATE_NV_LIT_CS(nv, NAME, VALUE) nv->name = (uint8_t *)NAME;      \
+                                             nv->namelen = sizeof(NAME) - 1;  \
+                                             nv->value = (uint8_t *)VALUE;    \
+                                             nv->valuelen = strlen(VALUE)
+
+#define H2_CREATE_NV_CS_LIT(nv, NAME, VALUE) nv->name = (uint8_t *)NAME;      \
+                                             nv->namelen = strlen(NAME);      \
+                                             nv->value = (uint8_t *)VALUE;    \
+                                             nv->valuelen = sizeof(VALUE) - 1
+
+#define H2_CREATE_NV_CS_CS(nv, NAME, VALUE) nv->name = (uint8_t *)NAME;       \
+                                            nv->namelen = strlen(NAME);       \
+                                            nv->value = (uint8_t *)VALUE;     \
+                                            nv->valuelen = strlen(VALUE)
+
+
 #endif /* defined(__mod_h2__h2_util__) */

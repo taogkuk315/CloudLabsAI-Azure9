@@ -27,6 +27,7 @@
 #include "h2_mplx.h"
 #include "h2_to_h1.h"
 #include "h2_request.h"
+#include "h2_util.h"
 
 
 h2_request *h2_request_create(int id, apr_pool_t *pool)

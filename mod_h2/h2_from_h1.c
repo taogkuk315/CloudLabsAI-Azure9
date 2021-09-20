@@ -191,17 +191,30 @@ static apr_status_t parse_headers(h2_from_h1 *from_h1, conn_rec *c)
                 
                 if (line[0] == ' ' || line[0] == '\t') {
                     /* continuation line from the header before this */
-                    char *last = apr_array_pop(from_h1->hlines);
-                    if (last == NULL) {
+                    while (line[0] == ' ' || line[0] == '\t') {
+                        ++line;
+                    }
+                           
+                    char **plast = apr_array_pop(from_h1->hlines);
+                    if (plast == NULL) {
                         /* not well formed */
                         return APR_EINVAL;
                     }
+                    char *last = *plast;
                     char *last_eos = last + strlen(last);
-                    memmove(last_eos, line, strlen(line)+1);
-                    line = last;
+                    memmove(last_eos, line-1, strlen(line)+2);
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                                  "h2_from_h1(%d): continuing last line as: %s",
+                                  from_h1->stream_id, last);
+                    APR_ARRAY_PUSH(from_h1->hlines, const char*) = last;
                 }
-                /* new header line */
-                APR_ARRAY_PUSH(from_h1->hlines, const char*) = line;
+                else {
+                    /* new header line */
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                                  "h2_from_h1(%d): adding header line: %s",
+                                  from_h1->stream_id, line);
+                    APR_ARRAY_PUSH(from_h1->hlines, const char*) = line;
+                }
             }
         }
     }

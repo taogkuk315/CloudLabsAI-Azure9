@@ -64,10 +64,10 @@ test: \
 	@rm -rf $(GEN)/tmp
 	@mkdir -p $(GEN)/tmp
 	@$(INST_DIR)/bin/apachectl restart
-	@bash test_001.sh https://$(HTTPS_AUTH)
-	@bash test_001.sh http://$(HTTP_AUTH)
-	@bash test_002.sh https://$(HTTPS_AUTH)
-	@bash test_002.sh http://$(HTTP_AUTH)
+	@bash test_001_get.sh https://$(HTTPS_AUTH)
+	@bash test_001_get.sh http://$(HTTP_AUTH)
+	@bash test_002_post.sh https://$(HTTPS_AUTH)
+	@bash test_002_post.sh http://$(HTTP_AUTH)
 
 ################################################################################
 # Load Test
@@ -108,7 +108,7 @@ $(INST_DIR)/.testdocs-setup: \
 	$(wildcard htdocs/*/*)
 	@echo -n setup htdocs locally...
 	@cp -r htdocs/* $(INST_DIR)/htdocs
-	@chmod +x $(INST_DIR)/htdocs/test.example.org/*.py
+	@chmod +x $$(find $(INST_DIR)/htdocs/test.example.org/ -name "*.py" )
 	@echo done.
 	@touch $(INST_DIR)/.testdocs-setup
 

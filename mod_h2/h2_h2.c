@@ -132,10 +132,14 @@ static int h2_h2_alpn_propose(conn_rec *c,
         return DECLINED;
     }
     
-    if (!client_protos
-        || h2_util_array_index(client_protos, PROTO_H2_14) >= 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
+    if (client_protos && h2_util_array_index(client_protos, PROTO_H2_14) >= 0) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "ALPN proposing %s", PROTO_H2_14);
+        APR_ARRAY_PUSH(protos, const char*) = PROTO_H2_14;
+    }
+    else {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                      "NPN proposing %s from client selection", PROTO_H2_14);
         APR_ARRAY_PUSH(protos, const char*) = PROTO_H2_14;
     }
     return OK;

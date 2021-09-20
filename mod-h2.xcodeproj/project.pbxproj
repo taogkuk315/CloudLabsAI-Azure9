@@ -3624,7 +3624,7 @@
 		B2344BF31AB07E040043A2D5 /* 008.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = 008.html; sourceTree = "<group>"; };
 		B2344BF41AB07E040043A2D5 /* 009.php */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.php; path = 009.php; sourceTree = "<group>"; };
 		B2344BF51AB07E040043A2D5 /* index.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
-		B2344C051AB18D980043A2D5 /* test_002.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_002.sh; sourceTree = "<group>"; };
+		B2344C051AB18D980043A2D5 /* test_002_post.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_002_post.sh; sourceTree = "<group>"; };
 		B2546D881A7F71F80033A875 /* h2_task.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task.c; sourceTree = "<group>"; };
 		B2546D891A7F71F80033A875 /* h2_task.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task.h; sourceTree = "<group>"; };
 		B2546D8E1A7FA7D70033A875 /* h2_task_output.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_output.c; sourceTree = "<group>"; };
@@ -3643,6 +3643,8 @@
 		B2546E711A827B960033A875 /* x509.input */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = x509.input; sourceTree = "<group>"; };
 		B2546E731A827D470033A875 /* h2.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.conf; sourceTree = "<group>"; };
 		B2546E741A827D470033A875 /* h2.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.load; sourceTree = "<group>"; };
+		B26170E21AB30403007B1688 /* upload.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = upload.py; sourceTree = "<group>"; };
+		B26170E31AB305CC007B1688 /* hello.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = hello.py; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27BBD2E1A65927E00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = httpd/Makefile; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = "<none>"; };
 		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
@@ -4279,7 +4281,7 @@
 		B2E5D7871AAF1F4D001FD280 /* ChangeLog */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ChangeLog; sourceTree = "<group>"; };
 		B2E5D7881AAF1F4D001FD280 /* COPYING */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = COPYING; sourceTree = "<group>"; };
 		B2E5D7891AAF1F4D001FD280 /* NEWS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = NEWS; sourceTree = "<group>"; };
-		B2FE998A1AA5ECA000A5CE5A /* test_001.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_001.sh; sourceTree = "<group>"; };
+		B2FE998A1AA5ECA000A5CE5A /* test_001_get.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_001_get.sh; sourceTree = "<group>"; };
 		B2FE998C1AA5F40F00A5CE5A /* test_common.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_common.sh; sourceTree = "<group>"; };
 		B2FE998E1AA7496B00A5CE5A /* h2_to_h1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_to_h1.c; sourceTree = "<group>"; };
 		B2FE998F1AA7496B00A5CE5A /* h2_to_h1.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_to_h1.h; sourceTree = "<group>"; };
@@ -4294,8 +4296,8 @@
 				B2344B2C1AB07E040043A2D5 /* htdocs */,
 				B2E06CCA1A8E308000BE04D5 /* load-urls-1.txt */,
 				B22549091A6E8AF9004BDEC9 /* Makefile */,
-				B2FE998A1AA5ECA000A5CE5A /* test_001.sh */,
-				B2344C051AB18D980043A2D5 /* test_002.sh */,
+				B2FE998A1AA5ECA000A5CE5A /* test_001_get.sh */,
+				B2344C051AB18D980043A2D5 /* test_002_post.sh */,
 				B2FE998C1AA5F40F00A5CE5A /* test_common.sh */,
 			);
 			path = test;
@@ -9501,7 +9503,10 @@
 				B2344BF11AB07E040043A2D5 /* 008 */,
 				B2344BF31AB07E040043A2D5 /* 008.html */,
 				B2344BF41AB07E040043A2D5 /* 009.php */,
+				B26170E11AB303FA007B1688 /* files */,
+				B26170E31AB305CC007B1688 /* hello.py */,
 				B2344BF51AB07E040043A2D5 /* index.html */,
+				B26170E21AB30403007B1688 /* upload.py */,
 			);
 			path = test.example.org;
 			sourceTree = "<group>";
@@ -9745,6 +9750,13 @@
 				B2546E741A827D470033A875 /* h2.load */,
 			);
 			path = mods;
+			sourceTree = "<group>";
+		};
+		B26170E11AB303FA007B1688 /* files */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = files;
 			sourceTree = "<group>";
 		};
 		B27BBD1F1A65757700C58A41 = {

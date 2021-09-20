@@ -29,21 +29,6 @@
 #include "h2_util.h"
 #include "h2_response.h"
 
-#define H2_CREATE_NV_LIT_CS(nv, NAME, VALUE) nv->name = (uint8_t *)NAME;      \
-                                             nv->namelen = sizeof(NAME) - 1;  \
-                                             nv->value = (uint8_t *)VALUE;    \
-                                             nv->valuelen = strlen(VALUE)
-
-#define H2_CREATE_NV_CS_LIT(nv, NAME, VALUE) nv->name = (uint8_t *)NAME;      \
-                                             nv->namelen = strlen(NAME);      \
-                                             nv->value = (uint8_t *)VALUE;    \
-                                             nv->valuelen = sizeof(VALUE) - 1
-
-#define H2_CREATE_NV_CS_CS(nv, NAME, VALUE) nv->name = (uint8_t *)NAME;       \
-                                            nv->namelen = strlen(NAME);       \
-                                            nv->value = (uint8_t *)VALUE;     \
-                                            nv->valuelen = strlen(VALUE)
-
 h2_response *h2_response_create(int stream_id,
                                   apr_status_t task_status,
                                   const char *http_status,
@@ -77,6 +62,9 @@ h2_response *h2_response_create(int stream_id,
             nghttp2_nv *nv = &nvs[i + 1];
             char *sep = strchr(hline, ':');
             if (!sep) {
+                ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, pool,
+                              "h2_response(%d): invalid header[%d] '%s'",
+                              head->stream_id, i, (char*)hline);
                 /* not valid format, abort */
                 return NULL;
             }
@@ -85,15 +73,20 @@ h2_response *h2_response_create(int stream_id,
                 ++sep;
             }
             if (*sep) {
-                const char *hname = h2_strlwr(hline);
-                if (!strcmp("transfer-encoding", hname)) {
+                if (H2_HD_MATCH_LIT_CS("transfer-encoding", hline)) {
                     /* never forward this header */
                     if (!strcmp("chunked", sep)) {
                         head->chunked = 1;
                     }
                 }
+                else if (H2_HD_MATCH_LIT_CS("connection", hline)
+                         || H2_HD_MATCH_LIT_CS("proxy-connection", hline)
+                         || H2_HD_MATCH_LIT_CS("upgrade", hline)
+                         || H2_HD_MATCH_LIT_CS("keep-alive", hline)) {
+                    /* never forward, ch. 8.1.2.2 */
+                }
                 else {
-                    H2_CREATE_NV_CS_CS(nv, hname, sep);
+                    H2_CREATE_NV_CS_CS(nv, h2_strlwr(hline), sep);
                 }
             }
             else {
@@ -106,8 +99,9 @@ h2_response *h2_response_create(int stream_id,
         for (int i = 1; i < head->nvlen; ++i) {
             const nghttp2_nv *nv = &(&head->nv)[i];
             if (!head->chunked && !strcmp("content-length", (char*)nv->name)) {
-                apr_int64_t clen = apr_atoi64((char*)nv->value);
-                if (clen <= 0) {
+                char *end;
+                apr_int64_t clen = apr_strtoi64((char*)nv->value, &end, 10);
+                if (((char*)nv->value) == end) {
                     ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, pool,
                                   "h2_response(%d): content-length value not parsed: %s",
                                   head->stream_id, (char*)nv->value);

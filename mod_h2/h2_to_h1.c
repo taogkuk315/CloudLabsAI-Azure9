@@ -42,6 +42,8 @@ struct h2_to_h1 {
     int eos;
     int flushed;
     int seen_host;
+    int chunked;
+    apr_size_t remain_len;
 };
 
 h2_to_h1 *h2_to_h1_create(apr_pool_t *pool)
@@ -161,18 +163,33 @@ apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1, struct h2_mplx *m)
     return status;
 }
 
-#define HEADER_MATCH_LIT(l, name, nlen)  \
-    ((nlen == sizeof(l) - 1) && !apr_strnatcasecmp(l, name))
-
 apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
                                  const char *name, size_t nlen,
                                  const char *value, size_t vlen,
                                  h2_mplx *m)
 {
-    if ((to_h1->seen_host && HEADER_MATCH_LIT("host", name, nlen))
-        || HEADER_MATCH_LIT("upgrade", name, nlen)
-        || HEADER_MATCH_LIT("connection", name, nlen)
-        || HEADER_MATCH_LIT("http2-settings", name, nlen)) {
+    if (H2_HD_MATCH_LIT("transfer-encoding", name, nlen)) {
+        if (!apr_strnatcasecmp("chunked", value)) {
+            to_h1->chunked = 1;
+        }
+    }
+    else if (H2_HD_MATCH_LIT("content-length", name, nlen)) {
+        char *end;
+        to_h1->remain_len = apr_strtoi64(value, &end, 10);
+        if (value == end) {
+            ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, 
+                          h2_mplx_get_pool(m),
+                          "h2_request(%d): content-length value not parsed: %s",
+                          to_h1->stream_id, value);
+            return APR_EINVAL;
+        }
+    }
+    else if ((to_h1->seen_host && H2_HD_MATCH_LIT("host", name, nlen))
+        || H2_HD_MATCH_LIT("upgrade", name, nlen)
+        || H2_HD_MATCH_LIT("connection", name, nlen)
+        || H2_HD_MATCH_LIT("proxy-connection", name, nlen)
+        || H2_HD_MATCH_LIT("keep-alive", name, nlen)
+        || H2_HD_MATCH_LIT("http2-settings", name, nlen)) {
         // ignore these.
         return APR_SUCCESS;
     }
@@ -187,7 +204,7 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
             /* if this still does not work, we fail */
         }
     }
-    if (!to_h1->seen_host && HEADER_MATCH_LIT("host", name, nlen)) {
+    if (!to_h1->seen_host && H2_HD_MATCH_LIT("host", name, nlen)) {
         to_h1->seen_host = 1;
     }
     return status;

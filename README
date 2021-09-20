@@ -181,6 +181,11 @@ TODO
 - Detection at runtime that we are indeed running with mpm_worker, an error
   message to the log and stay inactive otherwise.
 - http trailers are not implemented
+- Firefox supported both ALPN+NPN and pmanus reports NPN being selected. Check
+  if there is anything we can do to enforce ALPN for that.
+- PMcManus reports that latency will be better when SSL Record sizes are smaller.
+  Check if we can tweak that for a mod_ssl connection.
+
 
 Licensing
 ---------
