@@ -114,12 +114,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         cleanup(input);
     }
     
-    if (input->eos) {
-        cleanup(input);
-        return APR_EOF;
-    }
-    
-    if (!input->cur) {
+    if (!input->eos && !input->cur) {
         /* Try to get new data for our stream from the queue.
          * If all data is in queue (could be none), do not block.
          * Getting none back in that case means we reached the
@@ -129,19 +124,34 @@ apr_status_t h2_task_input_read(h2_task_input *input,
             return APR_ECONNABORTED;
         }
         
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
+                      "h2_task_input(%s): get next bucket from mplx",
+                      input->task_id);
         status = h2_mplx_in_read(input->m, all_there? APR_NONBLOCK_READ : block,
                                  input->stream_id, &input->cur);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
+                      "h2_task_input(%s): mplx returned %ld bytes",
+                      input->task_id, 
+                      (long)(input->cur? input->cur->data_len : -1L));
         input->cur_offset = 0;
         if (status == APR_EOF) {
             input->eos = 1;
         }
     }
     
+    if (input->eos) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
+                      "h2_task_input(%s): read returns EOF",
+                      input->task_id);
+        cleanup(input);
+        return APR_EOF;
+    }
+    
     if (input->cur) {
         /* Got data, depends on the read mode how much we return. */
         h2_bucket *b = input->cur;
-        apr_size_t avail = (input->cur_offset < b->data_len)?
-        (b->data_len - input->cur_offset) : 0;
+        apr_size_t avail = ((input->cur_offset < b->data_len)?
+                            (b->data_len - input->cur_offset) : 0);
         if (avail > 0) {
             if (mode == AP_MODE_EXHAUSTIVE) {
                 /* return all we have */

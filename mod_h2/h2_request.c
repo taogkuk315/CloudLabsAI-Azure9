@@ -35,7 +35,7 @@ h2_request *h2_request_create(int id, apr_pool_t *pool)
     h2_request *req = apr_pcalloc(pool, sizeof(h2_request));
     if (req) {
         req->id = id;
-        req->to_h1 = h2_to_h1_create(pool);
+        req->to_h1 = h2_to_h1_create(id, pool);
     }
     return req;
 }
@@ -178,9 +178,10 @@ apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m)
     return h2_to_h1_close(req->to_h1, m);
 }
 
-h2_bucket *h2_request_steal_first_data(h2_request *req, int *peos)
+h2_bucket *h2_request_steal_first_data(h2_request *req, struct h2_mplx *m, 
+                                       int *peos)
 {
-    return h2_to_h1_steal_first_data(req->to_h1, peos);
+    return h2_to_h1_steal_first_data(req->to_h1, m, peos);
 }
 
 static apr_status_t insert_request_line(h2_request *req, h2_mplx *m)

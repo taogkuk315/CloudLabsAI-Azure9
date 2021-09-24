@@ -22,7 +22,7 @@ try:
         
         # strip leading path from file name to avoid directory traversal attacks
         fn = os.path.basename(fileitem.filename)
-        open('./' + fn, 'wb').write(fileitem.file.read())
+        open('./files/' + fn, 'wb').write(fileitem.file.read())
         message = 'The file "' + fn + '" was uploaded successfully'
 
     else:

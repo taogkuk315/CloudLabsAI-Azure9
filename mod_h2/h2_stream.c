@@ -99,8 +99,8 @@ h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
 {
     assert(stream);
     int input_eos = 0;
-    h2_bucket *data = h2_request_steal_first_data(stream->request, &input_eos);
-    h2_request_flush(stream->request, stream->m);
+    h2_bucket *data = h2_request_steal_first_data(stream->request, stream->m, 
+                                                  &input_eos);
     stream->task = h2_task_create(h2_mplx_get_id(stream->m),
                                   stream->id, master, stream->pool,
                                   data, input_eos, stream->m);

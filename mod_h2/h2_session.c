@@ -159,6 +159,9 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
         return NGHTTP2_ERR_INVALID_STREAM_ID;
     }
     
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+                  "h2_stream(%ld-%d): got DATA, length %ld",
+                  session->id, stream_id, len);
     apr_status_t status = h2_stream_write_data(stream, (const char *)data, len);
     return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_INVALID_STREAM_STATE;
 }
@@ -342,6 +345,8 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             }
             break;
         }
+        case NGHTTP2_DATA:
+            break;
         default:
             if (session->loglvl >= APLOG_DEBUG) {
                 char buffer[256];
@@ -634,7 +639,7 @@ apr_status_t h2_session_start(h2_session *session)
         --cslen; /* apr also counts the terminating 0 */
         apr_base64_decode(cs, s);
         
-        ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, session->r,
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, session->r,
                       "upgrading h2c session with nghttp2 from %s (%d)",
                       s, cslen);
         

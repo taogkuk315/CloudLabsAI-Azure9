@@ -71,6 +71,7 @@ apr_status_t h2_request_rwrite(h2_request *req, request_rec *r,
  * the request and is not written out.
  * Will return NULL if data has been flushed already.
  */
-struct h2_bucket *h2_request_steal_first_data(h2_request *req, int *peos);
+struct h2_bucket *h2_request_steal_first_data(h2_request *req, 
+                                              struct h2_mplx *m, int *peos);
 
 #endif /* defined(__mod_h2__h2_request__) */

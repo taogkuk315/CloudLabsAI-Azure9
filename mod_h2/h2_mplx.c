@@ -180,8 +180,9 @@ apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = h2_bucket_queue_pop(m->input, stream_id, pbucket);
-        while (!is_aborted(m, &status)
-               && block == APR_BLOCK_READ && status == APR_EAGAIN) {
+        while (status == APR_EAGAIN 
+               && !is_aborted(m, &status)
+               && block == APR_BLOCK_READ) {
             apr_thread_cond_wait(m->added_input, m->lock);
             status = h2_bucket_queue_pop(m->input, stream_id, pbucket);
         }

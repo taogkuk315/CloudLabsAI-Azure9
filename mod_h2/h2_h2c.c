@@ -55,7 +55,7 @@ static int h2_h2c_request_handler(request_rec *r)
     
     /* Check for the start of an h2c Upgrade dance. */
     if (h2_h2c_is_upgrade(r)) {
-        ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r,
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                      "seeing h2c upgrade invitation");
         /* We do not handle upgradeable requests with a body.
          * The reason being that we would need to read the body in full

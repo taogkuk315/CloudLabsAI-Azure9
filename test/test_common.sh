@@ -89,3 +89,17 @@ curl_check_content() {
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
 }
+
+curl_post_data() {
+    DOC="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@"
+    rm -rf $TMP
+    mkdir -p $TMP
+    cat > $TMP/data
+    echo -n "curl $URL_PREFIX/$DOC: $MSG..."
+    ${CURL} "$ARGS" --form file=@"$TMP/data" $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${CURL} "$ARGS" $URL_PREFIX/files/data > $TMP/data.down || fail
+    diff  $TMP/data $TMP/data.down || fail
+    echo ok.
+}
