@@ -327,8 +327,7 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
     }
     apr_status_t status = APR_SUCCESS;
     switch (frame->hd.type) {
-        case NGHTTP2_HEADERS:
-        case NGHTTP2_CONTINUATION: {
+        case NGHTTP2_HEADERS: {
             h2_stream * stream = h2_stream_set_get(session->streams,
                                                    frame->hd.stream_id);
             if (stream == NULL) {
