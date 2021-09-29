@@ -111,13 +111,6 @@ int h2_util_frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen)
                                 "WINDOW_UPDATE[length=%d, stream=%d]",
                                 (int)frame->hd.length, frame->hd.stream_id);
         }
-        case NGHTTP2_CONTINUATION: {
-            return apr_snprintf(buffer, maxlen,
-                                "CONTINUATION[length=%d, hend=%dm, stream=%d]",
-                                (int)frame->hd.length,
-                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
-                                frame->hd.stream_id);
-        }
         default:
             return apr_snprintf(buffer, maxlen,
                          "FRAME[type=%d, length=%d, flags=%d, stream=%d]",
