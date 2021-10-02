@@ -23,7 +23,7 @@ dist_doc_DATA   = README
 
 .PHONY: test loadtest start stop
 
-start: $(INST_DIR)/.test-setup
+start:
 	make -C test start
 
 stop:

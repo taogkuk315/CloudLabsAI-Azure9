@@ -16,11 +16,27 @@
 
 source test_common.sh
 
+CHR100="0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+"
 curl_post_data upload.py "file upload via http/1.1" --http1.1 <<EOF
 012345678901234567890123456789012345678901234567890123456789
 EOF
 
-curl_post_data upload.py "file upload via http/2" --http2 <<EOF
-0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
-EOF
+i=0
+rm -f $GEN/data-10k
+while [ $i -lt 100 ]; do
+echo -n "$CHR100" >> $GEN/data-10k
+i=$[ i + 1 ]
+done
+
+nghttp_post_file upload.py $GEN/data-10k "10k upload via http/2"
+
+# disabled for now, need to clarify if initial delay is bug in curl 
+# from previous Expect: handling
+#
+#curl_post_data upload.py "file upload via http/2" --http2 <<EOF
+#$CHR100
+#EOF
+
+
 

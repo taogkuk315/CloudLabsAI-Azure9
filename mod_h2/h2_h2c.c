@@ -24,6 +24,7 @@
 #include <http_connection.h>
 #include <http_log.h>
 #include <http_protocol.h>
+#include <http_request.h>
 
 #include "h2_private.h"
 #include "h2_conn.h"
@@ -36,20 +37,37 @@
 static int h2_h2c_request_handler(request_rec *r);
 static int h2_h2c_is_upgrade(request_rec *r);
 static int h2_h2c_upgrade_to(request_rec *r, const char *proto);
+static int h2_h2c_upgrade_options(request_rec *r);
 
 void h2_h2c_register_hooks(void)
 {
     ap_hook_handler(h2_h2c_request_handler, NULL, NULL, APR_HOOK_FIRST - 1);
+    ap_hook_map_to_storage(h2_h2c_upgrade_options, NULL, NULL, APR_HOOK_FIRST);
+}
+
+static int h2_h2c_upgrade_options(request_rec *r)
+{
+    if ((r->method_number == M_OPTIONS) && r->uri && (r->uri[0] == '*') &&
+        (r->uri[1] == '\0')) {
+        ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
+                      "h2c: request OPTIONS * seen");
+        return h2_h2c_request_handler(r);
+    }
+    return DECLINED;
 }
 
 static int h2_h2c_request_handler(request_rec *r)
 {
     if (h2_h2_is_tls(r->connection)) {
         /* h2c runs only on plain connections */
+        ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
+                      "h2c: request is from TLS, declined");
         return DECLINED;
     }
     if (h2_ctx_is_task(r->connection)) {
         /* h2_task connection for a stream, not for h2c */
+        ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
+                      "h2c: request is for task, declined");
         return DECLINED;
     }
     
@@ -63,10 +81,16 @@ static int h2_h2c_request_handler(request_rec *r)
          */
         const char *clen = apr_table_get(r->headers_in, "Content-Length");
         if (clen && strcmp(clen, "0")) {
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                          "upgrade with content-length: %s, declined", clen);
             return DECLINED;
         }
         return h2_h2c_upgrade_to(r, "h2c-14");
     }
+    else {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                      "no upgrade request: %s %s", r->method, r->uri);
+ }
     
     return DECLINED;
 }

@@ -154,7 +154,7 @@ apr_status_t h2_session_process(h2_session *session)
     }
     
     apr_interval_time_t wait_micros = 0;
-    static const int MAX_WAIT_MICROS = 200 * 1000; /* 100 ms */
+    static const int MAX_WAIT_MICROS = 200 * 1000;
     
     while (!h2_session_is_done(session)) {
         int have_written = 0;

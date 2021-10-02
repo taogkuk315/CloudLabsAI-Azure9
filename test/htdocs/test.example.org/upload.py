@@ -30,8 +30,11 @@ try:
         message = 'No file was uploaded'
 
 except KeyError:
-    status = '400 Parameter Missing'
-    message = 'No "file" parameter given'
+    message = '''\
+        Upload File<form method="POST" enctype="multipart/form-data">
+        <input type="file" name="file">
+        <button type="submit">Upload</button></form>
+        '''
     pass
 
 print "Status: %s" % (status,)

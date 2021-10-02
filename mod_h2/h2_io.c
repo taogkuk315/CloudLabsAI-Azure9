@@ -50,6 +50,7 @@ static apr_status_t h2_io_bucket_read(h2_io_ctx *io,
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t readlen = 0;
+    *pdone = 0;
     
     while (status == APR_SUCCESS && !*pdone
            && !APR_BRIGADE_EMPTY(io->input)) {
@@ -114,9 +115,8 @@ apr_status_t h2_io_read(h2_io_ctx *io,
         case APR_SUCCESS:
             return h2_io_bucket_read(io, block, on_read_cb, puser, &done);
         case APR_EOF:
-            return APR_EOF;
         case APR_EAGAIN:
-            return APR_EAGAIN;
+            break;
         default:
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
                           "h2_io: error reading");

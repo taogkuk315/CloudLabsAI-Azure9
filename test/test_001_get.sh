@@ -281,13 +281,19 @@ EOF
 
 curl_check_content upload.py "http/1.1" --http1.1 <<EOF
     <html><body>
-    <p>No "file" parameter given</p>
+    <p>        Upload File<form method="POST" enctype="multipart/form-data">
+        <input type="file" name="file">
+        <button type="submit">Upload</button></form>
+        </p>
     </body></html>
 EOF
 
 curl_check_content upload.py "http2"    --http2 <<EOF
     <html><body>
-    <p>No "file" parameter given</p>
+    <p>        Upload File<form method="POST" enctype="multipart/form-data">
+        <input type="file" name="file">
+        <button type="submit">Upload</button></form>
+        </p>
     </body></html>
 EOF
 

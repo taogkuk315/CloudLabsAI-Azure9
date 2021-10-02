@@ -226,12 +226,12 @@ static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
         return APR_EINVAL;
     }
     
-    apr_status_t status = ensure_data(to_h1, DATA_BLOCKSIZE);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    
     while (len > 0) {
+        apr_status_t status = ensure_data(to_h1, DATA_BLOCKSIZE);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+        
         apr_size_t written = h2_bucket_append(to_h1->data, data, len);
         if (written >= len) {
             break;
@@ -239,7 +239,7 @@ static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
         
         len -= written;
         data += written;
-        apr_status_t status = h2_to_h1_flush(to_h1, m);
+        status = h2_to_h1_flush(to_h1, m);
         if (status != APR_SUCCESS) {
             return status;
         }

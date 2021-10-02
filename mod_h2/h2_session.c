@@ -698,6 +698,12 @@ apr_status_t h2_session_start(h2_session *session)
     return status;
 }
 
+static int h2_session_want_read(h2_session *session)
+{
+    assert(session);
+    return nghttp2_session_want_read(session->ngh2);
+}
+
 static int h2_session_want_write(h2_session *session)
 {
     assert(session);
@@ -819,7 +825,10 @@ static apr_status_t session_receive(const char *data, apr_size_t len,
 apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
 {
     assert(session);
-    return h2_io_read(&session->io, block, session_receive, session);
+    if (h2_session_want_read(session)) {
+        return h2_io_read(&session->io, block, session_receive, session);
+    }
+    return APR_EAGAIN;
 }
 
 void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb)
