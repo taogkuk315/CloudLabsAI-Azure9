@@ -825,10 +825,7 @@ static apr_status_t session_receive(const char *data, apr_size_t len,
 apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
 {
     assert(session);
-    if (h2_session_want_read(session)) {
-        return h2_io_read(&session->io, block, session_receive, session);
-    }
-    return APR_EAGAIN;
+    return h2_io_read(&session->io, block, session_receive, session);
 }
 
 void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb)
