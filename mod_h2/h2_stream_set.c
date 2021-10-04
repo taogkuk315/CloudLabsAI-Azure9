@@ -32,15 +32,16 @@
 
 
 struct h2_stream_set {
-    h2_queue *queue;
+    apr_array_header_t *list;
+    int aborted;
 };
 
 h2_stream_set *h2_stream_set_create(apr_pool_t *pool)
 {
     h2_stream_set *sp = apr_pcalloc(pool, sizeof(h2_stream_set));
     if (sp) {
-        sp->queue = h2_queue_create(pool, NULL);
-        if (!sp->queue) {
+        sp->list = apr_array_make(pool, 100, sizeof(h2_stream*));
+        if (!sp->list) {
             return NULL;
         }
     }
@@ -49,85 +50,97 @@ h2_stream_set *h2_stream_set_create(apr_pool_t *pool)
 
 void h2_stream_set_destroy(h2_stream_set *sp)
 {
-    if (sp->queue) {
-        h2_queue_destroy(sp->queue);
-        sp->queue = NULL;
-    }
 }
 
 void h2_stream_set_term(h2_stream_set *sp)
 {
-    h2_queue_abort(sp->queue);
+    sp->aborted = 1;
 }
 
-apr_status_t h2_stream_set_add(h2_stream_set *sp, h2_stream *stream)
+static int h2_stream_id_cmp(const void *s1, const void *s2)
 {
-    if (h2_stream_set_get(sp, stream->id) == NULL) {
-        return h2_queue_push_id(sp->queue, stream->id, stream);
-    }
-    return APR_SUCCESS;
+    h2_stream **pstream1 = (h2_stream **)s1;
+    h2_stream **pstream2 = (h2_stream **)s2;
+    return (*pstream1)->id - (*pstream2)->id;
 }
 
 h2_stream *h2_stream_set_get(h2_stream_set *sp, int stream_id)
 {
-    return (h2_stream *)h2_queue_find_id(sp->queue, stream_id);
+    h2_stream key = { stream_id };
+    h2_stream *pkey = &key;
+    h2_stream **ps = bsearch(&pkey, sp->list->elts, sp->list->nelts, 
+                             sp->list->elt_size, h2_stream_id_cmp);
+    return ps? *ps : NULL;
+}
+
+void h2_stream_set_sort(h2_stream_set *sp)
+{
+    qsort(sp->list->elts, sp->list->nelts, sp->list->elt_size, 
+          h2_stream_id_cmp);
+}
+
+apr_status_t h2_stream_set_add(h2_stream_set *sp, h2_stream *stream)
+{
+    h2_stream *existing = h2_stream_set_get(sp, stream->id);
+    if (!existing) {
+        APR_ARRAY_PUSH(sp->list, h2_stream*) = stream;
+        h2_stream_set_sort(sp);
+    }
+    return APR_SUCCESS;
 }
 
 h2_stream *h2_stream_set_remove(h2_stream_set *sp, h2_stream *stream)
 {
-    return (h2_stream *)h2_queue_remove(sp->queue, stream);
+    for (int i = 0; i < sp->list->nelts; ++i) {
+        h2_stream *s = APR_ARRAY_IDX(sp->list, i, h2_stream*);
+        if (s == stream) {
+            int n = sp->list->nelts - i - 1;
+            sp->list->nelts -= 1;
+            if (n > 0) {
+                h2_stream **selts = (h2_stream**)sp->list->elts;
+                memmove(selts+i, selts+i+1, n * sizeof(h2_stream*));
+            }
+            return s;
+        }
+    }
+    return NULL;
 }
 
 void h2_stream_set_remove_all(h2_stream_set *sp)
 {
-    h2_queue_remove_all(sp->queue);
+    sp->list->nelts = 0;
 }
 
 int h2_stream_set_is_empty(h2_stream_set *sp)
 {
     assert(sp);
-    assert(sp->queue);
-    return h2_queue_is_empty(sp->queue);
-}
-
-typedef struct {
-    h2_stream_set_match_fn *match;
-    void *ctx;
-} h2_stream_match_ctx;
-
-static void *find_match(void *ctx, int id, void *entry)
-{
-    h2_stream_match_ctx *mctx = (h2_stream_match_ctx*)ctx;
-    return mctx->match(mctx->ctx, (h2_stream *)entry);
+    assert(sp->list);
+    return sp->list->nelts == 0;
 }
 
 h2_stream *h2_stream_set_find(h2_stream_set *sp,
                               h2_stream_set_match_fn match, void *ctx)
 {
-    h2_stream_match_ctx mctx = { match, ctx };
-    return h2_queue_find(sp->queue, find_match, &mctx);
-}
-
-typedef struct {
-    h2_stream_set_iter_fn *iter;
-    void *ctx;
-} h2_stream_iter_ctx;
-
-static int iter_wrap(void *ctx, int id, void *entry, int index)
-{
-    h2_stream_iter_ctx *ictx = (h2_stream_iter_ctx*)ctx;
-    return ictx->iter(ictx->ctx, (h2_stream *)entry);
+    h2_stream *s = NULL;
+    for (int i = 0; !s && i < sp->list->nelts; ++i) {
+        s = match(ctx, (h2_stream*)APR_ARRAY_IDX(sp->list, i, h2_stream*));
+    }
+    return s;
 }
 
 void h2_stream_set_iter(h2_stream_set *sp,
                         h2_stream_set_iter_fn *iter, void *ctx)
 {
-    h2_stream_iter_ctx ictx = { iter, ctx };
-    h2_queue_iter(sp->queue, iter_wrap, &ictx);
+    for (int i = 0; i < sp->list->nelts; ++i) {
+        h2_stream *s = (h2_stream*)APR_ARRAY_IDX(sp->list, i, h2_stream*);
+        if (!iter(ctx, s)) {
+            break;
+        }
+    }
 }
 
 apr_size_t h2_stream_set_size(h2_stream_set *sp)
 {
-    return h2_queue_size(sp->queue);
+    return sp->list->nelts;
 }
 
