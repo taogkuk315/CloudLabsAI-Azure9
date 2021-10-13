@@ -9,6 +9,7 @@ v0.2.0
  * fixed handling of uploads ;-)
  * enabled h2c upgrade for "OPTIONS *" requests
  * changed h2_stream_set implementation to use sorted apr array
+ * switched to nghttp2 v0.7.7 in sandbox
 
 v0.1.1
 --------------------------------------------------------------------------------
