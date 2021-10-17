@@ -31,8 +31,6 @@ h2_stream_set *h2_stream_set_create(apr_pool_t *pool);
 
 void h2_stream_set_destroy(h2_stream_set *sp);
 
-void h2_stream_set_term(h2_stream_set *sp);
-
 apr_status_t h2_stream_set_add(h2_stream_set *sp, h2_stream *stream);
 
 h2_stream *h2_stream_set_get(h2_stream_set *sp, int stream_id);
