@@ -30,12 +30,12 @@
 #include "h2_util.h"
 
 
-h2_request *h2_request_create(int id, apr_pool_t *pool)
+h2_request *h2_request_create(int id, apr_pool_t *pool, h2_mplx *m)
 {
     h2_request *req = apr_pcalloc(pool, sizeof(h2_request));
     if (req) {
         req->id = id;
-        req->to_h1 = h2_to_h1_create(id, pool);
+        req->to_h1 = h2_to_h1_create(id, pool, m);
     }
     return req;
 }
@@ -52,7 +52,6 @@ static apr_status_t insert_request_line(h2_request *req, h2_mplx *m);
 
 struct whctx {
     h2_to_h1 *to_h1;
-    h2_mplx *m;
 };
 
 static int write_header(void *puser, const char *key, const char *value)
@@ -60,8 +59,7 @@ static int write_header(void *puser, const char *key, const char *value)
     struct whctx *ctx = (struct whctx*)puser;
     apr_status_t status = h2_to_h1_add_header(ctx->to_h1,
                                               key, strlen(key),
-                                              value, strlen(value),
-                                              ctx->m);
+                                              value, strlen(value));
     return status == APR_SUCCESS;
 }
 
@@ -79,7 +77,7 @@ apr_status_t h2_request_rwrite(h2_request *req, request_rec *r,
     
     apr_status_t status = insert_request_line(req, m);
     req->started = 1;
-    struct whctx ctx = { req->to_h1, m };
+    struct whctx ctx = { req->to_h1 };
     apr_table_do(write_header, &ctx, r->headers_in, NULL);
     
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, status, r,
@@ -146,8 +144,7 @@ apr_status_t h2_request_write_header(h2_request *req,
         
         if (status == APR_SUCCESS) {
             status = h2_to_h1_add_header(req->to_h1,
-                                         name, nlen, value, vlen,
-                                         m);
+                                         name, nlen, value, vlen);
         }
     }
     
@@ -158,7 +155,7 @@ apr_status_t h2_request_write_data(h2_request *req,
                                    const char *data, size_t len,
                                    struct h2_mplx *m)
 {
-    return h2_to_h1_add_data(req->to_h1, data, len, m);
+    return h2_to_h1_add_data(req->to_h1, data, len);
 }
 
 apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m)
@@ -170,28 +167,28 @@ apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m)
         }
         req->started = 1;
     }
-    return h2_to_h1_end_headers(req->to_h1, m);
+    return h2_to_h1_end_headers(req->to_h1);
 }
 
 apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m)
 {
-    return h2_to_h1_close(req->to_h1, m);
+    return h2_to_h1_close(req->to_h1);
 }
 
 h2_bucket *h2_request_steal_first_data(h2_request *req, struct h2_mplx *m, 
                                        int *peos)
 {
-    return h2_to_h1_steal_first_data(req->to_h1, m, peos);
+    return h2_to_h1_steal_first_data(req->to_h1, peos);
 }
 
 static apr_status_t insert_request_line(h2_request *req, h2_mplx *m)
 {
     return h2_to_h1_start_request(req->to_h1, req->id,
                                   req->method, req->path,
-                                  req->authority, m);
+                                  req->authority);
 }
 
 apr_status_t h2_request_flush(h2_request *req, h2_mplx *m)
 {
-    return h2_to_h1_flush(req->to_h1, m);
+    return h2_to_h1_flush(req->to_h1);
 }

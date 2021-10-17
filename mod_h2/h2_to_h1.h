@@ -23,7 +23,7 @@ typedef struct h2_to_h1 h2_to_h1;
  * HTTP/1.1 format. The serialized data will be written onto the
  * given h2_mplx instance.
  */
-h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool);
+h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, struct h2_mplx *m);
 
 /* Destroy the converter and free resources. */
 void h2_to_h1_destroy(h2_to_h1 *to_h1);
@@ -33,33 +33,31 @@ void h2_to_h1_destroy(h2_to_h1 *to_h1);
  */
 apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1, int stream_id, 
                                     const char *method, const char *path,
-                                    const char *authority, struct h2_mplx *m);
+                                    const char *authority);
 
 /* Add a header to the serialization. Only valid to call after start
  * and before end_headers.
  */
 apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
                                  const char *name, size_t nlen,
-                                 const char *value, size_t vlen,
-                                 struct h2_mplx *m);
+                                 const char *value, size_t vlen);
 
 /* End the request headers.
  */
-apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, struct h2_mplx *m);
+apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1);
 
 /* Add request body data.
  */
 apr_status_t h2_to_h1_add_data(h2_to_h1 *to_h1,
-                               const char *data, size_t len,
-                               struct h2_mplx *m);
+                               const char *data, size_t len);
 
 /* Flush the converted data onto the h2_mplx instance.
  */
-apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1, struct h2_mplx *m);
+apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1);
 
 /* Close the request, flushed automatically.
  */
-apr_status_t h2_to_h1_close(h2_to_h1 *to_h1, struct h2_mplx *m);
+apr_status_t h2_to_h1_close(h2_to_h1 *to_h1);
 
 /* If the so far serialized data has not been flushed to the h2_mplx
  * yet, return this data and do not flush it. Also return, if this
@@ -69,7 +67,6 @@ apr_status_t h2_to_h1_close(h2_to_h1 *to_h1, struct h2_mplx *m);
  * Returns NULL, when either nor data is available or if any data
  * has already been flushed to the h2_mplx for this request.
  */
-h2_bucket *h2_to_h1_steal_first_data(h2_to_h1 *to_h1, struct h2_mplx *m, 
-                                     int *peos);
+h2_bucket *h2_to_h1_steal_first_data(h2_to_h1 *to_h1, int *peos);
 
 #endif /* defined(__mod_h2__h2_to_h1__) */

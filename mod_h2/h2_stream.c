@@ -60,7 +60,7 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master, struct h2_mplx *m)
         stream->state = H2_STREAM_ST_IDLE;
         stream->pool = spool;
         stream->m = m;
-        stream->request = h2_request_create(id, spool);
+        stream->request = h2_request_create(id, spool, m);
     }
     return stream;
 }

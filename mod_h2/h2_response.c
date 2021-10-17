@@ -36,12 +36,12 @@ h2_response *h2_response_create(int stream_id,
                                   h2_bucket *data,
                                   apr_pool_t *pool)
 {
-    apr_size_t nvlen = 1 + (hlines? hlines->nelts : 0);
+    apr_size_t nvmax = 1 + (hlines? hlines->nelts : 0);
     /* we allocate one block for the h2_response and the array of
      * nghtt2_nv structures.
      */
     h2_response *head = calloc(1, sizeof(h2_response)
-                                + (nvlen * sizeof(nghttp2_nv)));
+                                + (nvmax * sizeof(nghttp2_nv)));
     if (head == NULL) {
         return NULL;
     }
@@ -57,9 +57,10 @@ h2_response *h2_response_create(int stream_id,
         H2_CREATE_NV_LIT_CS(nvs, ":status", http_status);
 
         int seen_clen = 0;
+        int nvlen = 1;
         for (int i = 0; i < hlines->nelts; ++i) {
             char *hline = ((char **)hlines->elts)[i];
-            nghttp2_nv *nv = &nvs[i + 1];
+            nghttp2_nv *nv = &nvs[nvlen];
             char *sep = strchr(hline, ':');
             if (!sep) {
                 ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, pool,
@@ -87,11 +88,13 @@ h2_response *h2_response_create(int stream_id,
                 }
                 else {
                     H2_CREATE_NV_CS_CS(nv, h2_strlwr(hline), sep);
+                    ++nvlen;
                 }
             }
             else {
                 /* reached end of line, an empty header value */
                 H2_CREATE_NV_CS_LIT(nv, h2_strlwr(hline), "");
+                ++nvlen;
             }
         }
         head->nvlen = nvlen;

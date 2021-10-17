@@ -38,6 +38,7 @@
 struct h2_to_h1 {
     h2_bucket *data;
     int stream_id;
+    h2_mplx *m;
     int eoh;
     int eos;
     int flushed;
@@ -46,11 +47,12 @@ struct h2_to_h1 {
     apr_size_t remain_len;
 };
 
-h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool)
+h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, h2_mplx *m)
 {
     h2_to_h1 *to_h1 = apr_pcalloc(pool, sizeof(h2_to_h1));
     if (to_h1) {
         to_h1->stream_id = stream_id;
+        to_h1->m = m;
     }
     return to_h1;
 }
@@ -79,17 +81,16 @@ apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
                                     int stream_id,
                                     const char *method,
                                     const char *path,
-                                    const char *authority,
-                                    h2_mplx *m)
+                                    const char *authority)
 {
     apr_status_t status = APR_SUCCESS;
     if (!method) {
-        ap_log_perror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_pool(m),
+        ap_log_perror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_pool(to_h1->m),
                       "h2_to_h1: header start but :method missing");
         return APR_EGENERAL;
     }
     if (!path) {
-        ap_log_perror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_pool(m),
+        ap_log_perror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_pool(to_h1->m),
                       "h2_to_h1: header start but :path missing");
         return APR_EGENERAL;
     }
@@ -104,7 +105,7 @@ apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
     size_t total = mlen + 1 + plen + HTTP_RLINE_SUFFIX_LEN;
     if (!h2_bucket_has_free(to_h1->data, total)) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENAMETOOLONG,
-                      h2_mplx_get_pool(m), "h2_to_h1: adding request line");
+                      h2_mplx_get_pool(to_h1->m), "h2_to_h1: adding request line");
         return APR_ENAMETOOLONG;
     }
     h2_bucket_append(to_h1->data, method, mlen);
@@ -114,7 +115,7 @@ apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
 
     if (authority) {
         status = h2_to_h1_add_header(to_h1, "Host", 4,
-                                     authority, strlen(authority), m);
+                                     authority, strlen(authority));
     }
     return status;
 }
@@ -141,8 +142,7 @@ static apr_status_t append_header(h2_bucket *bucket,
 
 apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
                                  const char *name, size_t nlen,
-                                 const char *value, size_t vlen,
-                                 h2_mplx *m)
+                                 const char *value, size_t vlen)
 {
     if (H2_HD_MATCH_LIT("transfer-encoding", name, nlen)) {
         if (!apr_strnatcasecmp("chunked", value)) {
@@ -154,7 +154,7 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
         to_h1->remain_len = apr_strtoi64(value, &end, 10);
         if (value == end) {
             ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, 
-                          h2_mplx_get_pool(m),
+                          h2_mplx_get_pool(to_h1->m),
                           "h2_request(%d): content-length value not parsed: %s",
                           to_h1->stream_id, value);
             return APR_EINVAL;
@@ -175,7 +175,7 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
     if (status == APR_ENAMETOOLONG && to_h1->data->data_len > 0) {
         /* header did not fit into bucket, push bucket to input and
          * get a new one */
-        status = h2_to_h1_flush(to_h1, m);
+        status = h2_to_h1_flush(to_h1);
         if (status == APR_SUCCESS) {
             status = append_header(to_h1->data, name, nlen, value, vlen);
             /* if this still does not work, we fail */
@@ -188,7 +188,7 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
 }
 
 
-apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, struct h2_mplx *m)
+apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1)
 {
     if (to_h1->eoh) {
         return APR_EINVAL;
@@ -200,7 +200,7 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, struct h2_mplx *m)
     }
     
     if (!h2_bucket_has_free(to_h1->data, 2)) {
-        status = h2_to_h1_flush(to_h1, m);
+        status = h2_to_h1_flush(to_h1);
     }
     
     if (status == APR_SUCCESS) {
@@ -219,8 +219,7 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, struct h2_mplx *m)
 }
 
 static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
-                                          const char *data, size_t len,
-                                          struct h2_mplx *m)
+                                          const char *data, size_t len)
 {
     if (to_h1->eos || !to_h1->eoh) {
         return APR_EINVAL;
@@ -239,7 +238,7 @@ static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
         
         len -= written;
         data += written;
-        status = h2_to_h1_flush(to_h1, m);
+        status = h2_to_h1_flush(to_h1);
         if (status != APR_SUCCESS) {
             return status;
         }
@@ -249,10 +248,9 @@ static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
 
 
 apr_status_t h2_to_h1_add_data(h2_to_h1 *to_h1,
-                               const char *data, size_t len,
-                               struct h2_mplx *m)
+                               const char *data, size_t len)
 {
-    ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(m),
+    ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(to_h1->m),
                   "h2_request(%d): add %ld data bytes", 
                   to_h1->stream_id, (long)len);
     
@@ -262,68 +260,67 @@ apr_status_t h2_to_h1_add_data(h2_to_h1 *to_h1,
         //
         char buffer[32];
         size_t chunklen = sprintf(buffer, "%lx\r\n", len);
-        apr_status_t status = h2_to_h1_add_data_raw(to_h1, buffer, chunklen, m);
+        apr_status_t status = h2_to_h1_add_data_raw(to_h1, buffer, chunklen);
         if (status != APR_SUCCESS) {
             return status;
         }
     }
     
-    return h2_to_h1_add_data_raw(to_h1, data, len, m);
+    return h2_to_h1_add_data_raw(to_h1, data, len);
 }
 
-apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1, h2_mplx *m)
+apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1)
 {
     apr_status_t status = APR_SUCCESS;
     int write_close = !to_h1->flushed && to_h1->eos;
     if (to_h1->data) {
-        ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(m),
+        ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(to_h1->m),
                       "h2_to_h1(%d): flush %ld data bytes", 
                       to_h1->stream_id, to_h1->data->data_len);
         
-        status = h2_mplx_in_write(m, to_h1->stream_id, to_h1->data);
+        status = h2_mplx_in_write(to_h1->m, to_h1->stream_id, to_h1->data);
         to_h1->data = NULL;
         if (status == APR_SUCCESS) {
             to_h1->flushed = 1;
         }
         else {
             ap_log_perror(APLOG_MARK, APLOG_ERR, status,
-                          h2_mplx_get_pool(m),
+                          h2_mplx_get_pool(to_h1->m),
                           "h2_request(%d): pushing request data",
                           to_h1->stream_id);
         }
     }
     
     if (write_close) {
-        ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(m),
+        ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(to_h1->m),
                       "h2_to_h1(%d): adding close to mplx", to_h1->stream_id);
-        h2_mplx_in_close(m, to_h1->stream_id);
+        h2_mplx_in_close(to_h1->m, to_h1->stream_id);
     }
     return status;
 }
 
-apr_status_t h2_to_h1_close(h2_to_h1 *to_h1, h2_mplx *m)
+apr_status_t h2_to_h1_close(h2_to_h1 *to_h1)
 {
-    ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(m),
+    ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(to_h1->m),
                   "h2_to_h1(%d): close", to_h1->stream_id);
     
     apr_status_t status = APR_SUCCESS;
     if (!to_h1->eos) {
         to_h1->eos = 1;
         if (to_h1->flushed) {
-            status = h2_to_h1_flush(to_h1, m);
+            status = h2_to_h1_flush(to_h1);
             if (status == APR_SUCCESS) {
-                ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(m),
+                ap_log_perror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_pool(to_h1->m),
                               "h2_to_h1(%d): adding close to mplx", 
                               to_h1->stream_id);
-                status = h2_mplx_in_close(m, to_h1->stream_id);
+                status = h2_mplx_in_close(to_h1->m, to_h1->stream_id);
             }
         }
     }
     return status;
 }
 
-h2_bucket *h2_to_h1_steal_first_data(h2_to_h1 *to_h1, struct h2_mplx *m, 
-                                     int *peos)
+h2_bucket *h2_to_h1_steal_first_data(h2_to_h1 *to_h1, int *peos)
 {
     *peos = 0;
     if (!to_h1->flushed && to_h1->data) {
