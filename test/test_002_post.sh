@@ -16,11 +16,22 @@
 
 source test_common.sh
 
-CHR100="0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+CHR100="012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678
 "
-curl_post_data upload.py "file upload via http/1.1" --http1.1 <<EOF
-012345678901234567890123456789012345678901234567890123456789
-EOF
+
+rm -f $GEN/data-*
+i=0; while [ $i -lt 10 ]; do
+    echo -n "$CHR100" >> $GEN/data-1k
+    i=$[ i + 1 ]
+done
+i=0; while [ $i -lt 10 ]; do
+    cat $GEN/data-1k >> $GEN/data-10k
+    i=$[ i + 1 ]
+done
+i=0; while [ $i -lt 10 ]; do
+    cat $GEN/data-10k >> $GEN/data-100k
+    i=$[ i + 1 ]
+done
 
 i=0
 rm -f $GEN/data-10k
@@ -29,14 +40,26 @@ echo -n "$CHR100" >> $GEN/data-10k
 i=$[ i + 1 ]
 done
 
-nghttp_post_file upload.py $GEN/data-10k "10k upload via http/2"
+# just a check that things are working
+curl_post_data upload.py $GEN/data-1k "file upload via http/1.1" --http1.1
 
-# disabled for now, need to clarify if initial delay is bug in curl 
-# from previous Expect: handling
+# on curl 7.40.0 and earlier, there will be a delay before the upload
+# commences. Fix is underway, thanks @badger!
+# Caveat: on h2c, the connection will not be upgraded, since curl sends
+# the POST as first request and mod_h2 does not upgrade on requests with
+# content. Currently we have no means to check that his is happening.
 #
-#curl_post_data upload.py "file upload via http/2" --http2 <<EOF
-#$CHR100
-#EOF
+curl_post_data upload.py $GEN/data-1k "1k file upload via http/2" --http2
+curl_post_data upload.py $GEN/data-10k "10k file upload via http/2" --http2
+curl_post_data upload.py $GEN/data-100k "100k file upload via http/2" --http2
+
+# Tests witht the nghttp client that *requires* h2/h2c. Sends "OPTIONS *"
+# on h2c which is a good test.
+#
+nghttp_post_file upload.py $GEN/data-1k   "1k upload via http/2"
+nghttp_post_file upload.py $GEN/data-10k  "10k upload via http/2"
+nghttp_post_file upload.py $GEN/data-100k "100k upload via http/2"
+
 
 
 

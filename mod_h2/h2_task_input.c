@@ -106,10 +106,6 @@ apr_status_t h2_task_input_read(h2_task_input *input,
     apr_size_t nread = 0;
     int all_there = all_queued(input);
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, filter->c,
-                  "h2_task_input(%s): read() asking for %d bytes",
-                  input->task_id, (int)readbytes);
-    
     if (input->cur && input->cur_offset >= input->cur->data_len) {
         cleanup(input);
     }
@@ -201,7 +197,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
                                                             nread, brigade->bucket_alloc));
         if (mode != AP_MODE_SPECULATIVE) {
             input->cur_offset += nread;
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, filter->c,
                           "h2_task_input(%s): forward %d bytes",
                           input->task_id, (int)nread);
         }

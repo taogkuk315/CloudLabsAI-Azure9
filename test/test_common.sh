@@ -107,15 +107,16 @@ curl_post_file() {
 
 curl_post_data() {
     DOC="$1"; shift;
+    FILE="$1"; shift;
     MSG="$1"; shift;
     ARGS="$@"
+    fname="$(basename $FILE)"
     rm -rf $TMP
     mkdir -p $TMP
-    cat > $TMP/data
     echo -n "curl $URL_PREFIX/$DOC: $MSG..."
-    ${CURL} "$ARGS" --form file=@"$TMP/data" $URL_PREFIX/$DOC > $TMP/$DOC || fail
-    ${CURL} "$ARGS" $URL_PREFIX/files/data > $TMP/data.down || fail
-    diff  $TMP/data $TMP/data.down || fail
+    ${CURL} "$ARGS" --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${CURL} "$ARGS" $URL_PREFIX/files/"$fname" > $TMP/data.down || fail
+    diff  $FILE $TMP/data.down || fail
     echo ok.
 }
 
@@ -145,8 +146,8 @@ EOF
 EOF
     echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
     ${NGHTTP} -uv --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
-#${NGHTTP} -u "$ARGS" $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
-#diff  $FILE $TMP/data.down || fail
+    ${NGHTTP} -u "$ARGS" $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
+    diff  $FILE $TMP/data.down || fail
     echo ok.
 }
 
