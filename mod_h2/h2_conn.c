@@ -41,6 +41,9 @@ static apr_status_t before_stream_close_cb(h2_session *session,
                                            h2_stream *stream, h2_task *task,
                                            int wait);
 
+static h2_mpm_type_t mpm_type = H2_MPM_UNKNOWN;
+static module *mpm_module = NULL;
+
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
     h2_config *config = h2_config_sget(s);
@@ -53,12 +56,27 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     int threads_limit = 0;
     ap_mpm_query(AP_MPMQ_HARD_LIMIT_THREADS, &threads_limit);
     
+    for (int i = 0; ap_loaded_modules[i]; ++i) {
+        module *m = ap_loaded_modules[i];
+        if (!strcmp("event.c", m->name)) {
+            mpm_type = H2_MPM_EVENT;
+            mpm_module = m;
+        }
+        else if (!strcmp("worker.c", m->name)) {
+            mpm_type = H2_MPM_WORKER;
+            mpm_module = m;
+        }
+    }
+    
     ap_log_error(APLOG_MARK, APLOG_INFO, 0, s,
                  "h2_conn: child init with conf[%s]: "
-                 "min_workers=%d, max_workers=%d,"
-                 "mpm-threads=%d, mpm-threads-limit=%d",
+                 "min_workers=%d, max_workers=%d, "
+                 "mpm-threads=%d, mpm-threads-limit=%d, "
+                 "mpm-type=%d(%s)",
                  config->name, config->min_workers, config->max_workers,
-                 max_threads_per_child, threads_limit);
+                 max_threads_per_child, threads_limit, mpm_type,
+                 mpm_module? mpm_module->name : "unknown");
+    
     if (minw <= 0) {
         minw = max_threads_per_child / 2;
     }
@@ -72,6 +90,14 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     h2_workers_set_max_idle_secs(
         workers, h2_config_geti(config, H2_CONF_MAX_WORKER_IDLE_SECS));
     return status;
+}
+
+h2_mpm_type_t h2_conn_mpm_type() {
+    return mpm_type;
+}
+
+module *h2_conn_mpm_module() {
+    return mpm_module;
 }
 
 apr_status_t h2_conn_rprocess(request_rec *r)

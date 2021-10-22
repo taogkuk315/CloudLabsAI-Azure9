@@ -51,7 +51,11 @@ curl_post_data upload.py $GEN/data-1k "file upload via http/1.1" --http1.1
 #
 curl_post_data upload.py $GEN/data-1k "1k file upload via http/2" --http2
 curl_post_data upload.py $GEN/data-10k "10k file upload via http/2" --http2
+#CURL="time $CURL"
+#curl_post_data upload.py $GEN/data-100k "100k file upload default"
 curl_post_data upload.py $GEN/data-100k "100k file upload via http/2" --http2
+#curl_post_data upload.py $GEN/data-100k "100k file upload default w. Expect" -H 'Expect:'
+#curl_post_data upload.py $GEN/data-100k "100k file upload via http/2 w. Expect" --http2 -H 'Expect:'
 
 # Tests witht the nghttp client that *requires* h2/h2c. Sends "OPTIONS *"
 # on h2c which is a good test.

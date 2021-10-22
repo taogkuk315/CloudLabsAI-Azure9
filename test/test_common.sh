@@ -114,8 +114,8 @@ curl_post_data() {
     rm -rf $TMP
     mkdir -p $TMP
     echo -n "curl $URL_PREFIX/$DOC: $MSG..."
-    ${CURL} "$ARGS" --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC || fail
-    ${CURL} "$ARGS" $URL_PREFIX/files/"$fname" > $TMP/data.down || fail
+    ${CURL} $ARGS --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${CURL} $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down || fail
     diff  $FILE $TMP/data.down || fail
     echo ok.
 }

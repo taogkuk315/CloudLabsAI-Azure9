@@ -23,9 +23,12 @@
 #include <http_core.h>
 #include <http_log.h>
 #include <http_connection.h>
+#include <http_protocol.h>
+#include <http_request.h>
 
 #include "h2_private.h"
 #include "h2_bucket.h"
+#include "h2_conn.h"
 #include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
@@ -115,6 +118,50 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
     return DONE;
 }
 
+typedef struct event_conn_state_t event_conn_state_t;
+struct event_conn_state_t {
+    /** APR_RING of expiration timeouts */
+    APR_RING_ENTRY(event_conn_state_t) timeout_list;
+    /** the expiration time of the next keepalive timeout */
+    apr_time_t expiration_time;
+    /** connection record this struct refers to */
+    conn_rec *c;
+    /** request record (if any) this struct refers to */
+    request_rec *r;
+    /** is the current conn_rec suspended?  (disassociated with
+     * a particular MPM thread; for suspend_/resume_connection
+     * hooks)
+     */
+    int suspended;
+    /** memory pool to allocate from */
+    apr_pool_t *p;
+    /** bucket allocator */
+    apr_bucket_alloc_t *bucket_alloc;
+    /** poll file descriptor information */
+    apr_pollfd_t pfd;
+    /** public parts of the connection state */
+    conn_state_t pub;
+};
+APR_RING_HEAD(timeout_head_t, event_conn_state_t);
+
+static void fix_event_conn(h2_task *task, conn_rec *master) 
+{
+    event_conn_state_t *master_cs = ap_get_module_config(master->conn_config, 
+                                                         h2_conn_mpm_module());
+    event_conn_state_t *cs = apr_pcalloc(task->pool, sizeof(event_conn_state_t));
+    cs->bucket_alloc = apr_bucket_alloc_create(task->pool);
+    
+    ap_set_module_config(task->c->conn_config, h2_conn_mpm_module(), cs);
+    
+    cs->c = task->c;
+    cs->r = NULL;
+    cs->p = master_cs->p;
+    cs->pfd = master_cs->pfd;
+    cs->pub = master_cs->pub;
+    cs->pub.state = CONN_STATE_READ_REQUEST_LINE;
+    
+    task->c->cs = &(cs->pub);
+}
 
 static apr_status_t h2_conn_create(h2_task *task, conn_rec *master)
 {
@@ -144,6 +191,21 @@ static apr_status_t h2_conn_create(h2_task *task, conn_rec *master)
         return APR_EGENERAL;
     }
     
+    /* This works for mpm_worker so far. Other mpm modules have different needs,
+     * unfortunately. The most interesting one being mpm_event...
+     */
+    switch (h2_conn_mpm_type()) {
+        case H2_MPM_WORKER:
+            /* all fine */
+            break;
+        case H2_MPM_EVENT: 
+            fix_event_conn(task, master);
+            break;
+        default:
+            /* fingers crossed */
+            break;
+    }
+    
     ap_log_perror(APLOG_MARK, APLOG_TRACE3, 0, task->pool,
                   "h2_task: created con %ld from master %ld",
                   task->c->id, master->id);
@@ -155,6 +217,7 @@ static apr_status_t setup_connection(h2_task *task, apr_pool_t *parent) {
     apr_status_t status = APR_SUCCESS;
     if (task->own_pool) {
         status = apr_pool_create_ex(&task->pool, parent, NULL, NULL);
+        apr_pool_tag(task->pool, task->id);
     }
     else {
         task->pool = parent;
@@ -180,8 +243,9 @@ h2_task *h2_task_create(long session_id,
     h2_task *task = apr_pcalloc(stream_pool, sizeof(h2_task));
     if (task == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream_pool,
-                      "h2_task(%s): unable to create stream task", task->id);
-        h2_mplx_out_reset(mplx, task->stream_id, APR_ENOMEM);
+                      "h2_task(%ld-%d): create stream task", 
+                      session_id, stream_id);
+        h2_mplx_out_reset(mplx, stream_id, APR_ENOMEM);
         return NULL;
     }
     
@@ -239,11 +303,13 @@ apr_status_t h2_task_destroy(h2_task *task)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_task_do(h2_task *task)
+apr_status_t h2_task_do(h2_task *task, apr_thread_t *thd)
 {
     assert(task);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
                   "h2_task(%s): do", task->id);
+    
+    task->c->current_thread = thd;
     
     /* Furthermore, other code might want to see the socket for
      * this connection. Allocate one without further function...
@@ -253,13 +319,12 @@ apr_status_t h2_task_do(h2_task *task)
                                             APR_PROTO_TCP, task->pool);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, task->c,
-                      "h2_stream_process, unable to alloc socket");
+                      "h2_task/%s): alloc socket", task->id);
         h2_mplx_out_reset(task->mplx, task->stream_id, status);
         return status;
     }
     
     ap_set_module_config(task->c->conn_config, &core_module, task->socket);
-    
     ap_process_connection(task->c, task->socket);
 
     if (!h2_task_output_has_started(task->output)) {

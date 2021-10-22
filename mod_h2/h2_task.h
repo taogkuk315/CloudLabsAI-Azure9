@@ -57,7 +57,7 @@ h2_task *h2_task_create(long session_id,
 
 apr_status_t h2_task_destroy(h2_task *task);
 
-apr_status_t h2_task_do(h2_task *task);
+apr_status_t h2_task_do(h2_task *task, apr_thread_t *thd);
 
 void h2_task_abort(h2_task *task);
 int h2_task_is_aborted(h2_task *task);

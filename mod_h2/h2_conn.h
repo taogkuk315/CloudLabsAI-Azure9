@@ -35,5 +35,17 @@ apr_status_t h2_conn_rprocess(request_rec *r);
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s);
 
 
+typedef enum {
+    H2_MPM_UNKNOWN,
+    H2_MPM_WORKER,
+    H2_MPM_EVENT,
+} h2_mpm_type_t;
+
+/* Returns the type of MPM module detected */
+h2_mpm_type_t h2_conn_mpm_type();
+
+/* Gives the detected module itself or NULL if unknown */
+module *h2_conn_mpm_module();
+
 
 #endif /* defined(__mod_h2__h2_conn__) */

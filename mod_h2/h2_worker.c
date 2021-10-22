@@ -44,7 +44,7 @@ static void *execute(apr_thread_t *thread, void *wctx)
     
     while (!worker->aborted) {
         if (worker->current) {
-            apr_status_t status = h2_task_do(worker->current);
+            apr_status_t status = h2_task_do(worker->current, thread);
             worker->current = worker->task_done(worker, worker->current,
                                                 status, worker->ctx);
         }
