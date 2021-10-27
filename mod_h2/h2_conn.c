@@ -21,9 +21,13 @@
 #include <http_core.h>
 #include <http_config.h>
 #include <http_log.h>
+#include <http_connection.h>
+#include <http_protocol.h>
+#include <http_request.h>
 
 #include "h2_private.h"
 #include "h2_config.h"
+#include "h2_ctx.h"
 #include "h2_bucket_queue.h"
 #include "h2_session.h"
 #include "h2_stream.h"
@@ -118,11 +122,11 @@ apr_status_t h2_conn_rprocess(request_rec *r)
     return h2_session_process(session);
 }
 
-apr_status_t h2_conn_process(conn_rec *c)
+apr_status_t h2_conn_main(conn_rec *c)
 {
     h2_config *config = h2_config_get(c);
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_conn_process start");
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "h2_conn_main start");
     if (!workers) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, "workers not initialized");
         return APR_EGENERAL;
@@ -276,3 +280,196 @@ static apr_status_t before_stream_close_cb(h2_session *session,
     return status;
 }
 
+
+static void fix_event_conn(conn_rec *c, conn_rec *master);
+
+h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *parent)
+{
+    assert(master);
+    apr_status_t status = APR_SUCCESS;
+    apr_pool_t *pool;
+    
+    status = apr_pool_create(&pool, parent);
+    if (status == APR_SUCCESS) {
+        /* Setup a apache connection record for this stream.
+         * General idea is borrowed from mod_spdy::slave_connection.cc,
+         * partly replaced with some more modern calls to ap infrastructure.
+         *
+         * Here, we are tasting some sweet, internal knowledge, e.g. that
+         * the core module is storing the connection socket as its config.
+         * "ap_run_create_connection() needs a real socket as it tries to
+         * detect local and client address information and fails if it is
+         * unable to get it.
+         * In case someone ever replaces these core hooks, this will probably
+         * break miserably.
+         */
+        h2_conn *conn = apr_pcalloc(pool, sizeof(*conn));
+        conn->id = id;
+        conn->pool = pool;
+        apr_pool_tag(pool, id);
+
+        conn->bucket_alloc = apr_bucket_alloc_create(conn->pool);
+        conn->socket = ap_get_module_config(master->conn_config,
+                                            &core_module);
+        conn->master = master;
+        
+        /* TODO: should have own scoreboard handle, but where to
+         * take the child/worker ids from?
+         */
+        conn->c = ap_run_create_connection(conn->pool, conn->master->base_server,
+                                           conn->socket,
+                                           conn->master->id^((long)conn->pool), 
+                                           conn->master->sbh,
+                                           conn->bucket_alloc);
+        if (conn->c == NULL) {
+            ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, conn->pool,
+                          "h2_task: creating conn");
+            return NULL;
+        }
+        
+        return conn;
+    }
+    return NULL;
+}
+
+void h2_conn_destroy(h2_conn *conn)
+{
+    if (conn->c) {
+        /* more to do? */
+        conn->c = NULL;
+    }
+    if (conn->pool) {
+        apr_pool_destroy(conn->pool);
+        /* conn is gone */
+    }
+}
+
+apr_status_t h2_conn_prep(h2_conn *conn, apr_thread_t *thd)
+{
+    assert(conn);
+   
+    /* This works for mpm_worker so far. Other mpm modules have 
+     * different needs, unfortunately. The most interesting one 
+     * being mpm_event...
+     */
+    switch (h2_conn_mpm_type()) {
+        case H2_MPM_WORKER:
+            /* all fine */
+            break;
+        case H2_MPM_EVENT: 
+            fix_event_conn(conn->c, conn->master);
+            break;
+        default:
+            /* fingers crossed */
+            break;
+    }
+    
+    ap_log_perror(APLOG_MARK, APLOG_TRACE3, 0, conn->pool,
+                  "h2_conn(%s): created from master %ld",
+                  conn->id, conn->master->id);
+    
+    conn->c->current_thread = thd;
+    
+    /* Furthermore, other code might want to see the socket for
+     * this connection. Allocate one without further function...
+     */
+    apr_status_t status = apr_socket_create(&conn->socket,
+                                            APR_INET, SOCK_STREAM,
+                                            APR_PROTO_TCP, conn->pool);
+    if (status != APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, conn->c,
+                      "h2_conn(%s): alloc socket", conn->id);
+        return status;
+    }
+    
+    ap_set_module_config(conn->c->conn_config, &core_module, 
+                         conn->socket);
+    return status;
+}
+
+apr_status_t h2_conn_process(h2_conn *conn)
+{
+    assert(conn);
+    assert(conn->c);
+    
+    ap_process_connection(conn->c, conn->socket);
+    
+    if (conn->socket) {
+        apr_socket_close(conn->socket);
+        conn->socket = NULL;
+    }
+    
+    return APR_SUCCESS;
+}
+
+#define H2_EVENT_HACK   1
+
+#if H2_EVENT_HACK
+
+/* This is an internal mpm event.c struct which is disguised
+ * as a conn_state_t so that mpm_event can have special connection
+ * state information without changing the struct seen on the outside.
+ *
+ * For our task connections we need to create a new beast of this type
+ * and fill it with enough meaningful things that mpm_event reads and
+ * starts processing out task request.
+ */
+typedef struct event_conn_state_t event_conn_state_t;
+struct event_conn_state_t {
+    /** APR_RING of expiration timeouts */
+    APR_RING_ENTRY(event_conn_state_t) timeout_list;
+    /** the expiration time of the next keepalive timeout */
+    apr_time_t expiration_time;
+    /** connection record this struct refers to */
+    conn_rec *c;
+    /** request record (if any) this struct refers to */
+    request_rec *r;
+    /** is the current conn_rec suspended?  (disassociated with
+     * a particular MPM thread; for suspend_/resume_connection
+     * hooks)
+     */
+    int suspended;
+    /** memory pool to allocate from */
+    apr_pool_t *p;
+    /** bucket allocator */
+    apr_bucket_alloc_t *bucket_alloc;
+    /** poll file descriptor information */
+    apr_pollfd_t pfd;
+    /** public parts of the connection state */
+    conn_state_t pub;
+};
+APR_RING_HEAD(timeout_head_t, event_conn_state_t);
+
+static void fix_event_conn(conn_rec *c, conn_rec *master) 
+{
+    event_conn_state_t *master_cs = ap_get_module_config(master->conn_config, 
+                                                         h2_conn_mpm_module());
+    event_conn_state_t *cs = apr_pcalloc(c->pool, sizeof(event_conn_state_t));
+    cs->bucket_alloc = apr_bucket_alloc_create(c->pool);
+    
+    ap_set_module_config(c->conn_config, h2_conn_mpm_module(), cs);
+    
+    cs->c = c;
+    cs->r = NULL;
+    cs->p = master_cs->p;
+    cs->pfd = master_cs->pfd;
+    cs->pub = master_cs->pub;
+    cs->pub.state = CONN_STATE_READ_REQUEST_LINE;
+    
+    c->cs = &(cs->pub);
+}
+
+#else /*if H2_EVENT_HACK */
+
+static int warned = 0;
+static void fix_event_conn(conn_rec *c, conn_rec *master) 
+{
+    if (!warned) {
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, master,
+                      "running mod_h2 in an unhacked mpm_event server "
+                      "will most likely not work");
+        warned = 1;
+    }
+}
+
+#endif /*if H2_EVENT_HACK */

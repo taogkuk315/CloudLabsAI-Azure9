@@ -39,6 +39,7 @@
  * of our own to disble those.
  */
 
+struct h2_conn;
 struct h2_mplx;
 struct h2_task;
 struct h2_resp_head;
@@ -57,6 +58,7 @@ h2_task *h2_task_create(long session_id,
 
 apr_status_t h2_task_destroy(h2_task *task);
 
+apr_status_t h2_task_prep_conn(h2_task *task);
 apr_status_t h2_task_do(h2_task *task, apr_thread_t *thd);
 
 void h2_task_abort(h2_task *task);

@@ -250,7 +250,7 @@ int h2_h2_process_conn(conn_rec* c)
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_h2, connection, h2 active");
         
-        return h2_conn_process(c);
+        return h2_conn_main(c);
     }
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_h2, connection, declined");
