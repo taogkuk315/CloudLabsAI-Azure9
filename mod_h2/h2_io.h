@@ -16,36 +16,17 @@
 #ifndef __mod_h2__h2_io__
 #define __mod_h2__h2_io__
 
-/* h2_io is the basic handler of a httpd connection. It keeps two brigades,
- * one for input, one for output and works with the installed connection
- * filters.
- * The read is done via a callback function, so that input can be processed
- * directly without copying.
- */
-typedef struct {
-    conn_rec *connection;
-    apr_bucket_brigade *input;
-    apr_bucket_brigade *output;
-} h2_io_ctx;
+struct h2_bucket_queue;
 
-apr_status_t h2_io_init(h2_io_ctx *io, conn_rec *c);
-void h2_io_destroy(h2_io_ctx *io);
+typedef struct h2_io h2_io;
+struct h2_io {
+    int id;
+    struct h2_bucket_queue *input;
+    struct h2_bucket_queue *output;
+};
 
-typedef apr_status_t (*h2_io_on_read_cb)(const char *data, apr_size_t len,
-                                         apr_size_t *readlen, int *done,
-                                         void *puser);
+h2_io *h2_io_create(int id, apr_pool_t *pool);
 
-
-apr_status_t h2_io_read(h2_io_ctx *io,
-                        apr_read_type_e block,
-                        h2_io_on_read_cb on_read_cb,
-                        void *puser);
-
-apr_status_t h2_io_write(h2_io_ctx *io,
-                         const char *buf,
-                         size_t length,
-                         size_t *written);
-
-apr_status_t h2_io_flush(h2_io_ctx *io);
+void h2_io_destroy(h2_io *io);
 
 #endif /* defined(__mod_h2__h2_io__) */

@@ -26,11 +26,13 @@ OBJECTS = \
         h2_bucket_queue.c \
         h2_config.c \
         h2_conn.c \
+        h2_conn_io.c \
         h2_ctx.c \
         h2_from_h1.c \
         h2_h2.c \
         h2_h2c.c \
         h2_io.c \
+        h2_io_set.c \
         h2_mplx.c \
         h2_queue.c \
         h2_request.c \
@@ -52,11 +54,13 @@ HFILES = \
     h2_bucket_queue.h \
     h2_config.h \
     h2_conn.h \
+    h2_conn_io.h \
     h2_ctx.h \
     h2_from_h1.h \
     h2_h2.h \
     h2_h2c.h \
     h2_io.h \
+    h2_io_set.h \
     h2_mplx.h \
     h2_private.h \
     h2_queue.h \

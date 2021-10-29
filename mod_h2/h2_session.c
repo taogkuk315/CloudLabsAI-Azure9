@@ -75,6 +75,8 @@ static int stream_open(h2_session *session, int stream_id)
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                   "h2_session: stream(%ld-%d): opened",
                   session->id, stream_id);
+    
+    h2_mplx_start_io(session->mplx, stream_id);
     return 0;
 }
 
@@ -109,7 +111,7 @@ static ssize_t send_cb(nghttp2_session *ngh2,
     }
     
     size_t written = 0;
-    apr_status_t status = h2_io_write(&session->io, (const char*)data,
+    apr_status_t status = h2_conn_io_write(&session->io, (const char*)data,
                                       length, &written);
     if (status == APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, session->c,
@@ -235,6 +237,7 @@ static apr_status_t close_active_stream(h2_session *session,
                                                  stream->task, join);
     }
     if (status == APR_SUCCESS) {
+        h2_mplx_end_io(session->mplx, stream->id);
         h2_stream_destroy(stream);
     }
     else if (status == APR_EAGAIN) {
@@ -432,7 +435,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         
         session->mplx = h2_mplx_create(c->id, session->pool, h2_config_get(c));
         
-        h2_io_init(&session->io, c);
+        h2_conn_io_init(&session->io, c);
         
         apr_status_t status = init_callbacks(c, &callbacks);
         if (status != APR_SUCCESS) {
@@ -556,7 +559,7 @@ void h2_session_destroy(h2_session *session)
         h2_mplx_destroy(session->mplx);
         session->mplx = NULL;
     }
-    h2_io_destroy(&session->io);
+    h2_conn_io_destroy(&session->io);
     if (session->pool) {
         apr_pool_destroy(session->pool);
     }
@@ -778,7 +781,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
                 status = APR_EGENERAL;
             }
         }
-        status = h2_io_flush(&session->io);
+        status = h2_conn_io_flush(&session->io);
     }
     
     reap_zombies(session);
@@ -825,7 +828,7 @@ static apr_status_t session_receive(const char *data, apr_size_t len,
 apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
 {
     assert(session);
-    return h2_io_read(&session->io, block, session_receive, session);
+    return h2_conn_io_read(&session->io, block, session_receive, session);
 }
 
 void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb)

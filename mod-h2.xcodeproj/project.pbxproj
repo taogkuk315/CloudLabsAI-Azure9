@@ -24,8 +24,8 @@
 		B22549371A6FCE13004BDEC9 /* h2_private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_private.h; sourceTree = "<group>"; };
 		B22549381A710329004BDEC9 /* h2_session.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_session.c; sourceTree = "<group>"; };
 		B22549391A710329004BDEC9 /* h2_session.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_session.h; sourceTree = "<group>"; };
-		B225493A1A711985004BDEC9 /* h2_io.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_io.c; sourceTree = "<group>"; };
-		B225493B1A711985004BDEC9 /* h2_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_io.h; sourceTree = "<group>"; };
+		B225493A1A711985004BDEC9 /* h2_conn_io.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_conn_io.c; sourceTree = "<group>"; };
+		B225493B1A711985004BDEC9 /* h2_conn_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_conn_io.h; sourceTree = "<group>"; };
 		B225493C1A713D18004BDEC9 /* h2_util.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_util.c; sourceTree = "<group>"; };
 		B225493D1A713D18004BDEC9 /* h2_util.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_util.h; sourceTree = "<group>"; };
 		B22D25281AA89A0B0041D8E5 /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
@@ -3645,6 +3645,10 @@
 		B2546E741A827D470033A875 /* h2.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.load; sourceTree = "<group>"; };
 		B26170E21AB30403007B1688 /* upload.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = upload.py; sourceTree = "<group>"; };
 		B26170E31AB305CC007B1688 /* hello.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = hello.py; sourceTree = "<group>"; };
+		B271425E1AB9DD59004EF82E /* h2_io_set.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_io_set.c; sourceTree = "<group>"; };
+		B271425F1AB9DD59004EF82E /* h2_io_set.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_io_set.h; sourceTree = "<group>"; };
+		B27142601AB9DD76004EF82E /* h2_io.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_io.c; sourceTree = "<group>"; };
+		B27142611AB9DD76004EF82E /* h2_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_io.h; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27BBD2E1A65927E00C58A41 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = httpd/Makefile; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = "<none>"; };
 		B27BBD301A65927E00C58A41 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
@@ -4396,6 +4400,8 @@
 				B284ACC81A7A605200C35863 /* h2_bucket.h */,
 				B225490D1A6EAE9F004BDEC9 /* h2_config.c */,
 				B225490E1A6EAE9F004BDEC9 /* h2_config.h */,
+				B225493A1A711985004BDEC9 /* h2_conn_io.c */,
+				B225493B1A711985004BDEC9 /* h2_conn_io.h */,
 				B2CB610E1A88BB9F00D270A6 /* h2_conn.c */,
 				B2CB610F1A88BB9F00D270A6 /* h2_conn.h */,
 				B22549331A6FBEF1004BDEC9 /* h2_ctx.c */,
@@ -4406,8 +4412,10 @@
 				B225491F1A6FB8DF004BDEC9 /* h2_h2.h */,
 				B2A6EF281A9C79A6005DFC5B /* h2_h2c.c */,
 				B2A6EF291A9C79A6005DFC5B /* h2_h2c.h */,
-				B225493A1A711985004BDEC9 /* h2_io.c */,
-				B225493B1A711985004BDEC9 /* h2_io.h */,
+				B271425E1AB9DD59004EF82E /* h2_io_set.c */,
+				B271425F1AB9DD59004EF82E /* h2_io_set.h */,
+				B27142601AB9DD76004EF82E /* h2_io.c */,
+				B27142611AB9DD76004EF82E /* h2_io.h */,
 				B27D32E81A9487B4003DBAF4 /* h2_mplx.c */,
 				B27D32E91A9487B4003DBAF4 /* h2_mplx.h */,
 				B22549371A6FCE13004BDEC9 /* h2_private.h */,
