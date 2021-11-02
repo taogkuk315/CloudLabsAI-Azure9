@@ -28,7 +28,6 @@
 #include "h2_private.h"
 #include "h2_config.h"
 #include "h2_ctx.h"
-#include "h2_bucket_queue.h"
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_stream_set.h"

@@ -20,7 +20,6 @@
 #include <http_config.h>
 
 #include "h2_private.h"
-#include "h2_bucket_queue.h"
 #include "h2_task.h"
 #include "h2_ctx.h"
 #include "h2_private.h"

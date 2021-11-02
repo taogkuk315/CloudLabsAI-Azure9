@@ -30,10 +30,6 @@
  * different lifetimes than our h2_stream or h2_session instances. Basically,
  * we would like to be as standalone as possible.
  *
- * h2_task input/output are the h2_bucket_queue pairs of the h2_session this
- * task belongs to. h2_task_input and h2_task_output convert this into/from
- * proper apr_bucket_brigadedness.
- *
  * Finally, to keep certain connection level filters, such as ourselves and
  * especially mod_ssl ones, from messing with our data, we need a filter
  * of our own to disble those.
@@ -44,7 +40,6 @@ struct h2_mplx;
 struct h2_task;
 struct h2_resp_head;
 struct h2_bucket;
-struct h2_bucket_queue;
 
 typedef struct h2_task h2_task;
 

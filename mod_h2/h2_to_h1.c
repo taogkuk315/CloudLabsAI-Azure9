@@ -25,7 +25,6 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
-#include "h2_bucket_queue.h"
 #include "h2_mplx.h"
 #include "h2_response.h"
 #include "h2_to_h1.h"

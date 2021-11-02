@@ -48,3 +48,53 @@ void h2_io_destroy(h2_io *io)
         io->output = NULL;
     }
 }
+
+int h2_io_in_has_eos_for(h2_io *io)
+{
+    return h2_bucket_queue_has_eos_for(io->input, io->id);
+}
+
+int h2_io_out_has_data(h2_io *io)
+{
+    return h2_bucket_queue_has_buckets_for(io->output, io->id);
+}
+
+apr_size_t h2_io_out_length(h2_io *io)
+{
+    return h2_bucket_queue_get_stream_size(io->output, io->id);
+}
+
+apr_status_t h2_io_in_read(h2_io *io, struct h2_bucket **pbucket)
+{
+    return h2_bucket_queue_pop(io->input, io->id, pbucket);
+}
+
+apr_status_t h2_io_in_write(h2_io *io, struct h2_bucket *bucket)
+{
+    return h2_bucket_queue_append(io->input, io->id, bucket);
+}
+
+apr_status_t h2_io_in_close(h2_io *io)
+{
+    return h2_bucket_queue_append_eos(io->input, io->id);
+}
+
+apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket)
+{
+    return h2_bucket_queue_pop(io->output, io->id, pbucket);
+}
+    
+apr_status_t h2_io_out_pushback(h2_io *io, struct h2_bucket *bucket)
+{
+    return h2_bucket_queue_push(io->output, io->id, bucket);
+}
+
+apr_status_t h2_io_out_write(h2_io *io, struct h2_bucket *bucket)
+{
+    return h2_bucket_queue_append(io->output, io->id, bucket);
+}
+
+apr_status_t h2_io_out_close(h2_io *io)
+{
+    return h2_bucket_queue_append_eos(io->output, io->id);
+}

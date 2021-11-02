@@ -45,7 +45,6 @@ struct apr_pool_t;
 struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 struct h2_bucket;
-struct h2_bucket_queue;
 struct h2_config;
 struct h2_response;
 

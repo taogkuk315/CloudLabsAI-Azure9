@@ -16,6 +16,7 @@
 #ifndef __mod_h2__h2_io__
 #define __mod_h2__h2_io__
 
+struct h2_bucket;
 struct h2_bucket_queue;
 
 typedef struct h2_io h2_io;
@@ -26,7 +27,20 @@ struct h2_io {
 };
 
 h2_io *h2_io_create(int id, apr_pool_t *pool);
-
 void h2_io_destroy(h2_io *io);
+
+int h2_io_in_has_eos_for(h2_io *io);
+int h2_io_out_has_data(h2_io *io);
+
+apr_status_t h2_io_in_read(h2_io *io, struct h2_bucket **pbucket);
+apr_status_t h2_io_in_write(h2_io *io, struct h2_bucket *bucket);
+apr_status_t h2_io_in_close(h2_io *io);
+
+apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket);
+apr_status_t h2_io_out_pushback(h2_io *io, struct h2_bucket *bucket);
+apr_status_t h2_io_out_write(h2_io *io, struct h2_bucket *bucket);
+apr_status_t h2_io_out_close(h2_io *io);
+apr_size_t h2_io_out_length(h2_io *io);
+
 
 #endif /* defined(__mod_h2__h2_io__) */

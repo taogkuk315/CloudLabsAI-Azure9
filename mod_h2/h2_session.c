@@ -15,6 +15,7 @@
 
 #include <assert.h>
 #include <apr_base64.h>
+#include <apr_base64.h>
 
 #include <httpd.h>
 #include <http_core.h>
@@ -415,8 +416,15 @@ static h2_session *h2_session_create_int(conn_rec *c,
 {
     nghttp2_session_callbacks *callbacks = NULL;
     nghttp2_option *options = NULL;
+    
+    apr_allocator_t *allocator = NULL;
+    apr_status_t status = apr_allocator_create(&allocator);
+    if (status != APR_SUCCESS) {
+        return NULL;
+    }
+    
     apr_pool_t *pool = NULL;
-    apr_status_t status = apr_pool_create_ex(&pool, c->pool, NULL, NULL);
+    status = apr_pool_create_ex(&pool, c->pool, NULL, allocator);
     if (status != APR_SUCCESS) {
         return NULL;
     }
@@ -424,7 +432,14 @@ static h2_session *h2_session_create_int(conn_rec *c,
     h2_session *session = apr_pcalloc(pool, sizeof(h2_session));
     if (session) {
         session->id = c->id;
+        
+        session->allocator = allocator;
         session->pool = pool;
+        status = apr_thread_mutex_create(&session->alock, 
+                                         APR_THREAD_MUTEX_DEFAULT,
+                                         session->pool);
+        apr_allocator_mutex_set(session->allocator, session->alock);
+        
         session->c = c;
         session->r = r;
         session->ngh2 = NULL;
@@ -560,8 +575,20 @@ void h2_session_destroy(h2_session *session)
         session->mplx = NULL;
     }
     h2_conn_io_destroy(&session->io);
+    
+    apr_allocator_t *allocator = session->allocator;
+    if (session->alock) {
+        if (allocator) {
+            apr_allocator_mutex_set(allocator, session->alock);
+        }
+        apr_thread_mutex_destroy(session->alock);
+        session->alock = NULL;
+    }
     if (session->pool) {
         apr_pool_destroy(session->pool);
+    }
+    if (allocator) {
+        apr_allocator_destroy(allocator);
     }
 }
 

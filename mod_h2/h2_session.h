@@ -25,8 +25,8 @@
  * control of the connection data. It receives protocol frames from the
  * client. For new HTTP/2 streams it creates h2_task(s) that are sent
  * via callback to a dispatcher (see h2_conn.c).
- * h2_session keeps two h2_bucket_queue instances, one for the incoming
- * HEADER and DATA payload and one for the outgoing DATA payload.
+ * h2_session keeps h2_io's for each ongoing stream which buffer the
+ * payload for that stream.
  *
  * New incoming HEADER frames are converted into a h2_stream+h2_task instance
  * that both represent a HTTP/2 stream, but may have separate lifetimes. This
@@ -37,6 +37,7 @@
  *
  */
 
+struct apr_thread_mutext_t;
 struct h2_config;
 struct h2_mplx;
 struct h2_response;
@@ -75,7 +76,10 @@ struct h2_session {
                                      * of 'h2c', NULL otherwise */
     int aborted;                    /* this session is being aborted */
     
+    apr_allocator_t *allocator;      /* we have our own allocator */
+    struct apr_thread_mutex_t *alock;
     apr_pool_t *pool;               /* pool to use in session handling */
+    
     h2_conn_io_ctx io;               /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_stream_set *streams;  /* streams handled by this session */

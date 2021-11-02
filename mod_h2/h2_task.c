@@ -45,7 +45,6 @@ struct h2_task {
     
     struct h2_mplx *mplx;
     conn_rec *master;
-    
     struct h2_conn *conn;
     
     struct h2_task_input *input;    /* http/1.1 input data */
@@ -161,7 +160,8 @@ apr_status_t h2_task_prep_conn(h2_task *task)
      * making this new pool a sub pool of the stream one, but that
      * only led to crashes. With a root pool, this does not happen.
      */
-    task->conn = h2_conn_create(task->id, task->master, NULL);
+    task->conn = h2_conn_create(task->id, task->master, 
+                                h2_mplx_get_pool(task->mplx));
     if (!task->conn) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, task->master,
                       "h2_task(%s): create task connection", task->id);
