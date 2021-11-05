@@ -71,16 +71,13 @@ static void consumed_out_data_for(h2_mplx *m, int stream_id);
 
 h2_mplx *h2_mplx_create(long id, apr_pool_t *master, h2_config *conf)
 {
+    apr_status_t status = APR_SUCCESS;
     assert(conf);
 
     h2_mplx *m = apr_pcalloc(master, sizeof(h2_mplx));
     if (m) {
         m->id = id;
-
-        apr_status_t status = apr_pool_create_ex(&m->pool, master, NULL, NULL);
-        if (status != APR_SUCCESS) {
-            return NULL;
-        }
+        m->pool = master;
         
         m->responses = h2_queue_create(m->pool, free_response);
         m->stream_ios = h2_io_set_create(m->pool);
@@ -133,10 +130,6 @@ void h2_mplx_destroy(h2_mplx *m)
     if (m->lock) {
         apr_thread_mutex_destroy(m->lock);
         m->lock = NULL;
-    }
-    if (m->pool) {
-        apr_pool_destroy(m->pool);
-        /* gone */
     }
 }
 

@@ -49,7 +49,7 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
 h2_stream *h2_stream_create(int id, apr_pool_t *master, struct h2_mplx *m)
 {
     apr_pool_t *spool = NULL;
-    apr_status_t status = apr_pool_create_ex(&spool, master, NULL, NULL);
+    apr_status_t status = apr_pool_create(&spool, master);
     if (status != APR_SUCCESS) {
         return NULL;
     }
@@ -121,7 +121,7 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream)
 apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 {
     assert(stream);
-    return h2_request_rwrite(stream->request, r, stream->m, stream->pool);
+    return h2_request_rwrite(stream->request, r, stream->m);
 }
 
 apr_status_t h2_stream_write_eos(h2_stream *stream)
@@ -153,8 +153,7 @@ apr_status_t h2_stream_write_header(h2_stream *stream,
 {
     assert(stream);
     return h2_request_write_header(stream->request, name, nlen,
-                                   value, vlen, stream->m,
-                                   stream->pool);
+                                   value, vlen, stream->m);
 }
 
 apr_status_t h2_stream_write_data(h2_stream *stream,

@@ -143,8 +143,6 @@ h2_task *h2_task_create(long session_id,
     task->first_input = first_input;
     task->input_eos = input_eos;
     
-    /* we would like to do that, just before the connection is actually
-     * used */
     h2_task_prep_conn(task);
 
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
