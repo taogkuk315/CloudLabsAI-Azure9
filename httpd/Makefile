@@ -35,7 +35,7 @@ PCRE_DIR     = pcre-$(PCRE_VERSION)
 PCRE_TAR     = $(PCRE_DIR).tar.gz
 PCRE_URL     = http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VERSION)/$(PCRE_TAR)
 
-OPENSSL_DIR  = openssl-1.0.2
+OPENSSL_DIR  = openssl-1.0.2a
 OPENSSL_TAR  = $(OPENSSL_DIR).tar.gz
 OPENSSL_URL  = https://www.openssl.org/source/$(OPENSSL_TAR)
 
