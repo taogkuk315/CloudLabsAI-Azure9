@@ -143,7 +143,7 @@ $(INST_DIR)/conf/ssl/test.example.org.key:
 $(INST_DIR)/conf/ssl/test.example.org.pem: \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
 		conf/ssl/x509.input
-	openssl req -new -x509 -key $(INST_DIR)/conf/ssl/test.example.org.key \
+	openssl req -new -x509 -sha256 -key $(INST_DIR)/conf/ssl/test.example.org.key \
 		-out $(INST_DIR)/conf/ssl/test.example.org.pem -days 1095 < conf/ssl/x509.input
 
 ################################################################################
