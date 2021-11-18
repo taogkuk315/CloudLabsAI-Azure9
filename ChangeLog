@@ -1,4 +1,16 @@
 
+v0.2.1
+--------------------------------------------------------------------------------
+ * changed apr_pool usage to have more recycling, 50% performance increase in 
+   loadtest
+ * added hack to enable mod_h2 to run in mpm_event (experimental)
+ * changed internal stream/data lookup from O(n/2) to O(log(n)) time
+ * fixed index in http2 to http1 header conversion leading to segfaults
+ * update openssl version downloaded for sandbox
+ * using sha256 for self-signed sandbox certificates
+ * sandbox certificate no longer announces itself as roo
+   (last 3 thanks to michael.koeller at greenbytes.de)
+
 v0.2.0
 --------------------------------------------------------------------------------
  * merged pull request from Tatsuhiro Tsujikawa, removing code for CONTINUATION
