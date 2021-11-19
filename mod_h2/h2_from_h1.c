@@ -371,8 +371,7 @@ static apr_status_t read_chunk_size(h2_from_h1 *from_h1, conn_rec *c,
                 if (i == 0) {
                     /* end chunk */
                     from_h1->remain_len = 0;
-                    // TODO: maybe trailers? (shudder!)
-                    set_state(from_h1, H2_RESP_ST_DONE);
+                    h2_bucket_reset(from_h1->chunk_work);
                     return APR_SUCCESS;
                 }
                 else {
@@ -384,6 +383,13 @@ static apr_status_t read_chunk_size(h2_from_h1 *from_h1, conn_rec *c,
                                       "h2_from_h1(%d): garbled chunk size[len=%d]: %s",
                                       from_h1->stream_id, i, p);
                         return APR_EINVAL;
+                    }
+                    if (from_h1->remain_len == 0) {
+                        /* end last chunk */
+                        *pconsumed = ((long)i - p_start) + 4;
+                        // TODO: maybe trailers? (shudder!)
+                        set_state(from_h1, H2_RESP_ST_DONE);
+                        return APR_SUCCESS;
                     }
                 }
                 h2_bucket_reset(from_h1->chunk_work);
