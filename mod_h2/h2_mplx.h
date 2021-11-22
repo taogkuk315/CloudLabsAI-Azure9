@@ -53,7 +53,7 @@ typedef struct h2_mplx h2_mplx;
 /* Create the multiplexer for the given HTTP2 session.
  * The created multiplexer already has a reference count of 1.
  */
-h2_mplx *h2_mplx_create(long id, apr_pool_t *master, struct h2_config *conf);
+h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *master);
 
 /* Destroy and cleanup the multiplexer. Automatically called when
  * the reference count to this multiplexer goes to 0.
@@ -63,6 +63,9 @@ void h2_mplx_destroy(h2_mplx *mplx);
 /* Get the memory pool used by the multiplexer.
  */
 apr_pool_t *h2_mplx_get_pool(h2_mplx *mplx);
+
+/* Get the main connection this multiplexer works for */
+conn_rec *h2_mplx_get_conn(h2_mplx *mplx);
 
 /* Abort the multiplexer. It will answer all invocation with
  * APR_ECONNABORTED afterwards.

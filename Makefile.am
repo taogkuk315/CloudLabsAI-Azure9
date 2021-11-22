@@ -21,10 +21,13 @@ ACLOCAL_AMFLAGS = -I m4
 dist_doc_DATA   = README
 
 
-.PHONY: test loadtest start stop
+.PHONY: test loadtest start stop restart
 
 start:
 	make -C test start
+
+restart:
+	make -C test restart
 
 stop:
 	make -C test stop

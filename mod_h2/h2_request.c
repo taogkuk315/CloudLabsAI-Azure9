@@ -175,12 +175,6 @@ apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m)
     return h2_to_h1_close(req->to_h1);
 }
 
-h2_bucket *h2_request_steal_first_data(h2_request *req, struct h2_mplx *m, 
-                                       int *peos)
-{
-    return h2_to_h1_steal_first_data(req->to_h1, peos);
-}
-
 static apr_status_t insert_request_line(h2_request *req, h2_mplx *m)
 {
     return h2_to_h1_start_request(req->to_h1, req->id,

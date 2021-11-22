@@ -162,11 +162,11 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
         return NGHTTP2_ERR_INVALID_STREAM_ID;
     }
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                  "h2_stream(%ld-%d): got DATA, length %ld",
-                  session->id, stream_id, len);
     apr_status_t status = h2_stream_write_data(stream, (const char *)data, len);
-    return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_INVALID_STREAM_STATE;
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, session->c,
+                  "h2_stream(%ld-%d): written DATA, length %ld",
+                  session->id, stream_id, len);
+    return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_PROTO;
 }
 
 static int before_frame_send_cb(nghttp2_session *ngh2,
@@ -194,16 +194,6 @@ static int on_frame_send_cb(nghttp2_session *ngh2,
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
-    /*
-    apr_status_t status = h2_io_flush(&session->io);
-    
-    if (session->loglvl >= APLOG_DEBUG) {
-        char buffer[256];
-        h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, session->c,
-                      "h2_session: callback on_frame_send %s", buffer);
-    }
-     */
     return 0;
 }
 
@@ -313,7 +303,7 @@ static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
     apr_status_t status = h2_stream_write_header(stream,
                                                (const char *)name, namelen,
                                                (const char *)value, valuelen);
-    return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_INVALID_STREAM_STATE;
+    return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_PROTO;
 }
 
 /**
@@ -330,15 +320,18 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     apr_status_t status = APR_SUCCESS;
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+                  "h2_session(%ld): on_frame_rcv, type=%d", session->id,
+                  frame->hd.type);
     switch (frame->hd.type) {
         case NGHTTP2_HEADERS: {
             h2_stream * stream = h2_stream_set_get(session->streams,
                                                    frame->hd.stream_id);
             if (stream == NULL) {
                 ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
-                              "h2_session:  stream(%ld-%d): frame type %d "
+                              "h2_session:  stream(%ld-%d): HEADERS frame "
                               "for unknown stream", session->id,
-                              (int)frame->hd.stream_id, frame->hd.type);
+                              (int)frame->hd.stream_id);
                 return NGHTTP2_ERR_INVALID_STREAM_ID;
             }
             
@@ -348,8 +341,18 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             }
             break;
         }
-        case NGHTTP2_DATA:
+        case NGHTTP2_DATA: {
+            h2_stream * stream = h2_stream_set_get(session->streams,
+                                                   frame->hd.stream_id);
+            if (stream == NULL) {
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
+                              "h2_session:  stream(%ld-%d): DATA frame "
+                              "for unknown stream", session->id,
+                              (int)frame->hd.stream_id);
+                return NGHTTP2_ERR_PROTO;
+            }
             break;
+        }
         default:
             if (session->loglvl >= APLOG_DEBUG) {
                 char buffer[256];
@@ -448,7 +451,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->streams = h2_stream_set_create(session->pool);
         session->zombies = h2_stream_set_create(session->pool);
         
-        session->mplx = h2_mplx_create(c->id, session->pool, h2_config_get(c));
+        session->mplx = h2_mplx_create(c, session->pool);
         
         h2_conn_io_init(&session->io, c);
         
@@ -633,13 +636,17 @@ static apr_status_t h2_session_abort_int(h2_session *session, int reason)
 apr_status_t h2_session_abort(h2_session *session, apr_status_t reason)
 {
     assert(session);
-    int err = NGHTTP2_ERR_FATAL;
+    int err = NGHTTP2_ERR_PROTO;
     switch (reason) {
         case APR_ENOMEM:
             err = NGHTTP2_ERR_NOMEM;
+            break;
         case APR_EOF:
+            err = 0;
+            break;
         case APR_ECONNABORTED:
             err = NGHTTP2_ERR_EOF;
+            break;
         default:
             break;
     }
@@ -856,6 +863,12 @@ apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
 {
     assert(session);
     return h2_conn_io_read(&session->io, block, session_receive, session);
+}
+
+apr_status_t h2_session_close(h2_session *session)
+{
+    assert(session);
+    return h2_conn_io_flush(&session->io);
 }
 
 void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb)

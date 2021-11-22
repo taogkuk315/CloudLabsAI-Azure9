@@ -66,12 +66,4 @@ apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m);
 apr_status_t h2_request_rwrite(h2_request *req, request_rec *r,
                                struct h2_mplx *m);
 
-/* Steal the first bucket of the request in http1 format if not
- * already flushed to the multiplexer. This data will be removed from
- * the request and is not written out.
- * Will return NULL if data has been flushed already.
- */
-struct h2_bucket *h2_request_steal_first_data(h2_request *req, 
-                                              struct h2_mplx *m, int *peos);
-
 #endif /* defined(__mod_h2__h2_request__) */

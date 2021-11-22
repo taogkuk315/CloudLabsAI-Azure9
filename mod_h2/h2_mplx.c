@@ -35,6 +35,7 @@
 
 struct h2_mplx {
     long id;
+    conn_rec *c;
     apr_pool_t *pool;
     
     h2_queue *responses;
@@ -69,15 +70,16 @@ static void have_in_data_for(h2_mplx *m, int stream_id);
 static void have_out_data_for(h2_mplx *m, int stream_id);
 static void consumed_out_data_for(h2_mplx *m, int stream_id);
 
-h2_mplx *h2_mplx_create(long id, apr_pool_t *master, h2_config *conf)
+h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
 {
     apr_status_t status = APR_SUCCESS;
+    h2_config *conf = h2_config_get(c);
     assert(conf);
-
-    h2_mplx *m = apr_pcalloc(master, sizeof(h2_mplx));
+    h2_mplx *m = apr_pcalloc(pool, sizeof(h2_mplx));
     if (m) {
-        m->id = id;
-        m->pool = master;
+        m->id = c->id;
+        m->c = c;
+        m->pool = pool;
         
         m->responses = h2_queue_create(m->pool, free_response);
         m->stream_ios = h2_io_set_create(m->pool);
@@ -137,6 +139,11 @@ apr_pool_t *h2_mplx_get_pool(h2_mplx *m)
 {
     assert(m);
     return m->pool;
+}
+
+conn_rec *h2_mplx_get_conn(h2_mplx *m)
+{
+    return m->c;
 }
 
 long h2_mplx_get_id(h2_mplx *m)
@@ -257,7 +264,7 @@ apr_status_t h2_mplx_out_read(h2_mplx *m,
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
             status = h2_io_out_read(io, pbucket);
-            ap_log_perror(APLOG_MARK, APLOG_DEBUG, status, m->pool,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
                           "h2_mplx(%ld): read on stream_id-out(%d)",
                           m->id, stream_id);
             if (status == APR_SUCCESS) {
@@ -282,7 +289,7 @@ apr_status_t h2_mplx_out_pushback(h2_mplx *m, int stream_id,
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
             status = h2_io_out_pushback(io, bucket);
-            ap_log_perror(APLOG_MARK, APLOG_DEBUG, status, m->pool,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
                           "h2_mplx(%ld): pushback on stream_id-out(%d)",
                           m->id, stream_id);
         }
@@ -300,7 +307,7 @@ apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_queue_append_id(m->responses, stream_id, response);
-        ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, m->pool,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
                       "h2_mplx(%ld): open on stream_id-in(%d)",
                       m->id, stream_id);
         have_out_data_for(m, stream_id);
@@ -332,7 +339,7 @@ h2_response *h2_mplx_pop_response(h2_mplx *m)
     if (APR_SUCCESS == status) {
         head = (h2_response*)h2_queue_pop(m->responses);
         if (head) {
-            ap_log_perror(APLOG_MARK, APLOG_DEBUG, status, m->pool,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
                           "h2_mplx(%ld): popped response(%d)",
                           m->id, head->stream_id);
         }
@@ -356,17 +363,11 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
              */
             while (!is_aborted(m, &status)
                    && (m->out_stream_max_size < h2_io_out_length(io))) {
-                       ap_log_perror(APLOG_MARK, APLOG_DEBUG, status, m->pool,
-                                     "h2_mplx(%ld-%d): blocking on queue size",
-                                     m->id, stream_id);
                        apr_thread_cond_wait(m->removed_output, m->lock);
                    }
             
             if (!is_aborted(m, &status)) {
                 status = h2_io_out_write(io, bucket);
-                ap_log_perror(APLOG_MARK, APLOG_DEBUG, status, m->pool,
-                              "h2_mplx(%ld): write %ld bytes on stream_id-out(%d)",
-                              m->id, bucket->data_len, stream_id);
                 if (status == APR_SUCCESS) {
                     have_out_data_for(m, stream_id);
                 }
@@ -388,9 +389,6 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
             status = h2_io_out_close(io);
-            ap_log_perror(APLOG_MARK, APLOG_DEBUG, status, m->pool,
-                          "h2_mplx(%ld): close stream_id-out(%d)",
-                          m->id, stream_id);
             have_out_data_for(m, stream_id);
         }
         else {
@@ -438,7 +436,7 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = apr_thread_cond_timedwait(m->added_output, m->lock, timeout);
-        ap_log_perror(APLOG_MARK, APLOG_DEBUG, status, m->pool,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
                       "h2_mplx(%ld): trywait on data for %f ms)",
                       m->id, timeout/1000.0);
         apr_thread_mutex_unlock(m->lock);

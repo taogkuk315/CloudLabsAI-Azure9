@@ -1,3 +1,6 @@
+ * integrated fix (https://github.com/icing/mod_h2/pull/5) from 
+   Jonathan (invader444) to fix chunked encoding when converting http/1
+   responses to http2 unchunked data.
 
 v0.2.1
 --------------------------------------------------------------------------------

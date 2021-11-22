@@ -59,14 +59,4 @@ apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1);
  */
 apr_status_t h2_to_h1_close(h2_to_h1 *to_h1);
 
-/* If the so far serialized data has not been flushed to the h2_mplx
- * yet, return this data and do not flush it. Also return, if this
- * data is already the complete request.
- * This allows short requests to be retrieved directly without going
- * through the h2_mplx.
- * Returns NULL, when either nor data is available or if any data
- * has already been flushed to the h2_mplx for this request.
- */
-h2_bucket *h2_to_h1_steal_first_data(h2_to_h1 *to_h1, int *peos);
-
 #endif /* defined(__mod_h2__h2_to_h1__) */

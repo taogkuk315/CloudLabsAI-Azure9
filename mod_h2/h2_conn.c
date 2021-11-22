@@ -231,7 +231,7 @@ apr_status_t h2_session_process(h2_session *session)
             case APR_EOF:
             case APR_ECONNABORTED:
                 ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
-                              "h2_session(%ld): eof on input, terminating",
+                              "h2_session(%ld): reading",
                               session->id);
                 h2_session_abort(session, status);
                 break;
@@ -247,6 +247,7 @@ apr_status_t h2_session_process(h2_session *session)
     ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
                   "h2_session(%ld): done", session->id);
     
+    h2_session_close(session);
     h2_session_destroy(session);
     
     return DONE;

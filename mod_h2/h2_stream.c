@@ -98,12 +98,9 @@ void h2_stream_abort(h2_stream *stream)
 h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
 {
     assert(stream);
-    int input_eos = 0;
-    h2_bucket *data = h2_request_steal_first_data(stream->request, stream->m, 
-                                                  &input_eos);
     stream->task = h2_task_create(h2_mplx_get_id(stream->m),
                                   stream->id, master, stream->pool,
-                                  data, input_eos, stream->m);
+                                  NULL, 0, stream->m);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, master,
                   "h2_stream(%ld-%d): created task for %s %s (%s)",
                   h2_mplx_get_id(stream->m), stream->id,
@@ -121,7 +118,9 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream)
 apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 {
     assert(stream);
-    return h2_request_rwrite(stream->request, r, stream->m);
+    set_state(stream, H2_STREAM_ST_OPEN);
+    apr_status_t status = h2_request_rwrite(stream->request, r, stream->m);
+    return status;
 }
 
 apr_status_t h2_stream_write_eos(h2_stream *stream)
@@ -134,7 +133,7 @@ apr_status_t h2_stream_write_eos(h2_stream *stream)
     switch (stream->state) {
         case H2_STREAM_ST_CLOSED_INPUT:
         case H2_STREAM_ST_CLOSED:
-            break; /* ignore, idempotent */
+            return APR_SUCCESS; /* ignore, idempotent */
         case H2_STREAM_ST_CLOSED_OUTPUT:
             /* both closed now */
             set_state(stream, H2_STREAM_ST_CLOSED);
@@ -152,6 +151,15 @@ apr_status_t h2_stream_write_header(h2_stream *stream,
                                     const char *value, size_t vlen)
 {
     assert(stream);
+    switch (stream->state) {
+        case H2_STREAM_ST_IDLE:
+            set_state(stream, H2_STREAM_ST_OPEN);
+            break;
+        case H2_STREAM_ST_OPEN:
+            break;
+        default:
+            return APR_EINVAL;
+    }
     return h2_request_write_header(stream->request, name, nlen,
                                    value, vlen, stream->m);
 }
@@ -160,6 +168,13 @@ apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len)
 {
     assert(stream);
+    assert(stream);
+    switch (stream->state) {
+        case H2_STREAM_ST_OPEN:
+            break;
+        default:
+            return APR_EINVAL;
+    }
     return h2_request_write_data(stream->request, data, len, stream->m);
 }
 

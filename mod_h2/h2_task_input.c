@@ -121,8 +121,9 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         }
         
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                      "h2_task_input(%s): get next bucket from mplx",
-                      input->task_id);
+                      "h2_task_input(%s): get next bucket from mplx (%s)",
+                      input->task_id, 
+                      (block==APR_BLOCK_READ? "BLOCK" : "NONBLOCK"));
         status = h2_mplx_in_read(input->m, all_there? APR_NONBLOCK_READ : block,
                                  input->stream_id, &input->cur);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,

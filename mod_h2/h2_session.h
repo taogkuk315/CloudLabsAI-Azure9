@@ -125,6 +125,9 @@ apr_status_t h2_session_goaway(h2_session *session, apr_status_t reason);
  * Status indicates the reason of the error. */
 apr_status_t h2_session_abort(h2_session *session, apr_status_t reason);
 
+/* Called before a session gets destroyed, might flush output etc. */
+apr_status_t h2_session_close(h2_session *session);
+
 /* Read more data from the client connection. Used normally with blocking
  * APR_NONBLOCK_READ, which will return APR_EAGAIN when no data is available.
  * Use with APR_BLOCK_READ only when certain that no data needs to be written

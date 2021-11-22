@@ -51,6 +51,13 @@ distdir:
 start: $(INST_DIR)/.test-setup
 	@$(INST_DIR)/bin/apachectl restart
 
+restart: $(INST_DIR)/.test-setup
+	@echo -n shutting down httpd...
+	@$(INST_DIR)/bin/apachectl stop
+	@while true; do pkill -U $(USER) httpd; test "$$?" != "0" && break; done   
+	@echo done.
+	@$(INST_DIR)/bin/apachectl restart
+
 stop:
 	@$(INST_DIR)/bin/apachectl stop
 
