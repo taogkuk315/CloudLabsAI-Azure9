@@ -44,6 +44,7 @@ struct h2_from_h1 {
     void *state_cb_ctx;
     
     int chunked;
+    int chunk_count;
     apr_size_t remain_len;
     struct h2_bucket *chunk_work;
     
@@ -358,45 +359,52 @@ static apr_status_t read_chunk_size(h2_from_h1 *from_h1, conn_rec *c,
     apr_size_t p_start = from_h1->chunk_work->data_len;
     apr_size_t copied = h2_bucket_append(from_h1->chunk_work, data, len);
     
-    if (copied > 0) {
+    if (copied > 0 && from_h1->chunk_work->data_len >= 2) {
         /* we have copied bytes, do we find a line end? */
+        int start = 0;
+        if (from_h1->chunk_count) {
+            /* this is not the first chunk, we expect to see the CRLF from
+             * the previous chunk at start of data */
+            if (p[0] != '\r' || p[1] != '\n') {
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, c,
+                              "h2_from_h1(%d): missing CRLF from last chunk: %s",
+                              from_h1->stream_id, p);
+                return APR_EINVAL;
+            }
+            start = 2;
+        }
         apr_size_t max = from_h1->chunk_work->data_len - 1;
-        for (int i = 0; i < max; ++i) {
+        for (int i = start; i < max; ++i) {
             if (p[i] == '\r' && p[i+1] == '\n') {
                 /* how many bytes of the data have we consumed
                  * to find this line? */
                 *pconsumed = ((long)i - p_start) + 2;
                 /* null-terminate our chunk_work buffer */
                 p[i] = '\0';
-                if (i == 0) {
-                    /* end chunk */
-                    from_h1->remain_len = 0;
-                    h2_bucket_reset(from_h1->chunk_work);
+                char *end;
+                from_h1->remain_len = apr_strtoi64(p, &end, 16);
+                if (p == end) {
+                    /* invalid chunk size string */
+                    ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, c,
+                                  "h2_from_h1(%d): garbled chunk size[len=%d]: %s",
+                                  from_h1->stream_id, i, p);
+                    return APR_EINVAL;
+                }
+                if (from_h1->remain_len == 0) {
+                    /* end last chunk */
+                    *pconsumed = ((long)i - p_start) + 4;
+                    // TODO: maybe trailers? (shudder!)
+                    set_state(from_h1, H2_RESP_ST_DONE);
                     return APR_SUCCESS;
                 }
-                else {
-                    char *end;
-                    from_h1->remain_len = apr_strtoi64(p, &end, 16);
-                    if (p == end) {
-                        /* invalid chunk size string */
-                        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, c,
-                                      "h2_from_h1(%d): garbled chunk size[len=%d]: %s",
-                                      from_h1->stream_id, i, p);
-                        return APR_EINVAL;
-                    }
-                    if (from_h1->remain_len == 0) {
-                        /* end last chunk */
-                        *pconsumed = ((long)i - p_start) + 4;
-                        // TODO: maybe trailers? (shudder!)
-                        set_state(from_h1, H2_RESP_ST_DONE);
-                        return APR_SUCCESS;
-                    }
-                }
                 h2_bucket_reset(from_h1->chunk_work);
+                ++from_h1->chunk_count;
+                
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                              "h2_from_h1(%d): read chunk size %ld "
+                              "h2_from_h1(%d): read chunk #%d size %ld "
                               "(consumed %ld)",
-                              from_h1->stream_id, (long)from_h1->remain_len,
+                              from_h1->stream_id, from_h1->chunk_count, 
+                              (long)from_h1->remain_len,
                               (long)*pconsumed);
                 return APR_SUCCESS;
             }
