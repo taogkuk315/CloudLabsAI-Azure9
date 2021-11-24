@@ -64,10 +64,10 @@ void h2_to_h1_destroy(h2_to_h1 *to_h1)
     }
 }
 
-static apr_status_t ensure_data(h2_to_h1 *to_h1, apr_size_t size)
+static apr_status_t ensure_data(h2_to_h1 *to_h1)
 {
     if (!to_h1->data) {
-        to_h1->data = h2_bucket_alloc(size);
+        to_h1->data = h2_bucket_alloc(BLOCKSIZE);
         if (!to_h1->data) {
             return APR_ENOMEM;
         }
@@ -94,7 +94,7 @@ apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
         return APR_EGENERAL;
     }
     
-    status = ensure_data(to_h1, BLOCKSIZE);
+    status = ensure_data(to_h1);
     if (status != APR_SUCCESS) {
         return status;
     }
@@ -170,7 +170,7 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
         return APR_SUCCESS;
     }
 
-    apr_status_t status = ensure_data(to_h1, BLOCKSIZE);
+    apr_status_t status = ensure_data(to_h1);
     if (status == APR_SUCCESS) {
         status = append_header(to_h1->data, name, nlen, value, vlen);
         if (status == APR_ENAMETOOLONG && to_h1->data->data_len > 0) {
@@ -178,7 +178,7 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
              * get a new one */
             status = h2_to_h1_flush(to_h1);
             if (status == APR_SUCCESS) {
-                apr_status_t status = ensure_data(to_h1, BLOCKSIZE);
+                apr_status_t status = ensure_data(to_h1);
                 if (status == APR_SUCCESS) {
                     status = append_header(to_h1->data, name, nlen, 
                                            value, vlen);
@@ -200,7 +200,7 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1)
         return APR_EINVAL;
     }
     
-    apr_status_t status = ensure_data(to_h1, BLOCKSIZE);
+    apr_status_t status = ensure_data(to_h1);
     if (status != APR_SUCCESS) {
         return status;
     }
@@ -234,7 +234,7 @@ static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
     
     apr_status_t status = APR_SUCCESS;
     while (len > 0 && status == APR_SUCCESS) {
-        status = ensure_data(to_h1, DATA_BLOCKSIZE);
+        status = ensure_data(to_h1);
         if (status == APR_SUCCESS) {
             apr_size_t written = h2_bucket_append(to_h1->data, data, len);
             if (written >= len) {
@@ -304,7 +304,7 @@ apr_status_t h2_to_h1_close(h2_to_h1 *to_h1)
     if (!to_h1->eos) {
         to_h1->eos = 1;
         if (to_h1->chunked) {
-            status = h2_to_h1_add_data_raw(to_h1, "0\r\n", 2);
+            status = h2_to_h1_add_data_raw(to_h1, "0\r\n\r\n", 5);
         }
         status = h2_to_h1_flush(to_h1);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, h2_mplx_get_conn(to_h1->m),

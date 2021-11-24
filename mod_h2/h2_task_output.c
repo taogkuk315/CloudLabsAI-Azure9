@@ -145,6 +145,10 @@ static apr_status_t convert_data(h2_task_output *output,
                                  ap_filter_t *filter,
                                  const char *data, apr_size_t len);
 
+/* Bring the data from the brigade (which represents the result of the
+ * request_rec out filter chain) into the h2_mplx for further sending
+ * on the master connection. 
+ */
 apr_status_t h2_task_output_write(h2_task_output *output,
                                     ap_filter_t* filter,
                                     apr_bucket_brigade* brigade)
@@ -173,6 +177,8 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                     return APR_ECONNABORTED;
                 }
                 if (output->response) {
+                    /* we have not placed the response into the h2_mplx yet.
+                     * do so now. */
                     h2_mplx_out_open(output->m,
                                      output->stream_id, output->response);
                     output->response = NULL;
@@ -199,6 +205,10 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                           h2_task_get_id(output->task));
         }
         else {
+            /* we would like to pass this bucket directly into h2_mplx without
+             * reading it. We need to be careful with allocations and life times
+             * however.
+             */
             const char* data = NULL;
             apr_size_t data_length = 0;
             apr_status_t status = apr_bucket_read(bucket, &data, &data_length,
