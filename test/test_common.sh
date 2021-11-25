@@ -44,7 +44,7 @@ curl_check_doc() {
     echo -n "curl $URL_PREFIX/$DOC: $MSG..."
     rm -rf $TMP
     mkdir -p $TMP
-    ${CURL} "$ARGS" $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${CURL} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
     diff  $DOC_ROOT/$DOC $TMP/$DOC || fail
     echo ok.
 }
@@ -87,6 +87,22 @@ curl_check_content() {
     echo -n "curl $URL_PREFIX/$DOC: $MSG..."
     ${CURL} "$ARGS" $URL_PREFIX/$DOC > $TMP/$DOC || fail
     diff  $TMP/expected $TMP/$DOC || fail
+    echo ok.
+}
+
+curl_check_redir() {
+    DOC="$1"; shift;
+    REF_DOC="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@"
+    echo -n "curl redir $URL_PREFIX/$DOC: $MSG..."
+    rm -rf $TMP
+    mkdir -p $TMP
+    ${CURL} -D - $ARGS $URL_PREFIX/$DOC >$TMP/redir.out || fail
+    LOCATION=$( fgrep -i 'location:' $TMP/redir.out | sed -e "s,.*$URL_PREFIX/,," | tr -d '\r\n' )
+    test "$REF_DOC" != "$LOCATION" && fail "expected redirect to >>>$REF_DOC<<<, found >>>$LOCATION<<<"
+    ${CURL} $ARGS $URL_PREFIX/$LOCATION >$TMP/$LOCATION || fail
+    diff  $DOC_ROOT/$REF_DOC $TMP/$LOCATION || fail
     echo ok.
 }
 

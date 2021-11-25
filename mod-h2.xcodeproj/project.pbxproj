@@ -3660,6 +3660,7 @@
 		B284ACC81A7A605200C35863 /* h2_bucket.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_bucket.h; sourceTree = "<group>"; };
 		B284ACC91A7B9DF900C35863 /* h2_task_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_input.c; sourceTree = "<group>"; };
 		B284ACCA1A7B9DF900C35863 /* h2_task_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_input.h; sourceTree = "<group>"; };
+		B28DB1DE1AC06B2F005D02E7 /* xxx-1.0.2a.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "xxx-1.0.2a.tar.gz"; sourceTree = "<group>"; };
 		B2A6EF171A9B598B005DFC5B /* h2_request.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_request.c; sourceTree = "<group>"; };
 		B2A6EF181A9B598B005DFC5B /* h2_request.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_request.h; sourceTree = "<group>"; };
 		B2A6EF281A9C79A6005DFC5B /* h2_h2c.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_h2c.c; sourceTree = "<group>"; };
@@ -9577,6 +9578,7 @@
 				B26170E31AB305CC007B1688 /* hello.py */,
 				B2344BF51AB07E040043A2D5 /* index.html */,
 				B26170E21AB30403007B1688 /* upload.py */,
+				B28DB1DE1AC06B2F005D02E7 /* xxx-1.0.2a.tar.gz */,
 			);
 			path = test.example.org;
 			sourceTree = "<group>";
