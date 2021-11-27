@@ -1,3 +1,8 @@
+
+ * using openssl latest.tar.gz to retrieve latest openssl for sandbox
+ * fixed crash in large request header handling
+ * better flushing of stream io resulting in performance improvements
+ * added sandbox tests for chunked responses of various sizes
  * integrated fix (https://github.com/icing/mod_h2/pull/5) from 
    Jonathan (invader444) to fix chunked encoding when converting http/1
    responses to http2 unchunked data.

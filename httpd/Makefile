@@ -35,9 +35,10 @@ PCRE_DIR     = pcre-$(PCRE_VERSION)
 PCRE_TAR     = $(PCRE_DIR).tar.gz
 PCRE_URL     = http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VERSION)/$(PCRE_TAR)
 
-OPENSSL_DIR  = openssl-1.0.2a
-OPENSSL_TAR  = $(OPENSSL_DIR).tar.gz
-OPENSSL_URL  = https://www.openssl.org/source/$(OPENSSL_TAR)
+OPENSSL_BASE = http://www.openssl.org
+OPENSSL_DIR = openssl-latest
+OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
+OPENSSL_URL = $(OPENSSL_BASE)/source/latest.tar.gz
 
 
 GEN          = gen
@@ -73,7 +74,6 @@ ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0))
 	OPENSSL_CONF = darwin64-x86_64-cc
 	endif
 endif
-
 
 HTTP_PORT = 12345
 HTTPS_PORT = 12346
@@ -210,17 +210,19 @@ $(GEN)/$(OPENSSL_DIR)/.openssl-built: \
 	@echo done.
 	@touch $(GEN)/$(OPENSSL_DIR)/.openssl-built
 
-$(GEN)/$(OPENSSL_DIR)/.openssl-configured: $(GEN)/$(OPENSSL_TAR)
-	@rm -rf $(GEN)/$(OPENSSL_DIR)
-	@cd $(GEN) && tar xfz $(OPENSSL_TAR)
+$(GEN)/$(OPENSSL_DIR)/.openssl-configured: \
+        $(GEN)/$(OPENSSL_DIR)/.openssl-extracted
 	@echo -n configuring openssl...
-	cd $(GEN)/$(OPENSSL_DIR) && ./Configure --openssldir=$(BLD_PREFIX) $(OPENSSL_CONF) >> ../build.log
+	@cd $(GEN)/$(OPENSSL_DIR) && ./Configure --openssldir=$(BLD_PREFIX) $(OPENSSL_CONF) >> ../build.log
 	@echo done.
 	@touch $(GEN)/$(OPENSSL_DIR)/.openssl-configured
 
-$(GEN)/$(OPENSSL_TAR):
+$(GEN)/$(OPENSSL_DIR)/.openssl-extracted:
+	@echo -n downloading and extracting openssl...
 	@mkdir -p $(GEN)
-	curl $(CURL_OPTS) $(OPENSSL_URL) > $(GEN)/$(OPENSSL_TAR)
+	@bash get-openssl-latest.sh $(OPENSSL_URL) $(GEN)/$(OPENSSL_DIR)
+	@echo done.
+	@touch $(GEN)/$(OPENSSL_DIR)/.openssl-extracted
 
 ################################################################################
 # Build + install a local pcre library (if needed)

@@ -3643,6 +3643,7 @@
 		B2546E711A827B960033A875 /* x509.input */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = x509.input; sourceTree = "<group>"; };
 		B2546E731A827D470033A875 /* h2.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.conf; sourceTree = "<group>"; };
 		B2546E741A827D470033A875 /* h2.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.load; sourceTree = "<group>"; };
+		B259EEFE1AC16A2A00F0E3EC /* get-openssl-latest.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; name = "get-openssl-latest.sh"; path = "httpd/get-openssl-latest.sh"; sourceTree = "<group>"; };
 		B26170E21AB30403007B1688 /* upload.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = upload.py; sourceTree = "<group>"; };
 		B26170E31AB305CC007B1688 /* hello.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = hello.py; sourceTree = "<group>"; };
 		B271425E1AB9DD59004EF82E /* h2_io_set.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_io_set.c; sourceTree = "<group>"; };
@@ -9866,10 +9867,11 @@
 		B27BBD311A65928A00C58A41 /* htppd */ = {
 			isa = PBXGroup;
 			children = (
+				B259EEFE1AC16A2A00F0E3EC /* get-openssl-latest.sh */,
 				B22D252A1AA9A14D0041D8E5 /* httpd-2.4.12 */,
-				B27BBD391A690C9800C58A41 /* patches */,
-				B27BBD2F1A65927E00C58A41 /* packages */,
 				B27BBD2E1A65927E00C58A41 /* Makefile */,
+				B27BBD2F1A65927E00C58A41 /* packages */,
+				B27BBD391A690C9800C58A41 /* patches */,
 			);
 			name = htppd;
 			sourceTree = "<group>";
