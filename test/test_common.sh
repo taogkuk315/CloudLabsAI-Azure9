@@ -85,7 +85,7 @@ curl_check_content() {
     mkdir -p $TMP
     cat > $TMP/expected
     echo -n "curl $URL_PREFIX/$DOC: $MSG..."
-    ${CURL} "$ARGS" $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${CURL} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
 }
@@ -106,6 +106,20 @@ curl_check_redir() {
     echo ok.
 }
 
+curl_check_necho() {
+    COUNT="$1"; shift;
+    TEXT="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@"
+    rm -rf $TMP
+    mkdir -p $TMP
+    n=0; while [ $n -lt $COUNT ]; do echo "$TEXT"; n=$[ n + 1 ]; done > $TMP/expected
+    echo -n "curl $URL_PREFIX/necho.py?count=$COUNT&text=$TEXT..."
+    ${CURL} $ARGS -F count="$COUNT" -F text="$TEXT" $URL_PREFIX/necho.py > $TMP/echo || fail
+    diff  $TMP/expected $TMP/echo || fail
+    echo ok.
+}
+
 curl_post_file() {
     DOC="$1"; shift;
     FILE="$1"; shift;
@@ -115,8 +129,8 @@ curl_post_file() {
     rm -rf $TMP
     mkdir -p $TMP
     echo -n "curl $URL_PREFIX/$DOC: $MSG..."
-    ${CURL} "$ARGS" --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
-    ${CURL} "$ARGS" $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
+    ${CURL} $ARGS --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
+    ${CURL} $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
     diff  $FILE $TMP/data.down || fail
     echo ok.
 }
@@ -162,7 +176,7 @@ EOF
 EOF
     echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
     ${NGHTTP} -uv --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
-    ${NGHTTP} -u "$ARGS" $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
+    ${NGHTTP} -u $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
     diff  $FILE $TMP/data.down || fail
     echo ok.
 }

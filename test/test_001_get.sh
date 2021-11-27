@@ -304,4 +304,12 @@ curl_check_content upload.py "http2"    --http2 <<EOF
 EOF
 
 
+################################################################################
+# check chunked content from cgi
+################################################################################
+curl_check_necho 10 "0123456789" "http/2" --http2
+curl_check_necho 100 "0123456789" "http/2" --http2
+curl_check_necho 10000 "0123456789" "http/2" --http2
+curl_check_necho 100000 "0123456789" "http/2" --http2
+
 
