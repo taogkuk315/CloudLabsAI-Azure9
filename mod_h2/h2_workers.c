@@ -39,6 +39,7 @@ struct h2_workers {
     
     apr_threadattr_t *thread_attr;
     
+    int worker_count;
     struct h2_queue *workers;
     struct h2_queue *tasks_scheduled;
     
@@ -85,7 +86,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
             /* Need to wait for either a new task to arrive or, if we
              * are not at the minimum workers count, wait our max idle
              * time until we reduce the number of workers */
-            if (h2_queue_size(workers->workers) > workers->min_size) {
+            if (workers->worker_count > workers->min_size) {
                 apr_time_t now = apr_time_now();
                 if (now >= (start_wait + max_wait)) {
                     /* waited long enough without getting a task. */
@@ -97,7 +98,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
                 }
                 if (status == APR_TIMEUP) {
                     /* waited long enough */
-                    if (h2_queue_size(workers->workers) > workers->min_size) {
+                    if (workers->worker_count > workers->min_size) {
                         ap_log_error(APLOG_MARK, APLOG_TRACE2, status, workers->s,
                                      "h2_workers: aborting idle worker");
                         h2_worker_abort(worker);
@@ -143,6 +144,7 @@ static void worker_done(h2_worker *worker, void *ctx)
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                      "h2_worker(%d): done", h2_worker_get_id(worker));
         h2_queue_remove(workers->workers, worker);
+        workers->worker_count = h2_queue_size(workers->workers);
         apr_thread_mutex_unlock(workers->lock);
     }
 }
@@ -159,6 +161,7 @@ static apr_status_t add_worker(h2_workers *workers)
     }
     ap_log_error(APLOG_MARK, APLOG_TRACE2, 0, workers->s,
                  "h2_workers: adding worker(%d)", h2_worker_get_id(w));
+    ++workers->worker_count;
     return h2_queue_append(workers->workers, w);
 }
 
@@ -168,7 +171,7 @@ static apr_status_t h2_workers_start(h2_workers *workers) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                       "h2_workers: starting");
 
-        while (h2_queue_size(workers->workers) < workers->min_size
+        while (workers->worker_count < workers->min_size
                && status == APR_SUCCESS) {
             status = add_worker(workers);
         }
@@ -252,7 +255,7 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
                      "h2_workers: scheduling task(%s)",
                      h2_task_get_id(task));
         if (apr_atomic_read32(&workers->idle_worker_count) <= 0
-            && h2_queue_size(workers->workers) < workers->max_size) {
+            && workers->worker_count < workers->max_size) {
             ap_log_error(APLOG_MARK, APLOG_TRACE2, status, workers->s,
                          "h2_workers: adding worker");
             add_worker(workers);

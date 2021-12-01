@@ -37,20 +37,15 @@
 
 struct h2_task {
     const char *id;
-    long session_id;
     int stream_id;
     int aborted;
     apr_uint32_t has_started;
     apr_uint32_t has_finished;
     
     struct h2_mplx *mplx;
-    conn_rec *master;
     struct h2_conn *conn;
     
     struct h2_task_input *input;    /* http/1.1 input data */
-    h2_bucket *first_input;
-    int input_eos;
-
     struct h2_task_output *output;  /* response body data */
 };
 
@@ -122,8 +117,6 @@ h2_task *h2_task_create(long session_id,
                         int stream_id,
                         conn_rec *master,
                         apr_pool_t *stream_pool,
-                        h2_bucket *first_input,
-                        int input_eos,
                         h2_mplx *mplx)
 {
     h2_task *task = apr_pcalloc(stream_pool, sizeof(h2_task));
@@ -137,11 +130,7 @@ h2_task *h2_task_create(long session_id,
     
     task->id = apr_psprintf(stream_pool, "%ld-%d", session_id, stream_id);
     task->stream_id = stream_id;
-    task->session_id = session_id;
     task->mplx = mplx;
-    task->master = master;
-    task->first_input = first_input;
-    task->input_eos = input_eos;
     
     h2_task_prep_conn(task);
 
@@ -158,18 +147,15 @@ apr_status_t h2_task_prep_conn(h2_task *task)
      * making this new pool a sub pool of the stream one, but that
      * only led to crashes. With a root pool, this does not happen.
      */
-    task->conn = h2_conn_create(task->id, task->master, 
+    task->conn = h2_conn_create(task->id, h2_mplx_get_conn(task->mplx), 
                                 h2_mplx_get_pool(task->mplx));
     if (!task->conn) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, task->master,
-                      "h2_task(%s): create task connection", task->id);
         h2_mplx_out_reset(task->mplx, task->stream_id, APR_ENOMEM);
         return APR_ENOMEM;
     }
 
     task->input = h2_task_input_create(task->conn->pool,
                                        task->id, task->stream_id,
-                                       task->first_input, task->input_eos, 
                                        task->mplx);
     task->output = h2_task_output_create(task->conn->pool,
                                          task, task->stream_id,
@@ -181,7 +167,7 @@ apr_status_t h2_task_prep_conn(h2_task *task)
 apr_status_t h2_task_destroy(h2_task *task)
 {
     assert(task);
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->master,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(task->mplx),
                   "h2_task(%s): destroy started", task->id);
     if (task->input) {
         h2_task_input_destroy(task->input);
@@ -239,18 +225,6 @@ int h2_task_is_aborted(h2_task *task)
 {
     assert(task);
     return task->aborted;
-}
-
-long h2_task_get_session_id(h2_task *task)
-{
-    assert(task);
-    return task->session_id;
-}
-
-int h2_task_get_stream_id(h2_task *task)
-{
-    assert(task);
-    return task->stream_id;
 }
 
 const char *h2_task_get_id(h2_task *task)

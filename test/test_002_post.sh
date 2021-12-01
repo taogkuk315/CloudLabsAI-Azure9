@@ -20,25 +20,21 @@ CHR100="012345678901234567890123456789012345678901234567890123456789012345678901
 "
 
 rm -f $GEN/data-*
-i=0; while [ $i -lt 10 ]; do
-    echo -n "$CHR100" >> $GEN/data-1k
-    i=$[ i + 1 ]
-done
-i=0; while [ $i -lt 10 ]; do
-    cat $GEN/data-1k >> $GEN/data-10k
-    i=$[ i + 1 ]
-done
-i=0; while [ $i -lt 10 ]; do
-    cat $GEN/data-10k >> $GEN/data-100k
-    i=$[ i + 1 ]
-done
 
-i=0
-rm -f $GEN/data-10k
-while [ $i -lt 100 ]; do
-echo -n "$CHR100" >> $GEN/data-10k
-i=$[ i + 1 ]
-done
+i=0; while [ $i -lt 10 ]; do
+    echo -n "$CHR100"
+    i=$[ i + 1 ]
+done > $GEN/data-1k
+
+i=0; while [ $i -lt 10 ]; do
+    cat $GEN/data-1k
+    i=$[ i + 1 ]
+done  > $GEN/data-10k
+
+i=0; while [ $i -lt 10 ]; do
+    cat $GEN/data-10k
+    i=$[ i + 1 ]
+done > $GEN/data-100k
 
 # just a check that things are working
 curl_post_data upload.py $GEN/data-1k "file upload via http/1.1" --http1.1

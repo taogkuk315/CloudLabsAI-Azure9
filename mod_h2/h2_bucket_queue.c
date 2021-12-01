@@ -22,7 +22,6 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
-#include "h2_queue.h"
 #include "h2_bucket_queue.h"
 
 static void bucket_free(void *entry)
@@ -30,15 +29,27 @@ static void bucket_free(void *entry)
     h2_bucket_destroy((h2_bucket *)entry);
 }
 
+void h2_bucket_queue_init(h2_bucket_queue *q)
+{
+    APR_RING_INIT(&q->ring, h2_bucket, link);
+}
+
+void h2_bucket_queue_cleanup(h2_bucket_queue *q)
+{
+    h2_bucket *b;
+    
+    while (!H2_QUEUE_EMPTY(q)) {
+        b = H2_QUEUE_FIRST(q);
+        H2_BUCKET_REMOVE(b);						\
+        h2_bucket_destroy(b);
+    }
+}
+
 h2_bucket_queue *h2_bucket_queue_create(apr_pool_t *pool)
 {
     h2_bucket_queue *q = apr_pcalloc(pool, sizeof(h2_bucket_queue));
-    if (!q) {
-        return NULL;
-    }
-    q->queue = h2_queue_create(pool, bucket_free);
-    if (!q->queue) {
-        return NULL;
+    if (q) {
+        h2_bucket_queue_init(q);
     }
     return q;
 }
@@ -58,111 +69,91 @@ int count_stream(void *puser, int id, void *entry, int index)
     return 1;
 }
 
-apr_size_t h2_bucket_queue_get_stream_size(h2_bucket_queue *q, int stream_id) {
-    count_ctx ctx = { stream_id, 0 };
-    h2_queue_iter(q->queue, count_stream, &ctx);
-    return ctx.size;
+apr_size_t h2_bucket_queue_get_length(h2_bucket_queue *q) {
+    apr_status_t status = APR_SUCCESS;
+    apr_size_t total = 0;
+    h2_bucket *b;
+    
+    for (b = H2_QUEUE_FIRST(q);
+         b != H2_QUEUE_SENTINEL(q);
+         b = H2_BUCKET_NEXT(b))
+    {
+        total += b->data_len;
+    }
+        
+    return total;
 }
 
 void h2_bucket_queue_destroy(h2_bucket_queue *q)
 {
-    if (q->queue) {
-        h2_queue_destroy(q->queue);
-        q->queue = NULL;
-    }
+    h2_bucket_queue_cleanup(q);
 }
 
 void h2_bucket_queue_abort(h2_bucket_queue *q)
 {
-    h2_queue_abort(q->queue);
+    q->aborted = 1;
 }
 
-static void *find_eos_for(void *ctx, int id, void *entry)
+apr_status_t h2_bucket_queue_push(h2_bucket_queue *q, h2_bucket *b)
 {
-    int match_id = *((int *)ctx);
-    return ((id == match_id) && (entry == &H2_NULL_BUCKET))? entry : NULL;
-}
-
-static void *find_first_for(void *ctx, int id, void *entry)
-{
-    int match_id = *((int *)ctx);
-    return (id == match_id || H2_QUEUE_ID_NONE == match_id)? entry : NULL;
-}
-
-
-apr_status_t h2_bucket_queue_push(h2_bucket_queue *q,
-                                  int stream_id, h2_bucket *bucket)
-{
-    if (q->queue->aborted) {
-        return APR_EOF;
+    if (q->aborted) {
+        return APR_ECONNABORTED;
     }
-    
-    return h2_queue_push_id(q->queue, stream_id, bucket);
+    H2_QUEUE_INSERT_HEAD(q, b);
+    return APR_SUCCESS;
 }
 
-apr_status_t h2_bucket_queue_pop(h2_bucket_queue *q,
-                                 int stream_id, h2_bucket **pbucket)
+apr_status_t h2_bucket_queue_pop(h2_bucket_queue *q, h2_bucket **pb)
 {
-    *pbucket = NULL;
-    h2_bucket *bucket = h2_queue_pop_find(q->queue, find_first_for, &stream_id);
-    if (bucket == &H2_NULL_BUCKET) {
-        return APR_EOF;
-    }
-    else if (bucket) {
-        *pbucket = bucket;
+    *pb = NULL;
+    if (!H2_QUEUE_EMPTY(q)) {
+        h2_bucket *b = H2_QUEUE_FIRST(q);
+        H2_BUCKET_REMOVE(b);
+        if (h2_bucket_is_eos(b)) {
+            h2_bucket_destroy(b);
+            return APR_EOF;
+        }
+        *pb = b;
         return APR_SUCCESS;
     }
     return APR_EAGAIN;
 }
 
-apr_status_t h2_bucket_queue_append(h2_bucket_queue *q, int stream_id,
-                                    h2_bucket *bucket)
+apr_status_t h2_bucket_queue_append(h2_bucket_queue *q, h2_bucket *b)
 {
-    if (q->queue->aborted) {
-        return APR_EOF;
+    if (q->aborted) {
+        return APR_ECONNABORTED;
     }
-    
-    return h2_queue_append_id(q->queue, stream_id, bucket);
+    H2_QUEUE_INSERT_TAIL(q, b);
+    return APR_SUCCESS;
 }
 
-apr_status_t h2_bucket_queue_append_eos(h2_bucket_queue *q,
-                                        int stream_id)
+apr_status_t h2_bucket_queue_append_eos(h2_bucket_queue *q)
 {
-    return h2_bucket_queue_append(q, stream_id, &H2_NULL_BUCKET);
+    h2_bucket *eos = h2_bucket_alloc_eos();
+    if (!eos) {
+        return APR_ENOMEM;
+    }
+    H2_QUEUE_INSERT_TAIL(q, eos);
+    return APR_SUCCESS;
 }
 
-typedef struct {
-    h2_bucket_queue_iter_fn *cb;
-    void *ctx;
-} my_iter_ctx;
-
-static int my_iter(void *ctx, int stream_id, void *entry, int index)
+int h2_bucket_queue_has_eos(h2_bucket_queue *q)
 {
-    my_iter_ctx *ictx = (my_iter_ctx *)ctx;
-    return ictx->cb(ictx->ctx, stream_id, (h2_bucket *)entry, index);
-}
-
-void h2_bucket_queue_iter(h2_bucket_queue *q,
-                          h2_bucket_queue_iter_fn *iter, void *ctx)
-{
-    my_iter_ctx ictx = { iter, ctx };
-    h2_queue_iter(q->queue, my_iter, (void*)&ictx);
-}
-
-int h2_bucket_queue_has_eos_for(h2_bucket_queue *q, int stream_id)
-{
-    h2_bucket *b = h2_queue_find(q->queue, find_eos_for, (void*)&stream_id);
-    return (b != NULL);
+    h2_bucket *b;
+    for (b = H2_QUEUE_FIRST(q);
+         b != H2_QUEUE_SENTINEL(q);
+         b = H2_BUCKET_NEXT(b))
+    {
+        if (h2_bucket_is_eos(b)) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 int h2_bucket_queue_is_empty(h2_bucket_queue *q)
 {
-    return h2_queue_is_empty(q->queue);
-}
-
-int h2_bucket_queue_has_buckets_for(h2_bucket_queue *q, int stream_id)
-{
-    h2_bucket *b = h2_queue_find_id(q->queue, stream_id);
-    return (b != NULL);
+    return H2_QUEUE_EMPTY(q);
 }
 

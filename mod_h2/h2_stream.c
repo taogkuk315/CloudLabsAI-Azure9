@@ -98,9 +98,8 @@ void h2_stream_abort(h2_stream *stream)
 h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
 {
     assert(stream);
-    stream->task = h2_task_create(h2_mplx_get_id(stream->m),
-                                  stream->id, master, stream->pool,
-                                  NULL, 0, stream->m);
+    stream->task = h2_task_create(h2_mplx_get_id(stream->m), stream->id, 
+                                  master, stream->pool, stream->m);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, master,
                   "h2_stream(%ld-%d): created task for %s %s (%s)",
                   h2_mplx_get_id(stream->m), stream->id,

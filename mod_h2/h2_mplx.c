@@ -26,7 +26,6 @@
 
 #include "h2_private.h"
 #include "h2_config.h"
-#include "h2_queue.h"
 #include "h2_bucket.h"
 #include "h2_io.h"
 #include "h2_io_set.h"
@@ -38,8 +37,8 @@ struct h2_mplx {
     conn_rec *c;
     apr_pool_t *pool;
     
-    h2_queue *responses;
     h2_io_set *stream_ios;
+    h2_io_set *ready_ios;
     
     apr_thread_mutex_t *lock;
     apr_thread_cond_t *added_input;
@@ -81,8 +80,8 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
         m->c = c;
         m->pool = pool;
         
-        m->responses = h2_queue_create(m->pool, free_response);
         m->stream_ios = h2_io_set_create(m->pool);
+        m->ready_ios = h2_io_set_create(m->pool);
         m->out_stream_max_size =
             h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM_SIZE);
         
@@ -109,9 +108,9 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
 void h2_mplx_destroy(h2_mplx *m)
 {
     assert(m);
-    if (m->responses) {
-        h2_queue_destroy(m->responses);
-        m->responses = NULL;
+    if (m->ready_ios) {
+        h2_io_set_destroy(m->ready_ios);
+        m->ready_ios = NULL;
     }
     if (m->stream_ios) {
         h2_io_set_destroy(m->stream_ios);
@@ -158,7 +157,6 @@ void h2_mplx_abort(h2_mplx *m)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         m->aborted = 1;
-        h2_queue_abort(m->responses);
         h2_io_set_destroy_all(m->stream_ios);
         apr_thread_mutex_unlock(m->lock);
     }
@@ -306,11 +304,18 @@ apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response)
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        h2_queue_append_id(m->responses, stream_id, response);
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
-                      "h2_mplx(%ld): open on stream_id-in(%d)",
-                      m->id, stream_id);
-        have_out_data_for(m, stream_id);
+        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+        if (io) {
+            io->response = response;
+            h2_io_set_add(m->ready_ios, io);
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
+                          "h2_mplx(%ld): response on stream(%d)",
+                          m->id, stream_id);
+            have_out_data_for(m, stream_id);
+        }
+        else {
+            status = APR_ECONNABORTED;
+        }
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
@@ -319,33 +324,30 @@ apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response)
 apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
 {
     assert(m);
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        h2_queue_append_id(m->responses, stream_id,
-                           h2_response_create(stream_id, ss,
-                                              NULL, NULL, NULL,
-                                              m->pool));
-        have_out_data_for(m, stream_id);
-        apr_thread_mutex_unlock(m->lock);
-    }
-    return status;
+    return h2_mplx_out_open(m, stream_id, 
+                            h2_response_create(stream_id, ss,
+                                               NULL, NULL, NULL,
+                                               m->pool));
 }
 
 h2_response *h2_mplx_pop_response(h2_mplx *m)
 {
     assert(m);
-    h2_response *head = NULL;
+    h2_response *response = NULL;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        head = (h2_response*)h2_queue_pop(m->responses);
-        if (head) {
+        h2_io *io = h2_io_set_get_highest_prio(m->ready_ios);
+        if (io && io->response) {
+            response = io->response;
+            io->response = NULL;
+            h2_io_set_remove(m->ready_ios, io);
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
                           "h2_mplx(%ld): popped response(%d)",
-                          m->id, head->stream_id);
+                          m->id, response->stream_id);
         }
         apr_thread_mutex_unlock(m->lock);
     }
-    return head;
+    return response;
 }
 
 apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,

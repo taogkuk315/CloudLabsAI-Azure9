@@ -43,7 +43,6 @@ struct h2_task_output {
     struct h2_mplx *m;
     h2_task_output_state_t state;
     struct h2_bucket *cur;
-    apr_size_t cur_offset;
     
     h2_from_h1 *from_h1;
     h2_response *response;
@@ -231,7 +230,6 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                 if (is_aborted(output, filter)) {
                     return APR_ECONNABORTED;
                 }
-                flush_cur(output);
                 status = apr_bucket_read(bucket, &data, &data_length,
                                          APR_BLOCK_READ);
                 if (status != APR_SUCCESS) {

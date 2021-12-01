@@ -12,6 +12,8 @@
 	<dict>
 		<key>7A6D7B037166029D8EB565F124690A553EB43BAF</key>
 		<string>https://www.greenbytes.de/projects/mod-h2/mod-h2.git</string>
+		<key>ED37D202B9691A75DA1E927834B45B38A4B3B6A5</key>
+		<string>github.com:tatsuhiro-t/nghttp2.git</string>
 	</dict>
 	<key>IDESourceControlProjectPath</key>
 	<string>mod-h2/mod-h2.xcodeproj</string>
@@ -19,6 +21,8 @@
 	<dict>
 		<key>7A6D7B037166029D8EB565F124690A553EB43BAF</key>
 		<string>../../..</string>
+		<key>ED37D202B9691A75DA1E927834B45B38A4B3B6A5</key>
+		<string>../../../nghttp2/gen/nghttp2-master/</string>
 	</dict>
 	<key>IDESourceControlProjectURL</key>
 	<string>https://www.greenbytes.de/projects/mod-h2/mod-h2.git</string>
@@ -35,6 +39,14 @@
 			<string>7A6D7B037166029D8EB565F124690A553EB43BAF</string>
 			<key>IDESourceControlWCCName</key>
 			<string>mod-h2</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>ED37D202B9691A75DA1E927834B45B38A4B3B6A5</string>
+			<key>IDESourceControlWCCName</key>
+			<string>nghttp2-master</string>
 		</dict>
 	</array>
 </dict>

@@ -23,7 +23,7 @@
 #include "h2_private.h"
 #include "h2_bucket.h"
 
-h2_bucket H2_NULL_BUCKET = { NULL, 0, 0, NULL };
+h2_bucket H2_NULL_BUCKET = { { NULL, NULL }, NULL, 0, 0, NULL };
 
 static void bucket_free(h2_bucket *bucket)
 {
@@ -35,11 +35,17 @@ h2_bucket *h2_bucket_alloc(apr_size_t data_size)
     apr_size_t total = sizeof(h2_bucket) + data_size;
     h2_bucket *bucket = calloc(total, sizeof(char));
     if (bucket != NULL) {
+        APR_RING_ELEM_INIT(bucket, link);
         bucket->data = ((char *)bucket) + sizeof(h2_bucket);
         bucket->data_size = data_size;
         bucket->free_bucket = bucket_free;
     }
     return bucket;
+}
+
+h2_bucket *h2_bucket_alloc_eos()
+{
+    return h2_bucket_alloc(0);
 }
 
 void h2_bucket_destroy(h2_bucket *bucket)
@@ -111,4 +117,19 @@ apr_size_t h2_bucket_move(h2_bucket *bucket, char *buf, apr_size_t len)
     return copied;
 }
 
+apr_size_t h2_bucket_consume(h2_bucket *bucket, apr_size_t len)
+{
+    apr_size_t n = (bucket->data_len < len)? bucket->data_len : len;
+    if (n > 0) {
+        len -= n;
+        bucket->data_len -= n;
+        bucket->data += n;
+    }
+    return len;
+}
+
+int h2_bucket_is_eos(h2_bucket *bucket)
+{
+    return bucket->data_size == 0;
+}
 

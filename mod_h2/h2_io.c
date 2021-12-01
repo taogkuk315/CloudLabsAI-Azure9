@@ -22,7 +22,6 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
-#include "h2_queue.h"
 #include "h2_bucket_queue.h"
 #include "h2_io.h"
 
@@ -31,70 +30,69 @@ h2_io *h2_io_create(int id, apr_pool_t *pool)
     h2_io *io = apr_pcalloc(pool, sizeof(*io));
     if (io) {
         io->id = id;
-        io->input = h2_bucket_queue_create(pool);
-        io->output = h2_bucket_queue_create(pool);
+        h2_bucket_queue_init(&io->input);
+        h2_bucket_queue_init(&io->output);
     }
     return io;
 }
 
+void h2_io_cleanup(h2_io *io)
+{
+    h2_bucket_queue_cleanup(&io->input);
+    h2_bucket_queue_cleanup(&io->output);
+}
+
 void h2_io_destroy(h2_io *io)
 {
-    if (io->input) {
-        h2_bucket_queue_destroy(io->input);
-        io->input = NULL;
-    }
-    if (io->output) {
-        h2_bucket_queue_destroy(io->output);
-        io->output = NULL;
-    }
+    h2_io_cleanup(io);
 }
 
 int h2_io_in_has_eos_for(h2_io *io)
 {
-    return h2_bucket_queue_has_eos_for(io->input, io->id);
+    return h2_bucket_queue_has_eos(&io->input);
 }
 
 int h2_io_out_has_data(h2_io *io)
 {
-    return h2_bucket_queue_has_buckets_for(io->output, io->id);
+    return !h2_bucket_queue_is_empty(&io->output);
 }
 
 apr_size_t h2_io_out_length(h2_io *io)
 {
-    return h2_bucket_queue_get_stream_size(io->output, io->id);
+    return h2_bucket_queue_get_length(&io->output);
 }
 
 apr_status_t h2_io_in_read(h2_io *io, struct h2_bucket **pbucket)
 {
-    return h2_bucket_queue_pop(io->input, io->id, pbucket);
+    return h2_bucket_queue_pop(&io->input, pbucket);
 }
 
 apr_status_t h2_io_in_write(h2_io *io, struct h2_bucket *bucket)
 {
-    return h2_bucket_queue_append(io->input, io->id, bucket);
+    return h2_bucket_queue_append(&io->input, bucket);
 }
 
 apr_status_t h2_io_in_close(h2_io *io)
 {
-    return h2_bucket_queue_append_eos(io->input, io->id);
+    return h2_bucket_queue_append_eos(&io->input);
 }
 
 apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket)
 {
-    return h2_bucket_queue_pop(io->output, io->id, pbucket);
+    return h2_bucket_queue_pop(&io->output, pbucket);
 }
     
 apr_status_t h2_io_out_pushback(h2_io *io, struct h2_bucket *bucket)
 {
-    return h2_bucket_queue_push(io->output, io->id, bucket);
+    return h2_bucket_queue_push(&io->output, bucket);
 }
 
 apr_status_t h2_io_out_write(h2_io *io, struct h2_bucket *bucket)
 {
-    return h2_bucket_queue_append(io->output, io->id, bucket);
+    return h2_bucket_queue_append(&io->output, bucket);
 }
 
 apr_status_t h2_io_out_close(h2_io *io)
 {
-    return h2_bucket_queue_append_eos(io->output, io->id);
+    return h2_bucket_queue_append_eos(&io->output);
 }

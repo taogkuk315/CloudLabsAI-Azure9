@@ -73,6 +73,18 @@ h2_io *h2_io_set_get(h2_io_set *sp, int stream_id)
     return ps? *ps : NULL;
 }
 
+h2_io *h2_io_set_get_highest_prio(h2_io_set *set)
+{
+    h2_io *highest = NULL;
+    for (int i = 0; i < set->list->nelts; ++i) {
+        h2_io *io = h2_io_IDX(set->list, i);
+        if (!highest /*|| io-prio even higher */ ) {
+            highest = io;
+        }
+    }
+    return highest;
+}
+
 static void h2_io_set_sort(h2_io_set *sp)
 {
     qsort(sp->list->elts, sp->list->nelts, sp->list->elt_size, 

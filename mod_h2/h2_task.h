@@ -47,8 +47,6 @@ h2_task *h2_task_create(long session_id,
                         int stream_id,
                         conn_rec *master,
                         apr_pool_t *pool, 
-                        struct h2_bucket *input,
-                        int input_eos,
                         struct h2_mplx *mplx);
 
 apr_status_t h2_task_destroy(h2_task *task);
@@ -65,9 +63,6 @@ int h2_task_has_finished(h2_task *task);
 void h2_task_set_finished(h2_task *task, int finished);
 
 const char *h2_task_get_id(h2_task *task);
-
-long h2_task_get_session_id(h2_task *task);
-int h2_task_get_stream_id(h2_task *task);
 
 void h2_task_register_hooks(void);
 

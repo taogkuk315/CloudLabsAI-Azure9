@@ -109,14 +109,14 @@ curl_check_redir() {
 curl_check_necho() {
     COUNT="$1"; shift;
     TEXT="$1"; shift;
+    REF="$1"; shift;
     MSG="$1"; shift;
     ARGS="$@"
     rm -rf $TMP
     mkdir -p $TMP
-    n=0; while [ $n -lt $COUNT ]; do echo "$TEXT"; n=$[ n + 1 ]; done > $TMP/expected
     echo -n "curl $URL_PREFIX/necho.py?count=$COUNT&text=$TEXT..."
     ${CURL} $ARGS -F count="$COUNT" -F text="$TEXT" $URL_PREFIX/necho.py > $TMP/echo || fail
-    diff  $TMP/expected $TMP/echo || fail
+    diff  $REF $TMP/echo || fail
     echo ok.
 }
 

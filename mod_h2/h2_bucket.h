@@ -33,17 +33,41 @@ typedef void h2_bucket_free_func(h2_bucket *bucket);
  * between threads.
  */
 struct h2_bucket {
+    APR_RING_ENTRY(h2_bucket) link;
     char *data;
     apr_size_t data_len;
     apr_size_t data_size;
     h2_bucket_free_func *free_bucket;
 };
 
+/**
+ * Get the next bucket in the queue
+ * @param e The current bucket
+ * @return The next bucket
+ */
+#define H2_BUCKET_NEXT(e)	APR_RING_NEXT((e), link)
+
+/**
+ * Get the previous bucket in the queue
+ * @param e The current bucket
+ * @return The previous bucket
+ */
+#define H2_BUCKET_PREV(e)	APR_RING_PREV((e), link)
+
+/**
+ * Remove a bucket from its bucket queue
+ * @param e The bucket to remove
+ */
+#define H2_BUCKET_REMOVE(e)	APR_RING_REMOVE((e), link)
+
 /* Singular instance, useful in indicating end-of-stream or such */
 extern h2_bucket H2_NULL_BUCKET;
 
 /* Allocate a bucket from heap, will free memory when destroyed */
 h2_bucket *h2_bucket_alloc(apr_size_t data_size);
+
+/* Allocate a bucket representing the end of stream. */
+h2_bucket *h2_bucket_alloc_eos();
 
 /* Destroy the bucket and release memory when possible */
 void h2_bucket_destroy(h2_bucket *bucket);
@@ -80,5 +104,9 @@ apr_size_t h2_bucket_copy(const h2_bucket *bucket, char *buf, apr_size_t len);
  *   limitations in the target buffer
  */
 apr_size_t h2_bucket_move(h2_bucket *bucket, char *buf, apr_size_t len);
+
+apr_size_t h2_bucket_consume(h2_bucket *bucket, apr_size_t len);
+
+int h2_bucket_is_eos(h2_bucket *bucket);
 
 #endif /* defined(__mod_h2__h2_bucket__) */

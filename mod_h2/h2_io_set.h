@@ -30,6 +30,7 @@ void h2_io_set_destroy(h2_io_set *set);
 
 apr_status_t h2_io_set_add(h2_io_set *set, struct h2_io *io);
 h2_io *h2_io_set_get(h2_io_set *set, int stream_id);
+h2_io *h2_io_set_get_highest_prio(h2_io_set *set);
 h2_io *h2_io_set_remove(h2_io_set *set, struct h2_io *io);
 
 void h2_io_set_remove_all(h2_io_set *set);

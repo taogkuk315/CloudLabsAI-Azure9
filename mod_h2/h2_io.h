@@ -17,13 +17,16 @@
 #define __mod_h2__h2_io__
 
 struct h2_bucket;
-struct h2_bucket_queue;
+struct h2_response;
+
+#include "h2_bucket_queue.h"
 
 typedef struct h2_io h2_io;
 struct h2_io {
     int id;
-    struct h2_bucket_queue *input;
-    struct h2_bucket_queue *output;
+    h2_bucket_queue input;
+    h2_bucket_queue output;
+    struct h2_response *response;
 };
 
 h2_io *h2_io_create(int id, apr_pool_t *pool);
