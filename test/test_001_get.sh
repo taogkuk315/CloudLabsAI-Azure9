@@ -308,31 +308,40 @@ EOF
 # check chunked content from cgi
 ################################################################################
 
-rm -f $GEN/necho-*
-i=0; while [ $i -lt 10 ]; do
-echo "0123456789"
-i=$[ i + 1 ]
-done > $GEN/necho-100
+if [ ! -f $GEN/necho-100 ]; then
+    i=0; while [ $i -lt 10 ]; do
+    echo "0123456789"
+    i=$[ i + 1 ]
+    done > $GEN/necho-100
+fi
 
-i=0; while [ $i -lt 10 ]; do
-cat $GEN/necho-100
-i=$[ i + 1 ]
-done > $GEN/necho-1k
+if [ ! -f $GEN/necho-1k ]; then
+    i=0; while [ $i -lt 10 ]; do
+    cat $GEN/necho-100
+    i=$[ i + 1 ]
+    done > $GEN/necho-1k
+fi
 
-i=0; while [ $i -lt 10 ]; do
-cat $GEN/necho-1k
-i=$[ i + 1 ]
-done > $GEN/necho-10k
+if [ ! -f $GEN/necho-10k ]; then
+    i=0; while [ $i -lt 10 ]; do
+    cat $GEN/necho-1k
+    i=$[ i + 1 ]
+    done > $GEN/necho-10k
+fi
 
-i=0; while [ $i -lt 10 ]; do
-cat $GEN/necho-10k
-i=$[ i + 1 ]
-done > $GEN/necho-100k
+if [ ! -f $GEN/necho-100k ]; then
+    i=0; while [ $i -lt 10 ]; do
+    cat $GEN/necho-10k
+    i=$[ i + 1 ]
+    done > $GEN/necho-100k
+fi
 
-i=0; while [ $i -lt 10 ]; do
-cat $GEN/necho-100k
-i=$[ i + 1 ]
-done > $GEN/necho-1m
+if [ ! -f $GEN/necho-1m ]; then
+    i=0; while [ $i -lt 10 ]; do
+    cat $GEN/necho-100k
+    i=$[ i + 1 ]
+    done > $GEN/necho-1m
+fi
 
 curl_check_necho 10 "0123456789" $GEN/necho-100 "http/2" --http2
 curl_check_necho 100 "0123456789" $GEN/necho-1k "http/2" --http2
