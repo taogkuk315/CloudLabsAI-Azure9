@@ -177,10 +177,11 @@ apr_status_t h2_stream_write_data(h2_stream *stream,
     return h2_request_write_data(stream->request, data, len, stream->m);
 }
 
-apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket)
+apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket,
+                            int *peos)
 {
     assert(stream);
-    return h2_mplx_out_read(stream->m, stream->id, pbucket);
+    return h2_mplx_out_read(stream->m, stream->id, pbucket, peos);
 }
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended)

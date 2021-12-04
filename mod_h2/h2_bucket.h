@@ -33,10 +33,10 @@ typedef void h2_bucket_free_func(h2_bucket *bucket);
  * between threads.
  */
 struct h2_bucket {
-    APR_RING_ENTRY(h2_bucket) link;
     char *data;
     apr_size_t data_len;
     apr_size_t data_size;
+    APR_RING_ENTRY(h2_bucket) link;
     h2_bucket_free_func *free_bucket;
 };
 

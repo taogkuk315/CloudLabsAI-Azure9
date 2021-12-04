@@ -94,7 +94,7 @@ void h2_bucket_queue_abort(h2_bucket_queue *q)
     q->aborted = 1;
 }
 
-apr_status_t h2_bucket_queue_push(h2_bucket_queue *q, h2_bucket *b)
+apr_status_t h2_bucket_queue_prepend(h2_bucket_queue *q, h2_bucket *b)
 {
     if (q->aborted) {
         return APR_ECONNABORTED;
@@ -150,6 +150,11 @@ int h2_bucket_queue_has_eos(h2_bucket_queue *q)
         }
     }
     return 0;
+}
+
+int h2_bucket_queue_is_eos(h2_bucket_queue *q)
+{
+    return (!H2_QUEUE_EMPTY(q) && h2_bucket_is_eos(H2_QUEUE_FIRST(q)));
 }
 
 int h2_bucket_queue_is_empty(h2_bucket_queue *q)

@@ -920,10 +920,18 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
      * until we see EOS or the buffer is full.
      */
     ssize_t total_read = 0;
+    int eos = 0;
     int done = 0;
-    while (length > 0 && !done) {
-        h2_bucket *bucket = NULL;
-        apr_status_t status = h2_stream_read(stream, &bucket);
+    size_t left = length;
+    while (left > 0 && !done && !eos) {
+        apr_status_t status = APR_SUCCESS;
+        
+        h2_bucket *bucket = stream->cur_out;
+        stream->cur_out = NULL;
+        if (!bucket) {
+            status = h2_stream_read(stream, &bucket, &eos);
+        }
+        
         switch (status) {
             case APR_SUCCESS: {
                 /* This copies out the data and modifies the bucket to
@@ -932,18 +940,28 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
                  * of data in this queue.
                  */
                 assert(bucket);
-                size_t nread = h2_bucket_move(bucket, (char*)buf, length);
+                if (!eos && length < 128) {
+                    /* This happens when our window size has is filling up and 
+                     * the credit messages do not come fast enough. 
+                     * In such a case we suspend the stream. More data should 
+                     * arrive and wake us up again. */
+                    stream->cur_out = bucket;
+                    return NGHTTP2_ERR_DEFERRED;
+                }
+                
+                size_t nread = h2_bucket_move(bucket, (char*)buf, left);
                 if (bucket->data_len > 0) {
-                    /* we could not move all, put it back to the head of the queue.
+                    /* we could not move all, remember it for next time
                      */
-                    h2_mplx_out_pushback(session->mplx, stream_id, bucket);
+                    stream->cur_out = bucket;
+                    eos = 0;
                 }
                 else {
                     h2_bucket_destroy(bucket);
                 }
                 total_read += nread;
                 buf += nread;
-                length -= nread;
+                left -= nread;
             }
                 
             case APR_EAGAIN:
@@ -962,7 +980,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
                 break;
                 
             case APR_EOF:
-                *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+                eos = 1;
                 done = 1;
                 break;
                 
@@ -973,6 +991,17 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
                 return NGHTTP2_ERR_CALLBACK_FAILURE;
         }
     }
+    
+    if (eos) {
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    }
+    
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+                  "h2_stream(%ld-%d): requesting %ld, "
+                  "sending %ld data bytes (eos=%d)",
+                  session->id, (int)stream_id, (long)length, 
+                  (long)total_read, eos);
+    
     return total_read;
 }
 

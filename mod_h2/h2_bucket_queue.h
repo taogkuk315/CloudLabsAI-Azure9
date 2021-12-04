@@ -147,7 +147,7 @@ apr_status_t h2_bucket_queue_append(h2_bucket_queue *q,
                                     struct h2_bucket *bucket);
 
 /* Place the bucket at the head of the queue. */
-apr_status_t h2_bucket_queue_push(h2_bucket_queue *q,
+apr_status_t h2_bucket_queue_prepend(h2_bucket_queue *q,
                                   struct h2_bucket *bucket);
 
 /* Append an "End-of-Stream" marker to the queue. 
@@ -160,6 +160,9 @@ int h2_bucket_queue_is_empty(h2_bucket_queue *q);
 /* Return != 0 iff there is an eos for the given id in the queue. The queue
  * may contain buckets for the id before that still. */
 int h2_bucket_queue_has_eos(h2_bucket_queue *q);
+
+/* Return 1 if the next bucket in the queue is an eos bucket */
+int h2_bucket_queue_is_eos(h2_bucket_queue *q);
 
 /* Get the first bucket from the head of the queue. Will
  * return a bucket with APR_SUCCESS, APR_EOF if the stream is closed and

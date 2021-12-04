@@ -253,15 +253,15 @@ apr_status_t h2_mplx_in_close(h2_mplx *m, int stream_id)
     return status;
 }
 
-apr_status_t h2_mplx_out_read(h2_mplx *m,
-                              int stream_id, struct h2_bucket **pbucket)
+apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id, 
+                              struct h2_bucket **pbucket, int *peos)
 {
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
-            status = h2_io_out_read(io, pbucket);
+            status = h2_io_out_read(io, pbucket, peos);
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
                           "h2_mplx(%ld): read on stream_id-out(%d)",
                           m->id, stream_id);
@@ -271,28 +271,6 @@ apr_status_t h2_mplx_out_read(h2_mplx *m,
         }
         else {
             status = APR_EAGAIN;
-        }
-        apr_thread_mutex_unlock(m->lock);
-    }
-    return status;
-}
-
-apr_status_t h2_mplx_out_pushback(h2_mplx *m, int stream_id,
-                                  struct h2_bucket *bucket)
-
-{
-    assert(m);
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
-        if (io) {
-            status = h2_io_out_pushback(io, bucket);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
-                          "h2_mplx(%ld): pushback on stream_id-out(%d)",
-                          m->id, stream_id);
-        }
-        else {
-            status = APR_ECONNABORTED;
         }
         apr_thread_mutex_unlock(m->lock);
     }

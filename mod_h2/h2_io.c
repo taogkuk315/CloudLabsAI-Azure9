@@ -77,16 +77,13 @@ apr_status_t h2_io_in_close(h2_io *io)
     return h2_bucket_queue_append_eos(&io->input);
 }
 
-apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket)
+apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket, int *peos)
 {
-    return h2_bucket_queue_pop(&io->output, pbucket);
+    apr_status_t status = h2_bucket_queue_pop(&io->output, pbucket);
+    *peos = h2_bucket_queue_is_eos(&io->output);
+    return status;
 }
     
-apr_status_t h2_io_out_pushback(h2_io *io, struct h2_bucket *bucket)
-{
-    return h2_bucket_queue_push(&io->output, bucket);
-}
-
 apr_status_t h2_io_out_write(h2_io *io, struct h2_bucket *bucket)
 {
     return h2_bucket_queue_append(&io->output, bucket);

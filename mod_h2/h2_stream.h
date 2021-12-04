@@ -65,6 +65,7 @@ struct h2_stream {
     h2_request *request;        /* the request made in this stream */
     
     struct h2_task *task;       /* task created for this stream */
+    struct h2_bucket *cur_out;  /* current output bucket */
 };
 
 
@@ -91,7 +92,8 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream);
 apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len);
 
-apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket);
+apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket, 
+                            int *peos);
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended);
 int h2_stream_is_suspended(h2_stream *stream);

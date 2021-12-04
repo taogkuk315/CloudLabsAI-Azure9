@@ -103,15 +103,8 @@ int h2_mplx_in_has_eos_for(h2_mplx *m, int stream_id);
 /* Read output data from the given stream. Will never block, but
  * return APR_EAGAIN until data arrives or the stream is closed.
  */
-apr_status_t h2_mplx_out_read(h2_mplx *mplx,
-                              int stream_id, struct h2_bucket **pbucket);
-
-/* Push the given data back at the beginning of currently available 
- * stream output. Will never block and is not subject to flow control.
- * The next read will return this data (at least).
- */
-apr_status_t h2_mplx_out_pushback(h2_mplx *mplx, int stream_id,
-                                  struct h2_bucket *bucket);
+apr_status_t h2_mplx_out_read(h2_mplx *mplx, int stream_id, 
+                              struct h2_bucket **pbucket, int *peos);
 
 /* Opens the output for the given stream with the specified response.
  */

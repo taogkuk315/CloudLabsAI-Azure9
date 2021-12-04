@@ -23,20 +23,20 @@
 #include "h2_private.h"
 #include "h2_bucket.h"
 
-h2_bucket H2_NULL_BUCKET = { { NULL, NULL }, NULL, 0, 0, NULL };
-
 static void bucket_free(h2_bucket *bucket)
 {
     free(bucket);
 }
 
+static apr_size_t data_offset = ((sizeof(h2_bucket) / 256) + 1) * 256;
+
 h2_bucket *h2_bucket_alloc(apr_size_t data_size)
 {
-    apr_size_t total = sizeof(h2_bucket) + data_size;
+    apr_size_t total = data_offset + data_size;
     h2_bucket *bucket = calloc(total, sizeof(char));
     if (bucket != NULL) {
         APR_RING_ELEM_INIT(bucket, link);
-        bucket->data = ((char *)bucket) + sizeof(h2_bucket);
+        bucket->data = ((char *)bucket) + data_offset;
         bucket->data_size = data_size;
         bucket->free_bucket = bucket_free;
     }

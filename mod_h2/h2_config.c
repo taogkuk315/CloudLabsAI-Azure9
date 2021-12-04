@@ -32,14 +32,14 @@
 
 static h2_config defconf = {
     "default",
-    0,
-    100,
-    16 * 1024,
-    64 * 1024,
-    -1,
-    -1,
-    10,
-    64 * 1024,
+    0,                /* enabled */
+    100,              /* max_streams */
+    16 * 1024,        /* max_hl_size */
+    64 * 1024,        /* window_size */
+    -1,               /* min workers */
+    -1,               /* max workers */
+    10,               /* max workers idle secs */
+    64 * 1024,        /* stream max mem size */
 };
 
 static void *h2_config_create(apr_pool_t *pool,

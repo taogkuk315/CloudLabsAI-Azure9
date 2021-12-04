@@ -56,9 +56,9 @@ void h2_io_set_destroy(h2_io_set *sp)
 
 static int h2_stream_id_cmp(const void *s1, const void *s2)
 {
-    h2_io **pstream1 = (h2_io **)s1;
-    h2_io **pstream2 = (h2_io **)s2;
-    return (*pstream1)->id - (*pstream2)->id;
+    h2_io **pio1 = (h2_io **)s1;
+    h2_io **pio2 = (h2_io **)s2;
+    return (*pio1)->id - (*pio2)->id;
 }
 
 h2_io *h2_io_set_get(h2_io_set *sp, int stream_id)

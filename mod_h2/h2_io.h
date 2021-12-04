@@ -39,8 +39,7 @@ apr_status_t h2_io_in_read(h2_io *io, struct h2_bucket **pbucket);
 apr_status_t h2_io_in_write(h2_io *io, struct h2_bucket *bucket);
 apr_status_t h2_io_in_close(h2_io *io);
 
-apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket);
-apr_status_t h2_io_out_pushback(h2_io *io, struct h2_bucket *bucket);
+apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket, int *peos);
 apr_status_t h2_io_out_write(h2_io *io, struct h2_bucket *bucket);
 apr_status_t h2_io_out_close(h2_io *io);
 apr_size_t h2_io_out_length(h2_io *io);
