@@ -940,15 +940,6 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
                  * of data in this queue.
                  */
                 assert(bucket);
-                if (!eos && length < 128) {
-                    /* This happens when our window size has is filling up and 
-                     * the credit messages do not come fast enough. 
-                     * In such a case we suspend the stream. More data should 
-                     * arrive and wake us up again. */
-                    stream->cur_out = bucket;
-                    return NGHTTP2_ERR_DEFERRED;
-                }
-                
                 size_t nread = h2_bucket_move(bucket, (char*)buf, left);
                 if (bucket->data_len > 0) {
                     /* we could not move all, remember it for next time
