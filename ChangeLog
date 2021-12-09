@@ -1,4 +1,8 @@
 
+v0.2.2
+--------------------------------------------------------------------------------
+ * optimizations on response reads
+ * being more apacheeeish, using APR_RINGs for queue handling
  * using openssl latest.tar.gz to retrieve latest openssl for sandbox
  * fixed crash in large request header handling
  * better flushing of stream io resulting in performance improvements
