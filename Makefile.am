@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-SUBDIRS         = httpd nghttp2 mod_h2
-DIST_SUBDIRS    = $(SUBDIRS) test
+SUBDIRS         = @BUILD_SUBDIRS@
+DIST_SUBDIRS    = httpd nghttp2 mod_h2 test
 
 ACLOCAL_AMFLAGS = -I m4
 

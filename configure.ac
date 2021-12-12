@@ -66,6 +66,8 @@ if test x"$build_mode" == "xsandbox"; then
 
     # easy, we know where everything will be
     #
+    export BUILD_SUBDIRS="httpd nghttp2 mod_h2"
+
     prefix="$PWD/gen/install"
     APXS="$prefix/bin/apxs"
     LDFLAGS="$LDFLAGS -L${prefix}/lib"
@@ -89,6 +91,8 @@ else
         APXS="$request_apxs"
         AC_MSG_NOTICE("using APXS=$APXS as configured")
     fi
+
+    export BUILD_SUBDIRS="mod_h2"
 
     prefix="$($APXS -q prefix)"
     LDFLAGS="$LDFLAGS -L$($APXS -q libdir)"
@@ -117,6 +121,9 @@ AC_TYPE_UINT8_T
 # Checks for library functions.
 AC_CHECK_FUNCS([memmove memset strcasecmp strchr])
 
+# substitution in generated files
+AC_SUBST(BUILD_SUBDIRS)
+
 AC_CONFIG_FILES([
     Makefile
     mod_h2/Makefile
@@ -137,5 +144,6 @@ AC_MSG_NOTICE([summary of build options:
     LDFLAGS:        ${LDFLAGS}
     LIBS:           ${LIBS}
     CPPFLAGS:       ${CPPFLAGS}
+    BUILD_SUBDIRS   ${BUILD_SUBDIRS}
     C preprocessor: ${CPP}
 ])
