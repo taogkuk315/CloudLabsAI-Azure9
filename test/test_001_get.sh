@@ -15,10 +15,12 @@
 #
 
 source test_common.sh
+echo "-- GET Tests: $1 --"
 
 ################################################################################
 # check content of resources via different methods
 ################################################################################
+echo " - single document -"
 curl_check_doc index.html "default"
 curl_check_doc index.html "http/1.1" --http1.1
 curl_check_doc index.html "http2"    --http2
@@ -30,6 +32,7 @@ nghttp_check_doc 003.html   "detault"
 ################################################################################
 # check retrieving multiple resources from inside a page
 ################################################################################
+echo " - multiple resources -"
 nghttp_check_assets 001.html "with assets" <<EOF
 /001.html 251 200
 EOF
@@ -239,7 +242,7 @@ EOF
 
 # form data test, TODO
 nghttp_check_assets 007.html "with assets" <<EOF
-/007.html 809 200
+/007.html 808 200
 EOF
 
 # file upload test, TODO
@@ -260,6 +263,7 @@ curl_check_redir latest.tar.gz  xxx-1.0.2a.tar.gz  "http2"  --http2
 ################################################################################
 # check cgi generated content
 ################################################################################
+echo " - CGI generated content -"
 curl_check_content hello.py "default" <<EOF
 <html>
 <body>

@@ -15,6 +15,7 @@
 #
 
 source test_common.sh
+echo "-- POST Tests: $1 --"
 
 CHR100="012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678
 "
@@ -48,6 +49,7 @@ if [ ! -f $GEN/data-1m ]; then
 fi
 
 # just a check that things are working
+echo " - file upload -"
 curl_post_data upload.py $GEN/data-1k "file upload via http/1.1" --http1.1
 
 # on curl 7.40.0 and earlier, there will be a delay before the upload
