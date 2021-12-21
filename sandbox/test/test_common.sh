@@ -21,7 +21,7 @@ URL_PREFIX="$1"
 AUTH="${URL_PREFIX#*://}"
 HOST="${AUTH%%:*}"
 
-INSTALL_DIR="../gen/install"
+INSTALL_DIR="../install"
 BIN_DIR="${INSTALL_DIR}/bin"
 DOC_ROOT="htdocs/${HOST}"
 GEN="gen"

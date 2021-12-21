@@ -12,29 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-SUBDIRS         = @BUILD_SUBDIRS@
-DIST_SUBDIRS    = mod_h2 sandbox setup
+SUBDIRS         = httpd nghttp2 test
+DIST_SUBDIRS    = httpd nghttp2 test
 
-ACLOCAL_AMFLAGS = -I m4
+INSTALL_DIR     = install
 
-
-dist_doc_DATA   = README
+EXTRA_DIST = \
+    httpd/Makefile \
+    $(wildcard httpd/*.sh) \
+    $(wildcard httpd/patches/*) \
+    $(wildcard httpd/packages/*) \
+    nghttp2/Makefile \
+    $(wildcard nghttp2/patches/*) \
+    test/Makefile \
+    $(wildcard test/*.sh) \
+    $(wildcard test/*.text) \
+    test/htdocs \
+    test/conf \
+    test/clients/Makefile
 
 
 .PHONY: test loadtest start stop restart
 
 start:
-	make -C sandbox start
+	make -C test start
 
 restart:
-	make -C sandbox restart
+	make -C test restart
 
 stop:
-	make -C sandbox stop
+	make -C test stop
 
 test:
-	make -C sandbox test
+	make -C test test
 
 loadtest:
-	make -C sandbox loadtest
-
+	make -C test loadtest

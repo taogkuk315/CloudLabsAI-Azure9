@@ -42,8 +42,8 @@ OPENSSL_URL = $(OPENSSL_BASE)/source/latest.tar.gz
 
 
 GEN          = gen
-INST_DIR     = ../gen/install
-BLD_PREFIX   = $(shell dirname $$PWD)/gen/install
+INST_DIR     = ../install
+BLD_PREFIX   = $(shell dirname $$PWD)/install
 
 CURL_OPTS    = --progress-bar
 
@@ -80,6 +80,8 @@ HTTPS_PORT = 12346
 
 all: install
 
+distdir:
+
 dirs:
 	@mkdir -p $(GEN)/build
 
@@ -89,20 +91,9 @@ clean:
 distclean:
 	@rm -rf $(GEN)
 
-distdir:
-	@mkdir -p $(distdir)
-	@tar cf - Makefile patches packages| (cd $(distdir) && tar xf - )
-
-
-install:  $(INST_DIR)/.httpd-installed
+install: $(INST_DIR)/.httpd-installed
 
 setup: $(INST_DIR)/.httpd-setup
-
-start: $(INST_DIR)/.httpd-setup
-	@$(INST_DIR)/bin/apachectl restart
-
-stop:
-	@$(INST_DIR)/bin/apachectl stop
 
 copy-mod_ssl:
 	@cp mod_ssl-alpn/*.[ch] $(GEN)/$(HTTPD_DIR)/modules/ssl
@@ -112,6 +103,7 @@ copy-mod_ssl:
 # Install the local httpd
 #
 $(INST_DIR)/.httpd-installed:  $(GEN)/$(HTTPD_DIR)/.httpd-built
+	@mkdir -p $(INST_DIR)
 	@echo -n installing httpd locally...
 	@cd $(GEN)/$(HTTPD_DIR)/ && make install >> ../build.log
 	@echo done.
@@ -198,6 +190,7 @@ $(GEN)/$(APR-UTIL_TAR):
 #
 $(INST_DIR)/.openssl-installed: \
 		$(GEN)/$(OPENSSL_DIR)/.openssl-built
+	@mkdir -p $(INST_DIR)
 	@echo -n installing openssl locally, may take some time...
 	@cd $(GEN)/$(OPENSSL_DIR) && make install_sw >> ../build.log
 	@echo done.
@@ -229,6 +222,7 @@ $(GEN)/$(OPENSSL_DIR)/.openssl-extracted:
 #
 $(INST_DIR)/.pcre-installed: \
 		$(GEN)/$(PCRE_DIR)/.pcre-built
+	@mkdir -p $(INST_DIR)
 	@echo -n installing pcre locally...
 	@cd $(GEN)/$(PCRE_DIR) && make install >> ../build.log
 	@echo done.

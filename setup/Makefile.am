@@ -12,29 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-SUBDIRS         = @BUILD_SUBDIRS@
-DIST_SUBDIRS    = mod_h2 sandbox setup
+SUBDIRS =
+
+EXTRA_DIST = \
+    h2.load \   
+    h2.conf
+
 
 ACLOCAL_AMFLAGS = -I m4
 
+SYSCONF_DIR = @SYSCONF_DIR@
 
-dist_doc_DATA   = README
-
-
-.PHONY: test loadtest start stop restart
-
-start:
-	make -C sandbox start
-
-restart:
-	make -C sandbox restart
-
-stop:
-	make -C sandbox stop
-
-test:
-	make -C sandbox test
-
-loadtest:
-	make -C sandbox loadtest
-
+# overwrite install target
+install:
+	@bash install-config.sh $(SYSCONF_DIR)

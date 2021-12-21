@@ -19,7 +19,7 @@ NGHTTP2_TAR     = $(NGHTTP2_DIR).tar.gz
 NGHTTP2_URL     = https://github.com/tatsuhiro-t/nghttp2/releases/download/v$(NGHTTP2_VERSION)/$(NGHTTP2_TAR)
 
 NGHTTP2_CONF_ENV=
-NGHTTP2_CONF    = --prefix=$(BLD_PREFIX)
+NGHTTP2_CONF    = --prefix=$(BLD_PREFIX) --enable-app
 
 ZLIB_VERSION    = 1.2.8
 ZLIB_DIR        = zlib-$(ZLIB_VERSION)
@@ -32,8 +32,8 @@ LIBEV_TAR        = $(LIBEV_DIR).tar.gz
 LIBEV_URL        = http://dist.schmorp.de/libev/$(LIBEV_TAR)
 
 GEN             = gen
-INST_DIR        = ../gen/install
-BLD_PREFIX      = $(shell dirname $$PWD)/gen/install
+INST_DIR        = ../install
+BLD_PREFIX      = $(shell dirname $$PWD)/install
 
 CURL_OPTS       = --progress-bar
 

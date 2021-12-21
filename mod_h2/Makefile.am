@@ -22,32 +22,32 @@ mod_h2_la_CPPFLAGS = -std=c99
 mod_h2_la_LDFLAGS  = -module
 
 OBJECTS = \
-        h2_bucket.c \
-        h2_bucket_queue.c \
-        h2_config.c \
-        h2_conn.c \
-        h2_conn_io.c \
-        h2_ctx.c \
-        h2_from_h1.c \
-        h2_h2.c \
-        h2_h2c.c \
-        h2_io.c \
-        h2_io_set.c \
-        h2_mplx.c \
-        h2_queue.c \
-        h2_request.c \
-        h2_response.c \
-        h2_session.c \
-        h2_stream.c \
-        h2_stream_set.c \
-        h2_task.c \
-        h2_task_input.c \
-        h2_task_output.c \
-        h2_to_h1.c \
-        h2_util.c \
-        h2_worker.c \
-        h2_workers.c \
-        mod_h2.c
+    h2_bucket.c \
+    h2_bucket_queue.c \
+    h2_config.c \
+    h2_conn.c \
+    h2_conn_io.c \
+    h2_ctx.c \
+    h2_from_h1.c \
+    h2_h2.c \
+    h2_h2c.c \
+    h2_io.c \
+    h2_io_set.c \
+    h2_mplx.c \
+    h2_queue.c \
+    h2_request.c \
+    h2_response.c \
+    h2_session.c \
+    h2_stream.c \
+    h2_stream_set.c \
+    h2_task.c \
+    h2_task_input.c \
+    h2_task_output.c \
+    h2_to_h1.c \
+    h2_util.c \
+    h2_worker.c \
+    h2_workers.c \
+    mod_h2.c
 
 HFILES = \
     h2_bucket.h \
@@ -80,6 +80,8 @@ HFILES = \
 
 
 mod_h2_la_SOURCES = $(HFILES) $(OBJECTS)
+
+all: mod_h2.la
 
 install-libLTLIBRARIES:
 	@: # override

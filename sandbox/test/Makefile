@@ -22,8 +22,8 @@ HTTP_AUTH    = $(HOST_NAME):$(HTTP_PORT)
 HTTPS_AUTH   = $(HOST_NAME):$(HTTPS_PORT)
 
 GEN          = gen
-INST_DIR     = ../gen/install
-BLD_PREFIX   = $(shell dirname $$PWD)/gen/install
+INST_DIR     = ../install
+BLD_PREFIX   = $(shell dirname $$PWD)/install
 
 SUB_DIRS     = clients
 
@@ -32,7 +32,7 @@ NGHTTP       = $(INST_DIR)/bin/nghttp
 H2LOAD       = $(INST_DIR)/bin/h2load
 
 
-all: test
+all: install
 
 clean:
 	@rm -rf $(GEN) $(INST_DIR)/.testdocs-setup $(INST_DIR)/.test-setup
@@ -61,6 +61,9 @@ restart: $(INST_DIR)/.test-setup
 stop:
 	@$(INST_DIR)/bin/apachectl stop
 
+
+install:
+	@make -C clients install
 
 ################################################################################
 # Test the local httpd
@@ -107,8 +110,7 @@ loadtest: \
 ################################################################################
 # Setup the local httpd for our tests
 #
-SETUP_FILES = $(wildcard conf/*.conf) $(wildcard conf/sites/*.conf) \
-    $(wildcard conf/mods/*.conf) $(wildcard conf/mods/*.load)
+SETUP_FILES = $(wildcard conf/*.conf) $(wildcard conf/sites/*.conf)
 
 $(INST_DIR)/.testdocs-setup: \
 	$(wildcard conf/*) \
@@ -124,7 +126,7 @@ $(INST_DIR)/.test-setup: \
 		conf/httpd.conf \
 		conf/modules.conf \
 		$(wildcard conf/sites/*.conf) \
-        $(wildcard conf/mods/*.*) \
+        $(INST_DIR)/conf/mods-enabled/h2.load \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
 		$(INST_DIR)/conf/ssl/test.example.org.pem \
 		$(INST_DIR)/.testdocs-setup
@@ -162,6 +164,20 @@ $(INST_DIR)/conf/ssl/test.example.org.pem: \
 		-in $(INST_DIR)/conf/ssl/test.example.org.req \
 		-out $(INST_DIR)/conf/ssl/test.example.org.pem \
 		-extfile conf/ssl/extensions.conf -extensions ssl_client < conf/ssl/x509.input
+
+$(INST_DIR)/conf/mods-available/h2.load:
+	@mkdir -p $(INST_DIR)/conf/mods-available
+	cp ../../setup/h2.load $(INST_DIR)/conf/mods-available
+
+$(INST_DIR)/conf/mods-available/h2.conf:
+	@mkdir -p $(INST_DIR)/conf/mods-available
+	cp ../../setup/h2.conf $(INST_DIR)/conf/mods-available
+
+$(INST_DIR)/conf/mods-enabled/h2.load: \
+        $(INST_DIR)/conf/mods-available/h2.load \
+        $(INST_DIR)/conf/mods-available/h2.conf
+	@mkdir -p $(INST_DIR)/conf/mods-enabled
+	@cd $(INST_DIR)/conf/mods-enabled && ln -sf ../mods-available/h2.* .
 
 
 ################################################################################

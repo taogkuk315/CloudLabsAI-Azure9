@@ -66,13 +66,14 @@ if test x"$build_mode" == "xsandbox"; then
 
     # easy, we know where everything will be
     #
-    export BUILD_SUBDIRS="httpd nghttp2 mod_h2"
+    export BUILD_SUBDIRS="sandbox mod_h2"
 
-    prefix="$PWD/gen/install"
+    prefix="$PWD/sandbox/install"
     APXS="$prefix/bin/apxs"
     LDFLAGS="$LDFLAGS -L${prefix}/lib"
     LIBS="$LIBS -lnghttp2"
     CPPFLAGS="$CPPFLAGS -I${prefix}/include"
+    export SYSCONF_DIR="$prefix/conf"
 
     # On Ubuntu, we have a propblem with APR 1.5.1 and system includes that
     # causes compilation to abort since no definition of PATH_MAX can be found.
@@ -92,11 +93,12 @@ else
         AC_MSG_NOTICE("using APXS=$APXS as configured")
     fi
 
-    export BUILD_SUBDIRS="mod_h2"
+    export BUILD_SUBDIRS="mod_h2 setup"
 
     prefix="$($APXS -q prefix)"
     LDFLAGS="$LDFLAGS -L$($APXS -q libdir)"
     CPPFLAGS="$CPPFLAGS -I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR)"
+    export SYSCONF_DIR="$($APXS -q sysconfdir)"
 
     # We need nghttp2 to be in our link path, check for it.
     #
@@ -121,12 +123,17 @@ AC_TYPE_UINT8_T
 # Checks for library functions.
 AC_CHECK_FUNCS([memmove memset strcasecmp strchr])
 
+AC_CHECK_PROG([A2ENMOD],[a2enmod])
+
 # substitution in generated files
 AC_SUBST(BUILD_SUBDIRS)
+AC_SUBST(SYSCONF_DIR)
 
 AC_CONFIG_FILES([
     Makefile
-    mod_h2/Makefile
+    mod_h2/Makefile 
+    sandbox/Makefile 
+    setup/Makefile
 ])
 
 AC_OUTPUT
@@ -144,6 +151,7 @@ AC_MSG_NOTICE([summary of build options:
     LDFLAGS:        ${LDFLAGS}
     LIBS:           ${LIBS}
     CPPFLAGS:       ${CPPFLAGS}
-    BUILD_SUBDIRS   ${BUILD_SUBDIRS}
     C preprocessor: ${CPP}
+    BUILD_SUBDIRS   ${BUILD_SUBDIRS}
+    a2enmod         ${A2ENMOD:--}
 ])
