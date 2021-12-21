@@ -18,7 +18,7 @@ SYSCONF="$1"
 A2ENMOD="$2"
 
 if [ -d "$SYSCONF/mods-available" ]; then
-    echo -n "isntalling mod_h2 config in $SYSCONF"
+    echo -n "isntalling mod_h2 config in $SYSCONF..."
     cp h2.conf h2.load "$SYSCONF/mods-available"
     echo "done."
     if [ -x "$A2ENMOD" ]; then
