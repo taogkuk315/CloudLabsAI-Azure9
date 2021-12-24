@@ -1,3 +1,9 @@
+v0.3.0
+--------------------------------------------------------------------------------
+ * new directory structure, all sandbox related parts have been moved to 
+   own sandbox dir
+ * non-sandbox configuration no longer triggers building of sandbox stuff
+ * cleanup up distribution builds to have smaller and working tar balls
 
 v0.2.2
 --------------------------------------------------------------------------------
