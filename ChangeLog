@@ -1,3 +1,8 @@
+v0.3.1
+--------------------------------------------------------------------------------
+ * defining _GNU_SOURCE to pull in proper features and make APR header files
+   happy, fixes #7 
+
 v0.3.0
 --------------------------------------------------------------------------------
  * new directory structure, all sandbox related parts have been moved to 
