@@ -906,6 +906,10 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     h2_session *session = (h2_session *)puser;
     assert(session);
     
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+                  "h2_stream(%ld-%d): requesting %ld bytes",
+                  session->id, (int)stream_id, (long)length);
+    
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
@@ -988,7 +992,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     }
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                  "h2_stream(%ld-%d): requesting %ld, "
+                  "h2_stream(%ld-%d): requested %ld, "
                   "sending %ld data bytes (eos=%d)",
                   session->id, (int)stream_id, (long)length, 
                   (long)total_read, eos);
