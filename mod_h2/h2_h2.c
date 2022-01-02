@@ -33,6 +33,10 @@
 #include "h2_conn.h"
 #include "h2_h2.h"
 
+const char *h2_protos[] = {
+    "h2", "h2-16", "h2-14"
+};
+apr_size_t h2_protos_len = sizeof(h2_protos)/sizeof(h2_protos[0]);
 
 /**
  * The optional mod_ssl functions we need. We want to compile without using
@@ -132,15 +136,18 @@ static int h2_h2_alpn_propose(conn_rec *c,
         return DECLINED;
     }
     
-    if (client_protos && h2_util_array_index(client_protos, PROTO_H2_14) >= 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                      "ALPN proposing %s", PROTO_H2_14);
-        APR_ARRAY_PUSH(protos, const char*) = PROTO_H2_14;
-    }
-    else {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                      "NPN proposing %s from client selection", PROTO_H2_14);
-        APR_ARRAY_PUSH(protos, const char*) = PROTO_H2_14;
+    for (int i = 0; i < h2_protos_len; ++i) {
+        const char *proto = h2_protos[i];
+        if (client_protos && h2_util_array_index(client_protos, proto) >= 0) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                          "ALPN proposing %s", proto);
+            APR_ARRAY_PUSH(protos, const char*) = proto;
+        }
+        else {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                          "NPN proposing %s from client selection", proto);
+            APR_ARRAY_PUSH(protos, const char*) = proto;
+        }
     }
     return OK;
 }
@@ -163,14 +170,16 @@ static int h2_h2_alpn_negotiated(conn_rec *c,
         return DECLINED;
     }
     
-    if (proto_name_len == strlen(PROTO_H2_14)
-        && strncmp(PROTO_H2_14, proto_name, proto_name_len) == 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "ALPN negotiated: h2-14");
-        h2_ctx_set_protocol(c, PROTO_H2_14);
-    }
-    else {
-        h2_ctx_set_protocol(c, NULL);
-    }
+    for (int i = 0; i < h2_protos_len; ++i) {
+        const char *proto = h2_protos[i];
+        if (proto_name_len == strlen(proto)
+            && strncmp(proto, proto_name, proto_name_len) == 0) {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, 
+                          "ALPN negotiated: %s", proto);
+            h2_ctx_set_protocol(c, proto);
+            break;
+        }
+    }    
     return OK;
 }
 

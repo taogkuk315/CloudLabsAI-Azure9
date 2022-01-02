@@ -22,7 +22,7 @@
 		<key>7A6D7B037166029D8EB565F124690A553EB43BAF</key>
 		<string>../../..</string>
 		<key>ED37D202B9691A75DA1E927834B45B38A4B3B6A5</key>
-		<string>../../../nghttp2/gen/nghttp2-master/</string>
+		<string>../../../nghttp2/gen/nghttp2-master</string>
 	</dict>
 	<key>IDESourceControlProjectURL</key>
 	<string>https://www.greenbytes.de/projects/mod-h2/mod-h2.git</string>

@@ -33,6 +33,9 @@ char *h2_strlwr(char *s);
  */
 int h2_util_contains_token(apr_pool_t *pool, const char *s, const char *token);
 
+const char *h2_util_first_token_match(apr_pool_t *pool, const char *s, 
+                                      const char *tokens[], apr_size_t len);
+
 #define H2_HD_MATCH_LIT(l, name, nlen)  \
     ((nlen == sizeof(l) - 1) && !apr_strnatcasecmp(l, name))
 

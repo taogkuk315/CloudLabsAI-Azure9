@@ -33,9 +33,13 @@
 #include "h2_h2c.h"
 #include "h2_util.h"
 
+const char *h2c_protos[] = {
+    "h2c", "h2c-16", "h2c-14"
+};
+apr_size_t h2c_protos_len = sizeof(h2c_protos)/sizeof(h2c_protos[0]);
 
 static int h2_h2c_request_handler(request_rec *r);
-static int h2_h2c_is_upgrade(request_rec *r);
+static const char *h2_get_upgrade_proto(request_rec *r);
 static int h2_h2c_upgrade_to(request_rec *r, const char *proto);
 static int h2_h2c_upgrade_options(request_rec *r);
 
@@ -72,9 +76,10 @@ static int h2_h2c_request_handler(request_rec *r)
     }
     
     /* Check for the start of an h2c Upgrade dance. */
-    if (h2_h2c_is_upgrade(r)) {
+    const char *proto = h2_get_upgrade_proto(r);
+    if (proto) {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                     "seeing h2c upgrade invitation");
+                     "seeing %s upgrade invitation", proto);
         /* We do not handle upgradeable requests with a body.
          * The reason being that we would need to read the body in full
          * before we ca use HTTP2 frames on the wire.
@@ -85,7 +90,7 @@ static int h2_h2c_request_handler(request_rec *r)
                           "upgrade with content-length: %s, declined", clen);
             return DECLINED;
         }
-        return h2_h2c_upgrade_to(r, "h2c-14");
+        return h2_h2c_upgrade_to(r, proto);
     }
     else {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
@@ -95,17 +100,27 @@ static int h2_h2c_request_handler(request_rec *r)
     return DECLINED;
 }
 
-static int h2_h2c_is_upgrade(request_rec *r)
+static const char *h2_get_upgrade_proto(request_rec *r)
 {
-    return (h2_util_contains_token(
-            r->pool, apr_table_get(r->headers_in, "Upgrade"), "h2c-14")
-        && h2_util_contains_token(
+    const char *upgrade = apr_table_get(r->headers_in, "Upgrade");
+    const char *proto = h2_util_first_token_match(r->pool, upgrade, 
+                                                  h2c_protos, h2c_protos_len);
+    if (proto && 
+        h2_util_contains_token(
             r->pool, apr_table_get(r->headers_in, "Connection"), "Upgrade")
-        && apr_table_get(r->headers_in, "HTTP2-Settings"));
+        && apr_table_get(r->headers_in, "HTTP2-Settings")) {
+        return proto;
+    }
+    return NULL;
 }
 
 static int h2_h2c_upgrade_to(request_rec *r, const char *proto)
 {
+    h2_ctx *ctx = h2_ctx_create(r->connection);
+    ctx->is_h2 = 1;
+    ctx->protocol = proto;
+    ctx->is_negotiated = 1;
+    
     /* Let the client know what we are upgrading to. */
     apr_table_clear(r->headers_out);
     apr_table_setn(r->headers_out, "Upgrade", proto);
