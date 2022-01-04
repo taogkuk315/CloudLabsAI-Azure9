@@ -92,10 +92,6 @@ static int h2_h2c_request_handler(request_rec *r)
         }
         return h2_h2c_upgrade_to(r, proto);
     }
-    else {
-        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                      "no upgrade request: %s %s", r->method, r->uri);
- }
     
     return DECLINED;
 }
@@ -111,6 +107,12 @@ static const char *h2_get_upgrade_proto(request_rec *r)
         && apr_table_get(r->headers_in, "HTTP2-Settings")) {
         return proto;
     }
+    if (upgrade) {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                      "no suiteable upgrade detected: %s %s, "
+                      "Upgrade: %s", r->method, r->uri, upgrade);
+    }
+
     return NULL;
 }
 
