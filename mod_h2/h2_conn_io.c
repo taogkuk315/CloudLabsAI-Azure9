@@ -52,6 +52,9 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io_ctx *io,
     apr_size_t readlen = 0;
     *pdone = 0;
     
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->connection,
+                  "h2_conn_io(%ld): start read, block=%d",
+                  io->connection->id, block);
     while (status == APR_SUCCESS && !*pdone
            && !APR_BRIGADE_EMPTY(io->input)) {
         
@@ -70,16 +73,17 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io_ctx *io,
                     h2_util_hex_dump(buffer, sizeof(buffer)/sizeof(buffer[0]),
                                      bucket_data, bucket_length);
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->connection,
-                                  "h2_io(%ld): read %s",
-                                  io->connection->id, buffer);
+                                  "h2_conn_io(%ld): read %ld bytes: %s",
+                                  io->connection->id, bucket_length, buffer);
                 }
-                apr_size_t readlen = 0;
+                apr_size_t consumed = 0;
                 status = on_read_cb(bucket_data, bucket_length,
-                                    &readlen, pdone, puser);
-                if (status == APR_SUCCESS && bucket_length > readlen) {
+                                    &consumed, pdone, puser);
+                if (status == APR_SUCCESS && bucket_length > consumed) {
                     /* We have data left in the bucket. Split it. */
-                    status = apr_bucket_split(bucket, readlen);
+                    status = apr_bucket_split(bucket, consumed);
                 }
+                readlen += consumed;
             }
         }
         apr_bucket_delete(bucket);
@@ -119,7 +123,7 @@ apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
             break;
         default:
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
-                          "h2_io: error reading");
+                          "h2_conn_io: error reading");
             break;
     }
     return status;
@@ -154,7 +158,7 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf, size_t length
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
-                      "h2_io: write error");
+                      "h2_conn_io: write error");
     }
 
     return status;
@@ -180,7 +184,7 @@ apr_status_t h2_conn_io_flush(h2_conn_io_ctx *io)
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
-                      "h2_io: flush error");
+                      "h2_conn_io: flush error");
     }
     
     return status;
