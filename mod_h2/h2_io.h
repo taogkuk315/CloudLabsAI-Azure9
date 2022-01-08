@@ -16,6 +16,7 @@
 #ifndef __mod_h2__h2_io__
 #define __mod_h2__h2_io__
 
+struct apr_thread_cond_t;
 struct h2_bucket;
 struct h2_response;
 
@@ -25,7 +26,11 @@ typedef struct h2_io h2_io;
 struct h2_io {
     int id;
     h2_bucket_queue input;
+    struct apr_thread_cond_t *input_arrived;
+
     h2_bucket_queue output;
+    struct apr_thread_cond_t *output_drained;
+
     struct h2_response *response;
 };
 

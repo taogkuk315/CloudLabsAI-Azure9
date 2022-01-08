@@ -35,11 +35,13 @@
  * of our own to disble those.
  */
 
+struct apr_thread_cond_t;
 struct h2_conn;
 struct h2_mplx;
 struct h2_task;
 struct h2_resp_head;
 struct h2_bucket;
+struct h2_worker;
 
 typedef struct h2_task h2_task;
 
@@ -52,7 +54,8 @@ h2_task *h2_task_create(long session_id,
 apr_status_t h2_task_destroy(h2_task *task);
 
 apr_status_t h2_task_prep_conn(h2_task *task);
-apr_status_t h2_task_do(h2_task *task, apr_thread_t *thd);
+
+apr_status_t h2_task_do(h2_task *task, struct h2_worker *worker);
 
 void h2_task_abort(h2_task *task);
 int h2_task_is_aborted(h2_task *task);
@@ -67,5 +70,7 @@ const char *h2_task_get_id(h2_task *task);
 void h2_task_register_hooks(void);
 
 int h2_task_pre_conn(h2_task *task, conn_rec *c);
+
+struct apr_thread_cond_t *h2_task_get_io_cond(h2_task *task);
 
 #endif /* defined(__mod_h2__h2_task__) */

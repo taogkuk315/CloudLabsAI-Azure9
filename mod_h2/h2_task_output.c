@@ -57,7 +57,8 @@ static apr_status_t flush_cur(h2_task_output *output)
 {
     if (output->cur) {
         h2_mplx_out_write(output->m, APR_BLOCK_READ,
-                          output->stream_id, output->cur);
+                          output->stream_id, output->cur,
+                          h2_task_get_io_cond(output->task));
         output->cur = NULL;
     }
     

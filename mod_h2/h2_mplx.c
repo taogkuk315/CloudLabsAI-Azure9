@@ -41,9 +41,7 @@ struct h2_mplx {
     h2_io_set *ready_ios;
     
     apr_thread_mutex_t *lock;
-    apr_thread_cond_t *added_input;
     apr_thread_cond_t *added_output;
-    apr_thread_cond_t *removed_output;
     
     int aborted;
     
@@ -65,9 +63,7 @@ static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
     return 0;
 }
 
-static void have_in_data_for(h2_mplx *m, int stream_id);
 static void have_out_data_for(h2_mplx *m, int stream_id);
-static void consumed_out_data_for(h2_mplx *m, int stream_id);
 
 h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
 {
@@ -88,13 +84,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
         status = apr_thread_mutex_create(&m->lock, APR_THREAD_MUTEX_DEFAULT,
                                          m->pool);
         if (status == APR_SUCCESS) {
-            status = apr_thread_cond_create(&m->added_input, m->pool);
-        }
-        if (status == APR_SUCCESS) {
             status = apr_thread_cond_create(&m->added_output, m->pool);
-        }
-        if (status == APR_SUCCESS) {
-            status = apr_thread_cond_create(&m->removed_output, m->pool);
         }
         
         if (status != APR_SUCCESS) {
@@ -116,17 +106,9 @@ void h2_mplx_destroy(h2_mplx *m)
         h2_io_set_destroy(m->stream_ios);
         m->stream_ios = NULL;
     }
-    if (m->added_input) {
-        apr_thread_cond_destroy(m->added_input);
-        m->added_input = NULL;
-    }
     if (m->added_output) {
         apr_thread_cond_destroy(m->added_output);
         m->added_output = NULL;
-    }
-    if (m->removed_output) {
-        apr_thread_cond_destroy(m->removed_output);
-        m->removed_output = NULL;
     }
     if (m->lock) {
         apr_thread_mutex_destroy(m->lock);
@@ -193,7 +175,8 @@ void h2_mplx_end_io(h2_mplx *m, int stream_id)
 }
 
 apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
-                             int stream_id, struct h2_bucket **pbucket)
+                             int stream_id, struct h2_bucket **pbucket,
+                             struct apr_thread_cond_t *iowait)
 {
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
@@ -204,7 +187,10 @@ apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
             while (status == APR_EAGAIN 
                    && !is_aborted(m, &status)
                    && block == APR_BLOCK_READ) {
-                apr_thread_cond_wait(m->added_input, m->lock);
+                io->input_arrived = iowait;
+                apr_thread_cond_wait(io->input_arrived, m->lock);
+                io->input_arrived = NULL;
+                
                 status = h2_io_in_read(io, pbucket);
             }
         }
@@ -225,7 +211,9 @@ apr_status_t h2_mplx_in_write(h2_mplx *m,
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
             status = h2_io_in_write(io, bucket);
-            have_in_data_for(m, stream_id);
+            if (io->input_arrived) {
+                apr_thread_cond_signal(io->input_arrived);
+            }
             apr_thread_mutex_unlock(m->lock);
         }
         else {
@@ -243,7 +231,9 @@ apr_status_t h2_mplx_in_close(h2_mplx *m, int stream_id)
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
             status = h2_io_in_close(io);
-            have_in_data_for(m, stream_id);
+            if (io->input_arrived) {
+                apr_thread_cond_signal(io->input_arrived);
+            }
         }
         else {
             status = APR_ECONNABORTED;
@@ -265,8 +255,8 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
                           "h2_mplx(%ld): read on stream_id-out(%d)",
                           m->id, stream_id);
-            if (status == APR_SUCCESS) {
-                consumed_out_data_for(m, stream_id);
+            if (status == APR_SUCCESS && io->output_drained) {
+                apr_thread_cond_signal(io->output_drained);
             }
         }
         else {
@@ -329,7 +319,8 @@ h2_response *h2_mplx_pop_response(h2_mplx *m)
 }
 
 apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
-                               int stream_id, struct h2_bucket *bucket)
+                               int stream_id, struct h2_bucket *bucket,
+                               struct apr_thread_cond_t *iowait)
 {
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
@@ -341,16 +332,16 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
              * We will not split buckets to enforce the limit to the last
              * byte. After all, the bucket is already in memory.
              */
-            while (!is_aborted(m, &status)
+            while ((!is_aborted(m, &status))
                    && (m->out_stream_max_size < h2_io_out_length(io))) {
-                       apr_thread_cond_wait(m->removed_output, m->lock);
-                   }
+                io->output_drained = iowait;
+                apr_thread_cond_wait(io->output_drained, m->lock);
+                io->output_drained = NULL;
+            }
             
             if (!is_aborted(m, &status)) {
                 status = h2_io_out_write(io, bucket);
-                if (status == APR_SUCCESS) {
-                    have_out_data_for(m, stream_id);
-                }
+                have_out_data_for(m, stream_id);
             }
         }
         else {
@@ -424,21 +415,9 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout)
     return has_data;
 }
 
-static void have_in_data_for(h2_mplx *m, int stream_id)
-{
-    assert(m);
-    apr_thread_cond_broadcast(m->added_input);
-}
-
 static void have_out_data_for(h2_mplx *m, int stream_id)
 {
     assert(m);
     apr_thread_cond_broadcast(m->added_output);
-}
-
-static void consumed_out_data_for(h2_mplx *m, int stream_id)
-{
-    assert(m);
-    apr_thread_cond_broadcast(m->removed_output);
 }
 

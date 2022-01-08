@@ -22,12 +22,14 @@
  */
 struct h2_bucket;
 struct h2_mplx;
+struct h2_task;
 
 typedef struct h2_task_input h2_task_input;
 
 h2_task_input *h2_task_input_create(apr_pool_t *pool,
-                                    const char *task_id, int stream_id,
+                                    struct h2_task *task, int stream_id,
                                     struct h2_mplx *mplx);
+
 void h2_task_input_destroy(h2_task_input *input);
 
 apr_status_t h2_task_input_read(h2_task_input *input,

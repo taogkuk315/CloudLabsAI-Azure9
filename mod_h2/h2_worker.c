@@ -15,6 +15,8 @@
 
 #include <assert.h>
 
+#include <apr_thread_cond.h>
+
 #include <httpd.h>
 #include <http_core.h>
 #include <http_log.h>
@@ -27,12 +29,14 @@ struct h2_worker {
     int id;
     apr_thread_t *thread;
     apr_pool_t *pool;
+    apr_thread_cond_t *io;
+    
     h2_worker_task_next_fn *get_next;
     h2_worker_task_done_fn *task_done;
     h2_worker_done_fn *worker_done;
     void *ctx;
-    int aborted;
     
+    int aborted;
     struct h2_task *current;
 };
 
@@ -40,19 +44,25 @@ static void *execute(apr_thread_t *thread, void *wctx)
 {
     h2_worker *worker = (h2_worker *)wctx;
     apr_status_t status = APR_SUCCESS;
+    
     worker->current = NULL;
-    
-    while (!worker->aborted) {
-        if (worker->current) {
-            apr_status_t status = h2_task_do(worker->current, thread);
-            worker->current = worker->task_done(worker, worker->current,
-                                                status, worker->ctx);
+    status = apr_thread_cond_create(&worker->io, worker->pool);
+    if (status == APR_SUCCESS) {
+        while (!worker->aborted) {
+            if (worker->current) {
+                status = h2_task_do(worker->current, worker);
+                worker->current = worker->task_done(worker, worker->current,
+                                                    status, worker->ctx);
+            }
+            if (!worker->current) {
+                status = worker->get_next(worker, &worker->current,worker->ctx);
+            }
         }
-        if (!worker->current) {
-            status = worker->get_next(worker, &worker->current,worker->ctx);
-        }
+        
+        apr_thread_cond_destroy(worker->io);
+        worker->io = NULL;
     }
-    
+
     worker->worker_done(worker, worker->ctx);
     apr_thread_exit(thread, status);
     return NULL;
@@ -100,3 +110,12 @@ int h2_worker_is_aborted(h2_worker *worker)
     return worker->aborted;
 }
 
+apr_thread_t *h2_worker_get_thread(h2_worker *worker)
+{
+    return worker->thread;
+}
+
+apr_thread_cond_t *h2_worker_get_cond(h2_worker *worker)
+{
+    return worker->io;
+}

@@ -17,6 +17,7 @@
 #include <stddef.h>
 
 #include <apr_atomic.h>
+#include <apr_thread_cond.h>
 #include <apr_strings.h>
 
 #include <httpd.h>
@@ -34,6 +35,8 @@
 #include "h2_task_output.h"
 #include "h2_task.h"
 #include "h2_ctx.h"
+#include "h2_worker.h"
+
 
 struct h2_task {
     const char *id;
@@ -47,6 +50,7 @@ struct h2_task {
     
     struct h2_task_input *input;    /* http/1.1 input data */
     struct h2_task_output *output;  /* response body data */
+    apr_thread_cond_t *io;           /* optional condition to wait for io on */
 };
 
 
@@ -155,7 +159,7 @@ apr_status_t h2_task_prep_conn(h2_task *task)
     }
 
     task->input = h2_task_input_create(task->conn->pool,
-                                       task->id, task->stream_id,
+                                       task, task->stream_id,
                                        task->mplx);
     task->output = h2_task_output_create(task->conn->pool,
                                          task, task->stream_id,
@@ -187,15 +191,24 @@ apr_status_t h2_task_destroy(h2_task *task)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_task_do(h2_task *task, apr_thread_t *thd)
+apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
 {
     assert(task);
     
-    apr_status_t status = h2_conn_prep(task->conn, thd);
+    apr_status_t status = h2_conn_prep(task->conn, 
+                                       h2_worker_get_thread(worker));
     if (status == APR_SUCCESS) {
-        
+        /* save in connection that this one is for us, prevents
+         * other hooks from messing with it. */
         h2_ctx_create_for(task->conn->c, task);
+        /* borrow the condition from the worker during our processing. we
+         * will use it for io blocking and signalling. */
+        task->io = h2_worker_get_cond(worker);
+        assert(task->io);
+        
         status = h2_conn_process(task->conn);
+        
+        task->io = NULL;
     }
     
     if (!h2_task_output_has_started(task->output)) {
@@ -254,6 +267,11 @@ void h2_task_set_finished(h2_task *task, int finished)
 {
     assert(task);
     apr_atomic_set32(&task->has_finished, finished);
+}
+
+apr_thread_cond_t *h2_task_get_io_cond(h2_task *task)
+{
+    return task->io;
 }
 
 

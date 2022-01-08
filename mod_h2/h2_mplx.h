@@ -83,13 +83,14 @@ void h2_mplx_end_io(h2_mplx *mplx, int stream_id);
  * when the input of the stream has been closed.
  */
 apr_status_t h2_mplx_in_read(h2_mplx *mplx, apr_read_type_e block,
-                             int stream_id, struct h2_bucket **pbucket);
+                             int stream_id, struct h2_bucket **pbucket,
+                             struct apr_thread_cond_t *iowait);
 
 /* Add data to the input of the given stream. Storage of input data is
  * not subject to flow control.
  */
-apr_status_t h2_mplx_in_write(h2_mplx *mplx,
-                              int stream_id, struct h2_bucket *bucket);
+apr_status_t h2_mplx_in_write(h2_mplx *mplx, int stream_id, 
+                              struct h2_bucket *bucket);
 
 /* Closes the input for the given stream_id.
  */
@@ -115,7 +116,8 @@ apr_status_t h2_mplx_out_open(h2_mplx *mplx, int stream_id,
  * is subject to flow control.
  */
 apr_status_t h2_mplx_out_write(h2_mplx *mplx, apr_read_type_e block,
-                               int stream_id, struct h2_bucket *bucket);
+                               int stream_id, struct h2_bucket *bucket,
+                               struct apr_thread_cond_t *iowait);
 
 /* Closes the output stream. Readers of this stream will get all pending 
  * data and then only APR_EOF as result. 

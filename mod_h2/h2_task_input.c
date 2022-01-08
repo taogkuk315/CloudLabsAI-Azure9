@@ -26,9 +26,10 @@
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_task_input.h"
+#include "h2_task.h"
 
 struct h2_task_input {
-    const char *task_id;
+    h2_task *task;
     int stream_id;
     struct h2_mplx *m;
     
@@ -66,13 +67,12 @@ static void cleanup(h2_task_input *input) {
     }
 }
 
-h2_task_input *h2_task_input_create(apr_pool_t *pool,
-                                    const char *task_id, int stream_id,
-                                    h2_mplx *m)
+h2_task_input *h2_task_input_create(apr_pool_t *pool, h2_task *task, 
+                                    int stream_id, h2_mplx *m)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
-        input->task_id = task_id;
+        input->task = task;
         input->stream_id = stream_id;
         input->m = m;
     }
@@ -114,13 +114,14 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
                       "h2_task_input(%s): get next bucket from mplx (%s)",
-                      input->task_id, 
+                      h2_task_get_id(input->task), 
                       (block==APR_BLOCK_READ? "BLOCK" : "NONBLOCK"));
         status = h2_mplx_in_read(input->m, all_there? APR_NONBLOCK_READ : block,
-                                 input->stream_id, &input->cur);
+                                 input->stream_id, &input->cur, 
+                                 h2_task_get_io_cond(input->task));
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
                       "h2_task_input(%s): mplx returned %ld bytes",
-                      input->task_id, 
+                      h2_task_get_id(input->task), 
                       (long)(input->cur? input->cur->data_len : -1L));
         if (status == APR_EOF) {
             input->eos = 1;
@@ -130,7 +131,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
     if (input->eos) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
                       "h2_task_input(%s): read returns EOF",
-                      input->task_id);
+                      h2_task_get_id(input->task));
         cleanup(input);
         return APR_EOF;
     }
@@ -190,7 +191,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
             h2_bucket_consume(input->cur, nread);
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, filter->c,
                           "h2_task_input(%s): forward %d bytes",
-                          input->task_id, (int)nread);
+                          h2_task_get_id(input->task), (int)nread);
         }
     }
     else if (all_there) {
