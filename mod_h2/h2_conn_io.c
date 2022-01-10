@@ -52,9 +52,6 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io_ctx *io,
     apr_size_t readlen = 0;
     *pdone = 0;
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->connection,
-                  "h2_conn_io(%ld): start read, block=%d",
-                  io->connection->id, block);
     while (status == APR_SUCCESS && !*pdone
            && !APR_BRIGADE_EMPTY(io->input)) {
         

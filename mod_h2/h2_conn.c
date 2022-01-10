@@ -187,6 +187,35 @@ apr_status_t h2_session_process(h2_session *session)
     
     while (!h2_session_is_done(session)) {
         int have_written = 0;
+        int have_read = 0;
+        
+        int got_streams = !h2_stream_set_is_empty(session->streams);
+        status = h2_session_read(session, got_streams?
+                                 APR_NONBLOCK_READ : APR_BLOCK_READ);
+        switch (status) {
+            case APR_SUCCESS:
+                /* successful read, reset our idle timers */
+                have_read = 1;
+                wait_micros = 0;
+                break;
+            case APR_EAGAIN:
+                if (!have_written) {
+                }
+                break;
+            case APR_EOF:
+            case APR_ECONNABORTED:
+                ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
+                              "h2_session(%ld): reading",
+                              session->id);
+                h2_session_abort(session, status);
+                break;
+            default:
+                ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
+                              "h2_session(%ld): error reading, terminating",
+                              session->id);
+                h2_session_abort(session, status);
+                break;
+        }
         
         status = h2_session_write(session, wait_micros);
         if (status == APR_SUCCESS) {
@@ -208,39 +237,15 @@ apr_status_t h2_session_process(h2_session *session)
             h2_session_abort(session, status);
             break;
         }
-        
-        int got_streams = !h2_stream_set_is_empty(session->streams);
-        status = h2_session_read(session, got_streams?
-                                 APR_NONBLOCK_READ : APR_BLOCK_READ);
-        switch (status) {
-            case APR_SUCCESS:
-                /* successful read, reset our idle timers */
-                wait_micros = 0;
-                break;
-            case APR_EAGAIN:
-                if (!have_written) {
-                    /* Nothing to read or write, we may have sessions, but
-                     * the have no data yet ready to be delivered. Slowly
-                     * back off to give others a chance to do their work.
-                     */
-                    if (wait_micros == 0) {
-                        wait_micros = 100;
-                    }
-                }
-                break;
-            case APR_EOF:
-            case APR_ECONNABORTED:
-                ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
-                              "h2_session(%ld): reading",
-                              session->id);
-                h2_session_abort(session, status);
-                break;
-            default:
-                ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
-                              "h2_session(%ld): error reading, terminating",
-                              session->id);
-                h2_session_abort(session, status);
-                break;
+
+        if (!have_read && !have_written) {
+            /* Nothing to read or write, we may have sessions, but
+             * the have no data yet ready to be delivered. Slowly
+             * back off to give others a chance to do their work.
+             */
+            if (wait_micros == 0) {
+                wait_micros = 100;
+            }
         }
     }
     

@@ -131,7 +131,8 @@ apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t status);
 /* Wait on output data from any stream to become available. Returns
  * APR_TIMEUP if no data arrived in the given time.
  */
-apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout);
+apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
+                                 struct apr_thread_cond_t *iowait);
 
 /* Return != 0 iff the multiplexer has data for the given stream. 
  */

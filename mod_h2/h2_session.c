@@ -14,7 +14,7 @@
  */
 
 #include <assert.h>
-#include <apr_base64.h>
+#include <apr_thread_cond.h>
 #include <apr_base64.h>
 
 #include <httpd.h>
@@ -441,7 +441,15 @@ static h2_session *h2_session_create_int(conn_rec *c,
         status = apr_thread_mutex_create(&session->alock, 
                                          APR_THREAD_MUTEX_DEFAULT,
                                          session->pool);
+        if (status != APR_SUCCESS) {
+            return NULL;
+        }
         apr_allocator_mutex_set(session->allocator, session->alock);
+        
+        status = apr_thread_cond_create(&session->iowait, session->pool);
+        if (status != APR_SUCCESS) {
+            return NULL;
+        }
         
         session->c = c;
         session->r = r;
@@ -578,6 +586,11 @@ void h2_session_destroy(h2_session *session)
         session->mplx = NULL;
     }
     h2_conn_io_destroy(&session->io);
+    
+    if (session->iowait) {
+        apr_thread_cond_destroy(session->iowait);
+        session->iowait = NULL;
+    }
     
     apr_allocator_t *allocator = session->allocator;
     if (session->alock) {
@@ -799,7 +812,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     h2_session_resume_streams_with_data(session);
     
     if (!have_written && timeout > 0 && !h2_session_want_write(session)) {
-        status = h2_mplx_out_trywait(session->mplx, timeout);
+        status = h2_mplx_out_trywait(session->mplx, timeout, session->iowait);
         if (status != APR_TIMEUP) {
             h2_session_resume_streams_with_data(session);
         }

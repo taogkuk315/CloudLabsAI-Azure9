@@ -83,10 +83,6 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
         
         status = apr_thread_mutex_create(&m->lock, APR_THREAD_MUTEX_DEFAULT,
                                          m->pool);
-        if (status == APR_SUCCESS) {
-            status = apr_thread_cond_create(&m->added_output, m->pool);
-        }
-        
         if (status != APR_SUCCESS) {
             h2_mplx_destroy(m);
             return NULL;
@@ -105,10 +101,6 @@ void h2_mplx_destroy(h2_mplx *m)
     if (m->stream_ios) {
         h2_io_set_destroy(m->stream_ios);
         m->stream_ios = NULL;
-    }
-    if (m->added_output) {
-        apr_thread_cond_destroy(m->added_output);
-        m->added_output = NULL;
     }
     if (m->lock) {
         apr_thread_mutex_destroy(m->lock);
@@ -400,16 +392,19 @@ int h2_mplx_out_has_data_for(h2_mplx *m, int stream_id)
     return has_data;
 }
 
-apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout)
+apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
+                                 apr_thread_cond_t *iowait)
 {
     assert(m);
     int has_data = 0;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
+        m->added_output = iowait;
         status = apr_thread_cond_timedwait(m->added_output, m->lock, timeout);
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
                       "h2_mplx(%ld): trywait on data for %f ms)",
                       m->id, timeout/1000.0);
+        m->added_output = NULL;
         apr_thread_mutex_unlock(m->lock);
     }
     return has_data;
@@ -418,6 +413,8 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout)
 static void have_out_data_for(h2_mplx *m, int stream_id)
 {
     assert(m);
-    apr_thread_cond_broadcast(m->added_output);
+    if (m->added_output) {
+        apr_thread_cond_signal(m->added_output);
+    }
 }
 

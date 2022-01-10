@@ -38,6 +38,7 @@
  */
 
 struct apr_thread_mutext_t;
+struct apr_thread_cond_t;
 struct h2_config;
 struct h2_mplx;
 struct h2_response;
@@ -79,8 +80,9 @@ struct h2_session {
     apr_allocator_t *allocator;      /* we have our own allocator */
     struct apr_thread_mutex_t *alock;
     apr_pool_t *pool;               /* pool to use in session handling */
+    struct apr_thread_cond_t *iowait; /* our cond when trywaiting for data */
     
-    h2_conn_io_ctx io;               /* io on httpd conn filters */
+    h2_conn_io_ctx io;              /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_stream_set *streams;  /* streams handled by this session */
     struct h2_stream_set *zombies;  /* streams that are done */
