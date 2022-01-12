@@ -189,6 +189,27 @@ apr_status_t h2_session_process(h2_session *session)
         int have_written = 0;
         int have_read = 0;
         
+        status = h2_session_write(session, wait_micros);
+        if (status == APR_SUCCESS) {
+            have_written = 1;
+            wait_micros = 0;
+        }
+        else if (status == APR_TIMEUP) {
+            wait_micros *= 2;
+            if (wait_micros > MAX_WAIT_MICROS) {
+                wait_micros = MAX_WAIT_MICROS;
+            }
+            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
+                          "timeout waiting %f ms", wait_micros/1000.0);
+        }
+        else {
+            ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
+                          "h2_session(%ld): error writing, terminating",
+                          session->id);
+            h2_session_abort(session, status);
+            break;
+        }
+
         int got_streams = !h2_stream_set_is_empty(session->streams);
         status = h2_session_read(session, got_streams?
                                  APR_NONBLOCK_READ : APR_BLOCK_READ);
@@ -217,27 +238,6 @@ apr_status_t h2_session_process(h2_session *session)
                 break;
         }
         
-        status = h2_session_write(session, wait_micros);
-        if (status == APR_SUCCESS) {
-            have_written = 1;
-            wait_micros = 0;
-        }
-        else if (status == APR_TIMEUP) {
-            wait_micros *= 2;
-            if (wait_micros > MAX_WAIT_MICROS) {
-                wait_micros = MAX_WAIT_MICROS;
-            }
-            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
-                          "timeout waiting %f ms", wait_micros/1000.0);
-        }
-        else {
-            ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
-                          "h2_session(%ld): error writing, terminating",
-                          session->id);
-            h2_session_abort(session, status);
-            break;
-        }
-
         if (!have_read && !have_written) {
             /* Nothing to read or write, we may have sessions, but
              * the have no data yet ready to be delivered. Slowly

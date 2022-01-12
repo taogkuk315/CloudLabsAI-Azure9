@@ -46,25 +46,18 @@ static void *execute(apr_thread_t *thread, void *wctx)
     apr_status_t status = APR_SUCCESS;
     
     worker->current = NULL;
-    status = apr_thread_cond_create(&worker->io, worker->pool);
-    if (status == APR_SUCCESS) {
-        while (!worker->aborted) {
-            if (worker->current) {
-                status = h2_task_do(worker->current, worker);
-                worker->current = worker->task_done(worker, worker->current,
-                                                    status, worker->ctx);
-            }
-            if (!worker->current) {
-                status = worker->get_next(worker, &worker->current,worker->ctx);
-            }
+    while (!worker->aborted) {
+        if (worker->current) {
+            status = h2_task_do(worker->current, worker);
+            worker->current = worker->task_done(worker, worker->current,
+                                                status, worker->ctx);
         }
-        
-        apr_thread_cond_destroy(worker->io);
-        worker->io = NULL;
+        if (!worker->current) {
+            status = worker->get_next(worker, &worker->current,worker->ctx);
+        }
     }
 
     worker->worker_done(worker, worker->ctx);
-    apr_thread_exit(thread, status);
     return NULL;
 }
 
@@ -85,6 +78,11 @@ h2_worker *h2_worker_create(int id,
         w->worker_done = worker_done;
         w->ctx = ctx;
         
+        apr_status_t status = apr_thread_cond_create(&w->io, w->pool);
+        if (status != APR_SUCCESS) {
+            return NULL;
+        }
+        
         apr_thread_create(&w->thread, attr, execute, w, pool);
     }
     return w;
@@ -92,6 +90,10 @@ h2_worker *h2_worker_create(int id,
 
 apr_status_t h2_worker_destroy(h2_worker *worker)
 {
+    if (worker->io) {
+        apr_thread_cond_destroy(worker->io);
+        worker->io = NULL;
+    }
     return APR_SUCCESS;
 }
 
