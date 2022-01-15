@@ -17,6 +17,7 @@
 #define __mod_h2__h2_worker__
 
 struct apr_thread_cond_t;
+struct h2_task;
 
 /* h2_worker is a basically a apr_thread_t that reads fromt he h2_workers
  * task queue and runs h2_tasks it is given.
@@ -61,5 +62,7 @@ int h2_worker_is_aborted(h2_worker *worker);
 
 apr_thread_t *h2_worker_get_thread(h2_worker *worker);
 struct apr_thread_cond_t *h2_worker_get_cond(h2_worker *worker);
+
+struct h2_task *h2_worker_get_task(h2_worker *worker);
 
 #endif /* defined(__mod_h2__h2_worker__) */

@@ -121,3 +121,8 @@ apr_thread_cond_t *h2_worker_get_cond(h2_worker *worker)
 {
     return worker->io;
 }
+
+h2_task *h2_worker_get_task(h2_worker *worker)
+{
+    return worker->current;
+}

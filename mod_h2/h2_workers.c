@@ -48,7 +48,6 @@ struct h2_workers {
     
     struct apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *task_added;
-    struct apr_thread_cond_t *task_done;
 };
 
 static h2_task* pop_next_task(h2_workers *workers)
@@ -71,7 +70,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
         apr_time_t max_wait = apr_time_from_sec(apr_atomic_read32(&workers->max_idle_secs));
         apr_time_t start_wait = apr_time_now();
         
-        apr_atomic_inc32(&workers->idle_worker_count);
+        ++workers->idle_worker_count;
         while (!h2_worker_is_aborted(worker) && !workers->aborted) {
             h2_task *task = pop_next_task(workers);
             if (task) {
@@ -93,7 +92,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
                     status = APR_TIMEUP;
                 }
                 else {
-                    status = apr_thread_cond_timedwait(workers->task_added,
+                    status = apr_thread_cond_timedwait(h2_worker_get_cond(worker),
                                                        workers->lock, max_wait);
                 }
                 if (status == APR_TIMEUP) {
@@ -107,10 +106,10 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
                 }
             }
             else {
-                apr_thread_cond_wait(workers->task_added, workers->lock);
+                apr_thread_cond_wait(h2_worker_get_cond(worker), workers->lock);
             }
         }
-        apr_atomic_dec32(&workers->idle_worker_count);
+        --workers->idle_worker_count;
         apr_thread_mutex_unlock(workers->lock);
     }
     return status;
@@ -130,7 +129,7 @@ static h2_task *task_done(h2_worker *worker, h2_task *task,
         h2_task_set_finished(task, 1);
         next_task = pop_next_task(workers);
         
-        apr_thread_cond_broadcast(workers->task_done);
+        apr_thread_cond_signal(h2_worker_get_cond(worker));
         apr_thread_mutex_unlock(workers->lock);
     }
     return next_task;
@@ -204,14 +203,6 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
                                          APR_THREAD_MUTEX_DEFAULT,
                                          workers->pool);
         if (status == APR_SUCCESS) {
-            status = apr_thread_cond_create(&workers->task_added, workers->pool);
-            if (status == APR_SUCCESS) {
-                status = apr_thread_cond_create(&workers->task_done,
-                                                workers->pool);
-            }
-        }
-        
-        if (status == APR_SUCCESS) {
             status = h2_workers_start(workers);
         }
         
@@ -225,14 +216,6 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
 
 void h2_workers_destroy(h2_workers *workers)
 {
-    if (workers->task_done) {
-        apr_thread_cond_destroy(workers->task_done);
-        workers->task_done = NULL;
-    }
-    if (workers->task_added) {
-        apr_thread_cond_destroy(workers->task_added);
-        workers->task_added = NULL;
-    }
     if (workers->lock) {
         apr_thread_mutex_destroy(workers->lock);
         workers->lock = NULL;
@@ -247,6 +230,30 @@ void h2_workers_destroy(h2_workers *workers)
     }
 }
 
+typedef struct{
+    h2_worker *found;
+} find_idle_ctx;
+
+static int find_idle(void *ctx, int id, void *entry, int index) 
+{
+    find_idle_ctx *fctx = (find_idle_ctx *)ctx;
+    h2_worker *worker = (h2_worker *)entry;
+    if (!h2_worker_get_task(worker)) {
+        fctx->found = worker;
+        return 0;
+    }
+    return 1;
+}
+
+h2_worker *find_idle_worker(h2_workers *workers)
+{
+    find_idle_ctx ctx = { NULL };
+    h2_queue_iter(workers->workers, find_idle, &ctx);
+    return ctx.found;
+}
+
+
+
 apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
@@ -254,18 +261,50 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                      "h2_workers: scheduling task(%s)",
                      h2_task_get_id(task));
-        if (apr_atomic_read32(&workers->idle_worker_count) <= 0
+        
+        h2_queue_append(workers->tasks_scheduled, task);
+        
+        h2_worker *worker = NULL;
+        if (workers->idle_worker_count > 0) {
+            worker = find_idle_worker(workers);
+        }
+        
+        if (worker == NULL
             && workers->worker_count < workers->max_size) {
             ap_log_error(APLOG_MARK, APLOG_TRACE2, status, workers->s,
                          "h2_workers: adding worker");
             add_worker(workers);
         }
-        h2_queue_append(workers->tasks_scheduled, task);
         
-        apr_thread_cond_signal(workers->task_added);
+        if (worker) {
+            apr_thread_cond_signal(h2_worker_get_cond(worker));
+        }
         apr_thread_mutex_unlock(workers->lock);
     }
     return status;
+}
+
+typedef struct{
+    h2_task *task;
+    h2_worker *found;
+} find_task_ctx;
+
+static int find_task(void *ctx, int id, void *entry, int index) 
+{
+    find_task_ctx *fctx = (find_task_ctx *)ctx;
+    h2_worker *worker = (h2_worker *)entry;
+    if (fctx->task == h2_worker_get_task(worker)) {
+        fctx->found = worker;
+        return 0;
+    }
+    return 1;
+}
+
+h2_worker *h2_workers_get_task_worker(h2_workers *workers, h2_task *task)
+{
+    find_task_ctx ctx = { task, NULL };
+    h2_queue_iter(workers->workers, find_task, &ctx);
+    return ctx.found;
 }
 
 apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
@@ -280,7 +319,20 @@ apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
             /* not on scheduled list, wait until not running */
             assert(h2_task_has_started(task));
             while (wait && !h2_task_has_finished(task)) {
-                apr_thread_cond_wait(workers->task_done, workers->lock);
+                h2_worker *worker = h2_workers_get_task_worker(workers, task);
+                if (worker) {
+                    apr_thread_cond_wait(h2_worker_get_cond(worker), 
+                                         workers->lock);
+                }
+                else {
+                    if (!h2_task_has_finished(task)) {
+                        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, workers->s,
+                                     "h2_workers: join task(%s) started, but "
+                                     "not finished, no worker found",
+                                     h2_task_get_id(task));
+                    }
+                    break;
+                }
             }
             if (!h2_task_has_finished(task)) {
                 status = APR_EAGAIN;
