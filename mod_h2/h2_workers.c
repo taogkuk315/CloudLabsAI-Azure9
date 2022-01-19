@@ -92,7 +92,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
                     status = APR_TIMEUP;
                 }
                 else {
-                    status = apr_thread_cond_timedwait(h2_worker_get_cond(worker),
+                    status = apr_thread_cond_timedwait(workers->task_added,
                                                        workers->lock, max_wait);
                 }
                 if (status == APR_TIMEUP) {
@@ -106,7 +106,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
                 }
             }
             else {
-                apr_thread_cond_wait(h2_worker_get_cond(worker), workers->lock);
+                apr_thread_cond_wait(workers->task_added, workers->lock);
             }
         }
         --workers->idle_worker_count;
@@ -203,6 +203,10 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
                                          APR_THREAD_MUTEX_DEFAULT,
                                          workers->pool);
         if (status == APR_SUCCESS) {
+            status = apr_thread_cond_create(&workers->task_added, workers->pool);
+        }
+        
+        if (status == APR_SUCCESS) {
             status = h2_workers_start(workers);
         }
         
@@ -216,6 +220,10 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
 
 void h2_workers_destroy(h2_workers *workers)
 {
+    if (workers->task_added) {
+        apr_thread_cond_destroy(workers->task_added);
+        workers->task_added = NULL;
+    }
     if (workers->lock) {
         apr_thread_mutex_destroy(workers->lock);
         workers->lock = NULL;
@@ -230,30 +238,6 @@ void h2_workers_destroy(h2_workers *workers)
     }
 }
 
-typedef struct{
-    h2_worker *found;
-} find_idle_ctx;
-
-static int find_idle(void *ctx, int id, void *entry, int index) 
-{
-    find_idle_ctx *fctx = (find_idle_ctx *)ctx;
-    h2_worker *worker = (h2_worker *)entry;
-    if (!h2_worker_get_task(worker)) {
-        fctx->found = worker;
-        return 0;
-    }
-    return 1;
-}
-
-h2_worker *find_idle_worker(h2_workers *workers)
-{
-    find_idle_ctx ctx = { NULL };
-    h2_queue_iter(workers->workers, find_idle, &ctx);
-    return ctx.found;
-}
-
-
-
 apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
@@ -266,7 +250,7 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
         
         h2_worker *worker = NULL;
         if (workers->idle_worker_count > 0) {
-            worker = find_idle_worker(workers);
+            apr_thread_cond_signal(workers->task_added);
         }
         
         if (worker == NULL
@@ -276,9 +260,6 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
             add_worker(workers);
         }
         
-        if (worker) {
-            apr_thread_cond_signal(h2_worker_get_cond(worker));
-        }
         apr_thread_mutex_unlock(workers->lock);
     }
     return status;
