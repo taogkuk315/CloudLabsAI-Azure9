@@ -205,6 +205,18 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                           h2_task_get_id(output->task));
         }
         else {
+            if (APR_BUCKET_IS_FILE(bucket) 
+                && h2_from_h2_is_identity(output->from_h1)) {
+                /* TODO: this is the common case when static files are
+                 * requested and it is worth optimizing. We would like
+                 * to pass the apr_bucket_file that is inside the current
+                 * bucket though the h2_mplx to our h2_session and feed
+                 * it directly into the nghttp2 engine.
+                 */
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
+                              "h2_task_output(%s): file bucket (%ld len)",
+                              h2_task_get_id(output->task), bucket->length);
+            }
             /* we would like to pass this bucket directly into h2_mplx without
              * reading it. We need to be careful with allocations and life times
              * however.

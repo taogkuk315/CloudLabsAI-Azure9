@@ -520,3 +520,9 @@ static apr_status_t copy_direct(h2_from_h1 *from_h1, conn_rec *c,
     }
     return APR_SUCCESS;
 }
+
+int h2_from_h2_is_identity(h2_from_h1 *from_h1)
+{
+    return ((from_h1->state = H2_RESP_ST_BODY) 
+            && (from_h1->copy_body == copy_direct));
+}

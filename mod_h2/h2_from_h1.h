@@ -65,4 +65,10 @@ struct h2_response *h2_from_h1_get_response(h2_from_h1 *from_h1);
 
 h2_from_h1_state_t h2_from_h1_get_state(h2_from_h1 *from_h1);
 
+/* Returns != 0 iff the conversion is not transforming anything (from the
+ * point of time asking until the end of the response. Will be true for
+ * repsonse bodies that do not need chunking.
+ */
+int h2_from_h2_is_identity(h2_from_h1 *from_h1);
+
 #endif /* defined(__mod_h2__h2_from_h1__) */
