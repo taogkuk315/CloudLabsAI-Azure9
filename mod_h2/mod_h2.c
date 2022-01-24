@@ -30,6 +30,7 @@
 #include "h2_ctx.h"
 #include "h2_h2.h"
 #include "h2_h2c.h"
+#include "h2_version.h"
 
 
 static void h2_hooks(apr_pool_t *pool);
@@ -71,8 +72,8 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
         return APR_SUCCESS;
     }
     ap_log_error( APLOG_MARK, APLOG_INFO, 0, s,
-                 "initializing post config, mod_h2, version %s",
-                 PACKAGE_VERSION);
+                 "mod_h2 (v%s), initializing...",
+                 MOD_H2_VERSION);
     
     apr_status_t status = h2_h2_init(p, s);
     return status;

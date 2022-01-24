@@ -15,7 +15,7 @@
 SUBDIRS =
 
 EXTRA_DIST = \
-    h2.load \   
+    h2.load \
     h2.conf
 
 

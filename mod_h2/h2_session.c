@@ -77,7 +77,7 @@ static int stream_open(h2_session *session, int stream_id)
                   "h2_session: stream(%ld-%d): opened",
                   session->id, stream_id);
     
-    h2_mplx_start_io(session->mplx, stream_id);
+    h2_mplx_open_io(session->mplx, stream_id);
     return 0;
 }
 
@@ -228,7 +228,7 @@ static apr_status_t close_active_stream(h2_session *session,
                                                  stream->task, join);
     }
     if (status == APR_SUCCESS) {
-        h2_mplx_end_io(session->mplx, stream->id);
+        h2_mplx_close_io(session->mplx, stream->id);
         h2_stream_destroy(stream);
     }
     else if (status == APR_EAGAIN) {

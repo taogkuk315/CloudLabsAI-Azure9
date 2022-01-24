@@ -19,14 +19,13 @@ INSTALL_DIR     = install
 
 EXTRA_DIST = \
     httpd/Makefile \
-    $(wildcard httpd/*.sh) \
-    $(wildcard httpd/patches/*) \
-    $(wildcard httpd/packages/*) \
+    httpd/*.sh \
+    httpd/patches/* \
+    httpd/packages/* \
     nghttp2/Makefile \
-    $(wildcard nghttp2/patches/*) \
     test/Makefile \
-    $(wildcard test/*.sh) \
-    $(wildcard test/*.text) \
+    test/*.sh \
+    test/*.text \
     test/htdocs \
     test/conf \
     test/clients/Makefile

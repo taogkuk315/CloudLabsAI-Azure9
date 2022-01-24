@@ -24,6 +24,14 @@ AC_SUBST(LT_CURRENT, 11)
 AC_SUBST(LT_REVISION, 0)
 AC_SUBST(LT_AGE, 6)
 
+major=`echo $PACKAGE_VERSION |cut -d. -f1 | sed -e "s/[^0-9]//g"`
+minor=`echo $PACKAGE_VERSION |cut -d. -f2 | sed -e "s/[^0-9]//g"`
+patch=`echo $PACKAGE_VERSION |cut -d. -f3 | cut -d- -f1 | sed -e "s/[^0-9]//g"`
+
+PACKAGE_VERSION_NUM=`printf "0x%02x%02x%02x" "$major" "$minor" "$patch"`
+
+AC_SUBST(PACKAGE_VERSION_NUM)
+
 AC_CANONICAL_BUILD
 AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
@@ -131,7 +139,8 @@ AC_SUBST(SYSCONF_DIR)
 
 AC_CONFIG_FILES([
     Makefile
-    mod_h2/Makefile 
+    mod_h2/Makefile
+    mod_h2/h2_version.h
     sandbox/Makefile 
     setup/Makefile
 ])

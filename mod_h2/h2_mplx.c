@@ -136,7 +136,7 @@ void h2_mplx_abort(h2_mplx *m)
     }
 }
 
-apr_status_t h2_mplx_start_io(h2_mplx *m, int stream_id)
+apr_status_t h2_mplx_open_io(h2_mplx *m, int stream_id)
 {
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
@@ -152,7 +152,7 @@ apr_status_t h2_mplx_start_io(h2_mplx *m, int stream_id)
     return status;
 }
 
-void h2_mplx_end_io(h2_mplx *m, int stream_id)
+void h2_mplx_close_io(h2_mplx *m, int stream_id)
 {
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);

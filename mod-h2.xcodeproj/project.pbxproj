@@ -52,6 +52,7 @@
 		B2A6EF291A9C79A6005DFC5B /* h2_h2c.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_h2c.h; sourceTree = "<group>"; };
 		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
 		B2A6EF2C1A9F2452005DFC5B /* DISCUSS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = DISCUSS; sourceTree = "<group>"; };
+		B2AABE611AC5A9B400A90B72 /* h2_version.h.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2_version.h.in; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
 		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
 		B2CB610E1A88BB9F00D270A6 /* h2_conn.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_conn.c; sourceTree = "<group>"; };
@@ -353,6 +354,7 @@
 				B2FE998F1AA7496B00A5CE5A /* h2_to_h1.h */,
 				B225493C1A713D18004BDEC9 /* h2_util.c */,
 				B225493D1A713D18004BDEC9 /* h2_util.h */,
+				B2AABE611AC5A9B400A90B72 /* h2_version.h.in */,
 				B2CB61141A8B698A00D270A6 /* h2_worker.c */,
 				B2CB61151A8B698A00D270A6 /* h2_worker.h */,
 				B2CB61161A8B699E00D270A6 /* h2_workers.c */,

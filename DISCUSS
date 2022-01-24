@@ -74,15 +74,25 @@ the amount of output queue has reached a certain maximum.
 
 MEMORY HANDLING
 ---------------
-Since the parallelism and thread use of h2_session/h2_stream/h2_task is
-different from conn_rec/request_rec, the apr memory pools need to be handled
-carefully.
+The session pool is a sub pool of the main connection pool, with the twist
+that it has its own allocator (apr_allocator_t). That allocator is protected
+with a apr_thread_mutex (one instance per session). All further sub-pools share
+this allocator.
+
+Protecting the allocator allows sub pools to live in other threads 
+concurrently. Very important.
+
+Everything related to a h2_stream (and even the struct itself) is allocated
+from a new subpool. This guarantuees that all memory is recycled when the 
+stream is destroyed. Same holds true for h2_tasks, which get their own 
+sub pools.
+
 
 
 THREAD HANDLING
 ---------------
 There is a nice thread pool in apr-util which even suports priority scheduling.
-It would be nice to exchange the h2_worker(s) for this pool, except mod_h2
+It would be good to exchange the h2_worker(s) for this pool, except mod_h2
 has the use case that streams can be aborted by the client and the
 corresponding task needs to be removed from the schedule without any
 blocking wait for a possibly running task to complete. This is not offered
@@ -119,23 +129,8 @@ The main causes for this performance penalty seem to be:
   in the OUTPUT queue, if we get a grip on multi-threaded bucket brigade
   handling...
 - MPM MODULES:
-  mod_h2 currently works with mpm_worker only. mpm_event currently crashes as
-  connection and connection config setup does not yet make the necessary
-  incantations for mpm_event to be happy. We think there is no inherent
-  problem with running inside mpm_event, since mod_h2 handles pseudo-connection
-  in- and output itself, using thread_mutex/cond to block/signal.
-  Since mpm_event is standard in most distros nowadays, it would be good to
-  get that working.
-- MEMORY:
-  mod_h2 creates a new pool for every session, subpools for all streams and
-  sub-sub-pools for each task. Before destroying streams or the session, running
-  tasks are joined. That seems to work stable.
-  Using less pools keeps crashing, also the time/thread of pool creation seems
-  to play a role. Unless we understand this better, more optimization seems
-  difficult.
-- THREADS
-  The own worker thread pool does not share resources with the mpm worker pools.
-  Seems like a module in 2.4 is limited here. Maybe something to discuss in
-  future development.
+  mpm_event currently requires a hack (see h2_conn.c) to make it work. The
+  problem is its own event_conn_state struct that needs to be setup 
+  properly or httpd will crash on task connections.
 
 

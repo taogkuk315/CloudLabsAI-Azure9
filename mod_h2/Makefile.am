@@ -74,6 +74,7 @@ HFILES = \
     h2_task_output.h \
     h2_to_h1.h \
     h2_util.h \
+    h2_version.h \
     h2_worker.h \
     h2_workers.h \
     mod_h2.h
