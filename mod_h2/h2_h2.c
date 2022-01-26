@@ -138,10 +138,12 @@ static int h2_h2_alpn_propose(conn_rec *c,
     
     for (int i = 0; i < h2_protos_len; ++i) {
         const char *proto = h2_protos[i];
-        if (client_protos && h2_util_array_index(client_protos, proto) >= 0) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                          "ALPN proposing %s", proto);
-            APR_ARRAY_PUSH(protos, const char*) = proto;
+        if (client_protos) {
+            if (h2_util_array_index(client_protos, proto) >= 0) {
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                              "ALPN proposing %s", proto);
+                APR_ARRAY_PUSH(protos, const char*) = proto;
+            }
         }
         else {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,

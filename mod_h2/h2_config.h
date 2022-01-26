@@ -34,17 +34,24 @@ typedef enum {
     H2_CONF_STREAM_MAX_MEM_SIZE,
 } h2_config_var_t;
 
+typedef struct h2_alt_svc {
+    const char *alpn;
+    const char *host;
+    int port;
+} h2_alt_svc;
+
 /* Apache httpd module configuration for h2. */
 typedef struct h2_config {
     const char *name;
-    int h2_enabled;             /* if mod_h2 is active at all here */
-    int h2_max_streams;         /* max concurrent # streams (http2) */
-    int h2_max_hl_size;         /* max header list size (http2) */
-    int h2_window_size;         /* stream window size (http2) */
-    int min_workers;            /* min # of worker threads/child */
-    int max_workers;            /* max # of worker threads/child */
-    int max_worker_idle_secs;   /* max # of idle seconds before worker shuts down */
-    int stream_max_mem_size;    /* max # bytes held in memory/stream */
+    int h2_enabled;               /* if mod_h2 is active at all here */
+    int h2_max_streams;           /* max concurrent # streams (http2) */
+    int h2_max_hl_size;           /* max header list size (http2) */
+    int h2_window_size;           /* stream window size (http2) */
+    int min_workers;              /* min # of worker threads/child */
+    int max_workers;              /* max # of worker threads/child */
+    int max_worker_idle_secs;     /* max # of idle seconds for worker */
+    int stream_max_mem_size;      /* max # bytes held in memory/stream */
+    apr_array_header_t *alt_svcs; /* h2_alt_svc specs for this server */
 } h2_config;
 
 

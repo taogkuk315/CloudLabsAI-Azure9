@@ -187,7 +187,61 @@ static const char *h2_conf_set_stream_max_mem_size(cmd_parms *parms,
                                                    void *arg, const char *value)
 {
     h2_config *cfg = h2_config_sget(parms->server);
+    
+    
     cfg->stream_max_mem_size = (int)apr_atoi64(value);
+    return NULL;
+}
+
+/**
+ * Parse an Alt-Svc specifier as described in "HTTP Alternative Services"
+ * (https://tools.ietf.org/html/draft-ietf-httpbis-alt-svc-04)
+ * with the following changes:
+ * - do not percent encode token values
+ * - do not use quotation marks
+ */
+static h2_alt_svc *parse_alt_svc(const char *s, apr_pool_t *pool) {
+    const char *sep = strchr(s, '=');
+    if (sep) {
+        const char *alpn = apr_pstrndup(pool, s, sep - s);
+        const char *host = NULL;
+        int port = 0;
+        s = sep + 1;
+        sep = strchr(s, ':');  /* mandatory : */
+        if (sep) {
+            if (sep != s) {    /* optional host */
+                host = apr_pstrndup(pool, s, sep - s);
+            }
+            s = sep + 1;
+            if (*s) {          /* must be a port number */
+                port = (int)apr_atoi64(s);
+                if (port > 0 && port < (0x1 << 16)) {
+                    h2_alt_svc *as = apr_pcalloc(pool, sizeof(*as));
+                    as->alpn = alpn;
+                    as->host = host;
+                    as->port = port;
+                    return as;
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
+static const char *h2_add_alt_svc(cmd_parms *parms,
+                                  void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    if (value && strlen(value)) {
+        h2_alt_svc *as = parse_alt_svc(value, parms->pool);
+        if (!as) {
+            return "unable to parse alt-svc specifier";
+        }
+        if (!cfg->alt_svcs) {
+            cfg->alt_svcs = apr_array_make(parms->pool, 5, sizeof(h2_alt_svc*));
+        }
+        APR_ARRAY_PUSH(cfg->alt_svcs, h2_alt_svc*) = as;
+    }
     return NULL;
 }
 
@@ -208,6 +262,8 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "maximum number of idle seconds before a worker shuts down"),
     AP_INIT_TAKE1("H2StreamMaxMemSize", h2_conf_set_stream_max_mem_size, NULL,
                   RSRC_CONF, "maximum number of bytes buffered in memory for a stream"),
+    AP_INIT_TAKE1("H2AltSvc", h2_add_alt_svc, NULL,
+                  RSRC_CONF, "adds an Alt-Svc for this server"),
     {NULL}
 };
 
