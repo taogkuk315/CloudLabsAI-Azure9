@@ -181,3 +181,16 @@ EOF
     echo ok.
 }
 
+curl_check_altsvc() {
+    DOC="$1"; shift;
+    EXP_ALT_SVC="$1"; shift;
+    MSG="$1"; shift;
+    mkdir -p $TMP
+    echo -n "curl check alt_svc at $URL_PREFIX/$DOC..."
+    ${CURL} "$@" -D $TMP/headers $URL_PREFIX/$DOC > /dev/null || fail
+    alt_svc="$( fgrep -i 'Alt-Svc: ' $TMP/headers | tr -d "\r\n" )"
+    alt_svc="${alt_svc#*: }"
+    test "$EXP_ALT_SVC" = "$alt_svc" || fail "failed. Expected '$EXP_ALT_SVC', got '$alt_svc'"
+    echo ok.
+}
+

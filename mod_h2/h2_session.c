@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <apr_thread_cond.h>
 #include <apr_base64.h>
+#include <apr_strings.h>
 
 #include <httpd.h>
 #include <http_core.h>
@@ -34,6 +35,8 @@
 #include "h2_bucket.h"
 #include "h2_session.h"
 #include "h2_util.h"
+
+static int frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen);
 
 static int h2_session_status_from_apr_status(apr_status_t rv)
 {
@@ -138,7 +141,7 @@ static int on_invalid_frame_recv_cb(nghttp2_session *ngh2,
     if (session->loglvl >= APLOG_DEBUG) {
         char buffer[256];
         
-        h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
+        frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                       "h2_session: callback on_invalid_frame_recv error=%d %s",
                       (int)error_code, buffer);
@@ -179,7 +182,7 @@ static int before_frame_send_cb(nghttp2_session *ngh2,
     }
     if (session->loglvl >= APLOG_DEBUG) {
         char buffer[256];
-        h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
+        frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                       "h2_session: before_frame_send %s", buffer);
     }
@@ -205,7 +208,7 @@ static int on_frame_not_send_cb(nghttp2_session *ngh2,
     if (session->loglvl >= APLOG_DEBUG) {
         char buffer[256];
         
-        h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
+        frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                       "h2_session: callback on_frame_not_send error=%d %s",
                       lib_error_code, buffer);
@@ -357,8 +360,8 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             if (session->loglvl >= APLOG_DEBUG) {
                 char buffer[256];
                 
-                h2_util_frame_print(frame, buffer,
-                                    sizeof(buffer)/sizeof(buffer[0]));
+                frame_print(frame, buffer,
+                            sizeof(buffer)/sizeof(buffer[0]));
                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                               "h2_session: on_frame_rcv %s", buffer);
             }
@@ -1079,5 +1082,82 @@ void h2_session_log_stats(h2_session *session)
                   "h2_session(%ld): %ld open streams",
                   session->id, h2_stream_set_size(session->streams));
     h2_stream_set_iter(session->streams, log_stream, session);
+}
+
+static int frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen)
+{
+    char scratch[128];
+    size_t s_len = sizeof(scratch)/sizeof(scratch[0]);
+    
+    switch (frame->hd.type) {
+        case NGHTTP2_DATA: {
+            return apr_snprintf(buffer, maxlen,
+                                "DATA[length=%d, flags=%d, stream=%d, padlen=%d]",
+                                (int)frame->hd.length, frame->hd.flags,
+                                frame->hd.stream_id, (int)frame->data.padlen);
+        }
+        case NGHTTP2_HEADERS: {
+            return apr_snprintf(buffer, maxlen,
+                                "HEADERS[length=%d, hend=%d, stream=%d, eos=%d]",
+                                (int)frame->hd.length,
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
+                                frame->hd.stream_id,
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
+        }
+        case NGHTTP2_PRIORITY: {
+            return apr_snprintf(buffer, maxlen,
+                                "PRIORITY[length=%d, flags=%d, stream=%d]",
+                                (int)frame->hd.length,
+                                frame->hd.flags, frame->hd.stream_id);
+        }
+        case NGHTTP2_RST_STREAM: {
+            return apr_snprintf(buffer, maxlen,
+                                "RST_STREAM[length=%d, flags=%d, stream=%d]",
+                                (int)frame->hd.length,
+                                frame->hd.flags, frame->hd.stream_id);
+        }
+        case NGHTTP2_SETTINGS: {
+            if (frame->hd.flags & NGHTTP2_FLAG_ACK) {
+                return apr_snprintf(buffer, maxlen,
+                                    "SETTINGS[ack=1, stream=%d]",
+                                    frame->hd.stream_id);
+            }
+            return apr_snprintf(buffer, maxlen,
+                                "SETTINGS[length=%d, stream=%d]",
+                                (int)frame->hd.length, frame->hd.stream_id);
+        }
+        case NGHTTP2_PUSH_PROMISE: {
+            return apr_snprintf(buffer, maxlen,
+                                "PUSH_PROMISE[length=%d, hend=%d, stream=%d]",
+                                (int)frame->hd.length,
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
+                                frame->hd.stream_id);
+        }
+        case NGHTTP2_PING: {
+            return apr_snprintf(buffer, maxlen,
+                                "PING[length=%d, ack=%d, stream=%d]",
+                                (int)frame->hd.length,
+                                frame->hd.flags&NGHTTP2_FLAG_ACK,
+                                frame->hd.stream_id);
+        }
+        case NGHTTP2_GOAWAY: {
+            size_t len = (frame->goaway.opaque_data_len < s_len)?
+            frame->goaway.opaque_data_len : s_len-1;
+            memcpy(scratch, frame->goaway.opaque_data, len);
+            scratch[len+1] = '\0';
+            return apr_snprintf(buffer, maxlen, "GOAWAY[error=%d, reason='%s']",
+                                frame->goaway.error_code, scratch);
+        }
+        case NGHTTP2_WINDOW_UPDATE: {
+            return apr_snprintf(buffer, maxlen,
+                                "WINDOW_UPDATE[length=%d, stream=%d]",
+                                (int)frame->hd.length, frame->hd.stream_id);
+        }
+        default:
+            return apr_snprintf(buffer, maxlen,
+                                "FRAME[type=%d, length=%d, flags=%d, stream=%d]",
+                                frame->hd.type, (int)frame->hd.length,
+                                frame->hd.flags, frame->hd.stream_id);
+    }
 }
 

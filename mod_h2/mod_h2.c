@@ -23,6 +23,7 @@
 #include "mod_h2.h"
 
 #include "h2_stream.h"
+#include "h2_alt_svc.h"
 #include "h2_conn.h"
 #include "h2_task.h"
 #include "h2_session.h"
@@ -124,6 +125,8 @@ static void h2_hooks(apr_pool_t *pool)
     h2_h2c_register_hooks();
     h2_task_register_hooks();
 
+    h2_alt_svc_register_hooks();
+    
     /* We offer a function to other modules that lets them retrieve
      * the h2 protocol used on a connection (if any).
      */

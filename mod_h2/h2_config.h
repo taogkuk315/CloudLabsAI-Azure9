@@ -32,13 +32,9 @@ typedef enum {
     H2_CONF_MAX_WORKERS,
     H2_CONF_MAX_WORKER_IDLE_SECS,
     H2_CONF_STREAM_MAX_MEM_SIZE,
+    H2_CONF_ALT_SVCS,
+    H2_CONF_ALT_SVC_MAX_AGE,
 } h2_config_var_t;
-
-typedef struct h2_alt_svc {
-    const char *alpn;
-    const char *host;
-    int port;
-} h2_alt_svc;
 
 /* Apache httpd module configuration for h2. */
 typedef struct h2_config {
@@ -52,6 +48,7 @@ typedef struct h2_config {
     int max_worker_idle_secs;     /* max # of idle seconds for worker */
     int stream_max_mem_size;      /* max # bytes held in memory/stream */
     apr_array_header_t *alt_svcs; /* h2_alt_svc specs for this server */
+    int alt_svc_max_age;          /* how long clients can rely on alt-svc info (seconds) */
 } h2_config;
 
 

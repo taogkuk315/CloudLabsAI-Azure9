@@ -22,6 +22,7 @@ mod_h2_la_CPPFLAGS = -std=c99 -D_GNU_SOURCE
 mod_h2_la_LDFLAGS  = -module
 
 OBJECTS = \
+    h2_alt_svc.c \
     h2_bucket.c \
     h2_bucket_queue.c \
     h2_config.c \
@@ -50,6 +51,7 @@ OBJECTS = \
     mod_h2.c
 
 HFILES = \
+    h2_alt_svc.h \
     h2_bucket.h \
     h2_bucket_queue.h \
     h2_config.h \

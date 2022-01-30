@@ -74,6 +74,7 @@ test: \
 	@rm -rf $(GEN)/tmp
 	@mkdir -p $(GEN)/tmp
 	@$(INST_DIR)/bin/apachectl restart
+	@bash test_000_altsvc.sh http://$(HTTP_AUTH) https://$(HTTPS_AUTH)
 	@bash test_001_get.sh https://$(HTTPS_AUTH)
 	@bash test_001_get.sh http://$(HTTP_AUTH)
 	@bash test_002_post.sh https://$(HTTPS_AUTH)

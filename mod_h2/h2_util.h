@@ -16,10 +16,10 @@
 #ifndef __mod_h2__h2_util__
 #define __mod_h2__h2_util__
 
+struct nghttp2_frame;
+
 int h2_util_hex_dump(char *buffer, size_t maxlen,
                      const char *data, size_t datalen);
-
-int h2_util_frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen);
 
 int h2_util_header_print(char *buffer, size_t maxlen,
                          const char *name, size_t namelen,
