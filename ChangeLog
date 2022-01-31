@@ -1,3 +1,14 @@
+
+
+ * h2 + h2-16 will be negiotiated/upgraded. Priority handling is implemented
+   in nghttp2, however assigning requests to workers has currently not the
+   necessary information.
+ * Alt-Svc support based on https://http2.github.io/http2-spec/alt-svc.html#indicator
+   Configuration directives "H2AltSvc" and "H2AltSvcMaxAge" added. Configurable
+   per virtual host.
+ * reduced lock contention and eliminated broadcast signalling on internal 
+   condition variables, improved multi-thread performance
+
 v0.3.1
 --------------------------------------------------------------------------------
  * defining _GNU_SOURCE to pull in proper features and make APR header files

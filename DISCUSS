@@ -71,6 +71,24 @@ multiple threads is h2_mplx. h2_tasks use it to retrieve their input and feed
 it their output. h2_mplx blocks h2_tasks when no input is available or
 the amount of output queue has reached a certain maximum.
 
+There is a nice thread pool in apr-util which even suports priority scheduling.
+It would be good to exchange the h2_worker(s) for this pool, except mod_h2
+has the use case that streams can be aborted by the client and the
+corresponding task needs to be removed from the schedule without any
+blocking wait for a possibly running task to complete. This is not offered
+by apr-util.
+
+
+LOCKS / CONDITIONS
+------------------
+apr_thread_mutex_t is used for locking. apr_thread_cond_t is used for blocking
+and signalling. The number of such objects created grows linear with the 
+number of parallel main connections, plus the number of worker threads.
+
+This means it is not influenced by the number of outstanding requests. The 
+intention for this is to allow, possibly, many outstanding requests per HTTP/2 
+connection without consuming unnecessary server resources.
+
 
 MEMORY HANDLING
 ---------------
@@ -80,23 +98,15 @@ with a apr_thread_mutex (one instance per session). All further sub-pools share
 this allocator.
 
 Protecting the allocator allows sub pools to live in other threads 
-concurrently. Very important.
+concurrently, Necessary for parallel processing of HTTP/2 streams. (As 
+alternative, using root pool for streams was tested, but resulted in poorer
+performance).
 
 Everything related to a h2_stream (and even the struct itself) is allocated
 from a new subpool. This guarantuees that all memory is recycled when the 
 stream is destroyed. Same holds true for h2_tasks, which get their own 
 sub pools.
 
-
-
-THREAD HANDLING
----------------
-There is a nice thread pool in apr-util which even suports priority scheduling.
-It would be good to exchange the h2_worker(s) for this pool, except mod_h2
-has the use case that streams can be aborted by the client and the
-corresponding task needs to be removed from the schedule without any
-blocking wait for a possibly running task to complete. This is not offered
-by apr-util.
 
 
 DISCUSSION / OPEN QUESTIONS

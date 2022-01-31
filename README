@@ -19,7 +19,7 @@ it with the Apache infrastructure.
 Status
 ------
 In development. Definitely not ready for a production environment. Use at
-your own risk. Very alpha.
+your own risk.
 
 
 Features
@@ -28,6 +28,10 @@ This module supports the "h2" (HTTP2 over TLS) and "h2c" (HTTP2 over plain
 HTTP connections via Upgrade). You can enable it for the whole server or
 for specific virtual hosts only. More on this below on "Configuration".
 
+Specifically, the protocols "h2", "h2-16", "h2-14" and its "h2c" cousins
+are announced to clients. Support for "h2-14" and "h2-16" is expected to
+disappear silently as these are no standard and are currenlty being used
+for the interop testing phase.
 
 Configuration
 -------------
@@ -37,14 +41,39 @@ be configured.
 
 There are several configuration commands available when mod_h2 is loaded,
 such as:
-- H2Engine (on/off), "on"    to enable HTTP/2 protocol handling
-- H2MaxSessionStreams n      maximum number of open streams per session
-- H2InitialWindowSize n      initial window size on client DATA
-- H2MaxHeaderListSize n      maximum acceptable size of request headers
-- H2MinWorkers n             minimum number of worker threads per child
-- H2MaxWorkers n             maximum number of worker threads per child
-- H2StreamMaxMemSize n       maximum number of bytes buffered in memory for a stream
 
+- H2Engine (on/off), "on"    to enable HTTP/2 protocol handling
+                             Default: off
+
+- H2MaxSessionStreams n      maximum number of open streams per session
+                             Default: 100
+
+- H2InitialWindowSize n      initial window size on client DATA
+                             Default: 16k
+
+- H2MaxHeaderListSize n      maximum acceptable size of request headers
+                             Default: 64k
+
+- H2MinWorkers n             minimum number of worker threads per child
+                             Default: mpm configured MaxWorkers/2
+
+- H2MaxWorkers n             maximum number of worker threads per child
+                             Default: mpm configured thread limit/2
+
+- H2StreamMaxMemSize n       maximum number of bytes buffered in memory for a stream
+                             Default: 64k
+
+- H2AltSvc name=host:port    Announce an "alternate service" to clients (see
+   https://http2.github.io/http2-spec/alt-svc.html for details)
+                             Default: empty
+
+- H2AltSvcMaxAge n           number of seconds Alt-Svc information is valid
+                             Default: will not be sent, specificatin defaults to 24h
+
+All these configuration parameters can be set on servers/virtual hosts and
+are not available on directory level. Note that Worker configuration is
+only relevant on the base apache server and will be read - but ignored -
+on any virtual hosts.
 
 
 Dependencies
@@ -165,26 +194,13 @@ I am happy to be given pointers.
 
 TODO
 ----
-- Thanks to the excellent nghttp2, the module currently supports h2-14 and
-  h2c-14. Piority handling is implemented in nghttp2, but not tested with the
-  mod_h2 and there are several areas in work scheduling where priority handling
-  needs to be added to mod_h2.
-- Replace own thread pool with the ones from apr-util, use priority scheduling
-  (Initial tests show a 10% perf penalty, why?)
-- Performance is not where it should be, request/s suffer from current
-  pseudo-connection handling and other things. See DISCUSS
+- Thanks to the excellent nghttp2, the module currently supports stream priority
+  handling, but nghttp2 offers at the moment (v0.7.9) no way to use the prio
+  information for request scheduling.
 - Proper documentation needs to be added
-- Test cases need to be written to cover edge cases with connection abort,
-  stream reset, priority requests, etc.
-- mpm_event: can we support it?
-- Chunk handling for request input data (h2_request).
-- Detection at runtime that we are indeed running with mpm_worker, an error
-  message to the log and stay inactive otherwise.
+- mpm_event: supported by a hack atm. Needs an official patch with an Optional
+  function
 - http trailers are not implemented
-- Firefox supported both ALPN+NPN and pmanus reports NPN being selected. Check
-  if there is anything we can do to enforce ALPN for that.
-- PMcManus reports that latency will be better when SSL Record sizes are smaller.
-  Check if we can tweak that for a mod_ssl connection.
 
 
 Licensing
@@ -201,6 +217,6 @@ SPDY protocol. And without Tatsuhiro Tsujikawa excellent nghttp2 work, this
 would not have been possible.
 
 
-Münster, 10.3.2015,
+Münster, 30.3.2015,
 
 Stefan Eissing, greenbytes GmbH
