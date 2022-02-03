@@ -25,7 +25,7 @@ EXTRA_DIST = \
     nghttp2/Makefile \
     test/Makefile \
     test/*.sh \
-    test/*.text \
+    test/*.txt \
     test/htdocs \
     test/conf \
     test/clients/Makefile
