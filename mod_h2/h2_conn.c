@@ -167,9 +167,8 @@ apr_status_t h2_session_process(h2_session *session)
      * TODO: implement graceful GO_AWAY after configurable idle time
      */
     
-    /* remove the standard timeout handling */
-    /* TODO: install our own? */
-    ap_remove_input_filter_byhandle(session->c->input_filters, "reqtimeout");
+    /* Once we have our own. remove the standard timeout handling */
+    /* ap_remove_input_filter_byhandle(session->c->input_filters, "reqtimeout"); */
 
     h2_session_set_stream_open_cb(session, after_stream_opened_cb);
     h2_session_set_stream_close_cb(session, before_stream_close_cb);
@@ -320,8 +319,8 @@ h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *parent)
                                             &core_module);
         conn->master = master;
         
-        /* TODO: should have own scoreboard handle, but where to
-         * take the child/worker ids from?
+        /* Not sure about the scoreboard handle. Reusing the one from the main
+         * connection could make sense, but I do not know enough to tell...
          */
         conn->c = ap_run_create_connection(conn->pool, conn->master->base_server,
                                            conn->socket,

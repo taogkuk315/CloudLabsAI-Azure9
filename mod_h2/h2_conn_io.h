@@ -26,15 +26,17 @@ typedef struct {
     conn_rec *connection;
     apr_bucket_brigade *input;
     apr_bucket_brigade *output;
+    int check_preface;
+    int preface_bytes_left;
 } h2_conn_io_ctx;
 
-apr_status_t h2_conn_io_init(h2_conn_io_ctx *io, conn_rec *c);
+apr_status_t h2_conn_io_init(h2_conn_io_ctx *io, conn_rec *c, 
+                             int check_preface);
 void h2_conn_io_destroy(h2_conn_io_ctx *io);
 
 typedef apr_status_t (*h2_conn_io_on_read_cb)(const char *data, apr_size_t len,
                                          apr_size_t *readlen, int *done,
                                          void *puser);
-
 
 apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
                         apr_read_type_e block,

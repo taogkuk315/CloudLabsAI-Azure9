@@ -93,12 +93,6 @@ static void h2_child_init(apr_pool_t *pool, server_rec *s)
     }
 }
 
-static void *h2_core_inspect(request_rec *r)
-{
-    // TODO: Are we interested in this request? Returns NULL if not.
-    return NULL;
-}
-
 const char *h2_get_protocol(conn_rec *c)
 {
     return h2_ctx_get_protocol(c);

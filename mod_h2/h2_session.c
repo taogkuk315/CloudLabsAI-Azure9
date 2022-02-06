@@ -464,7 +464,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         
         session->mplx = h2_mplx_create(c, session->pool);
         
-        h2_conn_io_init(&session->io, c);
+        h2_conn_io_init(&session->io, c, 1);
         
         apr_status_t status = init_callbacks(c, &callbacks);
         if (status != APR_SUCCESS) {
@@ -482,8 +482,11 @@ static h2_session *h2_session_create_int(conn_rec *c,
             return NULL;
         }
 
-        /* Nowadays, we always expect nghttp2 to see a client preface. */
-        nghttp2_option_set_recv_client_preface(options, 1);
+        /* Nowadays, we handle the preface ourselves. We had problems
+         * with nghttp2 internal state machine when traffic action occured
+         * before the preface was read. 
+         */
+        nghttp2_option_set_recv_client_preface(options, 0);
         /* We need to handle window updates ourself, otherwise we
          * get flooded by nghttp2. */
         // TODO: enable and add consumption code

@@ -18,7 +18,8 @@
 
 /**
  * The stream multiplexer. It pushes h2_buckets from the connection
- * thread to the stream task threads and vice versa.
+ * thread to the stream task threads and vice versa. It's thread-safe
+ * to use.
  *
  * There is one h2_mplx instance for each h2_session, which sits on top
  * of a particular httpd conn_rec. Input goes from the connection to
@@ -29,8 +30,8 @@
  * queued in the multiplexer. If a task thread tries to write more
  * data, it is blocked until space becomes available.
  *
- * Writing input is never blocked here. This needs to be handled via
- * HTTP2 flow control against the client.
+ * Writing input is never blocked. In order to use flow control on the input,
+ * the mplx can be polled for input data consumption.
  */
 
 struct apr_pool_t;
@@ -110,6 +111,8 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
  * Reads a h2_bucket for the given stream_id. Will return ARP_EAGAIN when
  * called with APR_NONBLOCK_READ and no data present. Will return APR_EOF
  * when the end of the stream input has been reached.
+ * The condition passed in will be used for blocking/signalling and will
+ * be protected by the mplx's own mutex.
  */
 apr_status_t h2_mplx_in_read(h2_mplx *mplx, apr_read_type_e block,
                              int stream_id, struct h2_bucket **pbucket,

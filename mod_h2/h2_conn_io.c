@@ -23,9 +23,14 @@
 #include "h2_conn_io.h"
 #include "h2_util.h"
 
-apr_status_t h2_conn_io_init(h2_conn_io_ctx *io, conn_rec *c)
+static const char HTTP2_PREFACE[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+static const int HTTP2_PREFACE_LEN = sizeof(HTTP2_PREFACE) - 1;
+
+apr_status_t h2_conn_io_init(h2_conn_io_ctx *io, conn_rec *c, int check_preface)
 {
     io->connection = c;
+    io->check_preface = check_preface;
+    io->preface_bytes_left = HTTP2_PREFACE_LEN;
     io->input = apr_brigade_create(c->pool, c->bucket_alloc);
     io->output = apr_brigade_create(c->pool, c->bucket_alloc);
     return APR_SUCCESS;
@@ -73,14 +78,44 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io_ctx *io,
                                   "h2_conn_io(%ld): read %ld bytes: %s",
                                   io->connection->id, bucket_length, buffer);
                 }
-                apr_size_t consumed = 0;
-                status = on_read_cb(bucket_data, bucket_length,
-                                    &consumed, pdone, puser);
-                if (status == APR_SUCCESS && bucket_length > consumed) {
-                    /* We have data left in the bucket. Split it. */
-                    status = apr_bucket_split(bucket, consumed);
+                
+                if (io->preface_bytes_left > 0) {
+                    /* still requiring bytes from the http/2 preface */
+                    size_t pre_offset = HTTP2_PREFACE_LEN - io->preface_bytes_left;
+                    int check_len = io->preface_bytes_left;
+                    if (check_len > bucket_length) {
+                        check_len = bucket_length;
+                    }
+                        
+                    if (strncmp(HTTP2_PREFACE+pre_offset, bucket_data, 
+                                check_len)) {
+                        /* preface mismatch */
+                        ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_EMISMATCH, 
+                                      io->connection,
+                                      "h2_conn_io(%ld): preface check",
+                                      io->connection->id);
+                        return APR_EMISMATCH;
+                    }
+                    io->preface_bytes_left -= check_len;
+                    bucket_data += check_len;
+                    bucket_length -= check_len;
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->connection,
+                                  "h2_conn_io(%ld): preface check: %d bytes "
+                                  "matched, remaining %d",
+                                  io->connection->id, check_len, 
+                                  io->preface_bytes_left);
                 }
-                readlen += consumed;
+                
+                if (bucket_length > 0) {
+                    apr_size_t consumed = 0;
+                    status = on_read_cb(bucket_data, bucket_length,
+                                        &consumed, pdone, puser);
+                    if (status == APR_SUCCESS && bucket_length > consumed) {
+                        /* We have data left in the bucket. Split it. */
+                        status = apr_bucket_split(bucket, consumed);
+                    }
+                    readlen += consumed;
+                }
             }
         }
         apr_bucket_delete(bucket);
@@ -133,15 +168,12 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf, size_t length
     /* we do not want to send something leftover in the brigade */
     assert(APR_BRIGADE_EMPTY(io->output));
     
-    /* Append our data and a flush, since we most likely have a complete
-     * frame that must be send now. 
-     * TODO: is there a flush indication maybe from higher up???
-     */
+    /* Append our data and pass on. */
     APR_BRIGADE_INSERT_TAIL(io->output,
             apr_bucket_transient_create((const char *)buf, length,
                                         io->output->bucket_alloc));
     
-    /* Send it out through installed filters (TLS) to the client */
+    /* Send it out through installed filters to the client */
     apr_status_t status = ap_pass_brigade(io->connection->output_filters,
                                           io->output);
     apr_brigade_cleanup(io->output);
