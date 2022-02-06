@@ -59,6 +59,7 @@ apr_status_t h2_task_do(h2_task *task, struct h2_worker *worker);
 
 void h2_task_abort(h2_task *task);
 int h2_task_is_aborted(h2_task *task);
+void h2_task_interrupt(h2_task *task);
 
 int h2_task_has_started(h2_task *task);
 void h2_task_set_started(h2_task *task, int started);

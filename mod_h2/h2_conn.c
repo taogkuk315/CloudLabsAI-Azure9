@@ -194,12 +194,15 @@ apr_status_t h2_session_process(h2_session *session)
             have_written = 1;
             wait_micros = 0;
         }
+        else if (status == APR_EAGAIN) {
+            /* nop */
+        }
         else if (status == APR_TIMEUP) {
             wait_micros *= 2;
             if (wait_micros > MAX_WAIT_MICROS) {
                 wait_micros = MAX_WAIT_MICROS;
             }
-            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
+            ap_log_cerror( APLOG_MARK, APLOG_TRACE1, status, session->c,
                           "timeout waiting %f ms", wait_micros/1000.0);
         }
         else {
@@ -220,8 +223,6 @@ apr_status_t h2_session_process(h2_session *session)
                 wait_micros = 0;
                 break;
             case APR_EAGAIN:
-                if (!have_written) {
-                }
                 break;
             case APR_EOF:
             case APR_ECONNABORTED:
@@ -244,12 +245,12 @@ apr_status_t h2_session_process(h2_session *session)
              * back off to give others a chance to do their work.
              */
             if (wait_micros == 0) {
-                wait_micros = 100;
+                wait_micros = 10;
             }
         }
     }
     
-    ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
+    ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
                   "h2_session(%ld): done", session->id);
     
     h2_session_close(session);
@@ -275,6 +276,7 @@ static apr_status_t before_stream_close_cb(h2_session *session,
 {
     apr_status_t status = APR_SUCCESS;
     if (task) {
+        h2_task_abort(task);
         status = h2_workers_join(workers, task, wait);
         if (status != APR_SUCCESS && status != APR_EAGAIN) {
             ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,

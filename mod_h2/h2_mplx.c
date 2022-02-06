@@ -396,7 +396,6 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
                                  apr_thread_cond_t *iowait)
 {
     assert(m);
-    int has_data = 0;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         m->added_output = iowait;
@@ -407,7 +406,7 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
         m->added_output = NULL;
         apr_thread_mutex_unlock(m->lock);
     }
-    return has_data;
+    return status;
 }
 
 static void have_out_data_for(h2_mplx *m, int stream_id)

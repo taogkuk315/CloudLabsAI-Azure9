@@ -482,9 +482,12 @@ static h2_session *h2_session_create_int(conn_rec *c,
             return NULL;
         }
 
-        /* With a request present, we are in 'h2c' mode and 
-         * expect a preface from the client. */
+        /* Nowadays, we always expect nghttp2 to see a client preface. */
         nghttp2_option_set_recv_client_preface(options, 1);
+        /* We need to handle window updates ourself, otherwise we
+         * get flooded by nghttp2. */
+        // TODO: enable and add consumption code
+        //nghttp2_option_set_no_auto_window_update(options, 1);
         
         nghttp2_option_set_peer_max_concurrent_streams(
             options, h2_config_geti(config, H2_CONF_MAX_STREAMS));
@@ -798,7 +801,7 @@ static void h2_session_resume_streams_with_data(h2_session *session) {
 apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 {
     assert(session);
-    apr_status_t status = APR_SUCCESS;
+    apr_status_t status = APR_EAGAIN;
     int have_written = 0;
     
     /* First check if we have new streams to submit */
@@ -822,6 +825,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     }
     
     if (h2_session_want_write(session)) {
+        status = APR_SUCCESS;
         int rv = nghttp2_session_send(session->ngh2);
         if (rv != 0) {
             ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, session->c,
@@ -832,6 +836,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
             }
         }
         status = h2_conn_io_flush(&session->io);
+        have_written = 1;
     }
     
     reap_zombies(session);

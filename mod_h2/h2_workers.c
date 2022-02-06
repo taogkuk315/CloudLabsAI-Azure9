@@ -299,11 +299,12 @@ apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
         if (!h2_queue_remove(workers->tasks_scheduled, task)) {
             /* not on scheduled list, wait until not running */
             assert(h2_task_has_started(task));
-            while (wait && !h2_task_has_finished(task)) {
+            for (int i = 0; wait && !h2_task_has_finished(task) && i < 100; ++i) {
                 h2_worker *worker = h2_workers_get_task_worker(workers, task);
+                h2_task_interrupt(task);
                 if (worker) {
-                    apr_thread_cond_wait(h2_worker_get_cond(worker), 
-                                         workers->lock);
+                    apr_thread_cond_timedwait(h2_worker_get_cond(worker), 
+                                              workers->lock, 20 * 1000);
                 }
                 else {
                     if (!h2_task_has_finished(task)) {

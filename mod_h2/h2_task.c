@@ -224,20 +224,21 @@ void h2_task_abort(h2_task *task)
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->conn->c,
                   "h2_task(%s): aborting task", task->id);
     task->aborted =  1;
-    if (task->input) {
-        h2_task_input_destroy(task->input);
-        task->input = NULL;
-    }
-    if (task->output) {
-        h2_task_output_destroy(task->output);
-        task->output = NULL;
-    }
 }
 
 int h2_task_is_aborted(h2_task *task)
 {
     assert(task);
     return task->aborted;
+}
+
+void h2_task_interrupt(h2_task *task)
+{
+    apr_thread_cond_t *cond = task->io;
+    if (cond) {
+        /* task is waiting on io */
+        apr_thread_cond_broadcast(cond);
+    }
 }
 
 const char *h2_task_get_id(h2_task *task)

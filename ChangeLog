@@ -1,6 +1,8 @@
+ * fixing infinite loop when aborting session with tasks hanging in read
+
 v0.4.0
 --------------------------------------------------------------------------------
-* h2 + h2-16 will be negiotiated/upgraded. Priority handling is implemented
+ * h2 + h2-16 will be negiotiated/upgraded. Priority handling is implemented
    in nghttp2, however assigning requests to workers has currently not the
    necessary information.
  * Alt-Svc support based on https://http2.github.io/http2-spec/alt-svc.html#indicator
