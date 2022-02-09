@@ -464,7 +464,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         
         session->mplx = h2_mplx_create(c, session->pool);
         
-        h2_conn_io_init(&session->io, c, 1);
+        h2_conn_io_init(&session->io, c, 0);
         
         apr_status_t status = init_callbacks(c, &callbacks);
         if (status != APR_SUCCESS) {
@@ -486,14 +486,15 @@ static h2_session *h2_session_create_int(conn_rec *c,
          * with nghttp2 internal state machine when traffic action occured
          * before the preface was read. 
          */
-        nghttp2_option_set_recv_client_preface(options, 0);
+        nghttp2_option_set_recv_client_preface(options, 1);
+        /* Set a value, to be observed before we receive any SETTINGS
+         * from the client. */
+        nghttp2_option_set_peer_max_concurrent_streams(options, 100);
+
         /* We need to handle window updates ourself, otherwise we
          * get flooded by nghttp2. */
         // TODO: enable and add consumption code
         //nghttp2_option_set_no_auto_window_update(options, 1);
-        
-        nghttp2_option_set_peer_max_concurrent_streams(
-            options, h2_config_geti(config, H2_CONF_MAX_STREAMS));
         
         rv = nghttp2_session_server_new2(&session->ngh2, callbacks,
                                          session, options);
@@ -683,6 +684,31 @@ apr_status_t h2_session_start(h2_session *session)
     h2_config *config = h2_config_get(session->c);
     int rv = 0;
     
+    nghttp2_settings_entry settings[] = {
+        { NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE,
+            h2_config_geti(config, H2_CONF_MAX_HL_SIZE) },
+        { NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE,
+            h2_config_geti(config, H2_CONF_WIN_SIZE) },
+        {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 
+            h2_config_geti(config, H2_CONF_MAX_STREAMS) }, 
+    };
+    rv = nghttp2_submit_settings(session->ngh2, NGHTTP2_FLAG_NONE,
+                                 settings,
+                                 sizeof(settings)/sizeof(settings[0]));
+    if (rv != 0) {
+        status = APR_EGENERAL;
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                      "nghttp2_submit_settings: %s", nghttp2_strerror(rv));
+        return status;
+    }
+    
+    /* Lets really send the SETTINGS and anything else that may be
+     * pending, before we start any stream processing. */
+    status = h2_session_write(session, 0);
+    if (status == APR_SUCCESS) {
+        status = h2_session_read(session, APR_NONBLOCK_READ);
+    }
+    
     if (session->r) {
         /* 'h2c' mode: we should have a 'HTTP2-Settings' header with
          * base64 encoded client settings. */
@@ -739,21 +765,7 @@ apr_status_t h2_session_start(h2_session *session)
             return status;
         }
     }
-    
-    nghttp2_settings_entry settings[] = {
-        { NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE,
-            h2_config_geti(config, H2_CONF_MAX_HL_SIZE) },
-        { NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE,
-            h2_config_geti(config, H2_CONF_WIN_SIZE) },
-    };
-    rv = nghttp2_submit_settings(session->ngh2, NGHTTP2_FLAG_NONE,
-                                 settings,
-                                 sizeof(settings)/sizeof(settings[0]));
-    if (rv != 0) {
-        status = APR_EGENERAL;
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                      "nghttp2_submit_settings: %s", nghttp2_strerror(rv));
-    }
+  
     return status;
 }
 

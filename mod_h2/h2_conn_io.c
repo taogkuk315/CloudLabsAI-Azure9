@@ -30,7 +30,7 @@ apr_status_t h2_conn_io_init(h2_conn_io_ctx *io, conn_rec *c, int check_preface)
 {
     io->connection = c;
     io->check_preface = check_preface;
-    io->preface_bytes_left = HTTP2_PREFACE_LEN;
+    io->preface_bytes_left = check_preface? HTTP2_PREFACE_LEN : 0;
     io->input = apr_brigade_create(c->pool, c->bucket_alloc);
     io->output = apr_brigade_create(c->pool, c->bucket_alloc);
     return APR_SUCCESS;
@@ -69,6 +69,7 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io_ctx *io,
             apr_size_t bucket_length = 0;
             status = apr_bucket_read(bucket, &bucket_data,
                                      &bucket_length, block);
+            
             if (status == APR_SUCCESS && bucket_length > 0) {
                 if (APLOGctrace2(io->connection)) {
                     char buffer[32];
