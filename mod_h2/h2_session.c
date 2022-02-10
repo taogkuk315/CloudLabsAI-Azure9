@@ -138,11 +138,11 @@ static int on_invalid_frame_recv_cb(nghttp2_session *ngh2,
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
-    if (session->loglvl >= APLOG_DEBUG) {
+    if (APLOGctrace2(session->c)) {
         char buffer[256];
         
         frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                       "h2_session: callback on_invalid_frame_recv error=%d %s",
                       (int)error_code, buffer);
     }
@@ -180,11 +180,12 @@ static int before_frame_send_cb(nghttp2_session *ngh2,
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
-    if (session->loglvl >= APLOG_DEBUG) {
+    if (APLOGctrace2(session->c)) {
         char buffer[256];
         frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                      "h2_session: before_frame_send %s", buffer);
+                      "h2_session(%ld): before_frame_send %s", 
+                      session->id, buffer);
     }
     return 0;
 }
@@ -194,9 +195,8 @@ static int on_frame_send_cb(nghttp2_session *ngh2,
                             void *userp)
 {
     h2_session *session = (h2_session *)userp;
-    if (session->aborted) {
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                  "h2_session(%ld): on_frame_send", session->id);
     return 0;
 }
 
@@ -205,7 +205,7 @@ static int on_frame_not_send_cb(nghttp2_session *ngh2,
                                 int lib_error_code, void *userp)
 {
     h2_session *session = (h2_session *)userp;
-    if (session->loglvl >= APLOG_DEBUG) {
+    if (APLOGctrace2(session->c)) {
         char buffer[256];
         
         frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
@@ -357,12 +357,12 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             break;
         }
         default:
-            if (session->loglvl >= APLOG_DEBUG) {
+            if (APLOGctrace2(session->c)) {
                 char buffer[256];
                 
                 frame_print(frame, buffer,
                             sizeof(buffer)/sizeof(buffer[0]));
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                               "h2_session: on_frame_rcv %s", buffer);
             }
             break;
@@ -457,7 +457,6 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->c = c;
         session->r = r;
         session->ngh2 = NULL;
-        session->loglvl = APLOGcdebug(c)? APLOG_DEBUG : APLOG_NOTICE;
         
         session->streams = h2_stream_set_create(session->pool);
         session->zombies = h2_stream_set_create(session->pool);
@@ -771,13 +770,11 @@ apr_status_t h2_session_start(h2_session *session)
 
 static int h2_session_want_read(h2_session *session)
 {
-    assert(session);
     return nghttp2_session_want_read(session->ngh2);
 }
 
 static int h2_session_want_write(h2_session *session)
 {
-    assert(session);
     return nghttp2_session_want_write(session->ngh2);
 }
 

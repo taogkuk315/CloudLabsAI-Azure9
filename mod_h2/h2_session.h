@@ -90,10 +90,7 @@ struct h2_session {
     after_stream_open *after_stream_opened_cb; /* stream task can start */
     before_stream_close *before_stream_close_cb; /* stream will close */
 
-    int loglvl;
-    
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
-
 };
 
 
