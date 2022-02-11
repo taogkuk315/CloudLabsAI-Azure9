@@ -812,19 +812,24 @@ static void h2_session_resume_streams_with_data(h2_session *session) {
 
 apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 {
-    assert(session);
     apr_status_t status = APR_EAGAIN;
+    h2_response *response = NULL;
     int have_written = 0;
     
+    assert(session);
     /* First check if we have new streams to submit */
-    for (h2_response *head = h2_session_pop_response(session); head;
-         head = h2_session_pop_response(session)) {
-        h2_stream *stream = h2_session_get_stream(session, head->stream_id);
+    while ((response = h2_session_pop_response(session)) != NULL) {
+        h2_stream *stream = h2_session_get_stream(session, response->stream_id);
         if (stream) {
-            status = h2_session_handle_response(session, stream, head);
+            status = h2_session_handle_response(session, stream, response);
             have_written = 1;
         }
-        h2_response_destroy(head);
+        h2_response_destroy(response);
+        response = NULL;
+    }
+    
+    if (have_written) {
+        h2_conn_io_flush(&session->io);
     }
     
     h2_session_resume_streams_with_data(session);
