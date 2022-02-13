@@ -167,8 +167,7 @@ apr_status_t h2_session_process(h2_session *session)
      * TODO: implement graceful GO_AWAY after configurable idle time
      */
     
-    /* Once we have our own. remove the standard timeout handling */
-    /* ap_remove_input_filter_byhandle(session->c->input_filters, "reqtimeout"); */
+    ap_remove_input_filter_byhandle(session->c->input_filters, "reqtimeout");
 
     h2_session_set_stream_open_cb(session, after_stream_opened_cb);
     h2_session_set_stream_close_cb(session, before_stream_close_cb);
@@ -201,8 +200,6 @@ apr_status_t h2_session_process(h2_session *session)
             if (wait_micros > MAX_WAIT_MICROS) {
                 wait_micros = MAX_WAIT_MICROS;
             }
-            ap_log_cerror( APLOG_MARK, APLOG_TRACE1, status, session->c,
-                          "timeout waiting %f ms", wait_micros/1000.0);
         }
         else {
             ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,

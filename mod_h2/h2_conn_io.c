@@ -162,10 +162,11 @@ apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
     return status;
 }
 
-apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf, size_t length,
-                         size_t *written)
+apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf, 
+                              size_t length, size_t *written)
 {
     *written = 0;
+    
     /* we do not want to send something leftover in the brigade */
     assert(APR_BRIGADE_EMPTY(io->output));
     
@@ -177,6 +178,13 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf, size_t length
     /* Send it out through installed filters to the client */
     apr_status_t status = ap_pass_brigade(io->connection->output_filters,
                                           io->output);
+    if (APLOGctrace2(io->connection)) {
+        char buffer[32];
+        h2_util_hex_dump(buffer, sizeof(buffer)/sizeof(buffer[0]), buf, length);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, io->connection,
+                      "h2_conn_io(%ld): written %ld bytes: %s",
+                      io->connection->id, length, buffer);
+    }
     apr_brigade_cleanup(io->output);
     
     if (status == APR_SUCCESS
