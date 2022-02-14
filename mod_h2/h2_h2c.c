@@ -120,8 +120,7 @@ static int h2_h2c_upgrade_to(request_rec *r, const char *proto)
 {
     h2_ctx *ctx = h2_ctx_create(r->connection);
     ctx->is_h2 = 1;
-    ctx->protocol = proto;
-    ctx->is_negotiated = 1;
+    h2_ctx_set_protocol(r->connection, proto);
     
     /* Let the client know what we are upgrading to. */
     apr_table_clear(r->headers_out);
@@ -135,7 +134,7 @@ static int h2_h2c_upgrade_to(request_rec *r, const char *proto)
     /* Make sure the core filter that parses http1 requests does
      * not mess with our http2 frames. */
     ap_remove_input_filter_byhandle(r->input_filters, "http_in");
-
+    
     /* Ok, start an h2_conn on this one. */
     apr_status_t status = h2_conn_rprocess(r);
     if (status != DONE) {

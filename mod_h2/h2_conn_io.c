@@ -134,6 +134,8 @@ apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
 {
     apr_status_t status;
     int done = 0;
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, io->connection,
+                  "h2_conn_io: try read, block=%d", block);
     
     if (!APR_BRIGADE_EMPTY(io->input)) {
         /* Seems something is left from a previous read, lets

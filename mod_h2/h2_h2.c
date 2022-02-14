@@ -15,6 +15,7 @@
 
 #include <assert.h>
 
+#include <apr_strings.h>
 #include <apr_optional.h>
 #include <apr_optional_hooks.h>
 
@@ -158,6 +159,12 @@ static int h2_h2_alpn_negotiated(conn_rec *c,
                                   const char *proto_name,
                                   apr_size_t proto_name_len)
 {
+    if (APLOGctrace1(c)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                      "ALPN negotiated is %s", 
+                      apr_pstrndup(c->pool, proto_name, proto_name_len));
+    }
+    
     h2_config *cfg = h2_config_get(c);
     if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
         return DECLINED;
@@ -177,7 +184,7 @@ static int h2_h2_alpn_negotiated(conn_rec *c,
         if (proto_name_len == strlen(proto)
             && strncmp(proto, proto_name, proto_name_len) == 0) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, 
-                          "ALPN negotiated: %s", proto);
+                          "protocol set va ALPN to %s", proto);
             h2_ctx_set_protocol(c, proto);
             break;
         }
