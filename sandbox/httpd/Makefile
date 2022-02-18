@@ -39,7 +39,7 @@ OPENSSL_BASE = http://www.openssl.org
 OPENSSL_DIR = openssl-latest
 OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
 OPENSSL_URL = $(OPENSSL_BASE)/source/latest.tar.gz
-
+OPENSSL_CONF_CMD = ./config
 
 GEN          = gen
 INST_DIR     = ../install
@@ -71,7 +71,8 @@ ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0 1.0.1))
 	HTTPD_DEPS  += $(INST_DIR)/.openssl-installed
 	HTTPD_CONF  += --with-ssl=$(BLD_PREFIX)
 	ifeq ($(OS),Darwin)
-	OPENSSL_CONF = darwin64-x86_64-cc
+        OPENSSL_CONF = darwin64-x86_64-cc
+        OPENSSL_CONF_CMD = ./Configure
 	endif
 endif
 
@@ -206,7 +207,7 @@ $(GEN)/$(OPENSSL_DIR)/.openssl-built: \
 $(GEN)/$(OPENSSL_DIR)/.openssl-configured: \
         $(GEN)/$(OPENSSL_DIR)/.openssl-extracted
 	@echo -n configuring openssl...
-	@cd $(GEN)/$(OPENSSL_DIR) && ./Configure --openssldir=$(BLD_PREFIX) $(OPENSSL_CONF) >> ../build.log
+	@cd $(GEN)/$(OPENSSL_DIR) && $(OPENSSL_CONF_CMD) --openssldir=$(BLD_PREFIX) $(OPENSSL_CONF) >> ../build.log
 	@echo done.
 	@touch $(GEN)/$(OPENSSL_DIR)/.openssl-configured
 
