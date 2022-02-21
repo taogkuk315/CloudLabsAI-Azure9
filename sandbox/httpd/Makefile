@@ -67,7 +67,7 @@ endif
 
 OPENSSL_VERSION = $(shell openssl version -v | sed -e 's/OpenSSL *//g' -e 's/[a-z]* .*//g')
 
-ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0 1.0.1))
+ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0))
 	# Very old openssl without alpn support installed, need a newer one
 	HTTPD_DEPS  += $(INST_DIR)/.openssl-installed
 	HTTPD_CONF  += --with-ssl=$(BLD_PREFIX)
