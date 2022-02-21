@@ -39,7 +39,8 @@ OPENSSL_BASE = http://www.openssl.org
 OPENSSL_DIR = openssl-latest
 OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
 OPENSSL_URL = $(OPENSSL_BASE)/source/latest.tar.gz
-OPENSSL_CONF_CMD = ./config
+OPENSSL_CONF_CMD = CFLAGS=-fPIC ./Configure
+OPENSSL_CONF =  shared linux-x86_64
 
 GEN          = gen
 INST_DIR     = ../install
@@ -200,14 +201,14 @@ $(INST_DIR)/.openssl-installed: \
 $(GEN)/$(OPENSSL_DIR)/.openssl-built: \
 		$(GEN)/$(OPENSSL_DIR)/.openssl-configured
 	@echo -n building openssl locally...
-	@cd $(GEN)/$(OPENSSL_DIR) && make >> ../build.log
+	@cd $(GEN)/$(OPENSSL_DIR) && make
 	@echo done.
 	@touch $(GEN)/$(OPENSSL_DIR)/.openssl-built
 
 $(GEN)/$(OPENSSL_DIR)/.openssl-configured: \
         $(GEN)/$(OPENSSL_DIR)/.openssl-extracted
 	@echo -n configuring openssl...
-	@cd $(GEN)/$(OPENSSL_DIR) && $(OPENSSL_CONF_CMD) --openssldir=$(BLD_PREFIX) $(OPENSSL_CONF) >> ../build.log
+	cd $(GEN)/$(OPENSSL_DIR) && $(OPENSSL_CONF_CMD) --openssldir=$(BLD_PREFIX) $(OPENSSL_CONF)
 	@echo done.
 	@touch $(GEN)/$(OPENSSL_DIR)/.openssl-configured
 

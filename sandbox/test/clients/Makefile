@@ -28,7 +28,7 @@ CURL_CONF    = --with-nghttp2=$(BLD_PREFIX)
 
 OPENSSL_VERSION = $(shell openssl version -v | sed -e 's/OpenSSL *//g' -e 's/[a-z]* .*//g')
 
-ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0))
+ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0 1.0.1))
 	# Very old openssl without alpn or npn support installed, need a newer one
     CURL_CONF   += --with-ssl=$(BLD_PREFIX)
 endif
