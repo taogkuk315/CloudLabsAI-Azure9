@@ -244,7 +244,7 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
             status = h2_io_out_read(io, pbucket, peos);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
                           "h2_mplx(%ld): read on stream_id-out(%d)",
                           m->id, stream_id);
             if (status == APR_SUCCESS && io->output_drained) {
@@ -301,7 +301,7 @@ h2_response *h2_mplx_pop_response(h2_mplx *m)
             response = io->response;
             io->response = NULL;
             h2_io_set_remove(m->ready_ios, io);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
                           "h2_mplx(%ld): popped response(%d)",
                           m->id, response->stream_id);
         }
@@ -400,7 +400,7 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
     if (APR_SUCCESS == status) {
         m->added_output = iowait;
         status = apr_thread_cond_timedwait(m->added_output, m->lock, timeout);
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
                       "h2_mplx(%ld): trywait on data for %f ms)",
                       m->id, timeout/1000.0);
         m->added_output = NULL;

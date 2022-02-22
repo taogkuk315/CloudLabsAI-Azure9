@@ -119,7 +119,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         status = h2_mplx_in_read(input->m, all_there? APR_NONBLOCK_READ : block,
                                  input->stream_id, &input->cur, 
                                  h2_task_get_io_cond(input->task));
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
                       "h2_task_input(%s): mplx returned %ld bytes",
                       h2_task_get_id(input->task), 
                       (long)(input->cur? input->cur->data_len : -1L));

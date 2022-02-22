@@ -215,13 +215,6 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1)
     }
     to_h1->eoh = 1;
 
-    /* need that sometime, don't want to strdup always
-        ap_log_perror(APLOG_MARK, APLOG_TRACE2, status, h2_mplx_get_pool(m),
-                      "h2_request(%d): pushing request: %s",
-                      to_h1->stream_id,
-                      apr_pstrndup(h2_mplx_get_pool(m), to_h1->data->data, to_h1->data->data_len));
-     */
-    
     return status;
 }
 

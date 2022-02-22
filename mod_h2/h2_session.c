@@ -475,7 +475,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         
         int rv = nghttp2_option_new(&options);
         if (rv != 0) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, c,
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EGENERAL, c,
                           "nghttp2_option_new: %s", nghttp2_strerror(rv));
             h2_session_destroy(session);
             return NULL;
@@ -704,16 +704,13 @@ apr_status_t h2_session_start(h2_session *session)
     /* Lets really send the SETTINGS and anything else that may be
      * pending, before we start any stream processing. */
     status = h2_session_write(session, 0);
-    if (status == APR_SUCCESS) {
-        status = h2_session_read(session, APR_NONBLOCK_READ);
-    }
     
     if (session->r) {
         /* 'h2c' mode: we should have a 'HTTP2-Settings' header with
          * base64 encoded client settings. */
         const char *s = apr_table_get(session->r->headers_in, "HTTP2-Settings");
         if (!s) {
-            ap_log_rerror(APLOG_MARK, APLOG_ERR, status, session->r,
+            ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, session->r,
                           "HTTP2-Settings header missing in request");
             return APR_EINVAL;
         }
@@ -836,10 +833,8 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     
     if (!have_written && timeout > 0 && !h2_session_want_write(session)) {
         status = h2_mplx_out_trywait(session->mplx, timeout, session->iowait);
-        if (status != APR_TIMEUP) {
-            h2_session_resume_streams_with_data(session);
-        }
     }
+    h2_session_resume_streams_with_data(session);
     
     if (h2_session_want_write(session)) {
         status = APR_SUCCESS;
@@ -1005,7 +1000,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
                 done = 1;
                 if (total_read == 0) {
                     h2_stream_set_suspended(stream, 1);
-                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                                   "h2_stream(%ld-%d): suspending stream",
                                   session->id, (int)stream_id);
                     return NGHTTP2_ERR_DEFERRED;
