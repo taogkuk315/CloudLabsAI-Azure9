@@ -64,14 +64,10 @@ static int h2_h2c_request_handler(request_rec *r)
 {
     if (h2_h2_is_tls(r->connection)) {
         /* h2c runs only on plain connections */
-        ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
-                      "h2c: request is from TLS, declined");
         return DECLINED;
     }
     if (h2_ctx_is_task(r->connection)) {
         /* h2_task connection for a stream, not for h2c */
-        ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
-                      "h2c: request is for task, declined");
         return DECLINED;
     }
     
@@ -133,8 +129,18 @@ static int h2_h2c_upgrade_to(request_rec *r, const char *proto)
     
     /* Make sure the core filter that parses http1 requests does
      * not mess with our http2 frames. */
+    if (APLOGrtrace2(r)) {
+        ap_filter_t *filter = r->input_filters;
+        while (filter) {
+            ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
+                          "h2_conn(%ld), has request filter %s",
+                          r->connection->id, filter->frec->name);
+            filter = filter->next;
+        }
+    }
     ap_remove_input_filter_byhandle(r->input_filters, "http_in");
-    
+    ap_remove_input_filter_byhandle(r->input_filters, "reqtimeout");
+
     /* Ok, start an h2_conn on this one. */
     apr_status_t status = h2_conn_rprocess(r);
     if (status != DONE) {

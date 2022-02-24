@@ -167,7 +167,15 @@ apr_status_t h2_session_process(h2_session *session)
      * TODO: implement graceful GO_AWAY after configurable idle time
      */
     
-    ap_remove_input_filter_byhandle(session->c->input_filters, "reqtimeout");
+    if (APLOGctrace2(session->c)) {
+        ap_filter_t *filter = session->c->input_filters;
+        while (filter) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                          "h2_conn(%ld), has connection filter %s",
+                          session->id, filter->frec->name);
+            filter = filter->next;
+        }
+    }
 
     h2_session_set_stream_open_cb(session, after_stream_opened_cb);
     h2_session_set_stream_close_cb(session, before_stream_close_cb);
