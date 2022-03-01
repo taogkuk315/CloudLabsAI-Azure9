@@ -755,14 +755,8 @@ apr_status_t h2_session_start(h2_session *session)
         status = APR_EGENERAL;
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
                       "nghttp2_submit_settings: %s", nghttp2_strerror(rv));
-        return status;
     }
     
-    /* Lets really send the SETTINGS and anything else that may be
-     * pending, before we start any stream processing. */
-    status = h2_session_write(session, 0);
-    status = h2_session_read(session, APR_NONBLOCK_READ);
-  
     return status;
 }
 
@@ -1056,11 +1050,18 @@ apr_status_t h2_session_handle_response(h2_session *session,
         };
         rv = nghttp2_submit_response(session->ngh2, stream->id,
                                      &head->nv, head->nvlen, &provider);
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                      "h2_stream(%ld-%d): submitted response %s with %d "
-                      "headers, rv=%d",
-                      session->id, stream->id, head->http_status,
-                      (int)head->nvlen, rv);
+        if (rv != 0) {
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                          "h2_stream(%ld-%d): submit_response: %s",
+                          session->id, stream->id, nghttp2_strerror(rv));
+        }
+        else {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                          "h2_stream(%ld-%d): submitted response %s with %d "
+                          "headers, rv=%d",
+                          session->id, stream->id, head->http_status,
+                          (int)head->nvlen, rv);
+        }
     }
     else {
         rv = nghttp2_submit_rst_stream(session->ngh2, 0,
