@@ -76,6 +76,7 @@ struct h2_session {
     request_rec *r;                 /* the request that started this in case
                                      * of 'h2c', NULL otherwise */
     int aborted;                    /* this session is being aborted */
+    apr_size_t frames_received;     /* number of http/2 frames received */
     
     apr_allocator_t *allocator;      /* we have our own allocator */
     struct apr_thread_mutex_t *alock;

@@ -323,9 +323,11 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     apr_status_t status = APR_SUCCESS;
+    
+    ++session->frames_received;
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                  "h2_session(%ld): on_frame_rcv, type=%d", session->id,
-                  frame->hd.type);
+                  "h2_session(%ld): on_frame_rcv #%ld, type=%d", session->id,
+                  session->frames_received, frame->hd.type);
     switch (frame->hd.type) {
         case NGHTTP2_HEADERS: {
             h2_stream * stream = h2_stream_set_get(session->streams,
@@ -809,22 +811,26 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     int have_written = 0;
     
     assert(session);
-    /* First check if we have new streams to submit */
-    while ((response = h2_session_pop_response(session)) != NULL) {
-        h2_stream *stream = h2_session_get_stream(session, response->stream_id);
-        if (stream) {
-            status = h2_session_handle_response(session, stream, response);
-            have_written = 1;
+    
+    /* FIXME: nghttp2 seems to get confused, if we submit responses *before*
+     * the first frame from the client has been seen. On "h2" connections, this
+     * does never happen since the first request on stream 1 comes with http/2
+     * frames. On "h2c" however, the request arrived via http/1 and stream 1
+     * gets opened in half closed state before any real http/2 traffic happens.
+     */
+    if (session->frames_received) {
+        /* If we have responses ready, submit them now. */
+        while ((response = h2_session_pop_response(session)) != NULL) {
+            h2_stream *stream = h2_session_get_stream(session, response->stream_id);
+            if (stream) {
+                status = h2_session_handle_response(session, stream, response);
+                have_written = 1;
+            }
+            h2_response_destroy(response);
+            response = NULL;
         }
-        h2_response_destroy(response);
-        response = NULL;
+        h2_session_resume_streams_with_data(session);
     }
-    
-    if (have_written) {
-        h2_conn_io_flush(&session->io);
-    }
-    
-    h2_session_resume_streams_with_data(session);
     
     if (!have_written && timeout > 0 && !h2_session_want_write(session)) {
         status = h2_mplx_out_trywait(session->mplx, timeout, session->iowait);
@@ -842,8 +848,11 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
                 status = APR_EGENERAL;
             }
         }
-        status = h2_conn_io_flush(&session->io);
         have_written = 1;
+    }
+    
+    if (have_written) {
+        h2_conn_io_flush(&session->io);
     }
     
     reap_zombies(session);
