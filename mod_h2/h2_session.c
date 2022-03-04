@@ -818,7 +818,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
      * frames. On "h2c" however, the request arrived via http/1 and stream 1
      * gets opened in half closed state before any real http/2 traffic happens.
      */
-    if (session->frames_received) {
+    if (session->frames_received > 1) {
         /* If we have responses ready, submit them now. */
         while ((response = h2_session_pop_response(session)) != NULL) {
             h2_stream *stream = h2_session_get_stream(session, response->stream_id);

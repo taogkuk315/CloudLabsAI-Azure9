@@ -217,9 +217,21 @@ apr_status_t h2_session_process(h2_session *session)
             break;
         }
 
+        /* We would like to do blocking reads as often as possible as they
+         * are more efficient in regard to server resources.
+         * We can do them under the following circumstances:
+         * - we have no open streams and therefore have nothing to write
+         * - we have just started the session and are waiting for the first
+         *   two frames to come in. There will always be at least 2 frames as
+         *   * h2 will send SETTINGS and SETTINGS-ACK
+         *   * h2c will count the header settings as one frame and we
+         *     submit our settings and need the ACK.
+         */
         int got_streams = !h2_stream_set_is_empty(session->streams);
-        status = h2_session_read(session, got_streams?
-                                 APR_NONBLOCK_READ : APR_BLOCK_READ);
+        status = h2_session_read(session, 
+                                 (!got_streams 
+                                  || session->frames_received <= 1)?
+                                 APR_BLOCK_READ : APR_NONBLOCK_READ);
         switch (status) {
             case APR_SUCCESS:
                 /* successful read, reset our idle timers */
