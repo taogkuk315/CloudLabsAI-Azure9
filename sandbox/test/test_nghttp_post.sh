@@ -48,24 +48,6 @@ if [ ! -f $GEN/data-1m ]; then
     done > $GEN/data-1m
 fi
 
-# just a check that things are working
-echo " - file upload -"
-curl_post_data upload.py $GEN/data-1k "file upload via http/1.1" --http1.1
-
-# on curl 7.40.0 and earlier, there will be a delay before the upload
-# commences. Fix is underway, thanks @badger!
-# Caveat: on h2c, the connection will not be upgraded, since curl sends
-# the POST as first request and mod_h2 does not upgrade on requests with
-# content. Currently we have no means to check that his is happening.
-# on curl 7.41.0 and earlier, the transfer of the upload data will be
-# extremely slow. Fix will be in 7.42.0, thanks @badger!
-#
-# disable until 7.42.0 arrives....
-#curl_post_data upload.py $GEN/data-1k "1k file upload via http/2" --http2
-#curl_post_data upload.py $GEN/data-10k "10k file upload via http/2" --http2
-#curl_post_data upload.py $GEN/data-100k "100k file upload via http/2" --http2
-#curl_post_data upload.py $GEN/data-1m "1m file upload via http/2" --http2
-
 # Tests witht the nghttp client that *requires* h2/h2c. Sends "OPTIONS *"
 # on h2c which is a good test.
 #

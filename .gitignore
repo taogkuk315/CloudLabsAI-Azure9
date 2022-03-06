@@ -5,6 +5,7 @@ sandbox/test/conf/sites/mod-h2.greenbytes.de.conf
 *.slo
 *.lo
 *.la
+*.pcap
 .libs
 .configured
 .deps

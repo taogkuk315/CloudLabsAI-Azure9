@@ -74,11 +74,19 @@ test: \
 	@rm -rf $(GEN)/tmp
 	@mkdir -p $(GEN)/tmp
 	@$(INST_DIR)/bin/apachectl restart
-	@bash test_000_altsvc.sh http://$(HTTP_AUTH) https://$(HTTPS_AUTH)
-	@bash test_001_get.sh https://$(HTTPS_AUTH)
-	@bash test_001_get.sh http://$(HTTP_AUTH)
-	@bash test_002_post.sh https://$(HTTPS_AUTH)
-	@bash test_002_post.sh http://$(HTTP_AUTH)
+	@bash test_curl_altsvc.sh http://$(HTTP_AUTH) https://$(HTTPS_AUTH)
+	@bash test_curl_get.sh    https://$(HTTPS_AUTH)
+	@bash test_curl_post.sh   https://$(HTTPS_AUTH)
+	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH)
+	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)
+	@bash test_nghttp_get.sh  http://$(HTTP_AUTH)
+	@bash test_nghttp_post.sh http://$(HTTP_AUTH)
+
+# disabled curl HTTP tests as we have hangers on the client side:
+# reported: https://github.com/bagder/curl/issues/192
+#
+#@bash test_curl_get.sh https://$(HTTP_AUTH)
+#@bash test_curl_post.sh https://$(HTTP_AUTH)
 
 ################################################################################
 # Load Test
