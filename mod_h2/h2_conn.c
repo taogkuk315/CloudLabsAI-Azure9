@@ -181,9 +181,9 @@ apr_status_t h2_session_process(h2_session *session)
     h2_session_set_stream_close_cb(session, before_stream_close_cb);
     
     status = h2_session_start(session);
+    ap_log_cerror(APLOG_MARK, APLOG_INFO, status, session->c,
+                  "h2_session(%ld): starting", session->id);
     if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                      "h2_session(%ld): startup", session->id);
         h2_session_destroy(session);
         return status;
     }
@@ -210,8 +210,8 @@ apr_status_t h2_session_process(h2_session *session)
             }
         }
         else {
-            ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
-                          "h2_session(%ld): error writing, terminating",
+            ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
+                          "h2_session(%ld): writing, terminating",
                           session->id);
             h2_session_abort(session, status);
             break;
@@ -242,7 +242,7 @@ apr_status_t h2_session_process(h2_session *session)
                 break;
             case APR_EOF:
             case APR_ECONNABORTED:
-                ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
+                ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
                               "h2_session(%ld): reading",
                               session->id);
                 h2_session_abort(session, status);
@@ -266,7 +266,7 @@ apr_status_t h2_session_process(h2_session *session)
         }
     }
     
-    ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
+    ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
                   "h2_session(%ld): done", session->id);
     
     h2_session_close(session);

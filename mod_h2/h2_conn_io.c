@@ -91,7 +91,7 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io_ctx *io,
                     if (strncmp(HTTP2_PREFACE+pre_offset, bucket_data, 
                                 check_len)) {
                         /* preface mismatch */
-                        ap_log_cerror(APLOG_MARK, APLOG_INFO, APR_EMISMATCH, 
+                        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_EMISMATCH, 
                                       io->connection,
                                       "h2_conn_io(%ld): preface check",
                                       io->connection->id);
@@ -195,6 +195,7 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf,
         /* These are all fine and no reason for concern. Everything else
          * is interesting. */
         *written = length;
+        status = APR_SUCCESS;
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,

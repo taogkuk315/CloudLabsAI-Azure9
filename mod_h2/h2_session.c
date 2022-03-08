@@ -562,12 +562,12 @@ void h2_session_destroy(h2_session *session)
     assert(session);
     if (session->streams) {
         if (h2_stream_set_size(session->streams)) {
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                           "h2_session(%ld): destroy, %ld streams open",
                           session->id, h2_stream_set_size(session->streams));
             /* destroy all sessions, join all existing tasks */
             h2_stream_set_iter(session->streams, close_active_iter, session);
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                           "h2_session(%ld): destroy, %ld streams remain",
                           session->id, h2_stream_set_size(session->streams));
         }
@@ -576,12 +576,12 @@ void h2_session_destroy(h2_session *session)
     }
     if (session->zombies) {
         if (h2_stream_set_size(session->zombies)) {
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                           "h2_session(%ld): destroy, %ld zombie streams",
                           session->id, h2_stream_set_size(session->zombies));
             /* destroy all zombies, join all existing tasks */
             h2_stream_set_iter(session->zombies, close_zombie_iter, session);
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                           "h2_session(%ld): destroy, %ld zombies remain",
                           session->id, h2_stream_set_size(session->zombies));
         }
@@ -812,25 +812,17 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     
     assert(session);
     
-    /* FIXME: nghttp2 seems to get confused, if we submit responses *before*
-     * the first frame from the client has been seen. On "h2" connections, this
-     * does never happen since the first request on stream 1 comes with http/2
-     * frames. On "h2c" however, the request arrived via http/1 and stream 1
-     * gets opened in half closed state before any real http/2 traffic happens.
-     */
-    if (session->frames_received > 1) {
-        /* If we have responses ready, submit them now. */
-        while ((response = h2_session_pop_response(session)) != NULL) {
-            h2_stream *stream = h2_session_get_stream(session, response->stream_id);
-            if (stream) {
-                status = h2_session_handle_response(session, stream, response);
-                have_written = 1;
-            }
-            h2_response_destroy(response);
-            response = NULL;
+    /* If we have responses ready, submit them now. */
+    while ((response = h2_session_pop_response(session)) != NULL) {
+        h2_stream *stream = h2_session_get_stream(session, response->stream_id);
+        if (stream) {
+            status = h2_session_handle_response(session, stream, response);
+            have_written = 1;
         }
-        h2_session_resume_streams_with_data(session);
+        h2_response_destroy(response);
+        response = NULL;
     }
+    h2_session_resume_streams_with_data(session);
     
     if (!have_written && timeout > 0 && !h2_session_want_write(session)) {
         status = h2_mplx_out_trywait(session->mplx, timeout, session->iowait);
@@ -841,11 +833,11 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         status = APR_SUCCESS;
         int rv = nghttp2_session_send(session->ngh2);
         if (rv != 0) {
-            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                          "h2_session: send error %d", rv);
+            ap_log_cerror( APLOG_MARK, APLOG_INFO, 0, session->c,
+                          "h2_session: send: %s", nghttp2_strerror(rv));
             if (nghttp2_is_fatal(rv)) {
                 h2_session_abort_int(session, rv);
-                status = APR_EGENERAL;
+                status = APR_ECONNABORTED;
             }
         }
         have_written = 1;
