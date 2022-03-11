@@ -21,10 +21,6 @@ echo "-- GET Tests: $1 --"
 # check content of resources via different methods
 ################################################################################
 echo " - single document -"
-curl_check_doc index.html "default"
-curl_check_doc index.html "http/1.1" --http1.1
-curl_check_doc index.html "http2"    --http2
-
 nghttp_check_doc index.html "default"
 nghttp_check_doc 003.html   "detault"
 
@@ -253,104 +249,4 @@ EOF
 #nghttp_check_assets 009.php "with assets" <<EOF
 #EOF
 #
-
-################################################################################
-# check some redir handling
-################################################################################
-curl_check_doc xxx-1.0.2a.tar.gz  "http2"  --http2
-curl_check_redir latest.tar.gz  xxx-1.0.2a.tar.gz  "http2"  --http2
-
-################################################################################
-# check cgi generated content
-################################################################################
-echo " - CGI generated content -"
-curl_check_content hello.py "default" <<EOF
-<html>
-<body>
-<h2>Hello World!</h2>
-</body>
-</html>
-EOF
-
-curl_check_content hello.py "http/1.1" --http1.1 <<EOF
-<html>
-<body>
-<h2>Hello World!</h2>
-</body>
-</html>
-EOF
-
-curl_check_content hello.py "http2"    --http2 <<EOF
-<html>
-<body>
-<h2>Hello World!</h2>
-</body>
-</html>
-EOF
-
-
-curl_check_content upload.py "http/1.1" --http1.1 <<EOF
-    <html><body>
-    <p>        Upload File<form method="POST" enctype="multipart/form-data">
-        <input type="file" name="file">
-        <button type="submit">Upload</button></form>
-        </p>
-    </body></html>
-EOF
-
-curl_check_content upload.py "http2"    --http2 <<EOF
-    <html><body>
-    <p>        Upload File<form method="POST" enctype="multipart/form-data">
-        <input type="file" name="file">
-        <button type="submit">Upload</button></form>
-        </p>
-    </body></html>
-EOF
-
-
-################################################################################
-# check chunked content from cgi
-################################################################################
-
-if [ ! -f $GEN/necho-100 ]; then
-    i=0; while [ $i -lt 10 ]; do
-    echo "0123456789"
-    i=$[ i + 1 ]
-    done > $GEN/necho-100
-fi
-
-if [ ! -f $GEN/necho-1k ]; then
-    i=0; while [ $i -lt 10 ]; do
-    cat $GEN/necho-100
-    i=$[ i + 1 ]
-    done > $GEN/necho-1k
-fi
-
-if [ ! -f $GEN/necho-10k ]; then
-    i=0; while [ $i -lt 10 ]; do
-    cat $GEN/necho-1k
-    i=$[ i + 1 ]
-    done > $GEN/necho-10k
-fi
-
-if [ ! -f $GEN/necho-100k ]; then
-    i=0; while [ $i -lt 10 ]; do
-    cat $GEN/necho-10k
-    i=$[ i + 1 ]
-    done > $GEN/necho-100k
-fi
-
-if [ ! -f $GEN/necho-1m ]; then
-    i=0; while [ $i -lt 10 ]; do
-    cat $GEN/necho-100k
-    i=$[ i + 1 ]
-    done > $GEN/necho-1m
-fi
-
-curl_check_necho 10 "0123456789" $GEN/necho-100 "http/2" --http2
-curl_check_necho 100 "0123456789" $GEN/necho-1k "http/2" --http2
-curl_check_necho 1000 "0123456789" $GEN/necho-10k "http/2" --http2
-curl_check_necho 10000 "0123456789" $GEN/necho-100k "http/2" --http2
-curl_check_necho 100000 "0123456789" $GEN/necho-1m "http/2" --http2
-
 
