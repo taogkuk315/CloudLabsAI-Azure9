@@ -1,0 +1,46 @@
+--- modules/ssl/ssl_engine_kernel.c	2015-04-01 15:23:48.000000000 +0200
++++ ../../mod-h2/sandbox/httpd/gen/httpd-2.4.12/modules/ssl/ssl_engine_kernel.c	2015-04-01 17:53:03.000000000 +0200
+@@ -2177,7 +2152,7 @@
+ }
+ 
+ /*
+- * Compare to ALPN protocol proposal. Result is similar to strcmp():
++ * Compare two ALPN protocol proposal. Result is similar to strcmp():
+  * 0 gives same precedence, >0 means proto1 is prefered.
+  */
+ static int ssl_cmp_alpn_protos(modssl_ctx_t *ctx,
+@@ -2254,14 +2229,8 @@
+         i += plen;
+     }
+     
+-    /* Regardless of installed hooks, the http/1.1 protocol is always
+-     * supported by us. Add it to the proposals if the client also
+-     * offers it. */
+     proposed_protos = apr_array_make(c->pool, client_protos->nelts+1,
+                                      sizeof(char *));
+-    if (ssl_array_index(client_protos, alpn_http1) >= 0) {
+-        APR_ARRAY_PUSH(proposed_protos, const char*) = alpn_http1;
+-    }
+     
+     if (sslconn->alpn_proposefns != NULL) {
+         /* Invoke our alpn_propos_proto hooks, giving other modules a chance to
+@@ -2280,9 +2249,16 @@
+     }
+ 
+     if (proposed_protos->nelts <= 0) {
+-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02839)
+-                      "none of the client alpn protocols are supported");
+-        return SSL_TLSEXT_ERR_ALERT_FATAL;
++        /* Regardless of installed hooks, the http/1.1 protocol is always
++         * supported by us. Choose it if none other matches. */
++        if (ssl_array_index(client_protos, alpn_http1) < 0) {
++            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02839)
++                          "none of the client alpn protocols are supported");
++            return SSL_TLSEXT_ERR_ALERT_FATAL;
++        }
++        *out = (const unsigned char*)alpn_http1;
++        *outlen = (unsigned char)strlen(alpn_http1);
++        return SSL_TLSEXT_ERR_OK;
+     }
+     
+     /* Now select the most preferred protocol from the proposals. */
