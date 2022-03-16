@@ -1,3 +1,11 @@
+v0.4.2
+--------------------------------------------------------------------------------
+ * adding more low-level logging to NPN/ALPN negotiation
+ * added '-Werror' to module compiler flags (thanks @devurandom)
+ * debugged and tcpdumped around h2c startup handling with curl on certain
+   platforms. If you experience connection hangers, report pls with 'trace2'
+   level error log.
+
 v0.4.1
 --------------------------------------------------------------------------------
  * fixing infinite loop when aborting session with tasks hanging in read
