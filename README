@@ -18,8 +18,17 @@ it with the Apache infrastructure.
 
 Status
 ------
-In development. Definitely not ready for a production environment. Use at
-your own risk.
+In development. Not hardened enough for a production environment most likely. 
+Use at your own risk.
+
+Tested Platforms
+----------------
+- OS: Ubuntu 14.04, OS X 10.10
+- Apache httpd 2.4.12 (patch needed)
+- Openssl 1.0.1 + 1.0.2
+
+If someone wants to test other platforms or contribute adapations in a
+github pull request, she is more than welcome.
 
 
 Features
