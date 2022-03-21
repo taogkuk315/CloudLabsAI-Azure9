@@ -82,6 +82,7 @@ if test x"$build_mode" == "xsandbox"; then
     LIBS="$LIBS -lnghttp2"
     CPPFLAGS="$CPPFLAGS -I${prefix}/include"
     export SYSCONF_DIR="$prefix/conf"
+    export LIBEXEC_DIR="$prefix/modules"
 
     # On Ubuntu, we have a propblem with APR 1.5.1 and system includes that
     # causes compilation to abort since no definition of PATH_MAX can be found.
@@ -107,6 +108,7 @@ else
     LDFLAGS="$LDFLAGS -L$($APXS -q libdir)"
     CPPFLAGS="$CPPFLAGS -I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR)"
     export SYSCONF_DIR="$($APXS -q sysconfdir)"
+    export LIBEXEC_DIR="$($APXS -q LIBEXECDIR)"
 
     # We need nghttp2 to be in our link path, check for it.
     #
@@ -136,6 +138,7 @@ AC_CHECK_PROG([A2ENMOD],[a2enmod])
 # substitution in generated files
 AC_SUBST(BUILD_SUBDIRS)
 AC_SUBST(SYSCONF_DIR)
+AC_SUBST(LIBEXEC_DIR)
 
 AC_CONFIG_FILES([
     Makefile

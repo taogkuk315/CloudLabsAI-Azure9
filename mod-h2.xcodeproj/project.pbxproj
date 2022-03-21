@@ -83,8 +83,6 @@
 		B2E6DF7C1AC2EF6E00D557D8 /* get-openssl-latest.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = "get-openssl-latest.sh"; sourceTree = "<group>"; };
 		B2E6DF7D1AC2EF6E00D557D8 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2E6DF9E1AC2EF6E00D557D8 /* pcre-8.36.tar.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; path = "pcre-8.36.tar.gz"; sourceTree = "<group>"; };
-		B2E6DFA01AC2EF6E00D557D8 /* alpn-2.4.x.unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "alpn-2.4.x.unified.diff.patch"; sourceTree = "<group>"; };
-		B2E6DFA11AC2EF6E00D557D8 /* mod_spdy-alpn.unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_spdy-alpn.unified.diff.patch"; sourceTree = "<group>"; };
 		B2E6DFA31AC2EF6E00D557D8 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2E6FDF81AC2EFA200D557D8 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		B2E6FDFA1AC2EFA200D557D8 /* httpd.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = httpd.conf; sourceTree = "<group>"; };
@@ -439,10 +437,8 @@
 		B2E6DF9F1AC2EF6E00D557D8 /* patches */ = {
 			isa = PBXGroup;
 			children = (
-				B2E6DFA01AC2EF6E00D557D8 /* alpn-2.4.x.unified.diff.patch */,
 				B20E44211ACC2A06003D21AE /* alpn-trunk.unified.diff.patch */,
 				B20E44221ACC4E82003D21AE /* httpd-trunk2.unified.diff.patch */,
-				B2E6DFA11AC2EF6E00D557D8 /* mod_spdy-alpn.unified.diff.patch */,
 			);
 			path = patches;
 			sourceTree = "<group>";

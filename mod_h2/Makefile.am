@@ -90,6 +90,7 @@ install-libLTLIBRARIES:
 	@: # override
 
 install-exec-local: mod_h2.la
-	$(APXS) -i -n h2 mod_h2.la
+	$(MKDIR_P) $(DESTDIR)/@LIBEXEC_DIR@
+	$(APXS) -i -S LIBEXECDIR=$(DESTDIR)/@LIBEXEC_DIR@ -n h2 mod_h2.la
 
 
