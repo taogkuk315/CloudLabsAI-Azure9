@@ -1,3 +1,13 @@
+v0.4.3-DEV
+--------------------------------------------------------------------------------
+ * mod_h2 now performs proper flow-control on input. Uploads can no longer
+   flood memory of the server.
+ * changed mod_ssl patch to reflect current trunk changes in regard to NPN/ALPN
+   support.
+ * patched the trunk ALPN patch to make it do the right thing if no 
+   ALPNPreference is configured
+ * added DESTDIR support in Makefile as supplied by Hanno Böck.
+
 v0.4.2
 --------------------------------------------------------------------------------
  * adding more low-level logging to NPN/ALPN negotiation

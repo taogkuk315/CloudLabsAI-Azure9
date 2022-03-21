@@ -24,16 +24,17 @@ struct h2_response;
 
 typedef struct h2_io h2_io;
 struct h2_io {
-    int id;                                   /* stream identifier */
-    h2_bucket_queue input;                    /* input data for stream */
+    int id;                      /* stream identifier */
+    h2_bucket_queue input;       /* input data for stream */
+    apr_size_t input_consumed;   /* how many bytes have been read */
                                  /* != NULL, if someone blocks reading */
     struct apr_thread_cond_t *input_arrived;  
     
-    h2_bucket_queue output;                   /* output data of stream */
-                                     /* != NULL, if some block writing */
+    h2_bucket_queue output;      /* output data of stream */
+                                 /* != NULL, if some block writing */
     struct apr_thread_cond_t *output_drained; 
 
-    struct h2_response *response;             /* submittable response created */
+    struct h2_response *response; /* submittable response created */
 };
 
 /*******************************************************************************

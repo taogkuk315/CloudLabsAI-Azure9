@@ -235,6 +235,37 @@ apr_status_t h2_mplx_in_close(h2_mplx *m, int stream_id)
     return status;
 }
 
+typedef struct {
+    h2_mplx_consumed_cb *cb;
+    void *cb_ctx;
+    int streams_updated;
+} update_ctx;
+
+static int update_window(void *ctx, h2_io *io)
+{
+    if (io->input_consumed) {
+        update_ctx *uctx = (update_ctx*)ctx;
+        uctx->cb(uctx->cb_ctx, io->id, io->input_consumed);
+        io->input_consumed = 0;
+        ++uctx->streams_updated;
+    }
+    return 1;
+}
+
+apr_status_t h2_mplx_in_update_windows(h2_mplx *m, 
+                                       h2_mplx_consumed_cb *cb, void *cb_ctx)
+{
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        update_ctx ctx = { cb, cb_ctx, 0 };
+        h2_io_set_iter(m->stream_ios, update_window, &ctx);
+        status = ctx.streams_updated? APR_SUCCESS : APR_EAGAIN;
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}
+
 apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id, 
                               struct h2_bucket **pbucket, int *peos)
 {

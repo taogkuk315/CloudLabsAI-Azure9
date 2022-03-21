@@ -494,8 +494,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
 
         /* We need to handle window updates ourself, otherwise we
          * get flooded by nghttp2. */
-        // TODO: enable and add consumption code
-        //nghttp2_option_set_no_auto_window_update(options, 1);
+        nghttp2_option_set_no_auto_window_update(options, 1);
         
         rv = nghttp2_session_server_new2(&session->ngh2, callbacks,
                                          session, options);
@@ -804,6 +803,17 @@ static void h2_session_resume_streams_with_data(h2_session *session) {
     }
 }
 
+static void update_window(void *ctx, int stream_id, apr_size_t bytes_read)
+{
+    h2_session *session = (h2_session*)ctx;
+    nghttp2_session_consume(session->ngh2, stream_id, bytes_read);
+}
+
+static apr_status_t h2_session_update_windows(h2_session *session)
+{
+    return h2_mplx_in_update_windows(session->mplx, update_window, session);
+}
+
 apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 {
     apr_status_t status = APR_EAGAIN;
@@ -811,6 +821,15 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     int have_written = 0;
     
     assert(session);
+    
+    /* Check that any pending window updates are sent. */
+    status = h2_session_update_windows(session);
+    if (status == APR_SUCCESS) {
+        have_written = 1;
+    }
+    else if (status != APR_EAGAIN) {
+        return status;
+    }
     
     /* If we have responses ready, submit them now. */
     while ((response = h2_session_pop_response(session)) != NULL) {

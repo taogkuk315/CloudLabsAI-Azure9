@@ -136,6 +136,22 @@ apr_status_t h2_mplx_in_close(h2_mplx *m, int stream_id);
  */
 int h2_mplx_in_has_eos_for(h2_mplx *m, int stream_id);
 
+/**
+ * Callback invoked for every stream that had input data read since
+ * the last invocation.
+ */
+typedef void h2_mplx_consumed_cb(void *ctx, int stream_id, apr_size_t consumed);
+
+/**
+ * Invoke the callback for all streams that had bytes read since the last
+ * call to this function. If no stream had input data consumed, the callback
+ * is not invoked.
+ * Returns APR_SUCCESS when an update happened, APR_EAGAIN if no update
+ * happened.
+ */
+apr_status_t h2_mplx_in_update_windows(h2_mplx *m, 
+                                       h2_mplx_consumed_cb *cb, void *ctx);
+
 /*******************************************************************************
  * Output handling of streams.
  ******************************************************************************/

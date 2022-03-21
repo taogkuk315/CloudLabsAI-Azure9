@@ -64,7 +64,11 @@ apr_size_t h2_io_out_length(h2_io *io)
 
 apr_status_t h2_io_in_read(h2_io *io, struct h2_bucket **pbucket)
 {
-    return h2_bucket_queue_pop(&io->input, pbucket);
+    apr_status_t status = h2_bucket_queue_pop(&io->input, pbucket);
+    if (status == APR_SUCCESS) {
+        io->input_consumed += (*pbucket)->data_len;
+    }
+    return status;
 }
 
 apr_status_t h2_io_in_write(h2_io *io, struct h2_bucket *bucket)
