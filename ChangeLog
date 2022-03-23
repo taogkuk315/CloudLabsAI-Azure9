@@ -1,4 +1,4 @@
-v0.4.3-DEV
+v0.4.3
 --------------------------------------------------------------------------------
  * mod_h2 now performs proper flow-control on input. Uploads can no longer
    flood memory of the server.
