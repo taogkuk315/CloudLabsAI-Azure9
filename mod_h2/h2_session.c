@@ -226,7 +226,7 @@ static apr_status_t close_active_stream(h2_session *session,
                   session->id, (int)stream->id);
     
     h2_stream_set_remove(session->streams, stream);
-    if (session->before_stream_close_cb) {
+    if (session->before_stream_close_cb && stream->task) {
         status = session->before_stream_close_cb(session, stream,
                                                  stream->task, join);
     }
@@ -248,7 +248,7 @@ static apr_status_t join_zombie_stream(h2_session *session, h2_stream *stream)
                   session->id, (int)stream->id);
     
     h2_stream_set_remove(session->zombies, stream);
-    if (session->before_stream_close_cb) {
+    if (session->before_stream_close_cb && stream->task) {
         status = session->before_stream_close_cb(session, stream,
                                                  stream->task, 1);
     }
@@ -517,7 +517,7 @@ static int stream_close_finished(void *ctx, h2_stream *stream) {
     assert(ctx);
     h2_session *session = (h2_session *)ctx;
     h2_task *task = stream->task;
-    if (task && h2_task_has_finished(task)) {
+    if (!task || h2_task_has_finished(task)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                       "h2_session(%ld): reaping zombie stream(%d)",
                       session->id, stream->id);
