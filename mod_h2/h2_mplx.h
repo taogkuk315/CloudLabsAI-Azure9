@@ -40,6 +40,7 @@ struct apr_thread_cond_t;
 struct h2_bucket;
 struct h2_config;
 struct h2_response;
+struct h2_task;
 
 typedef struct h2_mplx h2_mplx;
 
@@ -78,6 +79,13 @@ conn_rec *h2_mplx_get_conn(h2_mplx *mplx);
  * APR_ECONNABORTED, leading to early termination of ongoing tasks.
  */
 void h2_mplx_abort(h2_mplx *mplx);
+
+/* Register the task reading/writing from/to a stream */
+apr_status_t h2_mplx_register_task(h2_mplx *mplx, struct h2_task *task);
+
+/* To be invoked regularly in order to cleanup finished tasks */
+void h2_mplx_cleanup(h2_mplx *mplx);
+
 
 /*******************************************************************************
  * IO lifetime of streams.

@@ -528,6 +528,7 @@ static int stream_close_finished(void *ctx, h2_stream *stream) {
 }
 
 static void reap_zombies(h2_session *session) {
+    h2_mplx_cleanup(session->mplx);
     if (session->zombies) {
         /* remove all zombies, where the task has run */
         h2_stream_set_iter(session->zombies, stream_close_finished, session);

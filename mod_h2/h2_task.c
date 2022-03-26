@@ -38,23 +38,6 @@
 #include "h2_worker.h"
 
 
-struct h2_task {
-    const char *id;
-    int stream_id;
-    int aborted;
-    apr_uint32_t has_started;
-    apr_uint32_t has_finished;
-    
-    struct h2_mplx *mplx;
-    struct h2_conn *conn;
-    
-    struct h2_task_input *input;    /* http/1.1 input data */
-    struct h2_task_output *output;  /* response body data */
-    apr_thread_cond_t *io;           /* optional condition to wait for io on */
-};
-
-
-
 static ap_filter_rec_t *h2_input_filter_handle;
 static ap_filter_rec_t *h2_output_filter_handle;
 
@@ -117,6 +100,26 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
 }
 
 
+apr_status_t h2_task_setup(h2_task *task, conn_rec *master, apr_pool_t *parent)
+{
+    /* We need a separate pool for the task execution as this happens
+     * in another thread and pools are not multi-thread safe. 
+     * Since the task lives not longer than the stream, we'd tried
+     * making this new pool a sub pool of the stream one, but that
+     * only led to crashes. With a root pool, this does not happen.
+     */
+    task->conn = h2_conn_create(task->id, master, parent);
+    if (!task->conn) {
+        return APR_ENOMEM;
+    }
+    
+    task->input = h2_task_input_create(task->conn->pool,
+                                       task, task->stream_id, task->mplx);
+    task->output = h2_task_output_create(task->conn->pool,
+                                         task, task->stream_id, task->mplx);
+    return APR_SUCCESS;
+}
+
 h2_task *h2_task_create(long session_id,
                         int stream_id,
                         conn_rec *master,
@@ -136,43 +139,18 @@ h2_task *h2_task_create(long session_id,
     task->stream_id = stream_id;
     task->mplx = mplx;
     
-    h2_task_prep_conn(task);
-
+    h2_task_setup(task, h2_mplx_get_conn(task->mplx), 
+                  h2_mplx_get_pool(task->mplx));
+    
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
                   "h2_task(%s): created", task->id);
     return task;
 }
 
-apr_status_t h2_task_prep_conn(h2_task *task)
-{
-    /* We need a separate pool for the task execution as this happens
-     * in another thread and pools are not multi-thread safe. 
-     * Since the task lives not longer than the stream, we'd tried
-     * making this new pool a sub pool of the stream one, but that
-     * only led to crashes. With a root pool, this does not happen.
-     */
-    task->conn = h2_conn_create(task->id, h2_mplx_get_conn(task->mplx), 
-                                h2_mplx_get_pool(task->mplx));
-    if (!task->conn) {
-        h2_mplx_out_reset(task->mplx, task->stream_id, APR_ENOMEM);
-        return APR_ENOMEM;
-    }
 
-    task->input = h2_task_input_create(task->conn->pool,
-                                       task, task->stream_id,
-                                       task->mplx);
-    task->output = h2_task_output_create(task->conn->pool,
-                                         task, task->stream_id,
-                                         task->mplx);
-    return APR_SUCCESS;
-}
-
-
-apr_status_t h2_task_destroy(h2_task *task)
+apr_status_t h2_task_teardown(h2_task *task)
 {
     assert(task);
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(task->mplx),
-                  "h2_task(%s): destroy started", task->id);
     if (task->input) {
         h2_task_input_destroy(task->input);
         task->input = NULL;
@@ -181,14 +159,28 @@ apr_status_t h2_task_destroy(h2_task *task)
         h2_task_output_destroy(task->output);
         task->output = NULL;
     }
-    if (task->mplx) {
-        task->mplx = NULL;
-    }
     if (task->conn) {
         h2_conn_destroy(task->conn);
         task->conn = NULL;
     }
     return APR_SUCCESS;
+}
+
+apr_status_t h2_task_destroy(h2_task *task)
+{
+    assert(task);
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(task->mplx),
+                  "h2_task(%s): destroy started", task->id);
+    if (task->mplx) {
+        task->mplx = NULL;
+    }
+    return h2_task_teardown(task);
+}
+
+void h2_task_on_finished(h2_task *task, task_callback *cb, void *cb_ctx)
+{
+    task->on_finished = cb;
+    task->ctx_finished = cb_ctx;
 }
 
 apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
@@ -215,14 +207,15 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         h2_mplx_out_reset(task->mplx, task->stream_id, status);
     }
     
+    if (task->on_finished) {
+        task->on_finished(task->ctx_finished, task);
+    }
     return status;
 }
 
 void h2_task_abort(h2_task *task)
 {
     assert(task);
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->conn->c,
-                  "h2_task(%s): aborting task", task->id);
     task->aborted =  1;
 }
 

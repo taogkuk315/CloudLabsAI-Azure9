@@ -27,10 +27,14 @@
 #include "h2_private.h"
 #include "h2_config.h"
 #include "h2_bucket.h"
+#include "h2_conn.h"
 #include "h2_io.h"
 #include "h2_io_set.h"
 #include "h2_response.h"
 #include "h2_mplx.h"
+#include "h2_task.h"
+#include "h2_task_input.h"
+#include "h2_task_output.h"
 
 struct h2_mplx {
     long id;
@@ -39,6 +43,7 @@ struct h2_mplx {
     
     h2_io_set *stream_ios;
     h2_io_set *ready_ios;
+    h2_io_set *task_finished_ios;
     
     apr_thread_mutex_t *lock;
     apr_thread_cond_t *added_output;
@@ -78,6 +83,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
         
         m->stream_ios = h2_io_set_create(m->pool);
         m->ready_ios = h2_io_set_create(m->pool);
+        m->task_finished_ios = h2_io_set_create(m->pool);
         m->out_stream_max_size =
             h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM_SIZE);
         
@@ -94,6 +100,10 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
 void h2_mplx_destroy(h2_mplx *m)
 {
     assert(m);
+    if (m->task_finished_ios) {
+        h2_io_set_destroy(m->task_finished_ios);
+        m->task_finished_ios = NULL;
+    }
     if (m->ready_ios) {
         h2_io_set_destroy(m->ready_ios);
         m->ready_ios = NULL;
@@ -105,6 +115,27 @@ void h2_mplx_destroy(h2_mplx *m)
     if (m->lock) {
         apr_thread_mutex_destroy(m->lock);
         m->lock = NULL;
+    }
+}
+
+static int teardown_task(void *ctx, h2_io *io) 
+{
+    h2_mplx *m = (h2_mplx *)ctx;
+    if (io->task) {
+        h2_task_teardown(io->task);
+    }
+    return 1;
+}
+
+void h2_mplx_cleanup(h2_mplx *m)
+{
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io_set_iter(m->task_finished_ios, teardown_task, m);
+        h2_io_set_remove_all(m->task_finished_ios);
+        
+        apr_thread_mutex_unlock(m->lock);
     }
 }
 
@@ -134,6 +165,38 @@ void h2_mplx_abort(h2_mplx *m)
         h2_io_set_destroy_all(m->stream_ios);
         apr_thread_mutex_unlock(m->lock);
     }
+}
+
+static void task_finished(void *ctx, h2_task *task) 
+{
+    h2_mplx *m = (h2_mplx*)ctx;
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        m->aborted = 1;
+        h2_io *io = h2_io_set_get(m->stream_ios, task->stream_id);
+        if (io) {
+            io->task = task;
+            h2_io_set_add(m->task_finished_ios, io);
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+}
+
+apr_status_t h2_mplx_register_task(h2_mplx *m, h2_task *task)
+{
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, task->stream_id);
+        if (io) {
+            io->task = task;
+            h2_task_on_finished(task, task_finished, m);
+        }
+        status = io? APR_SUCCESS : APR_EINVAL;
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
 }
 
 apr_status_t h2_mplx_open_io(h2_mplx *m, int stream_id)

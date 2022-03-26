@@ -45,6 +45,27 @@ struct h2_worker;
 
 typedef struct h2_task h2_task;
 
+typedef void task_callback(void *ctx, h2_task *task);
+
+struct h2_task {
+    const char *id;
+    int stream_id;
+    int aborted;
+    apr_uint32_t has_started;
+    apr_uint32_t has_finished;
+    
+    struct h2_mplx *mplx;
+    struct h2_conn *conn;
+    
+    struct h2_task_input *input;    /* http/1.1 input data */
+    struct h2_task_output *output;  /* response body data */
+    struct apr_thread_cond_t *io;   /* optional condition to wait for io on */
+    
+    task_callback *on_finished;
+    void *ctx_finished;
+};
+
+
 h2_task *h2_task_create(long session_id,
                         int stream_id,
                         conn_rec *master,
@@ -52,6 +73,7 @@ h2_task *h2_task_create(long session_id,
                         struct h2_mplx *mplx);
 
 apr_status_t h2_task_destroy(h2_task *task);
+apr_status_t h2_task_teardown(h2_task *task);
 
 apr_status_t h2_task_prep_conn(h2_task *task);
 
@@ -65,6 +87,8 @@ int h2_task_has_started(h2_task *task);
 void h2_task_set_started(h2_task *task, int started);
 int h2_task_has_finished(h2_task *task);
 void h2_task_set_finished(h2_task *task, int finished);
+
+void h2_task_on_finished(h2_task *task, task_callback *cb, void *cb_ctx);
 
 const char *h2_task_get_id(h2_task *task);
 

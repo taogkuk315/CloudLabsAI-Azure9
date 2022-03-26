@@ -144,6 +144,8 @@ static void worker_done(h2_worker *worker, void *ctx)
                      "h2_worker(%d): done", h2_worker_get_id(worker));
         h2_queue_remove(workers->workers, worker);
         workers->worker_count = h2_queue_size(workers->workers);
+        h2_worker_destroy(worker);
+        
         apr_thread_mutex_unlock(workers->lock);
     }
 }
