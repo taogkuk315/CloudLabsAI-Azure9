@@ -191,7 +191,7 @@ apr_status_t h2_mplx_register_task(h2_mplx *m, h2_task *task)
         h2_io *io = h2_io_set_get(m->stream_ios, task->stream_id);
         if (io) {
             io->task = task;
-            h2_task_on_finished(task, task_finished, m);
+            /*h2_task_on_finished(task, task_finished, m);*/
         }
         status = io? APR_SUCCESS : APR_EINVAL;
         apr_thread_mutex_unlock(m->lock);

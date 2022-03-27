@@ -74,16 +74,11 @@ h2_response *h2_response_create(int stream_id,
                 ++sep;
             }
             if (*sep) {
-                if (H2_HD_MATCH_LIT_CS("transfer-encoding", hline)) {
-                    /* never forward this header */
-                    if (!strcmp("chunked", sep)) {
-                        head->chunked = 1;
-                    }
-                }
-                else if (H2_HD_MATCH_LIT_CS("connection", hline)
-                         || H2_HD_MATCH_LIT_CS("proxy-connection", hline)
-                         || H2_HD_MATCH_LIT_CS("upgrade", hline)
-                         || H2_HD_MATCH_LIT_CS("keep-alive", hline)) {
+                if (H2_HD_MATCH_LIT_CS("connection", hline)
+                    || H2_HD_MATCH_LIT_CS("proxy-connection", hline)
+                    || H2_HD_MATCH_LIT_CS("upgrade", hline)
+                    || H2_HD_MATCH_LIT_CS("keep-alive", hline)
+                    || H2_HD_MATCH_LIT_CS("transfer-encoding", hline)) {
                     /* never forward, ch. 8.1.2.2 */
                 }
                 else {
@@ -101,7 +96,7 @@ h2_response *h2_response_create(int stream_id,
 
         for (int i = 1; i < head->nvlen; ++i) {
             const nghttp2_nv *nv = &(&head->nv)[i];
-            if (!head->chunked && !strcmp("content-length", (char*)nv->name)) {
+            if (!strcmp("content-length", (char*)nv->name)) {
                 char *end;
                 apr_int64_t clen = apr_strtoi64((char*)nv->value, &end, 10);
                 if (((char*)nv->value) == end) {

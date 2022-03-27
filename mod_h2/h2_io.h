@@ -32,10 +32,10 @@ struct h2_io {
     struct apr_thread_cond_t *input_arrived;  
     
     h2_bucket_queue output;      /* output data of stream */
-                                 /* != NULL, if some block writing */
+                                 /* != NULL, if some blocks writing */
     struct apr_thread_cond_t *output_drained; 
 
-    struct h2_task *task;         /* the task connectedt to this io */
+    struct h2_task *task;         /* the task connected to this io */
     struct h2_response *response; /* submittable response created */
 };
 

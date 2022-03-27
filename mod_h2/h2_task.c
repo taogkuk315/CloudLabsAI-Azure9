@@ -28,6 +28,7 @@
 #include "h2_private.h"
 #include "h2_bucket.h"
 #include "h2_conn.h"
+#include "h2_from_h1.h"
 #include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
@@ -37,9 +38,6 @@
 #include "h2_ctx.h"
 #include "h2_worker.h"
 
-
-static ap_filter_rec_t *h2_input_filter_handle;
-static ap_filter_rec_t *h2_output_filter_handle;
 
 static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
                                            apr_bucket_brigade* brigade,
@@ -65,16 +63,24 @@ static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
     return h2_task_output_write(task->output, filter, brigade);
 }
 
+static apr_status_t h2_filter_read_response(ap_filter_t* f,
+                                            apr_bucket_brigade* bb) {
+    h2_task *task = (h2_task *)f->ctx;
+    assert(task);
+    if (!task->output || !task->output->from_h1) {
+        return APR_ECONNABORTED;
+    }
+    return h2_from_h1_read_response(task->output->from_h1, f, bb);
+}
 
 void h2_task_register_hooks(void)
 {
-    h2_input_filter_handle =
-    ap_register_input_filter("H2_TO_HTTP", h2_filter_stream_input,
+    ap_register_input_filter("H2_TO_H1", h2_filter_stream_input,
                              NULL, AP_FTYPE_NETWORK);
-    
-    h2_output_filter_handle =
-    ap_register_output_filter("HTTP_TO_H2", h2_filter_stream_output,
+    ap_register_output_filter("H1_TO_H2", h2_filter_stream_output,
                               NULL, AP_FTYPE_NETWORK);
+    ap_register_output_filter("H1_TO_H2_RESP", h2_filter_read_response,
+                              NULL, AP_FTYPE_PROTOCOL);
 }
 
 int h2_task_pre_conn(h2_task *task, conn_rec *c)
@@ -88,10 +94,9 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_stream(%s): task_pre_conn, installing filters",
                   task->id);
-    ap_add_input_filter_handle(h2_input_filter_handle,
-                               task, NULL, c);
-    ap_add_output_filter_handle(h2_output_filter_handle,
-                                task, NULL, c);
+    
+    ap_add_input_filter("H2_TO_H1", task, NULL, c);
+    ap_add_output_filter("H1_TO_H2", task, NULL, c);
     
     /* prevent processing by anyone else, including httpd core */
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,

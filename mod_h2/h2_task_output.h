@@ -25,8 +25,25 @@ struct h2_bucket;
 struct h2_mplx;
 struct h2_response;
 struct h2_task;
+struct h2_from_h1;
+
+typedef enum {
+    H2_TASK_OUT_INIT,
+    H2_TASK_OUT_STARTED,
+    H2_TASK_OUT_DONE,
+} h2_task_output_state_t;
 
 typedef struct h2_task_output h2_task_output;
+
+struct h2_task_output {
+    struct h2_task *task;
+    int stream_id;
+    struct h2_mplx *m;
+    h2_task_output_state_t state;
+    struct h2_bucket *cur;
+    
+    struct h2_from_h1 *from_h1;
+};
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
                                       struct h2_task *task, int stream_id,

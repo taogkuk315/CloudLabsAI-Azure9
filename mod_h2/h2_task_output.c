@@ -22,6 +22,7 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
+#include "h2_conn.h"
 #include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
@@ -30,28 +31,6 @@
 #include "h2_task_output.h"
 #include "h2_task.h"
 
-typedef enum {
-    H2_TASK_OUT_INIT,
-    H2_TASK_OUT_HEAD_DONE,
-    H2_TASK_OUT_STARTED,
-    H2_TASK_OUT_DONE,
-} h2_task_output_state_t;
-
-struct h2_task_output {
-    h2_task *task;
-    int stream_id;
-    struct h2_mplx *m;
-    h2_task_output_state_t state;
-    struct h2_bucket *cur;
-    
-    h2_from_h1 *from_h1;
-    h2_response *response;
-};
-
-
-static void converter_state_change(h2_from_h1 *resp,
-                                   h2_from_h1_state_t prevstate,
-                                   void *cb_ctx);
 
 static apr_status_t flush_cur(h2_task_output *output)
 {
@@ -83,12 +62,11 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
         output->stream_id = stream_id;
         output->m = m;
         output->state = H2_TASK_OUT_INIT;
-        output->from_h1 = h2_from_h1_create(stream_id, pool);
+        output->from_h1 = h2_from_h1_create(stream_id, pool, 
+                                            task->conn->bucket_alloc);
         if (!output->from_h1) {
             return NULL;
         }
-        h2_from_h1_set_state_change_cb(output->from_h1,
-                                        converter_state_change, output);
     }
     return output;
 }
@@ -96,10 +74,6 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
 void h2_task_output_destroy(h2_task_output *output)
 {
     h2_task_output_close(output);
-    if (output->response) {
-        h2_response_destroy(output->response);
-        output->response = NULL;
-    }
     if (output->from_h1) {
         h2_from_h1_destroy(output->from_h1);
         output->from_h1 = NULL;
@@ -124,23 +98,6 @@ int h2_task_output_has_started(h2_task_output *output)
     return output->state >= H2_TASK_OUT_STARTED;
 }
 
-apr_status_t h2_task_output_open(h2_task_output *output, h2_response *response)
-{
-    assert(output);
-    assert(response);
-    long content_length = h2_response_get_content_length(response);
-    if (content_length > 0 && content_length < BLOCKSIZE) {
-        /* For small responses, we wait for the remaining data to
-         * come in before we announce readyness of our output. That
-         * way we have less thread sync to do.
-         */
-        output->response = response;
-        return APR_SUCCESS;
-    }
-    output->state = H2_TASK_OUT_STARTED;
-    return h2_mplx_out_open(output->m, output->stream_id, response);
-}
-
 static apr_status_t convert_data(h2_task_output *output,
                                  ap_filter_t *filter,
                                  const char *data, apr_size_t len);
@@ -151,21 +108,38 @@ static apr_status_t convert_data(h2_task_output *output,
  */
 apr_status_t h2_task_output_write(h2_task_output *output,
                                     ap_filter_t* filter,
-                                    apr_bucket_brigade* brigade)
+                                    apr_bucket_brigade* bb)
 {
+    apr_status_t status = APR_SUCCESS;
+    
     if (filter->next != NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, filter->c,
                       "h2_task_output(%s): unexpected filter",
                       h2_task_get_id(output->task));
     }
     
-    if (APR_BRIGADE_EMPTY(brigade)) {
+    if (output->state == H2_TASK_OUT_INIT) {
+        output->state = H2_TASK_OUT_STARTED;
+        h2_response *response = h2_from_h1_get_response(output->from_h1);
+        if (!response) {
+            ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, filter->c,
+                          "h2_task_output(%s): write without response",
+                          h2_task_get_id(output->task));
+            return APR_ECONNABORTED;
+        }
+        status = h2_mplx_out_open(output->m, output->stream_id, response);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+    }
+    
+    if (APR_BRIGADE_EMPTY(bb)) {
         return APR_SUCCESS;
     }
     
     int got_eos = 0;
-    while (!APR_BRIGADE_EMPTY(brigade)) {
-        apr_bucket* bucket = APR_BRIGADE_FIRST(brigade);
+    while (!APR_BRIGADE_EMPTY(bb)) {
+        apr_bucket* bucket = APR_BRIGADE_FIRST(bb);
         
         if (APR_BUCKET_IS_METADATA(bucket)) {
             if (APR_BUCKET_IS_EOS(bucket)) {
@@ -175,13 +149,6 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                               h2_task_get_id(output->task));
                 if (is_aborted(output, filter)) {
                     return APR_ECONNABORTED;
-                }
-                if (output->response) {
-                    /* we have not placed the response into the h2_mplx yet.
-                     * do so now. */
-                    h2_mplx_out_open(output->m,
-                                     output->stream_id, output->response);
-                    output->response = NULL;
                 }
                 h2_task_output_close(output);
             }
@@ -205,13 +172,18 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                           h2_task_get_id(output->task));
         }
         else {
-            if (APR_BUCKET_IS_FILE(bucket) 
-                && h2_from_h2_is_identity(output->from_h1)) {
-                /* TODO: this is the common case when static files are
+            if (APR_BUCKET_IS_FILE(bucket)) {
+                /* This is the common case when static files are
                  * requested and it is worth optimizing. We would like
                  * to pass the apr_bucket_file that is inside the current
                  * bucket though the h2_mplx to our h2_session and feed
                  * it directly into the nghttp2 engine.
+                 * 1st tests show that we need to be careful about this. If
+                 * we pass on file buckets, the file descriptor inside them
+                 * remains open until the last byte is consumed. That means
+                 * we quickly run out of file descriptors when streaming
+                 * files larger than out http2 window size to the client.
+                 * TODO.
                  */
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
                               "h2_task_output(%s): file bucket (%ld len)",
@@ -267,9 +239,6 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         apr_bucket_delete(bucket);
     }
     
-    if (h2_from_h1_get_state(output->from_h1) == H2_RESP_ST_DONE) {
-        h2_task_output_close(output);
-    }
     return APR_SUCCESS;
 }
 
@@ -288,15 +257,7 @@ static apr_status_t convert_data(h2_task_output *output,
                 return APR_ENOMEM;
             }
         }
-        apr_size_t consumed = 0;
-        status = h2_from_h1_http_convert(output->from_h1, filter->c,
-                                         output->cur, data, len, &consumed);
-        if (status != APR_SUCCESS) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, filter->c,
-                          "h2_task_output(%s): write failed",
-                          h2_task_get_id(output->task));
-            return status;
-        }
+        apr_size_t consumed = h2_bucket_append(output->cur, data, len);
         len -= consumed;
         data += consumed;
         if (h2_bucket_available(output->cur) <= 0) {
@@ -306,30 +267,3 @@ static apr_status_t convert_data(h2_task_output *output,
     return APR_SUCCESS;
 }
 
-static void converter_state_change(h2_from_h1 *resp,
-                                  h2_from_h1_state_t prevstate,
-                                  void *cb_ctx)
-{
-    switch (h2_from_h1_get_state(resp)) {
-        case H2_RESP_ST_BODY:
-        case H2_RESP_ST_DONE: {
-            h2_task_output *output = (h2_task_output *)cb_ctx;
-            assert(output);
-            if (output->state == H2_TASK_OUT_INIT) {
-                output->state = H2_TASK_OUT_HEAD_DONE;
-                apr_status_t status = h2_task_output_open(
-                    output, h2_from_h1_get_response(output->from_h1));
-                if (status != APR_SUCCESS) {
-                    ap_log_perror( APLOG_MARK, APLOG_ERR, status,
-                                  h2_mplx_get_pool(output->m),
-                                  "task_output(%s): starting response",
-                                  h2_task_get_id(output->task));
-                }
-            }
-            break;
-        }
-        default:
-            /* nop */
-            break;
-    }
-}

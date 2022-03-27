@@ -29,7 +29,6 @@ typedef struct h2_response {
     struct h2_bucket *data;
 
     long content_length;
-    int chunked;
     
     apr_size_t nvlen;
     const nghttp2_nv nv;

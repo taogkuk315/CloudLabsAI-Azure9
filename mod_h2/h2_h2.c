@@ -23,6 +23,7 @@
 #include <http_core.h>
 #include <http_config.h>
 #include <http_connection.h>
+#include <http_protocol.h>
 #include <http_log.h>
 
 #include "h2_private.h"
@@ -68,6 +69,7 @@ APR_DECLARE_OPTIONAL_FN(int, modssl_register_alpn,
                          ssl_alpn_propose_protos proposefn,
                          ssl_alpn_proto_negotiated negotiatedfn));
 
+int h2_h2_post_read_req(request_rec *r);
 
 static int (*opt_ssl_engine_disable)(conn_rec*);
 static int (*opt_ssl_is_https)(conn_rec*);
@@ -100,6 +102,8 @@ void h2_h2_register_hooks(void)
      * take over, if h2* was selected by ALPN on a TLS connection.
      */
     ap_hook_process_connection(h2_h2_process_conn, NULL, NULL, APR_HOOK_FIRST);
+    
+    ap_hook_post_read_request(h2_h2_post_read_req, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
 apr_status_t h2_h2_init(apr_pool_t *pool, server_rec *s)
@@ -357,4 +361,18 @@ int h2_h2_stream_pre_conn(conn_rec* c, void *arg)
     }
     return OK;
 }
+
+int h2_h2_post_read_req(request_rec *r)
+{
+    h2_ctx *ctx = h2_ctx_get(r->connection);
+    struct h2_task *task = ctx? h2_ctx_get_task(ctx) : NULL;
+    if (task) {
+        /* h2_task connection for a stream, not for h2c */
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                      "adding h1_to_h2_resp output filter");
+        ap_add_output_filter("H1_TO_H2_RESP", task, r, r->connection);
+    }
+    return DECLINED;
+}
+
 
