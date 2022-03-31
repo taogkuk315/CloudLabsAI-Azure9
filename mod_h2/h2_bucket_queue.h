@@ -124,17 +124,16 @@ APR_RING_CHECK_ELEM_CONSISTENCY((e), h2_bucket, link)
     } while (0)
 
 
-void h2_bucket_queue_init(h2_bucket_queue *q);
-void h2_bucket_queue_cleanup(h2_bucket_queue *q);
-
 /* Create a new queue using the given memory pool. The queue will
  * reuse allocated memory, so memory footprint varies with queue length,
  * not number of buckets placed. 
  */
 h2_bucket_queue *h2_bucket_queue_create(apr_pool_t *pool);
+void h2_bucket_queue_init(h2_bucket_queue *q);
 
 /* Destroys this queue and all buckets it still contains. */
 void h2_bucket_queue_destroy(h2_bucket_queue *q);
+void h2_bucket_queue_cleanup(h2_bucket_queue *q);
 
 void h2_bucket_queue_abort(h2_bucket_queue *q);
 
@@ -145,6 +144,8 @@ apr_size_t h2_bucket_queue_get_length(h2_bucket_queue *q);
 /* Append a bucket at the end of the queue. */
 apr_status_t h2_bucket_queue_append(h2_bucket_queue *q,
                                     struct h2_bucket *bucket);
+apr_status_t h2_bucket_queue_pass(h2_bucket_queue *q,
+                                  h2_bucket_queue *other);
 
 /* Place the bucket at the head of the queue. */
 apr_status_t h2_bucket_queue_prepend(h2_bucket_queue *q,
@@ -170,5 +171,13 @@ int h2_bucket_queue_is_eos(h2_bucket_queue *q);
  */
 apr_status_t h2_bucket_queue_pop(h2_bucket_queue *q,
                                  struct h2_bucket **pbucket);
+
+/**
+ * Consume the brigade and append up to buf_max length to the queue. 
+ * If not all data could be appended, return APR_EINCOMPLETE.
+ */
+apr_status_t h2_bucket_queue_consume(h2_bucket_queue *q, 
+                                     apr_bucket_brigade *bb, 
+                                     apr_size_t buf_max);
 
 #endif /* defined(__mod_h2__h2_bucket_queue__) */

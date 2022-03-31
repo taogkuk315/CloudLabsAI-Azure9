@@ -38,16 +38,9 @@ struct h2_task_input {
 };
 
 
-static int check_abort(h2_task_input *input,
-                       ap_filter_t *filter,
-                       apr_bucket_brigade *brigade)
+static int is_aborted(h2_task_input *input, ap_filter_t *f)
 {
-    if (filter->c->aborted) {
-        APR_BRIGADE_INSERT_TAIL(brigade,
-                                apr_bucket_eos_create(filter->c->bucket_alloc));
-        return 0;
-    }
-    return 1;
+    return (f->c->aborted || h2_task_is_aborted(input->task));
 }
 
 /** stream is in state of input closed. That means no input is pending
@@ -96,7 +89,10 @@ apr_status_t h2_task_input_read(h2_task_input *input,
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t nread = 0;
-    int all_there = all_queued(input);
+
+    if (is_aborted(input, filter)) {
+        return APR_ECONNABORTED;
+    }
     
     if (input->cur && input->cur->data_len <= 0) {
         cleanup(input);
@@ -108,15 +104,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
          * Getting none back in that case means we reached the
          * end of the input.
          */
-        if (!check_abort(input, filter, brigade)) {
-            return APR_ECONNABORTED;
-        }
-        
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                      "h2_task_input(%s): get next bucket from mplx (%s)",
-                      h2_task_get_id(input->task), 
-                      (block==APR_BLOCK_READ? "BLOCK" : "NONBLOCK"));
-        status = h2_mplx_in_read(input->m, all_there? APR_NONBLOCK_READ : block,
+        status = h2_mplx_in_read(input->m, block,
                                  input->stream_id, &input->cur, 
                                  h2_task_get_io_cond(input->task));
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
@@ -126,6 +114,10 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         if (status == APR_EOF) {
             input->eos = 1;
         }
+    }
+    
+    if (is_aborted(input, filter)) {
+        return APR_ECONNABORTED;
     }
     
     if (input->eos) {
@@ -178,14 +170,14 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         }
     }
     
-    if (!check_abort(input, filter, brigade)) {
+    if (is_aborted(input, filter)) {
         return APR_ECONNABORTED;
     }
     
     if (nread > 0) {
         /* We got actual data. */
-        apr_bucket *b = apr_bucket_transient_create(input->cur->data,
-                                                    nread, brigade->bucket_alloc);
+        apr_bucket *b = apr_bucket_transient_create(input->cur->data, nread, 
+                                                    brigade->bucket_alloc);
         APR_BRIGADE_INSERT_TAIL(brigade, b);
         if (mode != AP_MODE_SPECULATIVE) {
             h2_bucket_consume(input->cur, nread);
@@ -193,14 +185,6 @@ apr_status_t h2_task_input_read(h2_task_input *input,
                           "h2_task_input(%s): forward %d bytes",
                           h2_task_get_id(input->task), (int)nread);
         }
-    }
-    else if (all_there) {
-        /* we know there is nothing more to come and inserted all data
-         * there is into the brigade. Send the EOS right away, saving
-         * everyone some work. */
-        APR_BRIGADE_INSERT_TAIL(brigade,
-                                apr_bucket_eos_create(brigade->bucket_alloc));
-        input->eos = 1;
     }
     
     if (nread == 0 && !input->eos && block == APR_NONBLOCK_READ) {

@@ -98,6 +98,8 @@ apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket, int *peos);
  */
 apr_status_t h2_io_out_write(h2_io *io, struct h2_bucket *bucket);
 
+apr_status_t h2_io_out_append(h2_io *io, h2_bucket_queue *q);
+
 /**
  * Closes the input. After existing data has been read, APR_EOF will
  * be returned.

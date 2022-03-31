@@ -192,6 +192,10 @@ apr_status_t h2_mplx_out_write(h2_mplx *mplx, apr_read_type_e block,
                                int stream_id, struct h2_bucket *bucket,
                                struct apr_thread_cond_t *iowait);
 
+apr_status_t h2_mplx_out_pass(h2_mplx *mplx, int stream_id, 
+                              ap_filter_t* filter, apr_bucket_brigade *bb,
+                              struct apr_thread_cond_t *iowait);
+
 /**
  * Closes the output stream. Readers of this stream will get all pending 
  * data and then only APR_EOF as result. 

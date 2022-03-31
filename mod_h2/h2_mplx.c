@@ -100,21 +100,26 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
 void h2_mplx_destroy(h2_mplx *m)
 {
     assert(m);
-    if (m->task_finished_ios) {
-        h2_io_set_destroy(m->task_finished_ios);
-        m->task_finished_ios = NULL;
-    }
-    if (m->ready_ios) {
-        h2_io_set_destroy(m->ready_ios);
-        m->ready_ios = NULL;
-    }
-    if (m->stream_ios) {
-        h2_io_set_destroy(m->stream_ios);
-        m->stream_ios = NULL;
-    }
-    if (m->lock) {
-        apr_thread_mutex_destroy(m->lock);
-        m->lock = NULL;
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        if (m->task_finished_ios) {
+            h2_io_set_destroy(m->task_finished_ios);
+            m->task_finished_ios = NULL;
+        }
+        if (m->ready_ios) {
+            h2_io_set_destroy(m->ready_ios);
+            m->ready_ios = NULL;
+        }
+        if (m->stream_ios) {
+            h2_io_set_destroy(m->stream_ios);
+            m->stream_ios = NULL;
+        }
+        apr_thread_mutex_unlock(m->lock);
+        
+        if (m->lock) {
+            apr_thread_mutex_destroy(m->lock);
+            m->lock = NULL;
+        }
     }
 }
 
@@ -191,7 +196,7 @@ apr_status_t h2_mplx_register_task(h2_mplx *m, h2_task *task)
         h2_io *io = h2_io_set_get(m->stream_ios, task->stream_id);
         if (io) {
             io->task = task;
-            /*h2_task_on_finished(task, task_finished, m);*/
+            h2_task_on_finished(task, task_finished, m);
         }
         status = io? APR_SUCCESS : APR_EINVAL;
         apr_thread_mutex_unlock(m->lock);
@@ -429,6 +434,61 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
                 status = h2_io_out_write(io, bucket);
                 have_out_data_for(m, stream_id);
             }
+        }
+        else {
+            status = APR_ECONNABORTED;
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}
+
+apr_status_t h2_mplx_out_pass(h2_mplx *m, int stream_id, 
+                              ap_filter_t* f, apr_bucket_brigade *bb,
+                              struct apr_thread_cond_t *iowait)
+{
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+        if (io) {
+            /* We check the memory footprint queued for this stream_id
+             * and block if it exceeds our configured limit.
+             * We will not split buckets to enforce the limit to the last
+             * byte. After all, the bucket is already in memory.
+             */
+            while (!APR_BRIGADE_EMPTY(bb) 
+                   && (status == APR_SUCCESS)
+                   && !is_aborted(m, &status)) {
+                apr_thread_mutex_unlock(m->lock);
+                h2_bucket_queue tmp;
+                apr_off_t bblen;
+                
+                h2_bucket_queue_init(&tmp);
+                apr_brigade_length(bb, 0, &bblen);
+                status = h2_bucket_queue_consume(&tmp, bb, 
+                                                 m->out_stream_max_size);
+                
+                status = apr_thread_mutex_lock(m->lock);
+                if (status != APR_SUCCESS) {
+                    return status;
+                }
+                status = h2_io_out_append(io, &tmp);
+                
+                /* Wait for data to drain until there is room again */
+                while (!APR_BRIGADE_EMPTY(bb) 
+                       && status == APR_SUCCESS
+                       && (m->out_stream_max_size <= h2_io_out_length(io))
+                       && !is_aborted(m, &status)) {
+                    io->output_drained = iowait;
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
+                                  "h2_mplx(%ld-%d): waiting for out drain", 
+                                  m->id, stream_id);
+                    apr_thread_cond_wait(io->output_drained, m->lock);
+                    io->output_drained = NULL;
+                }
+            }
+            have_out_data_for(m, stream_id);
         }
         else {
             status = APR_ECONNABORTED;

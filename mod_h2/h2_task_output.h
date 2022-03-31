@@ -38,11 +38,11 @@ typedef struct h2_task_output h2_task_output;
 struct h2_task_output {
     struct h2_task *task;
     int stream_id;
-    struct h2_mplx *m;
     h2_task_output_state_t state;
-    struct h2_bucket *cur;
-    
+    struct h2_mplx *m;
     struct h2_from_h1 *from_h1;
+    
+    apr_bucket_brigade *bb;
 };
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,

@@ -93,6 +93,11 @@ apr_status_t h2_io_out_write(h2_io *io, struct h2_bucket *bucket)
     return h2_bucket_queue_append(&io->output, bucket);
 }
 
+apr_status_t h2_io_out_append(h2_io *io, h2_bucket_queue *q)
+{
+    return h2_bucket_queue_pass(&io->output, q);
+}
+
 apr_status_t h2_io_out_close(h2_io *io)
 {
     return h2_bucket_queue_append_eos(&io->output);

@@ -32,6 +32,7 @@ static void bucket_free(void *entry)
 void h2_bucket_queue_init(h2_bucket_queue *q)
 {
     APR_RING_INIT(&q->ring, h2_bucket, link);
+    q->aborted = 0;
 }
 
 void h2_bucket_queue_cleanup(h2_bucket_queue *q)
@@ -128,6 +129,18 @@ apr_status_t h2_bucket_queue_append(h2_bucket_queue *q, h2_bucket *b)
     return APR_SUCCESS;
 }
 
+apr_status_t h2_bucket_queue_pass(h2_bucket_queue *q,
+                                  h2_bucket_queue *other)
+{
+    while (!H2_QUEUE_EMPTY(other)) {
+        h2_bucket *b = H2_QUEUE_FIRST(other);
+        H2_BUCKET_REMOVE(b);
+        H2_QUEUE_INSERT_TAIL(q, b);
+    }
+    return APR_SUCCESS;
+}
+
+
 apr_status_t h2_bucket_queue_append_eos(h2_bucket_queue *q)
 {
     h2_bucket *eos = h2_bucket_alloc_eos();
@@ -160,5 +173,53 @@ int h2_bucket_queue_is_eos(h2_bucket_queue *q)
 int h2_bucket_queue_is_empty(h2_bucket_queue *q)
 {
     return H2_QUEUE_EMPTY(q);
+}
+
+apr_status_t h2_bucket_queue_consume(h2_bucket_queue *q, 
+                                     apr_bucket_brigade *bb, 
+                                     apr_size_t buf_max)
+{
+    apr_status_t status = APR_SUCCESS;
+    
+    while (!APR_BRIGADE_EMPTY(bb) 
+           && (status == APR_SUCCESS)) {
+        apr_bucket* bucket = APR_BRIGADE_FIRST(bb);
+        
+        if (APR_BUCKET_IS_METADATA(bucket)) {
+            if (APR_BUCKET_IS_EOS(bucket)) {
+                h2_bucket_queue_append_eos(q);
+            }
+            else {
+                /* ignore */
+            }
+        }
+        else {
+            const char* data = NULL;
+            apr_size_t data_len = 0;
+
+            if (h2_bucket_queue_get_length(q) >= buf_max) {
+                return APR_INCOMPLETE;
+            }
+            
+            status = apr_bucket_read(bucket, &data, &data_len,
+                                     APR_NONBLOCK_READ);
+            if (APR_STATUS_IS_EAGAIN(status)) {
+                status = apr_bucket_read(bucket, &data, &data_len,
+                                         APR_BLOCK_READ);
+            }
+            
+            if (status == APR_SUCCESS) {
+                if (data_len > 0) {
+                    h2_bucket *b = h2_bucket_alloc(data_len);
+                    h2_bucket_append(b, data, data_len);
+                    status = h2_bucket_queue_append(q, b);
+                }
+            }
+        }
+        
+        apr_bucket_delete(bucket);
+    }
+    
+    return status;
 }
 
