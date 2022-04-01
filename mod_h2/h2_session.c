@@ -59,6 +59,7 @@ static int stream_open(h2_session *session, int stream_id)
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     h2_stream * stream = h2_stream_create(stream_id, session->pool,
+                                          session->c->bucket_alloc, 
                                           session->mplx);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
@@ -955,13 +956,9 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     h2_session *session = (h2_session *)puser;
     assert(session);
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                  "h2_stream(%ld-%d): requesting %ld bytes",
-                  session->id, (int)stream_id, (long)length);
-    
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (!stream) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_NOTFOUND, session->c,
                       "h2_stream(%ld-%d): data requested but stream not found",
                       session->id, (int)stream_id);
         return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -972,68 +969,37 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     /* Try to pop data buckets from our queue for this stream
      * until we see EOS or the buffer is full.
      */
-    ssize_t total_read = 0;
+    apr_size_t nread = length;
     int eos = 0;
-    int done = 0;
-    size_t left = length;
-    while (left > 0 && !done && !eos) {
-        apr_status_t status = APR_SUCCESS;
-        
-        h2_bucket *bucket = stream->cur_out;
-        stream->cur_out = NULL;
-        if (!bucket) {
-            status = h2_stream_read(stream, &bucket, &eos);
-        }
-        
-        switch (status) {
-            case APR_SUCCESS: {
-                /* This copies out the data and modifies the bucket to
-                 * reflect the amount "moved". This is easy, as this callback
-                 * runs in the connection thread alone and is the sole owner
-                 * of data in this queue.
-                 */
-                assert(bucket);
-                size_t nread = h2_bucket_move(bucket, (char*)buf, left);
-                if (bucket->data_len > 0) {
-                    /* we could not move all, remember it for next time
-                     */
-                    stream->cur_out = bucket;
-                    eos = 0;
-                }
-                else {
-                    h2_bucket_destroy(bucket);
-                }
-                total_read += nread;
-                buf += nread;
-                left -= nread;
-            }
-                
-            case APR_EAGAIN:
-                /* If there is no data available, our session will automatically
-                 * suspend this stream and not ask for more data until we resume
-                 * it. Remember at our h2_stream that we need to do this.
-                 */
-                done = 1;
-                if (total_read == 0) {
-                    h2_stream_set_suspended(stream, 1);
-                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                                  "h2_stream(%ld-%d): suspending stream",
-                                  session->id, (int)stream_id);
-                    return NGHTTP2_ERR_DEFERRED;
-                }
-                break;
-                
-            case APR_EOF:
-                eos = 1;
-                done = 1;
-                break;
-                
-            default:
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                              "h2_stream(%ld-%d): reading data",
-                              session->id, (int)stream_id);
-                return NGHTTP2_ERR_CALLBACK_FAILURE;
-        }
+    apr_status_t status = h2_stream_readx(stream, (char*)buf, &nread, &eos);
+
+    switch (status) {
+        case APR_SUCCESS:
+            break;
+            
+        case APR_EAGAIN:
+            /* If there is no data available, our session will automatically
+             * suspend this stream and not ask for more data until we resume
+             * it. Remember at our h2_stream that we need to do this.
+             */
+            nread = 0;
+            h2_stream_set_suspended(stream, 1);
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                          "h2_stream(%ld-%d): suspending stream",
+                          session->id, (int)stream_id);
+            return NGHTTP2_ERR_DEFERRED;
+            
+        case APR_EOF:
+            nread = 0;
+            eos = 1;
+            break;
+            
+        default:
+            nread = 0;
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                          "h2_stream(%ld-%d): reading data",
+                          session->id, (int)stream_id);
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
     if (eos) {
@@ -1044,9 +1010,9 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
                   "h2_stream(%ld-%d): requested %ld, "
                   "sending %ld data bytes (eos=%d)",
                   session->id, (int)stream_id, (long)length, 
-                  (long)total_read, eos);
+                  (ssize_t)nread, eos);
     
-    return total_read;
+    return (ssize_t)nread;
 }
 
 /* Start submitting the response to a stream request. This is possible

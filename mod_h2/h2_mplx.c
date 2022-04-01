@@ -161,6 +161,11 @@ long h2_mplx_get_id(h2_mplx *m)
     return m->id;
 }
 
+apr_size_t h2_mplx_get_out_max_mem(h2_mplx *m)
+{
+    return m->out_stream_max_size;
+}
+
 void h2_mplx_abort(h2_mplx *m)
 {
     assert(m);
@@ -171,6 +176,7 @@ void h2_mplx_abort(h2_mplx *m)
         apr_thread_mutex_unlock(m->lock);
     }
 }
+
 
 static void task_finished(void *ctx, h2_task *task) 
 {
@@ -358,22 +364,21 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
     return status;
 }
 
-apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response)
+apr_status_t h2_mplx_out_readx(h2_mplx *m, int stream_id, 
+                               apr_bucket_brigade *bb, apr_size_t maxlen)
 {
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
-            io->response = response;
-            h2_io_set_add(m->ready_ios, io);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
-                          "h2_mplx(%ld): response on stream(%d)",
-                          m->id, stream_id);
-            have_out_data_for(m, stream_id);
+            status = h2_io_out_readx(io, bb, maxlen);
+            if (status == APR_SUCCESS && io->output_drained) {
+                apr_thread_cond_signal(io->output_drained);
+            }
         }
         else {
-            status = APR_ECONNABORTED;
+            status = APR_EAGAIN;
         }
         apr_thread_mutex_unlock(m->lock);
     }
@@ -386,7 +391,8 @@ apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
     return h2_mplx_out_open(m, stream_id, 
                             h2_response_create(stream_id, ss,
                                                NULL, NULL, NULL,
-                                               m->pool));
+                                               m->pool),
+                            NULL, NULL, NULL);
 }
 
 h2_response *h2_mplx_pop_response(h2_mplx *m)
@@ -409,31 +415,68 @@ h2_response *h2_mplx_pop_response(h2_mplx *m)
     return response;
 }
 
-apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
-                               int stream_id, struct h2_bucket *bucket,
-                               struct apr_thread_cond_t *iowait)
+static apr_status_t out_pass(h2_mplx *m, h2_io *io, 
+                              ap_filter_t* f, apr_bucket_brigade *bb,
+                              struct apr_thread_cond_t *iowait)
+{
+    apr_status_t status = APR_SUCCESS;
+    /* We check the memory footprint queued for this stream_id
+     * and block if it exceeds our configured limit.
+     * We will not split buckets to enforce the limit to the last
+     * byte. After all, the bucket is already in memory.
+     */
+    while (!APR_BRIGADE_EMPTY(bb) 
+           && (status == APR_SUCCESS)
+           && !is_aborted(m, &status)) {
+        apr_thread_mutex_unlock(m->lock);
+        h2_bucket_queue tmp;
+        apr_off_t bblen;
+        
+        h2_bucket_queue_init(&tmp);
+        apr_brigade_length(bb, 0, &bblen);
+        status = h2_bucket_queue_consume(&tmp, bb, 
+                                         m->out_stream_max_size);
+        
+        status = apr_thread_mutex_lock(m->lock);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+        status = h2_io_out_append(io, &tmp);
+        
+        /* Wait for data to drain until there is room again */
+        while (!APR_BRIGADE_EMPTY(bb) 
+               && status == APR_SUCCESS
+               && (m->out_stream_max_size <= h2_io_out_length(io))
+               && !is_aborted(m, &status)) {
+            io->output_drained = iowait;
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
+                          "h2_mplx(%ld-%d): waiting for out drain", 
+                          m->id, io->id);
+            apr_thread_cond_wait(io->output_drained, m->lock);
+            io->output_drained = NULL;
+        }
+    }
+    return status;
+}
+
+apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response,
+                              ap_filter_t* f, apr_bucket_brigade *bb,
+                              struct apr_thread_cond_t *iowait)
 {
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
-            /* We check the memory footprint queued for this stream_id
-             * and block if it exceeds our configured limit.
-             * We will not split buckets to enforce the limit to the last
-             * byte. After all, the bucket is already in memory.
-             */
-            while ((!is_aborted(m, &status))
-                   && (m->out_stream_max_size < h2_io_out_length(io))) {
-                io->output_drained = iowait;
-                apr_thread_cond_wait(io->output_drained, m->lock);
-                io->output_drained = NULL;
+            io->response = response;
+            h2_io_set_add(m->ready_ios, io);
+            if (f && bb && iowait) {
+                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c,
+                              "h2_mplx(%ld-%d): open response",
+                              m->id, stream_id);
+                status = out_pass(m, io, f, bb, iowait);
             }
-            
-            if (!is_aborted(m, &status)) {
-                status = h2_io_out_write(io, bucket);
-                have_out_data_for(m, stream_id);
-            }
+            have_out_data_for(m, stream_id);
         }
         else {
             status = APR_ECONNABORTED;
@@ -442,6 +485,7 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, apr_read_type_e block,
     }
     return status;
 }
+
 
 apr_status_t h2_mplx_out_pass(h2_mplx *m, int stream_id, 
                               ap_filter_t* f, apr_bucket_brigade *bb,
@@ -452,42 +496,7 @@ apr_status_t h2_mplx_out_pass(h2_mplx *m, int stream_id,
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
-            /* We check the memory footprint queued for this stream_id
-             * and block if it exceeds our configured limit.
-             * We will not split buckets to enforce the limit to the last
-             * byte. After all, the bucket is already in memory.
-             */
-            while (!APR_BRIGADE_EMPTY(bb) 
-                   && (status == APR_SUCCESS)
-                   && !is_aborted(m, &status)) {
-                apr_thread_mutex_unlock(m->lock);
-                h2_bucket_queue tmp;
-                apr_off_t bblen;
-                
-                h2_bucket_queue_init(&tmp);
-                apr_brigade_length(bb, 0, &bblen);
-                status = h2_bucket_queue_consume(&tmp, bb, 
-                                                 m->out_stream_max_size);
-                
-                status = apr_thread_mutex_lock(m->lock);
-                if (status != APR_SUCCESS) {
-                    return status;
-                }
-                status = h2_io_out_append(io, &tmp);
-                
-                /* Wait for data to drain until there is room again */
-                while (!APR_BRIGADE_EMPTY(bb) 
-                       && status == APR_SUCCESS
-                       && (m->out_stream_max_size <= h2_io_out_length(io))
-                       && !is_aborted(m, &status)) {
-                    io->output_drained = iowait;
-                    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
-                                  "h2_mplx(%ld-%d): waiting for out drain", 
-                                  m->id, stream_id);
-                    apr_thread_cond_wait(io->output_drained, m->lock);
-                    io->output_drained = NULL;
-                }
-            }
+            status = out_pass(m, io, f, bb, iowait);
             have_out_data_for(m, stream_id);
         }
         else {

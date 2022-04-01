@@ -87,12 +87,44 @@ apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket, int *peos)
     *peos = h2_bucket_queue_is_eos(&io->output);
     return status;
 }
-    
-apr_status_t h2_io_out_write(h2_io *io, struct h2_bucket *bucket)
+apr_status_t h2_io_out_readx(h2_io *io, apr_bucket_brigade *bb, 
+                             apr_size_t maxlen)
 {
-    return h2_bucket_queue_append(&io->output, bucket);
+    apr_status_t status = APR_SUCCESS;
+    h2_bucket *bucket;
+    apr_size_t len = 0;
+    
+    while ((status == APR_SUCCESS) && (len < maxlen)) {
+        status = h2_bucket_queue_pop(&io->output, &bucket);
+        if (status == APR_SUCCESS) {
+            apr_size_t consume = maxlen - len;
+            if (consume >= bucket->data_len) {
+                status = apr_brigade_write(bb, NULL, NULL, 
+                                           bucket->data, bucket->data_len);
+                len += bucket->data_len;
+                h2_bucket_destroy(bucket);
+            }
+            else {
+                status = apr_brigade_write(bb, NULL, NULL, 
+                                           bucket->data, consume);
+                len += consume;
+                h2_bucket_consume(bucket, consume);
+                h2_bucket_queue_prepend(&io->output, bucket);
+            }
+        }
+        else if (status == APR_EOF) {
+            apr_bucket *b = apr_bucket_eos_create(bb->bucket_alloc);
+            APR_BRIGADE_INSERT_TAIL(bb, b);
+            if (len > 0) {
+                status = APR_SUCCESS;
+            }
+            break;
+        }
+    }
+    return status;
 }
 
+    
 apr_status_t h2_io_out_append(h2_io *io, h2_bucket_queue *q)
 {
     return h2_bucket_queue_pass(&io->output, q);

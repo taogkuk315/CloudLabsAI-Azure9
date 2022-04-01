@@ -91,15 +91,9 @@ static int has_flush_or_eos(apr_bucket_brigade *bb) {
     return 0;
 }
 
-/* Bring the data from the brigade (which represents the result of the
- * request_rec out filter chain) into the h2_mplx for further sending
- * on the master connection. 
- */
-apr_status_t h2_task_output_write(h2_task_output *output,
-                                    ap_filter_t* f, apr_bucket_brigade* bb)
+static apr_status_t out_pass(h2_task_output *output, ap_filter_t *f,
+                             apr_bucket_brigade *bb)
 {
-    apr_status_t status = APR_SUCCESS;
-    
     if (output->state == H2_TASK_OUT_INIT) {
         output->state = H2_TASK_OUT_STARTED;
         h2_response *response = h2_from_h1_get_response(output->from_h1);
@@ -110,11 +104,23 @@ apr_status_t h2_task_output_write(h2_task_output *output,
             h2_task_abort(output->task);
             return APR_ECONNABORTED;
         }
-        status = h2_mplx_out_open(output->m, output->stream_id, response);
-        if (status != APR_SUCCESS) {
-            return status;
-        }
+        
+        return h2_mplx_out_open(output->m, output->stream_id, response,
+                                f, bb,
+                                h2_task_get_io_cond(output->task));
     }
+    return h2_mplx_out_pass(output->m, output->stream_id, f, bb,
+                            h2_task_get_io_cond(output->task));
+}
+
+/* Bring the data from the brigade (which represents the result of the
+ * request_rec out filter chain) into the h2_mplx for further sending
+ * on the master connection. 
+ */
+apr_status_t h2_task_output_write(h2_task_output *output,
+                                    ap_filter_t* f, apr_bucket_brigade* bb)
+{
+    apr_status_t status = APR_SUCCESS;
     
     if (APR_BRIGADE_EMPTY(bb)) {
         return APR_SUCCESS;
@@ -123,14 +129,11 @@ apr_status_t h2_task_output_write(h2_task_output *output,
     if (has_flush_or_eos(bb)) {
         if (output->bb && !APR_BRIGADE_EMPTY(output->bb)) {
             APR_BRIGADE_CONCAT(output->bb, bb);
-            status = h2_mplx_out_pass(output->m, output->stream_id, f, 
-                                      output->bb,
-                                      h2_task_get_io_cond(output->task));
+            status = out_pass(output, f, output->bb);
             apr_brigade_cleanup(output->bb);
         }
         else {
-            status = h2_mplx_out_pass(output->m, output->stream_id, f, bb,
-                                      h2_task_get_io_cond(output->task));
+            status = out_pass(output, f, bb);
         }
     }
     else {

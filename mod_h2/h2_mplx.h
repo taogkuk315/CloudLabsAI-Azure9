@@ -86,6 +86,7 @@ apr_status_t h2_mplx_register_task(h2_mplx *mplx, struct h2_task *task);
 /* To be invoked regularly in order to cleanup finished tasks */
 void h2_mplx_cleanup(h2_mplx *mplx);
 
+apr_size_t h2_mplx_get_out_max_mem(h2_mplx *m);
 
 /*******************************************************************************
  * IO lifetime of streams.
@@ -177,21 +178,26 @@ struct h2_response *h2_mplx_pop_response(h2_mplx *m);
 apr_status_t h2_mplx_out_read(h2_mplx *mplx, int stream_id, 
                               struct h2_bucket **pbucket, int *peos);
 
+apr_status_t h2_mplx_out_readx(h2_mplx *mplx, int stream_id, 
+                               apr_bucket_brigade *bb, apr_size_t maxlen);
+
+
 /**
  * Opens the output for the given stream with the specified response.
  */
 apr_status_t h2_mplx_out_open(h2_mplx *mplx, int stream_id,
-                              struct h2_response *response);
+                              struct h2_response *response,
+                              ap_filter_t* filter, apr_bucket_brigade *bb,
+                              struct apr_thread_cond_t *iowait);
 
 /**
- * Writes data to the output of the given stream. With APR_BLOCK_READ, it
- * is subject to flow control, otherwise it return APR_EAGAIN if the 
- * limit on queued data has been reached.
+ * Append the brigade to the stream output. Might block if amount
+ * of bytes buffered reaches configured max.
+ * @param stream_id the stream identifier
+ * @param filter the apache filter context of the data
+ * @param bb the bucket brigade to append
+ * @param iowait a conditional used for block/signalling in h2_mplx
  */
-apr_status_t h2_mplx_out_write(h2_mplx *mplx, apr_read_type_e block,
-                               int stream_id, struct h2_bucket *bucket,
-                               struct apr_thread_cond_t *iowait);
-
 apr_status_t h2_mplx_out_pass(h2_mplx *mplx, int stream_id, 
                               ap_filter_t* filter, apr_bucket_brigade *bb,
                               struct apr_thread_cond_t *iowait);

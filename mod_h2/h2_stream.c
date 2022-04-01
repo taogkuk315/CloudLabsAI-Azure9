@@ -46,7 +46,9 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
     }
 }
 
-h2_stream *h2_stream_create(int id, apr_pool_t *master, struct h2_mplx *m)
+h2_stream *h2_stream_create(int id, apr_pool_t *master, 
+                            apr_bucket_alloc_t *bucket_alloc, 
+                            struct h2_mplx *m)
 {
     apr_pool_t *spool = NULL;
     apr_status_t status = apr_pool_create(&spool, master);
@@ -59,6 +61,7 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master, struct h2_mplx *m)
         stream->id = id;
         stream->state = H2_STREAM_ST_IDLE;
         stream->pool = spool;
+        stream->bucket_alloc = bucket_alloc;
         stream->m = m;
         stream->request = h2_request_create(id, spool, m);
     }
@@ -76,6 +79,10 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
     if (stream->task) {
         h2_task_destroy(stream->task);
         stream->task = NULL;
+    }
+    if (stream->bbout) {
+        apr_brigade_destroy(stream->bbout);
+        stream->bbout = NULL;
     }
     if (stream->pool) {
         apr_pool_destroy(stream->pool);
@@ -182,6 +189,87 @@ apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket,
 {
     assert(stream);
     return h2_mplx_out_read(stream->m, stream->id, pbucket, peos);
+}
+
+apr_status_t h2_stream_readx(h2_stream *stream, char *buffer, 
+                             apr_size_t *plen, int *peos)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_size_t avail = *plen;
+    apr_size_t written = 0;
+    
+    if (stream->bbout == NULL) {
+        stream->bbout = apr_brigade_create(stream->pool, 
+                                           stream->bucket_alloc);
+    }
+    
+    /* As long as we read successfully, the buffer is not filled and
+     * we did not encounter the eos, continue.
+     */
+    *peos = 0;
+    while ((status == APR_SUCCESS) && (avail > 0) && !*peos) {
+        
+        if (APR_BRIGADE_EMPTY(stream->bbout)) {
+            /* Our brigade is empty, need to get more data.
+             */
+            status = h2_mplx_out_readx(stream->m, stream->id, stream->bbout, 
+                                       h2_mplx_get_out_max_mem(stream->m));
+            if (status == APR_EOF) {
+                *peos = 1;
+                if (written) {
+                    status = APR_SUCCESS;
+                    break;
+                }
+            }
+            else if (APR_STATUS_IS_EAGAIN(status)) {
+                if (written) {
+                    status = APR_SUCCESS;
+                    break;
+                }
+            }
+            else {
+                break;
+            }
+        }
+        
+        /* Copy data in our brigade into the buffer until it is filled or
+         * we encounter an EOS.
+         */
+        while (!APR_BRIGADE_EMPTY(stream->bbout) 
+               && (status == APR_SUCCESS)
+               && (avail > 0)) {
+            
+            apr_bucket *b = APR_BRIGADE_FIRST(stream->bbout);
+            if (APR_BUCKET_IS_METADATA(b)) {
+                if (APR_BUCKET_IS_EOS(b)) {
+                    *peos = 1;
+                }
+                else {
+                    /* ignore */
+                }
+            }
+            else {
+                const char *data;
+                apr_size_t data_len;
+                status = apr_bucket_read(b, &data, &data_len, 
+                                         APR_NONBLOCK_READ);
+                if (status == APR_SUCCESS && data_len > 0) {
+                    if (data_len > avail) {
+                        apr_bucket_split(b, avail);
+                        data_len = avail;
+                    }
+                    memcpy(buffer, data, data_len);
+                    avail -= data_len;
+                    buffer += data_len;
+                    written += data_len;
+                }
+            }
+            apr_bucket_delete(b);
+        }
+    }
+    
+    *plen = written;
+    return status;
 }
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended)
