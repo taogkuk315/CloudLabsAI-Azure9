@@ -306,7 +306,9 @@ static apr_status_t before_stream_close_cb(h2_session *session,
 
 static void fix_event_conn(conn_rec *c, conn_rec *master);
 
-h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *parent)
+h2_conn *h2_conn_create(const char *id, conn_rec *master, 
+                        apr_pool_t *parent,
+                        apr_bucket_alloc_t *bucket_alloc)
 {
     assert(master);
     apr_status_t status = APR_SUCCESS;
@@ -331,7 +333,7 @@ h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *parent)
         conn->pool = pool;
         apr_pool_tag(pool, id);
 
-        conn->bucket_alloc = apr_bucket_alloc_create(conn->pool);
+        conn->bucket_alloc = bucket_alloc;
         conn->socket = ap_get_module_config(master->conn_config,
                                             &core_module);
         conn->master = master;

@@ -26,15 +26,15 @@ struct h2_task;
 typedef struct h2_io h2_io;
 struct h2_io {
     int id;                      /* stream identifier */
+    apr_pool_t *pool;            /* pool to use for holding data */
+    
     h2_bucket_queue input;       /* input data for stream */
     apr_size_t input_consumed;   /* how many bytes have been read */
-                                 /* != NULL, if someone blocks reading */
-    struct apr_thread_cond_t *input_arrived;  
+    struct apr_thread_cond_t *input_arrived; /* block on reading */
     
-    h2_bucket_queue output;      /* output data of stream */
-                                 /* != NULL, if some blocks writing */
-    struct apr_thread_cond_t *output_drained; 
-
+    apr_bucket_brigade *bbout;   /* output data from stream */
+    struct apr_thread_cond_t *output_drained; /* block on writing */
+    
     struct h2_task *task;         /* the task connected to this io */
     struct h2_response *response; /* submittable response created */
 };
@@ -46,7 +46,7 @@ struct h2_io {
 /**
  * Creates a new h2_io for the given stream id. 
  */
-h2_io *h2_io_create(int id, apr_pool_t *pool);
+h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc);
 
 /**
  * Frees any resources hold by the h2_io instance. 
@@ -86,20 +86,19 @@ apr_status_t h2_io_in_close(h2_io *io);
 /*******************************************************************************
  * Output handling of streams.
  ******************************************************************************/
+
+struct h2_response *h2_io_extract_response(h2_io *io);
+
 /**
  * Read a bucket from the output head. Return APR_EAGAIN if non is available,
  * APR_EOF if none available and output has been closed. Will, on successful
  * read, set peos != 0 if data is the last data of the output.
  */
-apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket, int *peos);
+apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb, 
+                            apr_size_t maxlen);
 
-apr_status_t h2_io_out_readx(h2_io *io, apr_bucket_brigade *bb, 
+apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen);
-
-/** 
- * Append the bucket brigade to the output.
- */
-apr_status_t h2_io_out_append(h2_io *io, h2_bucket_queue *q);
 
 /**
  * Closes the input. After existing data has been read, APR_EOF will

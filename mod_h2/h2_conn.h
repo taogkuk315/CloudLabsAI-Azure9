@@ -60,7 +60,8 @@ struct h2_conn {
     conn_rec *master;
 };
 
-h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *parent);
+h2_conn *h2_conn_create(const char *id, conn_rec *master, 
+                        apr_pool_t *parent, apr_bucket_alloc_t *bucket_alloc);
 
 void h2_conn_destroy(h2_conn *conn);
 

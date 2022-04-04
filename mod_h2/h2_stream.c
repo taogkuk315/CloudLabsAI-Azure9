@@ -18,7 +18,6 @@
 
 #define APR_POOL_DEBUG  7
 
-
 #include <httpd.h>
 #include <http_core.h>
 #include <http_connection.h>
@@ -30,11 +29,13 @@
 #include "h2_bucket.h"
 #include "h2_mplx.h"
 #include "h2_request.h"
+#include "h2_response.h"
 #include "h2_stream.h"
 #include "h2_task.h"
 #include "h2_ctx.h"
 #include "h2_task_input.h"
 #include "h2_task.h"
+#include "h2_util.h"
 
 
 static void set_state(h2_stream *stream, h2_stream_state_t state)
@@ -61,7 +62,8 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master,
         stream->id = id;
         stream->state = H2_STREAM_ST_IDLE;
         stream->pool = spool;
-        stream->bucket_alloc = bucket_alloc;
+        //stream->bucket_alloc = bucket_alloc;
+        stream->bucket_alloc = apr_bucket_alloc_create(stream->pool);
         stream->m = m;
         stream->request = h2_request_create(id, spool, m);
     }
@@ -80,10 +82,7 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
         h2_task_destroy(stream->task);
         stream->task = NULL;
     }
-    if (stream->bbout) {
-        apr_brigade_destroy(stream->bbout);
-        stream->bbout = NULL;
-    }
+    stream->bbout = NULL;
     if (stream->pool) {
         apr_pool_destroy(stream->pool);
     }
@@ -100,6 +99,21 @@ void h2_stream_abort(h2_stream *stream)
 {
     assert(stream);
     stream->aborted = 1;
+}
+
+apr_status_t h2_stream_set_response(h2_stream *stream, 
+                                    struct h2_response *response,
+                                    apr_bucket_brigade *bb)
+{
+    stream->response = response;
+    if (bb) {
+        if (stream->bbout == NULL) {
+            stream->bbout = apr_brigade_create(stream->pool, 
+                                               stream->bucket_alloc);
+        }
+        return h2_util_move(stream->bbout, bb, 0);
+    }
+    return APR_SUCCESS;
 }
 
 h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
@@ -132,7 +146,7 @@ apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 apr_status_t h2_stream_write_eos(h2_stream *stream)
 {
     assert(stream);
-    ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream->pool,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
                   "h2_stream(%ld-%d): closing input",
                   h2_mplx_get_id(stream->m), stream->id);
     apr_status_t status = APR_SUCCESS;
@@ -184,15 +198,8 @@ apr_status_t h2_stream_write_data(h2_stream *stream,
     return h2_request_write_data(stream->request, data, len, stream->m);
 }
 
-apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket,
-                            int *peos)
-{
-    assert(stream);
-    return h2_mplx_out_read(stream->m, stream->id, pbucket, peos);
-}
-
-apr_status_t h2_stream_readx(h2_stream *stream, char *buffer, 
-                             apr_size_t *plen, int *peos)
+apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
+                            apr_size_t *plen, int *peos)
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t avail = *plen;
@@ -212,8 +219,12 @@ apr_status_t h2_stream_readx(h2_stream *stream, char *buffer,
         if (APR_BRIGADE_EMPTY(stream->bbout)) {
             /* Our brigade is empty, need to get more data.
              */
-            status = h2_mplx_out_readx(stream->m, stream->id, stream->bbout, 
-                                       h2_mplx_get_out_max_mem(stream->m));
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
+                          h2_mplx_get_conn(stream->m),
+                          "h2_stream(%ld-%d): reading from mplx",
+                          h2_mplx_get_id(stream->m), stream->id);
+            status = h2_mplx_out_read(stream->m, stream->id, stream->bbout, 
+                                      h2_mplx_get_out_max_mem(stream->m));
             if (status == APR_EOF) {
                 *peos = 1;
                 if (written) {
@@ -251,6 +262,15 @@ apr_status_t h2_stream_readx(h2_stream *stream, char *buffer,
             else {
                 const char *data;
                 apr_size_t data_len;
+                if (APR_BUCKET_IS_FILE(b)) {
+                    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
+                                  h2_mplx_get_conn(stream->m),
+                                  "h2_stream(%ld-%d): reading FILE bucket",
+                                  h2_mplx_get_id(stream->m), stream->id);
+                }
+                if (b->length != -1 && b->length > avail) {
+                    apr_bucket_split(b, avail);
+                }
                 status = apr_bucket_read(b, &data, &data_len, 
                                          APR_NONBLOCK_READ);
                 if (status == APR_SUCCESS && data_len > 0) {

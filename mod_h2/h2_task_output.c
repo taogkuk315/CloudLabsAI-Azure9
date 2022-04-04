@@ -91,8 +91,8 @@ static int has_flush_or_eos(apr_bucket_brigade *bb) {
     return 0;
 }
 
-static apr_status_t out_pass(h2_task_output *output, ap_filter_t *f,
-                             apr_bucket_brigade *bb)
+static apr_status_t out_write(h2_task_output *output, ap_filter_t *f,
+                              apr_bucket_brigade *bb)
 {
     if (output->state == H2_TASK_OUT_INIT) {
         output->state = H2_TASK_OUT_STARTED;
@@ -109,8 +109,8 @@ static apr_status_t out_pass(h2_task_output *output, ap_filter_t *f,
                                 f, bb,
                                 h2_task_get_io_cond(output->task));
     }
-    return h2_mplx_out_pass(output->m, output->stream_id, f, bb,
-                            h2_task_get_io_cond(output->task));
+    return h2_mplx_out_write(output->m, output->stream_id, f, bb,
+                             h2_task_get_io_cond(output->task));
 }
 
 /* Bring the data from the brigade (which represents the result of the
@@ -129,11 +129,11 @@ apr_status_t h2_task_output_write(h2_task_output *output,
     if (has_flush_or_eos(bb)) {
         if (output->bb && !APR_BRIGADE_EMPTY(output->bb)) {
             APR_BRIGADE_CONCAT(output->bb, bb);
-            status = out_pass(output, f, output->bb);
+            status = out_write(output, f, output->bb);
             apr_brigade_cleanup(output->bb);
         }
         else {
-            status = out_pass(output, f, bb);
+            status = out_write(output, f, bb);
         }
     }
     else {

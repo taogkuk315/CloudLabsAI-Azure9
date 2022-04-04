@@ -24,14 +24,17 @@
 #include "h2_bucket.h"
 #include "h2_bucket_queue.h"
 #include "h2_io.h"
+#include "h2_response.h"
+#include "h2_util.h"
 
-h2_io *h2_io_create(int id, apr_pool_t *pool)
+h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc)
 {
     h2_io *io = apr_pcalloc(pool, sizeof(*io));
     if (io) {
         io->id = id;
+        io->pool = pool;
         h2_bucket_queue_init(&io->input);
-        h2_bucket_queue_init(&io->output);
+        io->bbout = apr_brigade_create(pool, bucket_alloc);
     }
     return io;
 }
@@ -39,12 +42,12 @@ h2_io *h2_io_create(int id, apr_pool_t *pool)
 void h2_io_cleanup(h2_io *io)
 {
     h2_bucket_queue_cleanup(&io->input);
-    h2_bucket_queue_cleanup(&io->output);
 }
 
 void h2_io_destroy(h2_io *io)
 {
     h2_io_cleanup(io);
+    io->bbout = NULL;
 }
 
 int h2_io_in_has_eos_for(h2_io *io)
@@ -54,12 +57,17 @@ int h2_io_in_has_eos_for(h2_io *io)
 
 int h2_io_out_has_data(h2_io *io)
 {
-    return !h2_bucket_queue_is_empty(&io->output);
+    return !APR_BRIGADE_EMPTY(io->bbout);
 }
 
 apr_size_t h2_io_out_length(h2_io *io)
 {
-    return h2_bucket_queue_get_length(&io->output);
+    if (io->bbout) {
+        apr_off_t len = 0;
+        apr_brigade_length(io->bbout, 0, &len);
+        return (len > 0)? len : 0;
+    }
+    return 0;
 }
 
 apr_status_t h2_io_in_read(h2_io *io, struct h2_bucket **pbucket)
@@ -81,56 +89,33 @@ apr_status_t h2_io_in_close(h2_io *io)
     return h2_bucket_queue_append_eos(&io->input);
 }
 
-apr_status_t h2_io_out_read(h2_io *io, struct h2_bucket **pbucket, int *peos)
+h2_response *h2_io_extract_response(h2_io *io)
 {
-    apr_status_t status = h2_bucket_queue_pop(&io->output, pbucket);
-    *peos = h2_bucket_queue_is_eos(&io->output);
-    return status;
-}
-apr_status_t h2_io_out_readx(h2_io *io, apr_bucket_brigade *bb, 
-                             apr_size_t maxlen)
-{
-    apr_status_t status = APR_SUCCESS;
-    h2_bucket *bucket;
-    apr_size_t len = 0;
-    
-    while ((status == APR_SUCCESS) && (len < maxlen)) {
-        status = h2_bucket_queue_pop(&io->output, &bucket);
-        if (status == APR_SUCCESS) {
-            apr_size_t consume = maxlen - len;
-            if (consume >= bucket->data_len) {
-                status = apr_brigade_write(bb, NULL, NULL, 
-                                           bucket->data, bucket->data_len);
-                len += bucket->data_len;
-                h2_bucket_destroy(bucket);
-            }
-            else {
-                status = apr_brigade_write(bb, NULL, NULL, 
-                                           bucket->data, consume);
-                len += consume;
-                h2_bucket_consume(bucket, consume);
-                h2_bucket_queue_prepend(&io->output, bucket);
-            }
-        }
-        else if (status == APR_EOF) {
-            apr_bucket *b = apr_bucket_eos_create(bb->bucket_alloc);
-            APR_BRIGADE_INSERT_TAIL(bb, b);
-            if (len > 0) {
-                status = APR_SUCCESS;
-            }
-            break;
-        }
+    h2_response *resp = NULL;
+    if (io->response) {
+        resp = io->response;
+        io->response = NULL;
     }
-    return status;
+    return resp;
 }
 
-    
-apr_status_t h2_io_out_append(h2_io *io, h2_bucket_queue *q)
+
+apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb, 
+                            apr_size_t maxlen)
 {
-    return h2_bucket_queue_pass(&io->output, q);
+    return h2_util_move(bb, io->bbout, maxlen);
 }
+
+apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
+                             apr_size_t maxlen)
+{
+    return h2_util_move(io->bbout, bb, maxlen);
+}
+
 
 apr_status_t h2_io_out_close(h2_io *io)
 {
-    return h2_bucket_queue_append_eos(&io->output);
+    APR_BRIGADE_INSERT_TAIL(io->bbout, 
+                            apr_bucket_eos_create(io->bbout->bucket_alloc));
+    return APR_SUCCESS;
 }

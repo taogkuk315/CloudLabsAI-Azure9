@@ -105,7 +105,9 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
 }
 
 
-apr_status_t h2_task_setup(h2_task *task, conn_rec *master, apr_pool_t *parent)
+apr_status_t h2_task_setup(h2_task *task, conn_rec *master, 
+                           apr_pool_t *parent, 
+                           apr_bucket_alloc_t *bucket_alloc)
 {
     /* We need a separate pool for the task execution as this happens
      * in another thread and pools are not multi-thread safe. 
@@ -113,7 +115,7 @@ apr_status_t h2_task_setup(h2_task *task, conn_rec *master, apr_pool_t *parent)
      * making this new pool a sub pool of the stream one, but that
      * only led to crashes. With a root pool, this does not happen.
      */
-    task->conn = h2_conn_create(task->id, master, parent);
+    task->conn = h2_conn_create(task->id, master, parent, bucket_alloc);
     if (!task->conn) {
         return APR_ENOMEM;
     }
@@ -145,7 +147,8 @@ h2_task *h2_task_create(long session_id,
     task->mplx = mplx;
     
     h2_task_setup(task, h2_mplx_get_conn(task->mplx), 
-                  h2_mplx_get_pool(task->mplx));
+                  h2_mplx_get_pool(task->mplx), 
+                  apr_bucket_alloc_create(stream_pool));
     
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
                   "h2_task(%s): created", task->id);
@@ -164,10 +167,6 @@ apr_status_t h2_task_teardown(h2_task *task)
         h2_task_output_destroy(task->output);
         task->output = NULL;
     }
-    if (task->conn) {
-        h2_conn_destroy(task->conn);
-        task->conn = NULL;
-    }
     return APR_SUCCESS;
 }
 
@@ -179,7 +178,12 @@ apr_status_t h2_task_destroy(h2_task *task)
     if (task->mplx) {
         task->mplx = NULL;
     }
-    return h2_task_teardown(task);
+    apr_status_t status = h2_task_teardown(task);
+    if (task->conn) {
+        h2_conn_destroy(task->conn);
+        task->conn = NULL;
+    }
+    return status;
 }
 
 void h2_task_on_finished(h2_task *task, task_callback *cb, void *cb_ctx)

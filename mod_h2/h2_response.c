@@ -33,7 +33,6 @@ h2_response *h2_response_create(int stream_id,
                                   apr_status_t task_status,
                                   const char *http_status,
                                   apr_array_header_t *hlines,
-                                  h2_bucket *data,
                                   apr_pool_t *pool)
 {
     apr_size_t nvmax = 1 + (hlines? hlines->nelts : 0);
@@ -49,7 +48,6 @@ h2_response *h2_response_create(int stream_id,
     head->stream_id = stream_id;
     head->task_status = task_status;
     head->http_status = http_status;
-    head->data = data;
     head->content_length = -1;
 
     if (hlines) {
@@ -114,10 +112,6 @@ h2_response *h2_response_create(int stream_id,
 
 void h2_response_destroy(h2_response *head)
 {
-    if (head->data) {
-        h2_bucket_destroy(head->data);
-        head->data = NULL;
-    }
     free(head);
 }
 
@@ -125,3 +119,5 @@ long h2_response_get_content_length(h2_response *resp)
 {
     return resp->content_length;
 }
+
+

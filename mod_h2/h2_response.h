@@ -26,7 +26,6 @@ typedef struct h2_response {
     int stream_id;
     apr_status_t task_status;
     const char *http_status;
-    struct h2_bucket *data;
 
     long content_length;
     
@@ -39,7 +38,6 @@ h2_response *h2_response_create(int stream_id,
                                   apr_status_t task_status,
                                   const char *http_status,
                                   apr_array_header_t *hlines,
-                                  struct h2_bucket *data,
                                   apr_pool_t *pool);
 
 void h2_response_destroy(h2_response *head);

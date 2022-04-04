@@ -57,5 +57,16 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
                                             nv->value = (uint8_t *)VALUE;     \
                                             nv->valuelen = strlen(VALUE)
 
+/**
+ * Moves data from one brigade into another. If maxlen > 0, it only
+ * moves up to maxlen bytes into the target brigade, making bucket splits
+ * if needed.
+ * @param to the brigade to move the data to
+ * @param from the brigade to get the data from
+ * @param maxlen of bytes to move, 0 for all
+ */
+apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
+                          apr_size_t maxlen);
+
 
 #endif /* defined(__mod_h2__h2_util__) */

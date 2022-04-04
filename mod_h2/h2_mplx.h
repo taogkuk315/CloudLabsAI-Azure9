@@ -168,18 +168,18 @@ apr_status_t h2_mplx_in_update_windows(h2_mplx *m,
 /**
  * Gets a response from a stream that is ready for submit. Will return
  * NULL if none is available.
+ * @param m the mplxer to get a response from
+ * @param bb optional bucket brigade to receive any data for the returned
+ *           response
  */
-struct h2_response *h2_mplx_pop_response(h2_mplx *m);
+struct h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb);
 
 /**
  * Reads output data from the given stream. Will never block, but
  * return APR_EAGAIN until data arrives or the stream is closed.
  */
 apr_status_t h2_mplx_out_read(h2_mplx *mplx, int stream_id, 
-                              struct h2_bucket **pbucket, int *peos);
-
-apr_status_t h2_mplx_out_readx(h2_mplx *mplx, int stream_id, 
-                               apr_bucket_brigade *bb, apr_size_t maxlen);
+                              apr_bucket_brigade *bb, apr_size_t maxlen);
 
 
 /**
@@ -198,9 +198,9 @@ apr_status_t h2_mplx_out_open(h2_mplx *mplx, int stream_id,
  * @param bb the bucket brigade to append
  * @param iowait a conditional used for block/signalling in h2_mplx
  */
-apr_status_t h2_mplx_out_pass(h2_mplx *mplx, int stream_id, 
-                              ap_filter_t* filter, apr_bucket_brigade *bb,
-                              struct apr_thread_cond_t *iowait);
+apr_status_t h2_mplx_out_write(h2_mplx *mplx, int stream_id, 
+                               ap_filter_t* filter, apr_bucket_brigade *bb,
+                               struct apr_thread_cond_t *iowait);
 
 /**
  * Closes the output stream. Readers of this stream will get all pending 

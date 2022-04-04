@@ -102,18 +102,21 @@ $(GEN)/load-urls-2.txt: \
 	@mkdir -p $(GEN)/tmp
 	@sed -e "s,SUBST_AUTH_SUBST,http://$(HTTP_AUTH)," < load-urls-1.txt >$(GEN)/load-urls-2.txt
 
+MAX_STREAMS = 100
+
 loadtest: \
 		$(INST_DIR)/.test-setup \
 		$(INST_DIR)/.curl-installed \
         $(GEN)/load-urls-1.txt
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 1 -m 100 -c 8
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 2 -m 100 -c 8
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 3 -m 100 -c 8
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 4 -m 100 -c 8
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 5 -m 100 -c 8
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 6 -m 100 -c 8
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 7 -m 100 -c 8
-	@$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 8 -m 100 -c 8
+	$(H2LOAD) -c 100 -t 10 -n 100000 -m $(MAX_STREAMS) https://$(HTTPS_AUTH)/index.html
+	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 1 -m $(MAX_STREAMS) -c 8
+	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 2 -m $(MAX_STREAMS) -c 8
+	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 3 -m $(MAX_STREAMS) -c 8
+	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 4 -m $(MAX_STREAMS) -c 8
+	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 5 -m $(MAX_STREAMS) -c 8
+	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 6 -m $(MAX_STREAMS) -c 8
+	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 7 -m $(MAX_STREAMS) -c 8
+	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 8 -m $(MAX_STREAMS) -c 8
 
 
 ################################################################################

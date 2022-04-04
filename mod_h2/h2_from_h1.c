@@ -69,14 +69,8 @@ apr_status_t h2_from_h1_destroy(h2_from_h1 *from_h1)
         h2_response_destroy(from_h1->head);
         from_h1->head = NULL;
     }
-    if (from_h1->tmp) {
-        apr_brigade_destroy(from_h1->tmp);
-        from_h1->tmp = NULL;
-    }
-    if (from_h1->bb) {
-        apr_brigade_destroy(from_h1->bb);
-        from_h1->bb = NULL;
-    }
+    from_h1->tmp = NULL;
+    from_h1->bb = NULL;
     return APR_SUCCESS;
 }
 
@@ -104,7 +98,7 @@ static apr_status_t make_h2_headers(h2_from_h1 *from_h1, request_rec *r)
 {
     from_h1->head = h2_response_create(from_h1->stream_id, APR_SUCCESS,
                                        from_h1->status, from_h1->hlines,
-                                       NULL, from_h1->pool);
+                                       from_h1->pool);
     if (from_h1->head == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, r->connection,
                       "h2_from_h1(%d): unable to create resp_head",

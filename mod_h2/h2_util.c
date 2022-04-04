@@ -116,3 +116,229 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
     }
     return NULL;
 }
+
+apr_status_t h2_util_set_aside(apr_bucket_brigade *bb, apr_pool_t *p)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_bucket *b;
+    
+    for (b = APR_BRIGADE_FIRST(bb);
+         b != APR_BRIGADE_SENTINEL(bb);
+         b = APR_BUCKET_NEXT(b))
+    {
+        apr_status_t rv = apr_bucket_setaside(b, p);
+        
+        /* If the bucket type does not implement setaside, then
+         * (hopefully) morph it into a bucket type which does, and set
+         * *that* aside... */
+        if (rv == APR_ENOTIMPL) {
+            const char *s;
+            apr_size_t n;
+            
+            rv = apr_bucket_read(b, &s, &n, APR_BLOCK_READ);
+            if (rv == APR_SUCCESS) {
+                rv = apr_bucket_setaside(b, p);
+            }
+        }
+        
+        if (rv != APR_SUCCESS) {
+            status = rv;
+            /* Return an error but still save the brigade if
+             * ->setaside() is really not implemented. */
+            if (status != APR_ENOTIMPL) {
+                return status;
+            }
+        }
+    }
+    return status;
+}
+
+apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from, 
+                          apr_bucket_brigade **tmp, 
+                          int force_read, apr_size_t maxlen)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_bucket *b = NULL;
+    apr_size_t len = 0;
+    
+    assert(to);
+    assert(from);
+    
+    if (!APR_BRIGADE_EMPTY(from)) {
+        if (maxlen > 0) {
+            /* Find the bucket, up to which we reach maxlen bytes */
+            for (b = APR_BRIGADE_FIRST(from);
+                 (maxlen > 0) && (b != APR_BRIGADE_SENTINEL(from));
+                 b = APR_BUCKET_NEXT(b)) {
+                
+                if (b->length == -1) {
+                    if (!force_read) {
+                        continue;
+                    }
+                    const char *ign;
+                    apr_size_t ilen;
+                    status = apr_bucket_read(b, &ign, &ilen, APR_BLOCK_READ);
+                    if (status != APR_SUCCESS) {
+                        return status;
+                    }
+                }
+                
+                if (maxlen < b->length) {
+                    apr_bucket_split(b, maxlen);
+                    maxlen = 0;
+                }
+                else {
+                    maxlen -= b->length;
+                }
+            }
+            
+            if (b == APR_BRIGADE_SENTINEL(from)) {
+                b = NULL;
+            }
+        }
+        
+        /* b is now the bucket, we do not want to pass on, or NULL
+         * for "take all" */
+        if (b) {
+            if (!*tmp) {
+                *tmp = apr_brigade_create(to->p, to->bucket_alloc);
+            }
+            *tmp = apr_brigade_split_ex(from, b, *tmp);
+        }
+        
+        APR_BRIGADE_CONCAT(to, from);
+        
+        if (b) {
+            APR_BRIGADE_CONCAT(from, *tmp);
+        }
+    }
+    
+    return APR_SUCCESS;
+}
+
+apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
+                          apr_size_t maxlen)
+{
+    apr_status_t status = APR_SUCCESS;
+    
+    assert(to);
+    assert(from);
+    int same_alloc = (to->bucket_alloc == from->bucket_alloc);
+    
+    if (!APR_BRIGADE_EMPTY(from)) {
+        apr_bucket *end = NULL;
+        apr_bucket *b;
+        
+        if (maxlen > 0) {
+            /* Find the bucket, up to which we reach maxlen bytes */
+            for (b = APR_BRIGADE_FIRST(from); 
+                 (b != APR_BRIGADE_SENTINEL(from)) && (maxlen > 0);
+                 b = APR_BUCKET_NEXT(b)) {
+                
+                if (b->length == -1) {
+                    const char *ign;
+                    apr_size_t ilen;
+                    status = apr_bucket_read(b, &ign, &ilen, APR_BLOCK_READ);
+                    if (status != APR_SUCCESS) {
+                        return status;
+                    }
+                }
+                
+                if (same_alloc && APR_BUCKET_IS_FILE(b)) {
+                    /* this has no memory footprint really unless
+                     * it is read, disregard it in length count */
+                }
+                else if (maxlen < b->length) {
+                    apr_bucket_split(b, maxlen);
+                    maxlen = 0;
+                }
+                else {
+                    maxlen -= b->length;
+                }
+            }
+            end = b;
+        }
+        
+        /* DEEP_COPY==0 crashes under load. I think the setaside is fine, 
+         * however buckets moved to another thread will still be
+         * free'd against the old bucket_alloc. *And* if the old
+         * pool gets destroyed too early, the bucket disappears while
+         * still needed.
+         */
+        static const int DEEP_COPY = 1;
+        
+        while (!APR_BRIGADE_EMPTY(from) && status == APR_SUCCESS) {
+            b = APR_BRIGADE_FIRST(from);
+            if (b == end) {
+                break;
+            }
+            
+            if (same_alloc || (b->list == to->bucket_alloc)) {
+                /* both brigades use the same bucket_alloc and auto-cleanups
+                 * have the same life time. It's therefore safe to just move
+                 * directly. */
+                APR_BUCKET_REMOVE(b);
+                APR_BRIGADE_INSERT_TAIL(to, b);
+            }
+            else if (DEEP_COPY) {
+                /* we have not managed the magic of passing buckets from
+                 * one thread to another. Any attempts result in
+                 * cleanup of pools scrambling memory.
+                 */
+                if (APR_BUCKET_IS_METADATA(b)) {
+                    if (APR_BUCKET_IS_EOS(b)) {
+                        APR_BRIGADE_INSERT_TAIL(to, apr_bucket_eos_create(to->bucket_alloc));
+                    }
+                    else if (APR_BUCKET_IS_FLUSH(b)) {
+                        APR_BRIGADE_INSERT_TAIL(to, apr_bucket_flush_create(to->bucket_alloc));
+                    }
+                    else {
+                        /* TODO: there are some tricky metadata buckets such
+                         * as EOR (end of request) that do request resource
+                         * cleanup when deleted. 
+                         */
+                    }
+                }
+                else if (0 && APR_BUCKET_IS_FILE(b)) {
+                    /* We do not want to read files when passing buckets, if
+                     * we can avoid it. However, what we've come up so far
+                     * is not working corrently, resulting either in crashes or
+                     * too many open file descriptors.
+                     */
+                    apr_bucket_file *f = (apr_bucket_file *)b->data;
+                    int setaside = (f->readpool != to->p);
+                    ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, to->p,
+                                  "h2_util: moving FILE bucket %ld-%ld to=%lx "
+                                  "from=%lx fpool=%lx tpool=%lx, setaside=%d",
+                                  (long)b->start, (long)b->length, 
+                                  (long)to, (long)from, (long)from->p, 
+                                  (long)to->p, setaside);
+                    if (setaside) {
+                        status = apr_bucket_setaside(b, to->p);
+                    }
+                    if (status == APR_SUCCESS) {
+                        apr_brigade_insert_file(to, f->fd, b->start, b->length, 
+                                                to->p);
+                    }
+                }
+                else {
+                    const char *data;
+                    apr_size_t len;
+                    status = apr_bucket_read(b, &data, &len, APR_BLOCK_READ);
+                    if (status == APR_SUCCESS) {
+                        status = apr_brigade_write(to, NULL, NULL, data, len);
+                    }
+                }
+                apr_bucket_delete(b);
+            }
+            else {
+                apr_bucket_setaside(b, to->p);
+                APR_BUCKET_REMOVE(b);
+                APR_BRIGADE_INSERT_TAIL(to, b);
+            }
+        }
+    }
+    
+    return status;
+}
+

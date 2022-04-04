@@ -48,6 +48,7 @@ typedef enum {
 struct h2_bucket;
 struct h2_mplx;
 struct h2_request;
+struct h2_response;
 struct h2_task;
 
 typedef struct h2_stream h2_stream;
@@ -65,6 +66,7 @@ struct h2_stream {
     h2_request *request;        /* the request made in this stream */
     
     struct h2_task *task;       /* task created for this stream */
+    struct h2_response *response; /* the response, once ready */
     apr_bucket_brigade *bbout;  /* output DATA */
 };
 
@@ -94,11 +96,12 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream);
 apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len);
 
-apr_status_t h2_stream_read(h2_stream *stream, struct h2_bucket **pbucket, 
-                            int *peos);
+apr_status_t h2_stream_set_response(h2_stream *stream, 
+                                    struct h2_response *response,
+                                    apr_bucket_brigade *bb);
 
-apr_status_t h2_stream_readx(h2_stream *stream, char *buffer, 
-                             apr_size_t *plen, int *peos);
+apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
+                            apr_size_t *plen, int *peos);
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended);
 int h2_stream_is_suspended(h2_stream *stream);

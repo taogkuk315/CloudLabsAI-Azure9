@@ -38,14 +38,8 @@ apr_status_t h2_conn_io_init(h2_conn_io_ctx *io, conn_rec *c, int check_preface)
 
 void h2_conn_io_destroy(h2_conn_io_ctx *io)
 {
-    if (io->input) {
-        apr_brigade_destroy(io->input);
-        io->input = NULL;
-    }
-    if (io->output) {
-        apr_brigade_destroy(io->output);
-        io->output = NULL;
-    }
+    io->input = NULL;
+    io->output = NULL;
 }
 
 static apr_status_t h2_conn_io_bucket_read(h2_conn_io_ctx *io,

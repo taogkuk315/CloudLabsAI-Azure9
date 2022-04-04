@@ -81,6 +81,7 @@ struct h2_session {
     apr_allocator_t *allocator;      /* we have our own allocator */
     struct apr_thread_mutex_t *alock;
     apr_pool_t *pool;               /* pool to use in session handling */
+    apr_bucket_brigade *bbtmp;      /* brigade for keeping temporary data */
     struct apr_thread_cond_t *iowait; /* our cond when trywaiting for data */
     
     h2_conn_io_ctx io;              /* io on httpd conn filters */
@@ -144,8 +145,7 @@ apr_status_t h2_session_write(h2_session *session,
 /* Start submitting the response to a stream request. This is possible
  * once we have all the response headers. */
 apr_status_t h2_session_handle_response(h2_session *session,
-                                        struct h2_stream *stream,
-                                        struct h2_response *head);
+                                        struct h2_stream *stream);
 
 /* Set the callback to be invoked when new h2_task instances are created.  */
 void h2_session_set_stream_open_cb(h2_session *session, after_stream_open *cb);
@@ -156,10 +156,6 @@ void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb
 
 /* Get the h2_stream for the given stream idenrtifier. */
 struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);
-
-/* Get the first h2_stream that has a response ready and is submitted
- * yet. */
-struct h2_response *h2_session_pop_response(h2_session *session);
 
 void h2_session_log_stats(h2_session *session);
 
