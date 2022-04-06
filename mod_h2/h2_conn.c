@@ -314,7 +314,13 @@ h2_conn *h2_conn_create(const char *id, conn_rec *master,
     apr_status_t status = APR_SUCCESS;
     apr_pool_t *pool;
     
-    status = apr_pool_create(&pool, parent);
+    apr_allocator_t *allocator = NULL;
+    status = apr_allocator_create(&allocator);
+    if (status != APR_SUCCESS) {
+        return NULL;
+    }
+    
+    status = apr_pool_create_ex(&pool, parent, NULL, allocator);
     if (status == APR_SUCCESS) {
         /* Setup a apache connection record for this stream.
          * General idea is borrowed from mod_spdy::slave_connection.cc,
@@ -364,8 +370,12 @@ void h2_conn_destroy(h2_conn *conn)
         conn->c = NULL;
     }
     if (conn->pool) {
+        apr_allocator_t *allocator = apr_pool_allocator_get(conn->pool);
         apr_pool_destroy(conn->pool);
         /* conn is gone */
+        if (allocator) {
+            apr_allocator_destroy(allocator);
+        }
     }
 }
 
