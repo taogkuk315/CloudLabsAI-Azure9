@@ -68,5 +68,8 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
                           apr_size_t maxlen);
 
+apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from, 
+                          apr_size_t maxlen);
+
 
 #endif /* defined(__mod_h2__h2_util__) */

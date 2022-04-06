@@ -81,6 +81,7 @@ struct h2_session {
     apr_allocator_t *allocator;      /* we have our own allocator */
     struct apr_thread_mutex_t *alock;
     apr_pool_t *pool;               /* pool to use in session handling */
+    apr_bucket_alloc_t *bucket_alloc;
     apr_bucket_brigade *bbtmp;      /* brigade for keeping temporary data */
     struct apr_thread_cond_t *iowait; /* our cond when trywaiting for data */
     

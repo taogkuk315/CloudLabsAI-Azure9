@@ -71,17 +71,17 @@ static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
 
 static void have_out_data_for(h2_mplx *m, int stream_id);
 
-h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *pool)
+h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent)
 {
     apr_status_t status = APR_SUCCESS;
     h2_config *conf = h2_config_get(c);
     assert(conf);
-    h2_mplx *m = apr_pcalloc(pool, sizeof(h2_mplx));
+    h2_mplx *m = apr_pcalloc(parent, sizeof(h2_mplx));
     if (m) {
         m->id = c->id;
         m->c = c;
-        m->pool = pool;
-        m->bucket_alloc = apr_bucket_alloc_create(m->pool);
+        apr_pool_create(&m->pool, parent);
+        m->bucket_alloc = apr_bucket_alloc_create(parent);
         
         m->stream_ios = h2_io_set_create(m->pool);
         m->ready_ios = h2_io_set_create(m->pool);

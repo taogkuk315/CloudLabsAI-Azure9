@@ -59,7 +59,7 @@ static int stream_open(h2_session *session, int stream_id)
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     h2_stream * stream = h2_stream_create(stream_id, session->pool,
-                                          session->c->bucket_alloc, 
+                                          session->bucket_alloc, 
                                           session->mplx);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
@@ -447,8 +447,9 @@ static h2_session *h2_session_create_int(conn_rec *c,
         
         session->allocator = allocator;
         session->pool = pool;
+        session->bucket_alloc = apr_bucket_alloc_create(session->pool);
         session->bbtmp = apr_brigade_create(session->pool, 
-                                            c->bucket_alloc);
+                                            session->bucket_alloc);
         status = apr_thread_mutex_create(&session->alock, 
                                          APR_THREAD_MUTEX_DEFAULT,
                                          session->pool);

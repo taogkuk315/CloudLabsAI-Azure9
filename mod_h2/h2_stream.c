@@ -62,8 +62,7 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master,
         stream->id = id;
         stream->state = H2_STREAM_ST_IDLE;
         stream->pool = spool;
-        //stream->bucket_alloc = bucket_alloc;
-        stream->bucket_alloc = apr_bucket_alloc_create(stream->pool);
+        stream->bucket_alloc = bucket_alloc;
         stream->m = m;
         stream->request = h2_request_create(id, spool, m);
     }
@@ -111,7 +110,7 @@ apr_status_t h2_stream_set_response(h2_stream *stream,
             stream->bbout = apr_brigade_create(stream->pool, 
                                                stream->bucket_alloc);
         }
-        return h2_util_move(stream->bbout, bb, 0);
+        return h2_util_pass(stream->bbout, bb, 0);
     }
     return APR_SUCCESS;
 }
