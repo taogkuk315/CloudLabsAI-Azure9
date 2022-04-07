@@ -1,5 +1,7 @@
 v0.4.3
 --------------------------------------------------------------------------------
+ * heavy work on internal data transfers, use of apache bucket brigades for
+   improved performance and parallelism
  * mod_h2 now performs proper flow-control on input. Uploads can no longer
    flood memory of the server.
  * changed mod_ssl patch to reflect current trunk changes in regard to NPN/ALPN
