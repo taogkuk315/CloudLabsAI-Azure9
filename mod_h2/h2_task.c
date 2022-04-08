@@ -196,6 +196,8 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
 {
     assert(task);
     
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(task->mplx),
+                  "h2_task(%s): task_do", task->id);
     apr_status_t status = h2_conn_prep(task->conn, 
                                        h2_worker_get_thread(worker));
     if (status == APR_SUCCESS) {
@@ -219,6 +221,9 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     if (task->on_finished) {
         task->on_finished(task->ctx_finished, task);
     }
+
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, h2_mplx_get_conn(task->mplx),
+                  "h2_task(%s): task_done", task->id);
     return status;
 }
 

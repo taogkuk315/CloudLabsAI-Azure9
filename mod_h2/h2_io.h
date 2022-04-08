@@ -53,16 +53,6 @@ h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc);
  */
 void h2_io_destroy(h2_io *io);
 
-/**
- * The input data is completely queued. Blocked reads will return immediately
- * and give either data or EOF.
- */
-int h2_io_in_has_eos_for(h2_io *io);
-/**
- * Output data is available.
- */
-int h2_io_out_has_data(h2_io *io);
-
 /*******************************************************************************
  * Input handling of streams.
  ******************************************************************************/
@@ -72,30 +62,11 @@ int h2_io_out_has_data(h2_io *io);
  */
 apr_status_t h2_io_in_read(h2_io *io, struct h2_bucket **pbucket);
 
-/**
- * Appends given bucket to the input.
- */
-apr_status_t h2_io_in_write(h2_io *io, struct h2_bucket *bucket);
-
-/**
- * Closes the input. After existing data has been read, APR_EOF will
- * be returned.
- */
-apr_status_t h2_io_in_close(h2_io *io);
-
 /*******************************************************************************
  * Output handling of streams.
  ******************************************************************************/
 
 struct h2_response *h2_io_extract_response(h2_io *io);
-
-/**
- * Read a bucket from the output head. Return APR_EAGAIN if non is available,
- * APR_EOF if none available and output has been closed. Will, on successful
- * read, set peos != 0 if data is the last data of the output.
- */
-apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb, 
-                            apr_size_t maxlen);
 
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen);
@@ -111,6 +82,13 @@ apr_status_t h2_io_out_close(h2_io *io);
  * output.
  */
 apr_size_t h2_io_out_length(h2_io *io);
+
+
+/*******************************************************************************
+ * Synchronization to h2_session.
+ ******************************************************************************/
+apr_status_t h2_io_sync(h2_io *io, struct h2_bucket_queue *input, 
+                        apr_bucket_brigade *output);
 
 
 #endif /* defined(__mod_h2__h2_io__) */

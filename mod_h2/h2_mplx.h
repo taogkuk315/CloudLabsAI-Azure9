@@ -38,9 +38,11 @@ struct apr_pool_t;
 struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 struct h2_bucket;
+struct h2_bucket_queue;
 struct h2_config;
 struct h2_response;
 struct h2_task;
+struct h2_io_set;
 
 typedef struct h2_mplx h2_mplx;
 
@@ -101,10 +103,6 @@ apr_status_t h2_mplx_open_io(h2_mplx *mplx, int stream_id);
  */
 void h2_mplx_close_io(h2_mplx *mplx, int stream_id);
 
-/* Return != 0 iff the multiplexer has data for the given stream. 
- */
-int h2_mplx_out_has_data_for(h2_mplx *m, int stream_id);
-
 /**
  * Waits on output data from any stream in this session to become available. 
  * Returns APR_TIMEUP if no data arrived in the given time.
@@ -127,60 +125,9 @@ apr_status_t h2_mplx_in_read(h2_mplx *mplx, apr_read_type_e block,
                              int stream_id, struct h2_bucket **pbucket,
                              struct apr_thread_cond_t *iowait);
 
-/**
- * Appends data to the input of the given stream. Storage of input data is
- * not subject to flow control.
- */
-apr_status_t h2_mplx_in_write(h2_mplx *mplx, int stream_id, 
-                              struct h2_bucket *bucket);
-
-/**
- * Closes the input for the given stream_id.
- */
-apr_status_t h2_mplx_in_close(h2_mplx *m, int stream_id);
-
-/**
- * Returns != 0 iff the input for the given stream has been closed. There
- * could still be data queued, but it can be read without blocking.
- */
-int h2_mplx_in_has_eos_for(h2_mplx *m, int stream_id);
-
-/**
- * Callback invoked for every stream that had input data read since
- * the last invocation.
- */
-typedef void h2_mplx_consumed_cb(void *ctx, int stream_id, apr_size_t consumed);
-
-/**
- * Invoke the callback for all streams that had bytes read since the last
- * call to this function. If no stream had input data consumed, the callback
- * is not invoked.
- * Returns APR_SUCCESS when an update happened, APR_EAGAIN if no update
- * happened.
- */
-apr_status_t h2_mplx_in_update_windows(h2_mplx *m, 
-                                       h2_mplx_consumed_cb *cb, void *ctx);
-
 /*******************************************************************************
  * Output handling of streams.
  ******************************************************************************/
-
-/**
- * Gets a response from a stream that is ready for submit. Will return
- * NULL if none is available.
- * @param m the mplxer to get a response from
- * @param bb optional bucket brigade to receive any data for the returned
- *           response
- */
-struct h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb);
-
-/**
- * Reads output data from the given stream. Will never block, but
- * return APR_EAGAIN until data arrives or the stream is closed.
- */
-apr_status_t h2_mplx_out_read(h2_mplx *mplx, int stream_id, 
-                              apr_bucket_brigade *bb, apr_size_t maxlen);
-
 
 /**
  * Opens the output for the given stream with the specified response.
@@ -217,5 +164,14 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id);
  * (so far) only works when the response has not already been queued.
  */
 apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t status);
+
+/*******************************************************************************
+ * Synchronisation to h2_session.
+ ******************************************************************************/
+
+typedef apr_status_t h2_mplx_io_sync_cb(h2_mplx *m, struct h2_io_set *ios, 
+                                        void *puser);
+
+apr_status_t h2_mplx_io_sync(h2_mplx *m, h2_mplx_io_sync_cb *cb, void *puser);
 
 #endif /* defined(__mod_h2__h2_mplx__) */

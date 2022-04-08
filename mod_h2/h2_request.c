@@ -24,19 +24,20 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
+#include "h2_bucket_queue.h"
 #include "h2_mplx.h"
 #include "h2_to_h1.h"
 #include "h2_request.h"
 #include "h2_util.h"
 
 
-h2_request *h2_request_create(int id, apr_pool_t *pool, h2_mplx *m)
+h2_request *h2_request_create(int id, apr_pool_t *pool, h2_bucket_queue *bq)
 {
     h2_request *req = apr_pcalloc(pool, sizeof(h2_request));
     if (req) {
         req->id = id;
         req->pool = pool;
-        req->to_h1 = h2_to_h1_create(id, pool, m);
+        req->to_h1 = h2_to_h1_create(id, pool, bq);
     }
     return req;
 }
@@ -49,7 +50,7 @@ void h2_request_destroy(h2_request *req)
     }
 }
 
-static apr_status_t insert_request_line(h2_request *req, h2_mplx *m);
+static apr_status_t insert_request_line(h2_request *req);
 
 struct whctx {
     h2_to_h1 *to_h1;
@@ -64,7 +65,7 @@ static int write_header(void *puser, const char *key, const char *value)
     return status == APR_SUCCESS;
 }
 
-apr_status_t h2_request_rwrite(h2_request *req, request_rec *r, h2_mplx *m)
+apr_status_t h2_request_rwrite(h2_request *req, request_rec *r)
 {
     req->method = r->method;
     req->path = r->uri;
@@ -75,7 +76,7 @@ apr_status_t h2_request_rwrite(h2_request *req, request_rec *r, h2_mplx *m)
     }
     req->scheme = NULL;
     
-    apr_status_t status = insert_request_line(req, m);
+    apr_status_t status = insert_request_line(req);
     req->started = 1;
     struct whctx ctx = { req->to_h1 };
     apr_table_do(write_header, &ctx, r->headers_in, NULL);
@@ -89,8 +90,7 @@ apr_status_t h2_request_rwrite(h2_request *req, request_rec *r, h2_mplx *m)
 
 apr_status_t h2_request_write_header(h2_request *req,
                                      const char *name, size_t nlen,
-                                     const char *value, size_t vlen,
-                                     h2_mplx *m)
+                                     const char *value, size_t vlen)
 {
     apr_status_t status = APR_SUCCESS;
     
@@ -135,7 +135,7 @@ apr_status_t h2_request_write_header(h2_request *req,
     else {
         /* non-pseudo header, append to work bucket of stream */
         if (!req->started) {
-            apr_status_t status = insert_request_line(req, m);
+            apr_status_t status = insert_request_line(req);
             if (status != APR_SUCCESS) {
                 return status;
             }
@@ -152,16 +152,15 @@ apr_status_t h2_request_write_header(h2_request *req,
 }
 
 apr_status_t h2_request_write_data(h2_request *req,
-                                   const char *data, size_t len,
-                                   struct h2_mplx *m)
+                                   const char *data, size_t len)
 {
     return h2_to_h1_add_data(req->to_h1, data, len);
 }
 
-apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m)
+apr_status_t h2_request_end_headers(h2_request *req)
 {
     if (!req->started) {
-        apr_status_t status = insert_request_line(req, m);
+        apr_status_t status = insert_request_line(req);
         if (status != APR_SUCCESS) {
             return status;
         }
@@ -170,19 +169,19 @@ apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m)
     return h2_to_h1_end_headers(req->to_h1);
 }
 
-apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m)
+apr_status_t h2_request_close(h2_request *req)
 {
     return h2_to_h1_close(req->to_h1);
 }
 
-static apr_status_t insert_request_line(h2_request *req, h2_mplx *m)
+static apr_status_t insert_request_line(h2_request *req)
 {
     return h2_to_h1_start_request(req->to_h1, req->id,
                                   req->method, req->path,
                                   req->authority);
 }
 
-apr_status_t h2_request_flush(h2_request *req, h2_mplx *m)
+apr_status_t h2_request_flush(h2_request *req)
 {
     return h2_to_h1_flush(req->to_h1);
 }

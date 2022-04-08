@@ -27,6 +27,7 @@
 
 #include "h2_private.h"
 #include "h2_bucket.h"
+#include "h2_bucket_queue.h"
 #include "h2_mplx.h"
 #include "h2_request.h"
 #include "h2_response.h"
@@ -64,7 +65,11 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master,
         stream->pool = spool;
         stream->bucket_alloc = bucket_alloc;
         stream->m = m;
-        stream->request = h2_request_create(id, spool, m);
+        stream->input = h2_bucket_queue_create(stream->pool);
+        stream->bbout = apr_brigade_create(stream->pool, 
+                                           stream->bucket_alloc);
+
+        stream->request = h2_request_create(id, spool, stream->input);
     }
     return stream;
 }
@@ -80,6 +85,10 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
     if (stream->task) {
         h2_task_destroy(stream->task);
         stream->task = NULL;
+    }
+    if (stream->input) {
+        h2_bucket_queue_destroy(stream->input);
+        stream->input = NULL;
     }
     stream->bbout = NULL;
     if (stream->pool) {
@@ -100,21 +109,6 @@ void h2_stream_abort(h2_stream *stream)
     stream->aborted = 1;
 }
 
-apr_status_t h2_stream_set_response(h2_stream *stream, 
-                                    struct h2_response *response,
-                                    apr_bucket_brigade *bb)
-{
-    stream->response = response;
-    if (bb) {
-        if (stream->bbout == NULL) {
-            stream->bbout = apr_brigade_create(stream->pool, 
-                                               stream->bucket_alloc);
-        }
-        return h2_util_pass(stream->bbout, bb, 0);
-    }
-    return APR_SUCCESS;
-}
-
 h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
 {
     assert(stream);
@@ -128,21 +122,25 @@ h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
     return stream->task;
 }
 
-apr_status_t h2_stream_write_eoh(h2_stream *stream)
+apr_status_t h2_stream_in_write_eoh(h2_stream *stream)
 {
     assert(stream);
-    return h2_request_end_headers(stream->request, stream->m);
-}
-
-apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
-{
-    assert(stream);
-    set_state(stream, H2_STREAM_ST_OPEN);
-    apr_status_t status = h2_request_rwrite(stream->request, r, stream->m);
+    apr_status_t status = h2_request_end_headers(stream->request);
+    if (status == APR_SUCCESS) {
+        status = h2_request_flush(stream->request);
+    }
     return status;
 }
 
-apr_status_t h2_stream_write_eos(h2_stream *stream)
+apr_status_t h2_stream_in_rwrite(h2_stream *stream, request_rec *r)
+{
+    assert(stream);
+    set_state(stream, H2_STREAM_ST_OPEN);
+    apr_status_t status = h2_request_rwrite(stream->request, r);
+    return status;
+}
+
+apr_status_t h2_stream_in_write_eos(h2_stream *stream)
 {
     assert(stream);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
@@ -162,12 +160,12 @@ apr_status_t h2_stream_write_eos(h2_stream *stream)
             set_state(stream, H2_STREAM_ST_CLOSED_INPUT);
             break;
     }
-    return h2_request_close(stream->request, stream->m);
+    return h2_request_close(stream->request);
 }
 
-apr_status_t h2_stream_write_header(h2_stream *stream,
-                                    const char *name, size_t nlen,
-                                    const char *value, size_t vlen)
+apr_status_t h2_stream_in_write_header(h2_stream *stream,
+                                       const char *name, size_t nlen,
+                                       const char *value, size_t vlen)
 {
     assert(stream);
     switch (stream->state) {
@@ -179,12 +177,11 @@ apr_status_t h2_stream_write_header(h2_stream *stream,
         default:
             return APR_EINVAL;
     }
-    return h2_request_write_header(stream->request, name, nlen,
-                                   value, vlen, stream->m);
+    return h2_request_write_header(stream->request, name, nlen, value, vlen);
 }
 
-apr_status_t h2_stream_write_data(h2_stream *stream,
-                                  const char *data, size_t len)
+apr_status_t h2_stream_in_write_data(h2_stream *stream,
+                                     const char *data, size_t len)
 {
     assert(stream);
     assert(stream);
@@ -194,20 +191,15 @@ apr_status_t h2_stream_write_data(h2_stream *stream,
         default:
             return APR_EINVAL;
     }
-    return h2_request_write_data(stream->request, data, len, stream->m);
+    return h2_request_write_data(stream->request, data, len);
 }
 
-apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
-                            apr_size_t *plen, int *peos)
+apr_status_t h2_stream_out_read(h2_stream *stream, char *buffer, 
+                                apr_size_t *plen, int *peos)
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t avail = *plen;
     apr_size_t written = 0;
-    
-    if (stream->bbout == NULL) {
-        stream->bbout = apr_brigade_create(stream->pool, 
-                                           stream->bucket_alloc);
-    }
     
     /* As long as we read successfully, the buffer is not filled and
      * we did not encounter the eos, continue.
@@ -216,30 +208,12 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
     while ((status == APR_SUCCESS) && (avail > 0) && !*peos) {
         
         if (APR_BRIGADE_EMPTY(stream->bbout)) {
-            /* Our brigade is empty, need to get more data.
+            /* Our brigade is empty, return
              */
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
-                          h2_mplx_get_conn(stream->m),
-                          "h2_stream(%ld-%d): reading from mplx",
-                          h2_mplx_get_id(stream->m), stream->id);
-            status = h2_mplx_out_read(stream->m, stream->id, stream->bbout, 
-                                      h2_mplx_get_out_max_mem(stream->m));
-            if (status == APR_EOF) {
-                *peos = 1;
-                if (written) {
-                    status = APR_SUCCESS;
-                    break;
-                }
+            if (!written) {
+                status = APR_EAGAIN;
             }
-            else if (APR_STATUS_IS_EAGAIN(status)) {
-                if (written) {
-                    status = APR_SUCCESS;
-                    break;
-                }
-            }
-            else {
-                break;
-            }
+            break;
         }
         
         /* Copy data in our brigade into the buffer until it is filled or
@@ -291,13 +265,13 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
     return status;
 }
 
-void h2_stream_set_suspended(h2_stream *stream, int suspended)
+void h2_stream_out_set_suspended(h2_stream *stream, int suspended)
 {
     assert(stream);
     stream->suspended = !!suspended;
 }
 
-int h2_stream_is_suspended(h2_stream *stream)
+int h2_stream_out_is_suspended(h2_stream *stream)
 {
     assert(stream);
     return stream->suspended;

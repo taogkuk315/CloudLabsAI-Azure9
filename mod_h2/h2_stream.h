@@ -46,6 +46,7 @@ typedef enum {
 } h2_stream_state_t;
 
 struct h2_bucket;
+struct h2_bucket_queue;
 struct h2_mplx;
 struct h2_request;
 struct h2_response;
@@ -66,7 +67,7 @@ struct h2_stream {
     h2_request *request;        /* the request made in this stream */
     
     struct h2_task *task;       /* task created for this stream */
-    struct h2_response *response; /* the response, once ready */
+    struct h2_bucket_queue *input;/* stream input in HTTP/1.1 format */
     apr_bucket_brigade *bbout;  /* output DATA */
 };
 
@@ -81,29 +82,27 @@ int h2_stream_get_id(h2_stream *stream);
 
 void h2_stream_abort(h2_stream *stream);
 
-struct h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master);
+apr_status_t h2_stream_sync(h2_stream *stream, struct h2_mplx *mplx);
 
-apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r);
+apr_status_t h2_stream_in_rwrite(h2_stream *stream, request_rec *r);
 
-apr_status_t h2_stream_write_eos(h2_stream *stream);
+apr_status_t h2_stream_in_write_header(h2_stream *stream,
+                                       const char *name, size_t nlen,
+                                       const char *value, size_t vlen);
 
-apr_status_t h2_stream_write_header(h2_stream *stream,
-                                    const char *name, size_t nlen,
-                                    const char *value, size_t vlen);
+apr_status_t h2_stream_in_write_eoh(h2_stream *stream);
 
-apr_status_t h2_stream_write_eoh(h2_stream *stream);
-
-apr_status_t h2_stream_write_data(h2_stream *stream,
+apr_status_t h2_stream_in_write_data(h2_stream *stream,
                                   const char *data, size_t len);
 
-apr_status_t h2_stream_set_response(h2_stream *stream, 
-                                    struct h2_response *response,
-                                    apr_bucket_brigade *bb);
+apr_status_t h2_stream_in_write_eos(h2_stream *stream);
 
-apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
+apr_status_t h2_stream_out_read(h2_stream *stream, char *buffer, 
                             apr_size_t *plen, int *peos);
 
-void h2_stream_set_suspended(h2_stream *stream, int suspended);
-int h2_stream_is_suspended(h2_stream *stream);
+void h2_stream_out_set_suspended(h2_stream *stream, int suspended);
+int h2_stream_out_is_suspended(h2_stream *stream);
+
+struct h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master);
 
 #endif /* defined(__mod_h2__h2_stream__) */
