@@ -16,16 +16,14 @@
 #ifndef __mod_h2__h2_to_h1__
 #define __mod_h2__h2_to_h1__
 
-struct h2_bucket_queue;
-
+struct h2_mplx;
 typedef struct h2_to_h1 h2_to_h1;
 
 /* Create a converter from a HTTP/2 request to a serialzation in
  * HTTP/1.1 format. The serialized data will be written onto the
  * given h2_mplx instance.
  */
-h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, 
-                          struct h2_bucket_queue *bq);
+h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, struct h2_mplx *m);
 
 /* Destroy the converter and free resources. */
 void h2_to_h1_destroy(h2_to_h1 *to_h1);

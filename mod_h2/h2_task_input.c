@@ -33,7 +33,6 @@ struct h2_task_input {
     int stream_id;
     struct h2_mplx *m;
     
-    int first_read;
     int eos;
     struct h2_bucket *cur;
 };
@@ -42,6 +41,14 @@ struct h2_task_input {
 static int is_aborted(h2_task_input *input, ap_filter_t *f)
 {
     return (f->c->aborted || h2_task_is_aborted(input->task));
+}
+
+/** stream is in state of input closed. That means no input is pending
+ * on the connection and all input (if any) is in the input queue.
+ */
+static int all_queued(h2_task_input *input)
+{
+    return input->eos || h2_mplx_in_has_eos_for(input->m, input->stream_id);
 }
 
 static void cleanup(h2_task_input *input) {
@@ -61,7 +68,6 @@ h2_task_input *h2_task_input_create(apr_pool_t *pool, h2_task *task,
         input->task = task;
         input->stream_id = stream_id;
         input->m = m;
-        input->first_read = 1;
     }
     return input;
 }
@@ -98,13 +104,12 @@ apr_status_t h2_task_input_read(h2_task_input *input,
          * Getting none back in that case means we reached the
          * end of the input.
          */
-        status = h2_mplx_in_read(input->m, 
-                                 input->first_read? APR_BLOCK_READ : block,
+        status = h2_mplx_in_read(input->m, block,
                                  input->stream_id, &input->cur, 
                                  h2_task_get_io_cond(input->task));
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
-                      "h2_task_input(%s): mplx_in_read(block=%d) -> %ld bytes",
-                      h2_task_get_id(input->task), block,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
+                      "h2_task_input(%s): mplx returned %ld bytes",
+                      h2_task_get_id(input->task), 
                       (long)(input->cur? input->cur->data_len : -1L));
         if (status == APR_EOF) {
             input->eos = 1;

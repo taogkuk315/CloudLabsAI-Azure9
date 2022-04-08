@@ -70,7 +70,7 @@ static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
     return 0;
 }
 
-static void have_out_data(h2_mplx *m);
+static void have_out_data_for(h2_mplx *m, int stream_id);
 
 h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent)
 {
@@ -312,6 +312,99 @@ apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
     return status;
 }
 
+apr_status_t h2_mplx_in_write(h2_mplx *m,
+                              int stream_id, struct h2_bucket *bucket)
+{
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+        if (io) {
+            status = h2_io_in_write(io, bucket);
+            if (io->input_arrived) {
+                apr_thread_cond_signal(io->input_arrived);
+            }
+            apr_thread_mutex_unlock(m->lock);
+        }
+        else {
+            status = APR_EOF;
+        }
+    }
+    return status;
+}
+
+apr_status_t h2_mplx_in_close(h2_mplx *m, int stream_id)
+{
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+        if (io) {
+            status = h2_io_in_close(io);
+            if (io->input_arrived) {
+                apr_thread_cond_signal(io->input_arrived);
+            }
+        }
+        else {
+            status = APR_ECONNABORTED;
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}
+
+typedef struct {
+    h2_mplx_consumed_cb *cb;
+    void *cb_ctx;
+    int streams_updated;
+} update_ctx;
+
+static int update_window(void *ctx, h2_io *io)
+{
+    if (io->input_consumed) {
+        update_ctx *uctx = (update_ctx*)ctx;
+        uctx->cb(uctx->cb_ctx, io->id, io->input_consumed);
+        io->input_consumed = 0;
+        ++uctx->streams_updated;
+    }
+    return 1;
+}
+
+apr_status_t h2_mplx_in_update_windows(h2_mplx *m, 
+                                       h2_mplx_consumed_cb *cb, void *cb_ctx)
+{
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        update_ctx ctx = { cb, cb_ctx, 0 };
+        h2_io_set_iter(m->stream_ios, update_window, &ctx);
+        status = ctx.streams_updated? APR_SUCCESS : APR_EAGAIN;
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}
+
+apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id, 
+                              apr_bucket_brigade *bb, apr_size_t maxlen)
+{
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+        if (io) {
+            status = h2_io_out_read(io, bb, maxlen);
+            if (status == APR_SUCCESS && io->output_drained) {
+                apr_thread_cond_signal(io->output_drained);
+            }
+        }
+        else {
+            status = APR_EAGAIN;
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}
+
 apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
 {
     assert(m);
@@ -319,6 +412,29 @@ apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
                             h2_response_create(stream_id, ss, NULL, NULL,
                                                m->pool),
                             NULL, NULL, NULL);
+}
+
+h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb)
+{
+    assert(m);
+    h2_response *response = NULL;
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get_highest_prio(m->ready_ios);
+        if (io && io->response) {
+            response = h2_io_extract_response(io);
+            h2_io_set_remove(m->ready_ios, io);
+            if (bb) {
+                h2_io_out_read(io, bb, 0);
+            }
+            
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
+                          "h2_mplx(%ld): popped response(%d)",
+                          m->id, response->stream_id);
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return response;
 }
 
 static apr_status_t out_write(h2_mplx *m, h2_io *io, 
@@ -370,7 +486,7 @@ apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response,
                               m->id, stream_id);
                 status = out_write(m, io, f, bb, iowait);
             }
-            have_out_data(m);
+            have_out_data_for(m, stream_id);
         }
         else {
             status = APR_ECONNABORTED;
@@ -391,7 +507,7 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, int stream_id,
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
             status = out_write(m, io, f, bb, iowait);
-            have_out_data(m);
+            have_out_data_for(m, stream_id);
         }
         else {
             status = APR_ECONNABORTED;
@@ -409,7 +525,7 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
             status = h2_io_out_close(io);
-            have_out_data(m);
+            have_out_data_for(m, stream_id);
         }
         else {
             status = APR_ECONNABORTED;
@@ -417,6 +533,36 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
+}
+
+int h2_mplx_in_has_eos_for(h2_mplx *m, int stream_id)
+{
+    assert(m);
+    int has_eos = 0;
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+        if (io) {
+            has_eos = h2_io_in_has_eos_for(io);
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return has_eos;
+}
+
+int h2_mplx_out_has_data_for(h2_mplx *m, int stream_id)
+{
+    assert(m);
+    int has_data = 0;
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+        if (io) {
+            has_data = h2_io_out_has_data(io);
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return has_data;
 }
 
 apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
@@ -436,22 +582,11 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
     return status;
 }
 
-static void have_out_data(h2_mplx *m)
+static void have_out_data_for(h2_mplx *m, int stream_id)
 {
     assert(m);
     if (m->added_output) {
         apr_thread_cond_signal(m->added_output);
     }
-}
-
-apr_status_t h2_mplx_io_sync(h2_mplx *m, h2_mplx_io_sync_cb *cb, void *puser)
-{
-    assert(m);
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        status = cb(m, m->stream_ios, puser);
-        apr_thread_mutex_unlock(m->lock);
-    }
-    return status;   
 }
 

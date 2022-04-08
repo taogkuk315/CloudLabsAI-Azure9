@@ -88,7 +88,6 @@ struct h2_session {
     h2_conn_io_ctx io;              /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_stream_set *streams;  /* streams handled by this session */
-    struct h2_stream_set *to_be_resumed;/* streams to be resumed */
     struct h2_stream_set *zombies;  /* streams that are done */
     
     after_stream_open *after_stream_opened_cb; /* stream task can start */
@@ -143,6 +142,11 @@ apr_status_t h2_session_read(h2_session *session, apr_read_type_e block);
  */
 apr_status_t h2_session_write(h2_session *session,
                               apr_interval_time_t timeout);
+
+/* Start submitting the response to a stream request. This is possible
+ * once we have all the response headers. */
+apr_status_t h2_session_handle_response(h2_session *session,
+                                        struct h2_stream *stream);
 
 /* Set the callback to be invoked when new h2_task instances are created.  */
 void h2_session_set_stream_open_cb(h2_session *session, after_stream_open *cb);

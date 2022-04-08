@@ -124,12 +124,6 @@ APR_RING_CHECK_ELEM_CONSISTENCY((e), h2_bucket, link)
     } while (0)
 
 
-#define H2_QUEUE_CONCAT(a, b) do {					\
-    APR_RING_CONCAT(&(a)->ring, &(b)->ring, h2_bucket, link);	\
-        H2_QUEUE_CHECK_CONSISTENCY((a));				\
-    } while (0)
-
-
 /* Create a new queue using the given memory pool. The queue will
  * reuse allocated memory, so memory footprint varies with queue length,
  * not number of buckets placed. 

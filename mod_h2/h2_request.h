@@ -24,8 +24,8 @@
  * we have only to make someone else parse them back.
  */
 struct h2_bucket;
-struct h2_bucket_queue;
 struct h2_to_h1;
+struct h2_mplx;
 
 typedef struct h2_request h2_request;
 
@@ -45,23 +45,25 @@ struct h2_request {
     const char *scheme;
 };
 
-h2_request *h2_request_create(int id, apr_pool_t *pool, 
-                              struct h2_bucket_queue *bq);
+h2_request *h2_request_create(int id, apr_pool_t *pool, struct h2_mplx *m);
 void h2_request_destroy(h2_request *req);
 
-apr_status_t h2_request_flush(h2_request *req);
+apr_status_t h2_request_flush(h2_request *req, struct h2_mplx *m);
 
 apr_status_t h2_request_write_header(h2_request *req,
                                      const char *name, size_t nlen,
-                                     const char *value, size_t vlen);
+                                     const char *value, size_t vlen,
+                                     struct h2_mplx *m);
 
 apr_status_t h2_request_write_data(h2_request *request,
-                                   const char *data, size_t len);
+                                   const char *data, size_t len,
+                                   struct h2_mplx *m);
 
-apr_status_t h2_request_end_headers(h2_request *req);
+apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m);
 
-apr_status_t h2_request_close(h2_request *req);
+apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m);
 
-apr_status_t h2_request_rwrite(h2_request *req, request_rec *r);
+apr_status_t h2_request_rwrite(h2_request *req, request_rec *r,
+                               struct h2_mplx *m);
 
 #endif /* defined(__mod_h2__h2_request__) */

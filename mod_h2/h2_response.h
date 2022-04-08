@@ -24,7 +24,6 @@ struct h2_bucket;
 
 typedef struct h2_response {
     int stream_id;
-    APR_RING_ENTRY(h2_response) link;
     apr_status_t task_status;
     const char *http_status;
 

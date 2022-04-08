@@ -46,7 +46,6 @@ h2_response *h2_response_create(int stream_id,
     }
 
     head->stream_id = stream_id;
-    APR_RING_ELEM_INIT(head, link);
     head->task_status = task_status;
     head->http_status = http_status;
     head->content_length = -1;
