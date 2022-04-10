@@ -425,7 +425,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
 {
     nghttp2_session_callbacks *callbacks = NULL;
     nghttp2_option *options = NULL;
-    
+
     apr_allocator_t *allocator = NULL;
     apr_status_t status = apr_allocator_create(&allocator);
     if (status != APR_SUCCESS) {
@@ -493,7 +493,8 @@ static h2_session *h2_session_create_int(conn_rec *c,
         nghttp2_option_set_recv_client_preface(options, 1);
         /* Set a value, to be observed before we receive any SETTINGS
          * from the client. */
-        nghttp2_option_set_peer_max_concurrent_streams(options, 100);
+        nghttp2_option_set_peer_max_concurrent_streams(options, 
+             h2_config_geti(config, H2_CONF_MAX_STREAMS));
 
         /* We need to handle window updates ourself, otherwise we
          * get flooded by nghttp2. */
@@ -783,8 +784,14 @@ static int h2_session_want_write(h2_session *session)
     return nghttp2_session_want_write(session->ngh2);
 }
 
+typedef struct {
+    h2_session *session;
+    int resume_count;
+} resume_ctx;
+
 static h2_stream *resume_on_data(void *ctx, h2_stream *stream) {
-    h2_session *session = (h2_session *)ctx;
+    resume_ctx *rctx = (resume_ctx*)ctx;
+    h2_session *session = rctx->session;
     assert(session);
     assert(stream);
     
@@ -794,6 +801,8 @@ static h2_stream *resume_on_data(void *ctx, h2_stream *stream) {
                       h2_mplx_get_id(stream->m), stream->id);
         if (h2_mplx_out_has_data_for(stream->m, h2_stream_get_id(stream))) {
             h2_stream_set_suspended(stream, 0);
+            ++rctx->resume_count;
+            
             int rv = nghttp2_session_resume_data(session->ngh2,
                                                  h2_stream_get_id(stream));
             ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
@@ -805,14 +814,17 @@ static h2_stream *resume_on_data(void *ctx, h2_stream *stream) {
     return NULL;
 }
 
-static void h2_session_resume_streams_with_data(h2_session *session) {
+static int h2_session_resume_streams_with_data(h2_session *session) {
     assert(session);
     if (!h2_stream_set_is_empty(session->streams)
         && session->mplx && !session->aborted) {
+        resume_ctx ctx = { session, 0 };
         /* Resume all streams where we have data in the out queue and
          * which had been suspended before. */
-        h2_stream_set_find(session->streams, resume_on_data, session);
+        h2_stream_set_find(session->streams, resume_on_data, &ctx);
+        return ctx.resume_count;
     }
+    return 0;
 }
 
 static void update_window(void *ctx, int stream_id, apr_size_t bytes_read)
@@ -843,6 +855,20 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         return status;
     }
     
+    if (h2_session_want_write(session)) {
+        status = APR_SUCCESS;
+        int rv = nghttp2_session_send(session->ngh2);
+        if (rv != 0) {
+            ap_log_cerror( APLOG_MARK, APLOG_INFO, 0, session->c,
+                          "h2_session: send: %s", nghttp2_strerror(rv));
+            if (nghttp2_is_fatal(rv)) {
+                h2_session_abort_int(session, rv);
+                status = APR_ECONNABORTED;
+            }
+        }
+        have_written = 1;
+    }
+    
     /* If we have responses ready, submit them now. */
     apr_brigade_cleanup(session->bbtmp);
     while ((response = h2_session_pop_response(session, 
@@ -857,12 +883,17 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         response = NULL;
         apr_brigade_cleanup(session->bbtmp);
     }
-    h2_session_resume_streams_with_data(session);
+    
+    if (h2_session_resume_streams_with_data(session) > 0) {
+        have_written = 1;
+    }
     
     if (!have_written && timeout > 0 && !h2_session_want_write(session)) {
         status = h2_mplx_out_trywait(session->mplx, timeout, session->iowait);
+        if (h2_session_resume_streams_with_data(session) > 0) {
+            have_written = 1;
+        }
     }
-    h2_session_resume_streams_with_data(session);
     
     if (h2_session_want_write(session)) {
         status = APR_SUCCESS;

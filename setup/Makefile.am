@@ -16,7 +16,8 @@ SUBDIRS =
 
 EXTRA_DIST = \
     h2.load \
-    h2.conf
+    h2.conf \
+    install-config.sh
 
 
 ACLOCAL_AMFLAGS = -I m4
