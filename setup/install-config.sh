@@ -15,10 +15,16 @@
 #
 
 SYSCONF="$1"
-A2ENMOD="$2"
+DESTDIR="$2"
+A2ENMOD="$( type -p a2enmod )"
 
-if [ -d "$SYSCONF/mods-available" ]; then
-    echo -n "isntalling mod_h2 config in $SYSCONF..."
+if [ -d "$DESTDIR" ]; then
+	cat << EOF
+  You need to add loading instructions to your httpd configruation
+  in order to use mod_h2.
+EOF
+elif [ -d "$SYSCONF/mods-available" ]; then
+    echo -n "installing mod_h2 config in $SYSCONF..."
     cp h2.conf h2.load "$SYSCONF/mods-available"
     echo "done."
     if [ -x "$A2ENMOD" ]; then
