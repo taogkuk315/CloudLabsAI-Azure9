@@ -36,6 +36,14 @@ int h2_util_contains_token(apr_pool_t *pool, const char *s, const char *token);
 const char *h2_util_first_token_match(apr_pool_t *pool, const char *s, 
                                       const char *tokens[], apr_size_t len);
 
+/**
+ * I always wanted to write my own base64url decoder...not. See 
+ * https://tools.ietf.org/html/rfc4648#section-5 for description.
+ */
+apr_size_t h2_util_base64url_decode(unsigned char **decoded, 
+                                    const char *encoded, 
+                                    apr_pool_t *pool);
+
 #define H2_HD_MATCH_LIT(l, name, nlen)  \
     ((nlen == sizeof(l) - 1) && !apr_strnatcasecmp(l, name))
 
@@ -66,7 +74,7 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
  * @param maxlen of bytes to move, 0 for all
  */
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen);
+                          apr_size_t maxlen, const char *msg);
 
 apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from, 
                           apr_size_t maxlen);

@@ -231,11 +231,14 @@ static apr_status_t close_active_stream(h2_session *session,
         status = session->before_stream_close_cb(session, stream,
                                                  stream->task, join);
     }
+    
     if (status == APR_SUCCESS) {
-        h2_mplx_close_io(session->mplx, stream->id);
         h2_stream_destroy(stream);
     }
     else if (status == APR_EAGAIN) {
+        ap_log_cerror(APLOG_MARK, APLOG_INFO, status, session->c,
+                      "h2_stream(%ld-%d): close delayed by callback",
+                      session->id, (int)stream->id);
         h2_stream_set_add(session->zombies, stream);
     }
     return status;
@@ -655,39 +658,49 @@ static apr_status_t h2_session_abort_int(h2_session *session, int reason)
     assert(session);
     if (!session->aborted) {
         session->aborted = 1;
-        nghttp2_session_terminate_session(session->ngh2, reason);
+        if (session->ngh2) {
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+                          "session(%ld): aborting session, reason=%d %s",
+                          session->id, reason, nghttp2_strerror(reason));
+            nghttp2_session_terminate_session(session->ngh2, reason);
+            nghttp2_submit_goaway(session->ngh2, 0, 0, reason, NULL, 0);
+            nghttp2_session_send(session->ngh2);
+            h2_conn_io_flush(&session->io);
+        }
         h2_mplx_abort(session->mplx);
     }
     return APR_SUCCESS;
 }
 
-apr_status_t h2_session_abort(h2_session *session, apr_status_t reason)
+apr_status_t h2_session_abort(h2_session *session, apr_status_t reason, int rv)
 {
     assert(session);
-    int err = NGHTTP2_ERR_PROTO;
-    switch (reason) {
-        case APR_ENOMEM:
-            err = NGHTTP2_ERR_NOMEM;
-            break;
-        case APR_EOF:
-            err = 0;
-            break;
-        case APR_ECONNABORTED:
-            err = NGHTTP2_ERR_EOF;
-            break;
-        default:
-            break;
+    if (rv == 0) {
+        rv = NGHTTP2_ERR_PROTO;
+        switch (reason) {
+            case APR_ENOMEM:
+                rv = NGHTTP2_ERR_NOMEM;
+                break;
+            case APR_EOF:
+                rv = 0;
+                break;
+            case APR_ECONNABORTED:
+                rv = NGHTTP2_ERR_EOF;
+                break;
+            default:
+                break;
+        }
     }
-    return h2_session_abort_int(session, err);
+    return h2_session_abort_int(session, rv);
 }
 
-apr_status_t h2_session_start(h2_session *session)
+apr_status_t h2_session_start(h2_session *session, int *rv)
 {
     assert(session);
     /* Start the conversation by submitting our SETTINGS frame */
     apr_status_t status = APR_SUCCESS;
     h2_config *config = h2_config_get(session->c);
-    int rv = 0;
+    *rv = 0;
     
     if (session->r) {
         /* 'h2c' mode: we should have a 'HTTP2-Settings' header with
@@ -698,29 +711,31 @@ apr_status_t h2_session_start(h2_session *session)
                           "HTTP2-Settings header missing in request");
             return APR_EINVAL;
         }
-        int cslen = apr_base64_decode_len(s);
-        char *cs = apr_pcalloc(session->r->pool, cslen);
-        --cslen; /* apr also counts the terminating 0 */
-        apr_base64_decode(cs, s);
+        unsigned char *cs = NULL;
+        int dlen = h2_util_base64url_decode(&cs, s, session->pool);
         
-        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, session->r,
-                      "upgrading h2c session with nghttp2 from %s (%d)",
-                      s, cslen);
+        if (APLOGrdebug(session->r)) {
+            char buffer[128];
+            h2_util_hex_dump(buffer, 128, (char*)cs, dlen);
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, session->r,
+                          "upgrading h2c session with HTTP2-Settings: %s -> %s (%d)",
+                          s, buffer, dlen);
+        }
         
-        rv = nghttp2_session_upgrade(session->ngh2, (uint8_t*)cs, cslen, NULL);
-        if (rv != 0) {
-            status = APR_EGENERAL;
+        *rv = nghttp2_session_upgrade(session->ngh2, (uint8_t*)cs, dlen, NULL);
+        if (*rv != 0) {
+            status = APR_EINVAL;
             ap_log_rerror(APLOG_MARK, APLOG_ERR, status, session->r,
-                          "nghttp2_session_upgrade: %s", nghttp2_strerror(rv));
+                          "nghttp2_session_upgrade: %s", nghttp2_strerror(*rv));
             return status;
         }
         
         /* Now we need to auto-open stream 1 for the request we got. */
-        rv = stream_open(session, 1);
-        if (rv != 0) {
+        *rv = stream_open(session, 1);
+        if (*rv != 0) {
             status = APR_EGENERAL;
             ap_log_rerror(APLOG_MARK, APLOG_ERR, status, session->r,
-                          "open stream 1: %s", nghttp2_strerror(rv));
+                          "open stream 1: %s", nghttp2_strerror(*rv));
             return status;
         }
         
@@ -754,13 +769,13 @@ apr_status_t h2_session_start(h2_session *session)
         {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 
             h2_config_geti(config, H2_CONF_MAX_STREAMS) }, 
     };
-    rv = nghttp2_submit_settings(session->ngh2, NGHTTP2_FLAG_NONE,
+    *rv = nghttp2_submit_settings(session->ngh2, NGHTTP2_FLAG_NONE,
                                  settings,
                                  sizeof(settings)/sizeof(settings[0]));
-    if (rv != 0) {
+    if (*rv != 0) {
         status = APR_EGENERAL;
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                      "nghttp2_submit_settings: %s", nghttp2_strerror(rv));
+                      "nghttp2_submit_settings: %s", nghttp2_strerror(*rv));
     }
     
     return status;

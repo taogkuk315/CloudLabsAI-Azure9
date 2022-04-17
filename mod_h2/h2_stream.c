@@ -65,6 +65,9 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master,
         stream->bucket_alloc = bucket_alloc;
         stream->m = m;
         stream->request = h2_request_create(id, spool, m);
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(m),
+                      "h2_stream(%ld-%d): created",
+                      h2_mplx_get_id(stream->m), stream->id);
     }
     return stream;
 }
@@ -72,10 +75,11 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master,
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
     assert(stream);
-    ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, stream->pool,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
                   "h2_stream(%ld-%d): destroy",
                   h2_mplx_get_id(stream->m), stream->id);
     h2_request_destroy(stream->request);
+    h2_mplx_close_io(stream->m, stream->id);
     stream->m = NULL;
     if (stream->task) {
         h2_task_destroy(stream->task);
@@ -218,7 +222,7 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
         if (APR_BRIGADE_EMPTY(stream->bbout)) {
             /* Our brigade is empty, need to get more data.
              */
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
                           h2_mplx_get_conn(stream->m),
                           "h2_stream(%ld-%d): reading from mplx",
                           h2_mplx_get_id(stream->m), stream->id);
@@ -264,8 +268,9 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
                 if (APR_BUCKET_IS_FILE(b)) {
                     ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
                                   h2_mplx_get_conn(stream->m),
-                                  "h2_stream(%ld-%d): reading FILE bucket",
-                                  h2_mplx_get_id(stream->m), stream->id);
+                                  "h2_stream(%ld-%d): reading FILE(%ld-%ld)",
+                                  h2_mplx_get_id(stream->m), stream->id,
+                                  (long)b->start, (long)b->length);
                 }
                 if (b->length != -1 && b->length > avail) {
                     apr_bucket_split(b, avail);

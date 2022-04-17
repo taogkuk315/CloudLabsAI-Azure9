@@ -142,6 +142,8 @@ apr_status_t h2_conn_main(conn_rec *c)
 apr_status_t h2_session_process(h2_session *session)
 {
     apr_status_t status = APR_SUCCESS;
+    int rv = 0;
+    
     /* Start talking to the client. Apart from protocol meta data,
      * we mainly will see new http/2 streams opened by the client, which
      * basically are http requests we need to dispatch.
@@ -180,10 +182,11 @@ apr_status_t h2_session_process(h2_session *session)
     h2_session_set_stream_open_cb(session, after_stream_opened_cb);
     h2_session_set_stream_close_cb(session, before_stream_close_cb);
     
-    status = h2_session_start(session);
+    status = h2_session_start(session, &rv);
     ap_log_cerror(APLOG_MARK, APLOG_INFO, status, session->c,
                   "h2_session(%ld): starting", session->id);
     if (status != APR_SUCCESS) {
+        h2_session_abort(session, status, rv);
         h2_session_destroy(session);
         return status;
     }
@@ -213,7 +216,7 @@ apr_status_t h2_session_process(h2_session *session)
             ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
                           "h2_session(%ld): writing, terminating",
                           session->id);
-            h2_session_abort(session, status);
+            h2_session_abort(session, status, 0);
             break;
         }
 
@@ -245,13 +248,13 @@ apr_status_t h2_session_process(h2_session *session)
                 ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
                               "h2_session(%ld): reading",
                               session->id);
-                h2_session_abort(session, status);
+                h2_session_abort(session, status, 0);
                 break;
             default:
                 ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
                               "h2_session(%ld): error reading, terminating",
                               session->id);
-                h2_session_abort(session, status);
+                h2_session_abort(session, status, 0);
                 break;
         }
         

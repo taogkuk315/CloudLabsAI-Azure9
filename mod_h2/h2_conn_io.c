@@ -143,7 +143,7 @@ apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
     
     status = ap_get_brigade(io->connection->input_filters,
                         io->input, AP_MODE_READBYTES,
-                        block, BLOCKSIZE);
+                        block, 4096);
     switch (status) {
         case APR_SUCCESS:
             return h2_conn_io_bucket_read(io, block, on_read_cb, puser, &done);

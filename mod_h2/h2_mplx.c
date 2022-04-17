@@ -427,7 +427,6 @@ h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb)
             if (bb) {
                 h2_io_out_read(io, bb, 0);
             }
-            
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
                           "h2_mplx(%ld): popped response(%d)",
                           m->id, response->stream_id);

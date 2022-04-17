@@ -32,9 +32,10 @@ h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc)
     h2_io *io = apr_pcalloc(pool, sizeof(*io));
     if (io) {
         io->id = id;
-        io->pool = pool;
+        /*io->pool = pool;*/
+        apr_pool_create(&io->pool, pool);
         h2_bucket_queue_init(&io->input);
-        io->bbout = apr_brigade_create(pool, bucket_alloc);
+        io->bbout = apr_brigade_create(io->pool, bucket_alloc);
     }
     return io;
 }
@@ -48,6 +49,7 @@ void h2_io_destroy(h2_io *io)
 {
     h2_io_cleanup(io);
     io->bbout = NULL;
+    apr_pool_destroy(io->pool);
 }
 
 int h2_io_in_has_eos_for(h2_io *io)
@@ -103,13 +105,13 @@ h2_response *h2_io_extract_response(h2_io *io)
 apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb, 
                             apr_size_t maxlen)
 {
-    return h2_util_move(bb, io->bbout, maxlen);
+    return h2_util_move(bb, io->bbout, maxlen, "h2_io_out_read");
 }
 
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen)
 {
-    return h2_util_move(io->bbout, bb, maxlen);
+    return h2_util_move(io->bbout, bb, maxlen, "h2_io_out_write");
 }
 
 

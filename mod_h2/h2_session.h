@@ -112,7 +112,7 @@ h2_session *h2_session_rcreate(request_rec *r, struct h2_config *cfg);
 void h2_session_destroy(h2_session *session);
 
 /* Called once at start of session. Performs initial client thingies. */
-apr_status_t h2_session_start(h2_session *session);
+apr_status_t h2_session_start(h2_session *session, int *rv);
 
 /* Return != 0 iff session is finished and connection can be closed.
  */
@@ -125,7 +125,7 @@ apr_status_t h2_session_goaway(h2_session *session, apr_status_t reason);
 
 /* Called when an error occured and the session needs to shut down.
  * Status indicates the reason of the error. */
-apr_status_t h2_session_abort(h2_session *session, apr_status_t reason);
+apr_status_t h2_session_abort(h2_session *session, apr_status_t reason, int rv);
 
 /* Called before a session gets destroyed, might flush output etc. */
 apr_status_t h2_session_close(h2_session *session);

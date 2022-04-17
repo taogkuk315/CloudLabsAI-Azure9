@@ -30,6 +30,7 @@
 #include "h2_response.h"
 #include "h2_task_output.h"
 #include "h2_task.h"
+#include "h2_util.h"
 
 
 static int is_aborted(h2_task_output *output, ap_filter_t* filter) {
@@ -128,7 +129,7 @@ apr_status_t h2_task_output_write(h2_task_output *output,
     
     if (has_flush_or_eos(bb)) {
         if (output->bb && !APR_BRIGADE_EMPTY(output->bb)) {
-            APR_BRIGADE_CONCAT(output->bb, bb);
+            status = h2_util_move(output->bb, bb, 0, "task_output_write1");
             status = out_write(output, f, output->bb);
             apr_brigade_cleanup(output->bb);
         }
@@ -137,7 +138,10 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         }
     }
     else {
-        status = ap_save_brigade(f, &output->bb, &bb, f->c->pool);
+        if (!output->bb) {
+            output->bb = apr_brigade_create(bb->p, bb->bucket_alloc);
+        }
+        status = h2_util_move(output->bb, bb, 0, "task_output_write2");
     }
     return status;
 }

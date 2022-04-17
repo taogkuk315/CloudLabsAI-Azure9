@@ -249,4 +249,13 @@ EOF
 #nghttp_check_assets 009.php "with assets" <<EOF
 #EOF
 #
+################################################################################
+# check different window sizes
+################################################################################
+echo " - different window sizes -"
+
+nghttp_check_assets 003.html "with assets" --window-bits=24 <<EOF
+/003.html 316 200
+/003/003_img.jpg 88K 200
+EOF
 

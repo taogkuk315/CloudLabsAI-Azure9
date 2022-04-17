@@ -33,6 +33,8 @@
 #define HTTP_RLINE_SUFFIX       " HTTP/1.1\r\n"
 #define HTTP_RLINE_SUFFIX_LEN   11
 
+static const apr_off_t HEADERSIZE      = 16 * 1024;
+
 
 struct h2_to_h1 {
     h2_bucket *data;
@@ -67,7 +69,7 @@ void h2_to_h1_destroy(h2_to_h1 *to_h1)
 static apr_status_t ensure_data(h2_to_h1 *to_h1)
 {
     if (!to_h1->data) {
-        to_h1->data = h2_bucket_alloc(BLOCKSIZE);
+        to_h1->data = h2_bucket_alloc(HEADERSIZE);
         if (!to_h1->data) {
             return APR_ENOMEM;
         }
