@@ -40,6 +40,7 @@
 		B2546D9A1A81079D0033A875 /* h2_stream_set.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream_set.h; sourceTree = "<group>"; };
 		B2546D9B1A810A450033A875 /* h2_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_queue.c; sourceTree = "<group>"; };
 		B2546D9C1A810A450033A875 /* h2_queue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_queue.h; sourceTree = "<group>"; };
+		B256C4BA1ADD5FF10042C760 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		B271425E1AB9DD59004EF82E /* h2_io_set.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_io_set.c; sourceTree = "<group>"; };
 		B271425F1AB9DD59004EF82E /* h2_io_set.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_io_set.h; sourceTree = "<group>"; };
 		B27142601AB9DD76004EF82E /* h2_io.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_io.c; sourceTree = "<group>"; };
@@ -387,6 +388,7 @@
 				B225490A1A6EAAA3004BDEC9 /* mod_h2 */,
 				B2E5D7891AAF1F4D001FD280 /* NEWS */,
 				B27BBD2D1A6575C200C58A41 /* README */,
+				B256C4BA1ADD5FF10042C760 /* README.md */,
 				B2E6DF791AC2EF6E00D557D8 /* sandbox */,
 				B2E6DF761AC2E55700D557D8 /* setup */,
 			);
