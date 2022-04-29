@@ -313,14 +313,6 @@ static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
     return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_PROTO;
 }
 
-static int resume_data(void *ctx, h2_stream *stream) 
-{
-    h2_session *session = (h2_session*)ctx;
-    h2_stream_set_suspended(stream, 0);
-    nghttp2_session_resume_data(session->ngh2, stream->id);
-    return 1;
-}
-
 /**
  * nghttp2 session has received a complete frame. Most, it uses
  * for processing of internal state. HEADER and DATA frames however
@@ -367,30 +359,6 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                               "for unknown stream", session->id,
                               (int)frame->hd.stream_id);
                 return NGHTTP2_ERR_PROTO;
-            }
-            break;
-        }
-        case NGHTTP2_WINDOW_UPDATE: {
-            h2_stream * stream = h2_stream_set_get(session->streams,
-                                                   frame->hd.stream_id);
-            if (frame->hd.stream_id == 0) {
-                if (!h2_stream_set_is_empty(session->window_wait)) {
-                    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
-                                  "h2_stream(%ld-%d): WINDOW_UPDATE on session",
-                                  session->id, frame->hd.stream_id);
-                    h2_stream_set_iter(session->window_wait, 
-                                       resume_data, session);
-                    h2_stream_set_remove_all(session->window_wait);
-                }
-            }
-            else if (stream != NULL && h2_stream_is_suspended(stream)) {
-                /* might be a good time to resume */
-                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
-                              "h2_stream(%ld-%d): resume DATA on WINDOW_UPDATE",
-                              session->id, stream->id);
-                h2_stream_set_suspended(stream, 0);
-                h2_stream_set_remove(session->window_wait, stream);
-                nghttp2_session_resume_data(session->ngh2, stream->id);
             }
             break;
         }
@@ -500,7 +468,6 @@ static h2_session *h2_session_create_int(conn_rec *c,
         
         session->streams = h2_stream_set_create(session->pool);
         session->zombies = h2_stream_set_create(session->pool);
-        session->window_wait = h2_stream_set_create(session->pool);
         
         session->mplx = h2_mplx_create(c, session->pool);
         
@@ -600,10 +567,6 @@ static int close_zombie_iter(void *ctx, h2_stream *stream) {
 void h2_session_destroy(h2_session *session)
 {
     assert(session);
-    if (session->window_wait) {
-        h2_stream_set_destroy(session->window_wait);
-        session->window_wait = NULL;
-    }
     if (session->streams) {
         if (h2_stream_set_size(session->streams)) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
@@ -1057,17 +1020,6 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     
     assert(!h2_stream_is_suspended(stream));
     
-    if (length < 4096) {
-        /* This happens when we only have a very small window_size on this
-         * stream at the moment. We force suspension of DATA until we get
-         * a WINDOW_UPDATE which allows sending more data.
-         */
-        h2_stream_set_suspended(stream, 1);
-        h2_stream_set_add(session->window_wait, stream);
-        return NGHTTP2_ERR_DEFERRED;
-    }
-    
-
     /* Try to pop data buckets from our queue for this stream
      * until we see EOS or the buffer is full.
      */

@@ -94,7 +94,6 @@ struct h2_session {
     before_stream_close *before_stream_close_cb; /* stream will close */
 
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
-    struct h2_stream_set *window_wait; /* streams handled by this session */
 };
 
 
