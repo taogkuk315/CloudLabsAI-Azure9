@@ -205,91 +205,96 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
                             apr_size_t *plen, int *peos)
 {
     apr_status_t status = APR_SUCCESS;
+    apr_off_t buffered_len = 0;
     apr_size_t avail = *plen;
     apr_size_t written = 0;
     
+    *peos = 0;
     if (stream->bbout == NULL) {
         stream->bbout = apr_brigade_create(stream->pool, 
                                            stream->bucket_alloc);
     }
     
-    /* As long as we read successfully, the buffer is not filled and
-     * we did not encounter the eos, continue.
-     */
-    *peos = 0;
-    while ((status == APR_SUCCESS) && (avail > 0) && !*peos) {
-        
-        if (APR_BRIGADE_EMPTY(stream->bbout)) {
-            /* Our brigade is empty, need to get more data.
-             */
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
-                          h2_mplx_get_conn(stream->m),
-                          "h2_stream(%ld-%d): reading from mplx",
-                          h2_mplx_get_id(stream->m), stream->id);
-            status = h2_mplx_out_read(stream->m, stream->id, stream->bbout, 
-                                      h2_mplx_get_out_max_mem(stream->m));
-            if (status == APR_EOF) {
-                *peos = 1;
-                if (written) {
-                    status = APR_SUCCESS;
-                    break;
-                }
-            }
-            else if (APR_STATUS_IS_EAGAIN(status)) {
-                if (written) {
-                    status = APR_SUCCESS;
-                    break;
-                }
-            }
-            else {
-                break;
-            }
-        }
-        
-        /* Copy data in our brigade into the buffer until it is filled or
-         * we encounter an EOS.
+    status = apr_brigade_length(stream->bbout, 1, &buffered_len);
+    if (status != APR_SUCCESS) {
+        return status;
+    }
+    
+    if (buffered_len < avail) {
+        /* Our brigade does not hold enough bytes, try to get more data.
          */
-        while (!APR_BRIGADE_EMPTY(stream->bbout) 
-               && (status == APR_SUCCESS)
-               && (avail > 0)) {
-            
-            apr_bucket *b = APR_BRIGADE_FIRST(stream->bbout);
-            if (APR_BUCKET_IS_METADATA(b)) {
-                if (APR_BUCKET_IS_EOS(b)) {
-                    *peos = 1;
-                }
-                else {
-                    /* ignore */
-                }
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
+                      h2_mplx_get_conn(stream->m),
+                      "h2_stream(%ld-%d): reading from mplx",
+                      h2_mplx_get_id(stream->m), stream->id);
+        status = h2_mplx_out_read(stream->m, stream->id, stream->bbout, 0);
+        if (status == APR_SUCCESS) {
+            /* nop */
+            apr_brigade_length(stream->bbout, 1, &buffered_len);
+        }
+        else if (status == APR_EOF) {
+            *peos = 1;
+            if (APR_BRIGADE_EMPTY(stream->bbout)) {
+                return status;
+            }
+            status = APR_SUCCESS;
+        }
+        else {
+            return status;
+        }
+    }
+    
+    /* Copy data in our brigade into the buffer until it is filled or
+     * we encounter an EOS.
+     */
+    while ((status == APR_SUCCESS) 
+           && !APR_BRIGADE_EMPTY(stream->bbout)
+           && (avail > 0)) {
+        
+        apr_bucket *b = APR_BRIGADE_FIRST(stream->bbout);
+        if (APR_BUCKET_IS_METADATA(b)) {
+            if (APR_BUCKET_IS_EOS(b)) {
+                *peos = 1;
             }
             else {
-                const char *data;
-                apr_size_t data_len;
-                if (APR_BUCKET_IS_FILE(b)) {
-                    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
-                                  h2_mplx_get_conn(stream->m),
-                                  "h2_stream(%ld-%d): reading FILE(%ld-%ld)",
-                                  h2_mplx_get_id(stream->m), stream->id,
-                                  (long)b->start, (long)b->length);
-                }
-                if (b->length != -1 && b->length > avail) {
-                    apr_bucket_split(b, avail);
-                }
-                status = apr_bucket_read(b, &data, &data_len, 
-                                         APR_NONBLOCK_READ);
-                if (status == APR_SUCCESS && data_len > 0) {
-                    if (data_len > avail) {
-                        apr_bucket_split(b, avail);
-                        data_len = avail;
-                    }
-                    memcpy(buffer, data, data_len);
-                    avail -= data_len;
-                    buffer += data_len;
-                    written += data_len;
-                }
+                /* ignore */
             }
-            apr_bucket_delete(b);
         }
+        else {
+            const char *data;
+            apr_size_t data_len;
+            if (APR_BUCKET_IS_FILE(b)) {
+                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
+                              h2_mplx_get_conn(stream->m),
+                              "h2_stream(%ld-%d): reading FILE(%ld-%ld)",
+                              h2_mplx_get_id(stream->m), stream->id,
+                              (long)b->start, (long)b->length);
+            }
+            if (b->length != -1 && b->length > avail) {
+                apr_bucket_split(b, avail);
+            }
+            status = apr_bucket_read(b, &data, &data_len, 
+                                     APR_NONBLOCK_READ);
+            if (status == APR_SUCCESS && data_len > 0) {
+                if (data_len > avail) {
+                    apr_bucket_split(b, avail);
+                    data_len = avail;
+                }
+                memcpy(buffer, data, data_len);
+                avail -= data_len;
+                buffer += data_len;
+                written += data_len;
+            }
+        }
+        apr_bucket_delete(b);
+    }
+
+    if (0) {
+        ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
+                      h2_mplx_get_conn(stream->m),
+                      "h2_stream(%ld-%d): requested=%ld, written=%ld bytes of DATA",
+                      h2_mplx_get_id(stream->m), stream->id,
+                      (long)*plen, (long)written);
     }
     
     *plen = written;
