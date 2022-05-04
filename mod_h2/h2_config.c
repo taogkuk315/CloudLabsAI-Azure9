@@ -19,10 +19,12 @@
 #include <http_core.h>
 #include <http_config.h>
 #include <http_log.h>
+#include <http_vhost.h>
 
 #include <apr_strings.h>
 
 #include "h2_alt_svc.h"
+#include "h2_ctx.h"
 #include "h2_config.h"
 #include "h2_private.h"
 
@@ -253,20 +255,61 @@ const command_rec h2_cmds[] = {
 
 h2_config *h2_config_rget(request_rec *r)
 {
-    h2_config *cfg = (h2_config *)ap_get_module_config(r->per_dir_config, &h2_module);
-    return cfg? cfg : 
-        (h2_config *)ap_get_module_config(r->server->module_config, &h2_module);
+    h2_config *cfg = (h2_config *)ap_get_module_config(r->per_dir_config, 
+                                                       &h2_module);
+    return cfg? cfg : h2_config_sget(r->server); 
 }
 
 h2_config *h2_config_sget(server_rec *s)
 {
-    h2_config *cfg = (h2_config *)ap_get_module_config(s->module_config, &h2_module);
+    h2_config *cfg = (h2_config *)ap_get_module_config(s->module_config, 
+                                                       &h2_module);
     assert(cfg);
     return cfg;
 }
 
 h2_config *h2_config_get(conn_rec *c)
 {
+    h2_ctx *ctx = h2_ctx_get(c, 1);
+    if (ctx) {
+        if (ctx->config) {
+            return ctx->config;
+        }
+        if (!ctx->server && ctx->hostname) {
+            /* We have a host agreed upon via TLS SNI, but no request yet.
+             * The sni host was accepted and therefore does match a server record
+             * (vhost) for it. But we need to know which one.
+             * Normally, it is enough to be set on the initial request on a
+             * connection, but we need it earlier. Simulate a request and call
+             * the vhost matching stuff.
+             */
+            apr_uri_t uri = {};
+            memset(&uri, 0, sizeof(uri));
+            uri.scheme = "https";
+            uri.hostinfo = (char*)ctx->hostname;
+            uri.hostname = (char*)ctx->hostname;
+            uri.port_str = "";
+            uri.port = c->local_addr->port;
+            uri.path = "/";
+            
+            request_rec r;
+            memset(&r, 0, sizeof(r));
+            r.uri = "/";
+            r.connection = c;
+            r.pool = c->pool;
+            r.hostname = ctx->hostname;
+            r.headers_in = apr_table_make(c->pool, 1);
+            r.parsed_uri = uri;
+            
+            ap_update_vhost_from_headers(&r);
+            ctx->server = r.server;
+        }
+        
+        if (ctx->server) {
+            ctx->config = h2_config_sget(ctx->server);
+            return ctx->config;
+        }
+    }
     return h2_config_sget(c->base_server);
 }
 

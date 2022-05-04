@@ -236,7 +236,7 @@ static apr_status_t close_active_stream(h2_session *session,
         h2_stream_destroy(stream);
     }
     else if (status == APR_EAGAIN) {
-        ap_log_cerror(APLOG_MARK, APLOG_INFO, status, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
                       "h2_stream(%ld-%d): close delayed by callback",
                       session->id, (int)stream->id);
         h2_stream_set_add(session->zombies, stream);
@@ -699,10 +699,12 @@ apr_status_t h2_session_start(h2_session *session, int *rv)
     assert(session);
     /* Start the conversation by submitting our SETTINGS frame */
     apr_status_t status = APR_SUCCESS;
-    h2_config *config = h2_config_get(session->c);
     *rv = 0;
-    
+    h2_config *config = h2_config_get(session->c);
     if (session->r) {
+        /* better for vhost matching */
+        config = h2_config_rget(session->r);
+        
         /* 'h2c' mode: we should have a 'HTTP2-Settings' header with
          * base64 encoded client settings. */
         const char *s = apr_table_get(session->r->headers_in, "HTTP2-Settings");

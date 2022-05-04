@@ -114,7 +114,7 @@ static const char *h2_get_upgrade_proto(request_rec *r)
 
 static int h2_h2c_upgrade_to(request_rec *r, const char *proto)
 {
-    h2_ctx *ctx = h2_ctx_create(r->connection);
+    h2_ctx *ctx = h2_ctx_rget(r, 1);
     ctx->is_h2 = 1;
     h2_ctx_set_protocol(r->connection, proto);
     

@@ -17,6 +17,7 @@
 #define __mod_h2__h2_ctx__
 
 struct h2_task;
+struct h2_config;
 
 /**
  * The h2 module context associated with a connection. 
@@ -31,11 +32,14 @@ typedef struct h2_ctx {
     const char *protocol;     /* the protocol negotiated */
     int is_negotiated;        /* negotiated did happen */
     struct h2_task *task;     /* the h2_task or NULL */
+    const char *hostname;     /* hostname negotiated via SNI, optional */
+    server_rec *server;       /* httpd server config selected. */
+    struct h2_config *config; /* effective config in this context */
 } h2_ctx;
 
-h2_ctx *h2_ctx_create(conn_rec *c);
+h2_ctx *h2_ctx_get(conn_rec *c, int create);
+h2_ctx *h2_ctx_rget(request_rec *r, int create);
 h2_ctx *h2_ctx_create_for(conn_rec *c, struct h2_task *task);
-h2_ctx *h2_ctx_get(conn_rec *c);
 
 const char *h2_ctx_get_protocol(conn_rec* c);
 h2_ctx *h2_ctx_set_protocol(conn_rec* c, const char *proto);
