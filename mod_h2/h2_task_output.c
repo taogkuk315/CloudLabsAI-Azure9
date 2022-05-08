@@ -79,19 +79,6 @@ int h2_task_output_has_started(h2_task_output *output)
     return output->state >= H2_TASK_OUT_STARTED;
 }
 
-static int has_flush_or_eos(apr_bucket_brigade *bb) {
-    apr_bucket *b;
-    for (b = APR_BRIGADE_FIRST(bb);
-         b != APR_BRIGADE_SENTINEL(bb);
-         b = APR_BUCKET_NEXT(b))
-    {
-        if (APR_BUCKET_IS_EOS(b) || APR_BUCKET_IS_FLUSH(b)) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
 static apr_status_t out_write(h2_task_output *output, ap_filter_t *f,
                               apr_bucket_brigade *bb)
 {
@@ -127,7 +114,7 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         return APR_SUCCESS;
     }
     
-    if (has_flush_or_eos(bb)) {
+    if (h2_util_has_flush_or_eos(bb)) {
         if (output->bb && !APR_BRIGADE_EMPTY(output->bb)) {
             status = h2_util_move(output->bb, bb, 0, "task_output_write1");
             status = out_write(output, f, output->bb);

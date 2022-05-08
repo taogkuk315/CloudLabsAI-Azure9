@@ -79,5 +79,11 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
 apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from, 
                           apr_size_t maxlen);
 
+/**
+ * Return != 0 iff there is a FLUSH or EOS bucket in the brigade.
+ * @param bb the brigade to check on
+ * @return != 0 iff brigade holds FLUSH or EOS bucket (or both)
+ */
+int h2_util_has_flush_or_eos(apr_bucket_brigade *bb);
 
 #endif /* defined(__mod_h2__h2_util__) */

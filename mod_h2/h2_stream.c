@@ -244,6 +244,16 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
         }
     }
     
+    if (avail > 8192 && !*peos && buffered_len < 1024) {
+        /* We have only few bytes, but could send many. If there
+         * is no flush or EOS in the buffered brigade, tell the
+         * caller to try again later.
+         */
+        if (!h2_util_has_flush_or_eos(stream->bbout)) {
+            return APR_EAGAIN;
+        }
+    }
+    
     /* Copy data in our brigade into the buffer until it is filled or
      * we encounter an EOS.
      */
