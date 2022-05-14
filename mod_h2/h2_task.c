@@ -147,8 +147,7 @@ h2_task *h2_task_create(long session_id,
     task->mplx = mplx;
     
     h2_task_setup(task, h2_mplx_get_conn(task->mplx), 
-                  h2_mplx_get_pool(task->mplx), 
-                  apr_bucket_alloc_create(stream_pool));
+                  stream_pool, apr_bucket_alloc_create(stream_pool));
     
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
                   "h2_task(%s): created", task->id);
