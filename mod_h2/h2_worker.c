@@ -29,7 +29,9 @@ struct h2_worker {
     int id;
     apr_thread_t *thread;
     apr_pool_t *pool;
+    apr_bucket_alloc_t *bucket_alloc;
     apr_thread_cond_t *io;
+    apr_socket_t *socket;
     
     h2_worker_task_next_fn *get_next;
     h2_worker_task_done_fn *task_done;
@@ -45,6 +47,19 @@ static void *execute(apr_thread_t *thread, void *wctx)
     h2_worker *worker = (h2_worker *)wctx;
     apr_status_t status = APR_SUCCESS;
     
+    /* Furthermore, other code might want to see the socket for
+     * this connection. Allocate one without further function...
+     */
+    status = apr_socket_create(&worker->socket,
+                               APR_INET, SOCK_STREAM,
+                               APR_PROTO_TCP, worker->pool);
+    if (status != APR_SUCCESS) {
+        ap_log_perror(APLOG_MARK, APLOG_ERR, status, worker->pool,
+                      "h2_worker(%d): alloc socket", worker->id);
+        worker->worker_done(worker, worker->ctx);
+        return NULL;
+    }
+    
     worker->current = NULL;
     while (!worker->aborted) {
         if (worker->current) {
@@ -57,22 +72,42 @@ static void *execute(apr_thread_t *thread, void *wctx)
         }
     }
 
+    if (worker->socket) {
+        apr_socket_close(worker->socket);
+        worker->socket = NULL;
+    }
+    
     worker->worker_done(worker, worker->ctx);
     return NULL;
 }
 
 h2_worker *h2_worker_create(int id,
-                            apr_pool_t *pool,
+                            apr_pool_t *parent_pool,
                             apr_threadattr_t *attr,
                             h2_worker_task_next_fn *get_next,
                             h2_worker_task_done_fn *task_done,
                             h2_worker_done_fn *worker_done,
                             void *ctx)
 {
+    apr_allocator_t *allocator = NULL;
+    apr_pool_t *pool = NULL;
+    
+    apr_status_t status = apr_allocator_create(&allocator);
+    if (status != APR_SUCCESS) {
+        return NULL;
+    }
+    
+    status = apr_pool_create_ex(&pool, parent_pool, NULL, allocator);
+    if (status != APR_SUCCESS) {
+        return NULL;
+    }
+    
     h2_worker *w = apr_pcalloc(pool, sizeof(h2_worker));
     if (w) {
         w->id = id;
         w->pool = pool;
+        w->bucket_alloc = apr_bucket_alloc_create(pool);
+
         w->get_next = get_next;
         w->task_done = task_done;
         w->worker_done = worker_done;
@@ -93,6 +128,14 @@ apr_status_t h2_worker_destroy(h2_worker *worker)
     if (worker->io) {
         apr_thread_cond_destroy(worker->io);
         worker->io = NULL;
+    }
+    if (worker->pool) {
+        apr_allocator_t *allocator = apr_pool_allocator_get(worker->pool);
+        apr_pool_destroy(worker->pool);
+        /* worker is gone */
+        if (allocator) {
+            apr_allocator_destroy(allocator);
+        }
     }
     return APR_SUCCESS;
 }
@@ -126,3 +169,19 @@ h2_task *h2_worker_get_task(h2_worker *worker)
 {
     return worker->current;
 }
+
+apr_socket_t *h2_worker_get_socket(h2_worker *worker)
+{
+    return worker->socket;
+}
+
+apr_pool_t *h2_worker_get_pool(h2_worker *worker)
+{
+    return worker->pool;
+}
+
+apr_bucket_alloc_t *h2_worker_get_bucket_alloc(h2_worker *worker)
+{
+    return worker->bucket_alloc;
+}
+

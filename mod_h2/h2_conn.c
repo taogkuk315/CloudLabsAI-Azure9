@@ -386,7 +386,7 @@ void h2_conn_destroy(h2_conn *conn)
     }
 }
 
-apr_status_t h2_conn_prep(h2_conn *conn, apr_thread_t *thd)
+apr_status_t h2_conn_prep(h2_conn *conn, apr_socket_t *s, apr_thread_t *thd)
 {
     assert(conn);
    
@@ -412,21 +412,10 @@ apr_status_t h2_conn_prep(h2_conn *conn, apr_thread_t *thd)
     
     conn->c->current_thread = thd;
     
-    /* Furthermore, other code might want to see the socket for
-     * this connection. Allocate one without further function...
-     */
-    apr_status_t status = apr_socket_create(&conn->socket,
-                                            APR_INET, SOCK_STREAM,
-                                            APR_PROTO_TCP, conn->pool);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, conn->c,
-                      "h2_conn(%s): alloc socket", conn->id);
-        return status;
-    }
-    
+    conn->socket = s;
     ap_set_module_config(conn->c->conn_config, &core_module, 
                          conn->socket);
-    return status;
+    return APR_SUCCESS;
 }
 
 apr_status_t h2_conn_process(h2_conn *conn)
@@ -435,11 +424,6 @@ apr_status_t h2_conn_process(h2_conn *conn)
     assert(conn->c);
     
     ap_process_connection(conn->c, conn->socket);
-    
-    if (conn->socket) {
-        apr_socket_close(conn->socket);
-        conn->socket = NULL;
-    }
     
     return APR_SUCCESS;
 }

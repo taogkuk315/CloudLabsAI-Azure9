@@ -65,7 +65,7 @@ h2_conn *h2_conn_create(const char *id, conn_rec *master,
 
 void h2_conn_destroy(h2_conn *conn);
 
-apr_status_t h2_conn_prep(h2_conn *conn, apr_thread_t *thd);
+apr_status_t h2_conn_prep(h2_conn *conn, apr_socket_t *s, apr_thread_t *thd);
 
 apr_status_t h2_conn_process(h2_conn *conn);
 

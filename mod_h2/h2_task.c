@@ -196,6 +196,7 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     assert(task);
     
     apr_status_t status = h2_conn_prep(task->conn, 
+                                       h2_worker_get_socket(worker),
                                        h2_worker_get_thread(worker));
     if (status == APR_SUCCESS) {
         /* save in connection that this one is for us, prevents
