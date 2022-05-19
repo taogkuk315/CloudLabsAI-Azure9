@@ -423,6 +423,7 @@ apr_status_t h2_conn_process(h2_conn *conn)
     assert(conn);
     assert(conn->c);
     
+    conn->c->clogging_input_filters = 1;
     ap_process_connection(conn->c, conn->socket);
     
     return APR_SUCCESS;
