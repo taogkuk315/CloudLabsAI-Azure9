@@ -105,9 +105,7 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
 }
 
 
-apr_status_t h2_task_setup(h2_task *task, conn_rec *master, 
-                           apr_pool_t *parent, 
-                           apr_bucket_alloc_t *bucket_alloc)
+apr_status_t h2_task_setup(h2_task *task, conn_rec *master, apr_pool_t *parent)
 {
     /* We need a separate pool for the task execution as this happens
      * in another thread and pools are not multi-thread safe. 
@@ -115,7 +113,7 @@ apr_status_t h2_task_setup(h2_task *task, conn_rec *master,
      * making this new pool a sub pool of the stream one, but that
      * only led to crashes. With a root pool, this does not happen.
      */
-    task->conn = h2_conn_create(task->id, master, parent, bucket_alloc);
+    task->conn = h2_conn_create(task->id, master, parent);
     if (!task->conn) {
         return APR_ENOMEM;
     }
@@ -146,8 +144,7 @@ h2_task *h2_task_create(long session_id,
     task->stream_id = stream_id;
     task->mplx = mplx;
     
-    h2_task_setup(task, h2_mplx_get_conn(task->mplx), 
-                  stream_pool, apr_bucket_alloc_create(stream_pool));
+    h2_task_setup(task, h2_mplx_get_conn(task->mplx), stream_pool);
     
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
                   "h2_task(%s): created", task->id);
@@ -195,9 +192,7 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
 {
     assert(task);
     
-    apr_status_t status = h2_conn_prep(task->conn, 
-                                       h2_worker_get_socket(worker),
-                                       h2_worker_get_thread(worker));
+    apr_status_t status = h2_conn_prep(task->conn, worker); 
     if (status == APR_SUCCESS) {
         /* save in connection that this one is for us, prevents
          * other hooks from messing with it. */
@@ -219,6 +214,9 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     if (task->on_finished) {
         task->on_finished(task->ctx_finished, task);
     }
+
+    h2_conn_post(task->conn, worker); 
+    
     return status;
 }
 

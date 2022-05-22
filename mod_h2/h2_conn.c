@@ -32,6 +32,7 @@
 #include "h2_stream.h"
 #include "h2_stream_set.h"
 #include "h2_task.h"
+#include "h2_worker.h"
 #include "h2_workers.h"
 #include "h2_conn.h"
 
@@ -313,61 +314,47 @@ static apr_status_t before_stream_close_cb(h2_session *session,
 
 static void fix_event_conn(conn_rec *c, conn_rec *master);
 
-h2_conn *h2_conn_create(const char *id, conn_rec *master, 
-                        apr_pool_t *parent,
-                        apr_bucket_alloc_t *bucket_alloc)
+h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *pool)
 {
-    assert(master);
     apr_status_t status = APR_SUCCESS;
-    apr_pool_t *pool;
     
-    apr_allocator_t *allocator = NULL;
-    status = apr_allocator_create(&allocator);
-    if (status != APR_SUCCESS) {
+    assert(master);
+    
+    /* Setup a conn_rec for this stream.
+     * General idea is borrowed from mod_spdy::slave_connection.cc,
+     * partly replaced with some more modern calls to ap infrastructure.
+     */
+    h2_conn *conn = apr_pcalloc(pool, sizeof(*conn));
+    conn->id = id;
+    conn->pool = pool;
+    conn->bucket_alloc = master->bucket_alloc;
+    conn->socket = ap_get_module_config(master->conn_config, &core_module);
+    conn->master = master;
+    
+    /* CAVEAT: it seems necessary to setup the conn_rec in the master
+     * connection thread. Other attempts crashed. 
+     * HOWEVER: we setup the connection using the pools and other items
+     * from the master connection, since we do not want to allocate 
+     * lots of resources here. 
+     * Lets allocated pools and everything else when we actually start
+     * working on this new connection.
+     */
+     
+    /* Not sure about the scoreboard handle. Reusing the one from the main
+     * connection could make sense, but I do not know enough to tell...
+     */
+    conn->c = ap_run_create_connection(conn->pool, conn->master->base_server,
+                                       conn->socket,
+                                       conn->master->id^((long)conn->pool), 
+                                       conn->master->sbh,
+                                       conn->bucket_alloc);
+    if (conn->c == NULL) {
+        ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, conn->pool,
+                      "h2_task: creating conn");
         return NULL;
     }
     
-    status = apr_pool_create_ex(&pool, parent, NULL, allocator);
-    if (status == APR_SUCCESS) {
-        /* Setup a apache connection record for this stream.
-         * General idea is borrowed from mod_spdy::slave_connection.cc,
-         * partly replaced with some more modern calls to ap infrastructure.
-         *
-         * Here, we are tasting some sweet, internal knowledge, e.g. that
-         * the core module is storing the connection socket as its config.
-         * "ap_run_create_connection() needs a real socket as it tries to
-         * detect local and client address information and fails if it is
-         * unable to get it.
-         * In case someone ever replaces these core hooks, this will probably
-         * break miserably.
-         */
-        h2_conn *conn = apr_pcalloc(pool, sizeof(*conn));
-        conn->id = id;
-        conn->pool = pool;
-        apr_pool_tag(pool, id);
-
-        conn->bucket_alloc = bucket_alloc;
-        conn->socket = ap_get_module_config(master->conn_config,
-                                            &core_module);
-        conn->master = master;
-        
-        /* Not sure about the scoreboard handle. Reusing the one from the main
-         * connection could make sense, but I do not know enough to tell...
-         */
-        conn->c = ap_run_create_connection(conn->pool, conn->master->base_server,
-                                           conn->socket,
-                                           conn->master->id^((long)conn->pool), 
-                                           conn->master->sbh,
-                                           conn->bucket_alloc);
-        if (conn->c == NULL) {
-            ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, conn->pool,
-                          "h2_task: creating conn");
-            return NULL;
-        }
-        
-        return conn;
-    }
-    return NULL;
+    return conn;
 }
 
 void h2_conn_destroy(h2_conn *conn)
@@ -376,20 +363,35 @@ void h2_conn_destroy(h2_conn *conn)
         /* more to do? */
         conn->c = NULL;
     }
-    if (conn->pool) {
-        apr_allocator_t *allocator = apr_pool_allocator_get(conn->pool);
-        apr_pool_destroy(conn->pool);
-        /* conn is gone */
-        if (allocator) {
-            apr_allocator_destroy(allocator);
-        }
-    }
 }
 
-apr_status_t h2_conn_prep(h2_conn *conn, apr_socket_t *s, apr_thread_t *thd)
+apr_status_t h2_conn_prep(h2_conn *conn, h2_worker *worker)
 {
-    assert(conn);
+   assert(conn);
    
+    ap_log_perror(APLOG_MARK, APLOG_TRACE3, 0, conn->pool,
+                  "h2_conn(%s): created from master %ld",
+                  conn->id, conn->master->id);
+    
+    /* Ok, we are just about to start processing the connection and
+     * the worker is calling us to setup all necessary resources.
+     * We can borrow some from the worker itself and some we do as
+     * sub-resources from it, so that we get a nice reuse of
+     * pools.
+     */
+    apr_pool_t *worker_pool = h2_worker_get_pool(worker);
+    
+    apr_pool_create(&conn->pool, worker_pool);
+    conn->bucket_alloc = h2_worker_get_bucket_alloc(worker);
+    conn->socket = h2_worker_get_socket(worker);
+    
+    conn->c->pool = conn->pool;
+    conn->c->bucket_alloc = conn->bucket_alloc;
+    conn->c->current_thread = h2_worker_get_thread(worker);
+    
+    ap_set_module_config(conn->c->conn_config, &core_module, 
+                         conn->socket);
+
     /* This works for mpm_worker so far. Other mpm modules have 
      * different needs, unfortunately. The most interesting one 
      * being mpm_event...
@@ -406,15 +408,23 @@ apr_status_t h2_conn_prep(h2_conn *conn, apr_socket_t *s, apr_thread_t *thd)
             break;
     }
     
-    ap_log_perror(APLOG_MARK, APLOG_TRACE3, 0, conn->pool,
-                  "h2_conn(%s): created from master %ld",
-                  conn->id, conn->master->id);
+    return APR_SUCCESS;
+}
+
+apr_status_t h2_conn_post(h2_conn *conn, h2_worker *worker)
+{
+    assert(conn);
     
-    conn->c->current_thread = thd;
+    /* The worker is done with this connection. release all allocated
+     * resource before we leave the worker's domain.
+     */
+    conn->socket = NULL;
+    conn->bucket_alloc = NULL;
+    apr_pool_destroy(conn->pool);
+    conn->pool = NULL;
+    /* be sure no one messes with this any more */
+    memset(conn->c, 0, sizeof(conn_rec)); 
     
-    conn->socket = s;
-    ap_set_module_config(conn->c->conn_config, &core_module, 
-                         conn->socket);
     return APR_SUCCESS;
 }
 
