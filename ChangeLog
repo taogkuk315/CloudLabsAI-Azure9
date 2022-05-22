@@ -1,3 +1,18 @@
+v0.5.0
+--------------------------------------------------------------------------------
+ * improved resource handling and performance
+ * fixes lookup of correct server config when several virtual hosts are 
+   available
+
+v0.4.5
+--------------------------------------------------------------------------------
+ * fixed base64 decoding to use correct dialect when upgrading to h2c
+
+v0.4.4
+--------------------------------------------------------------------------------
+ * adds missing file in distribution tar, fixes #11
+ * sandbox now uses nghttp2 0.7.11
+
 v0.4.3
 --------------------------------------------------------------------------------
  * heavy work on internal data transfers, use of apache bucket brigades for
