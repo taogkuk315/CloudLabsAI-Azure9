@@ -31,4 +31,10 @@
 #define MOD_H2_VERSION_NUM @PACKAGE_VERSION_NUM@
 
 
+/**
+ * @macro
+ * != 0 iff the nghttp2 library supports data callbacks.
+ */
+#define NGHTTP2_HAS_DATA_CB @NGHTTP2_HAS_DATA_CB@
+
 #endif /* mod_h2_h2_version_h */

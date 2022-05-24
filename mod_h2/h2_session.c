@@ -119,8 +119,6 @@ static ssize_t send_cb(nghttp2_session *ngh2,
     apr_status_t status = h2_conn_io_write(&session->io, (const char*)data,
                                       length, &written);
     if (status == APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, session->c,
-                      "h2_session: callback send write %d bytes", (int)written);
         return written;
     }
     else if (status == APR_EAGAIN || status == APR_TIMEUP) {
@@ -429,14 +427,8 @@ static h2_session *h2_session_create_int(conn_rec *c,
     nghttp2_session_callbacks *callbacks = NULL;
     nghttp2_option *options = NULL;
 
-    apr_allocator_t *allocator = NULL;
-    apr_status_t status = apr_allocator_create(&allocator);
-    if (status != APR_SUCCESS) {
-        return NULL;
-    }
-    
     apr_pool_t *pool = NULL;
-    status = apr_pool_create_ex(&pool, c->pool, NULL, allocator);
+    apr_status_t status = apr_pool_create(&pool, c->pool);
     if (status != APR_SUCCESS) {
         return NULL;
     }
@@ -448,18 +440,10 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->r = r;
         session->ngh2 = NULL;
         
-        session->allocator = allocator;
         session->pool = pool;
         session->bucket_alloc = apr_bucket_alloc_create(session->pool);
         session->bbtmp = apr_brigade_create(session->pool, 
                                             session->bucket_alloc);
-        status = apr_thread_mutex_create(&session->alock, 
-                                         APR_THREAD_MUTEX_DEFAULT,
-                                         session->pool);
-        if (status != APR_SUCCESS) {
-            return NULL;
-        }
-        apr_allocator_mutex_set(session->allocator, session->alock);
         
         status = apr_thread_cond_create(&session->iowait, session->pool);
         if (status != APR_SUCCESS) {
@@ -610,19 +594,8 @@ void h2_session_destroy(h2_session *session)
         session->iowait = NULL;
     }
     
-    apr_allocator_t *allocator = session->allocator;
-    if (session->alock) {
-        if (allocator) {
-            apr_allocator_mutex_set(allocator, session->alock);
-        }
-        apr_thread_mutex_destroy(session->alock);
-        session->alock = NULL;
-    }
     if (session->pool) {
         apr_pool_destroy(session->pool);
-    }
-    if (allocator) {
-        apr_allocator_destroy(allocator);
     }
 }
 

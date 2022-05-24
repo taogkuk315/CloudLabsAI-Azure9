@@ -158,22 +158,27 @@ apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
     return status;
 }
 
+static apr_status_t do_flush(apr_bucket_brigade *bb, void *ctx) {
+    h2_conn_io_ctx *io = (h2_conn_io_ctx *)ctx;
+    apr_status_t status = ap_pass_brigade(io->connection->output_filters, bb);
+    apr_brigade_cleanup(bb);
+    
+    return status;
+}
+
 apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf, 
                               size_t length, size_t *written)
 {
+    apr_status_t status = APR_SUCCESS;
     *written = 0;
-    
-    /* we do not want to send something leftover in the brigade */
-    assert(APR_BRIGADE_EMPTY(io->output));
     
     /* Append our data and pass on. */
     APR_BRIGADE_INSERT_TAIL(io->output,
             apr_bucket_transient_create((const char *)buf, length,
                                         io->output->bucket_alloc));
-    
+
     /* Send it out through installed filters to the client */
-    apr_status_t status = ap_pass_brigade(io->connection->output_filters,
-                                          io->output);
+    status = ap_pass_brigade(io->connection->output_filters, io->output);
     if (APLOGctrace2(io->connection)) {
         char buffer[32];
         h2_util_hex_dump(buffer, sizeof(buffer)/sizeof(buffer[0]), buf, length);

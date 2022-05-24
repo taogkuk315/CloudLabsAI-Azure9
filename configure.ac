@@ -83,11 +83,14 @@ if test x"$build_mode" == "xsandbox"; then
     CPPFLAGS="$CPPFLAGS -I${prefix}/include"
     export SYSCONF_DIR="$prefix/conf"
     export LIBEXEC_DIR="$prefix/modules"
-
     # On Ubuntu, we have a propblem with APR 1.5.1 and system includes that
     # causes compilation to abort since no definition of PATH_MAX can be found.
     # In sandbox build, we just define it therefore, as a quick workaround
     CPPFLAGS="$CPPFLAGS -DPATH_MAX=4096"
+
+    # we use a new nghttp2 in the sandbox which has these features
+    NGHTTP2_HAS_DATA_CB=1
+
 else
     # production, we need to find where the apxs is. which then
     # can tell us the various directories we need.
@@ -115,6 +118,9 @@ else
     AC_CHECK_LIB([nghttp2], [nghttp2_session_server_new2], ,
     [AC_MSG_ERROR("library nghttp2 not found")])
 
+    AC_CHECK_LIB([nghttp2], [nghttp2_session_callbacks_set_send_data_callback], 
+        [NGHTTP2_HAS_DATA_CB=1], [NGHTTP2_HAS_DATA_CB=0])
+
 fi
 
 # Checks for header files.
@@ -139,6 +145,7 @@ AC_CHECK_PROG([A2ENMOD],[a2enmod])
 AC_SUBST(BUILD_SUBDIRS)
 AC_SUBST(SYSCONF_DIR)
 AC_SUBST(LIBEXEC_DIR)
+AC_SUBST(NGHTTP2_HAS_DATA_CB)
 
 AC_CONFIG_FILES([
     Makefile
