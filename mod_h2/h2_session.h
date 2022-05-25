@@ -79,7 +79,6 @@ struct h2_session {
     apr_size_t frames_received;     /* number of http/2 frames received */
     
     apr_pool_t *pool;               /* pool to use in session handling */
-    apr_bucket_alloc_t *bucket_alloc;
     apr_bucket_brigade *bbtmp;      /* brigade for keeping temporary data */
     struct apr_thread_cond_t *iowait; /* our cond when trywaiting for data */
     

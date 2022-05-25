@@ -46,7 +46,6 @@ struct h2_mplx {
     h2_io_set *ready_ios;
     h2_io_set *task_finished_ios;
     
-    apr_thread_mutex_t *memlock;
     apr_thread_mutex_t *lock;
     apr_thread_cond_t *added_output;
     
@@ -72,6 +71,17 @@ static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
 
 static void have_out_data_for(h2_mplx *m, int stream_id);
 
+/**
+ * A h2_mplx needs to be thread-safe *and* if will be called by
+ * the h2_session thread *and* the h2_worker threads. Therefore:
+ * - calls are protected by a mutex lock, m->lock
+ * - the pool needs its own allocator, since apr_allocator_t are 
+ *   not re-entrant. The separate allocator works without a 
+ *   separate lock since we already protect h2_mplx itself.
+ *   Since HTTP/2 connections can be expected to live longer than
+ *   their HTTP/1 cousins, the separate allocator seems to work better
+ *   than protecting a shared h2_session one with an own lock.
+ */
 h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent)
 {
     apr_status_t status = APR_SUCCESS;
@@ -93,34 +103,19 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent)
             return NULL;
         }
         
-        status = apr_thread_mutex_create(&m->memlock, 
-                                         APR_THREAD_MUTEX_DEFAULT,
-                                         m->pool);
-        if (status != APR_SUCCESS) {
-            h2_mplx_destroy(m);
-            return NULL;
-        }
-        apr_allocator_mutex_set(allocator, m->memlock);
-        
-
-        m->bucket_alloc = apr_bucket_alloc_create(m->pool);
-        
-        m->stream_ios = h2_io_set_create(m->pool);
-        m->ready_ios = h2_io_set_create(m->pool);
-        m->task_finished_ios = h2_io_set_create(m->pool);
-        m->out_stream_max_size =
-            h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM_SIZE);
-        
         status = apr_thread_mutex_create(&m->lock, APR_THREAD_MUTEX_DEFAULT,
                                          m->pool);
         if (status != APR_SUCCESS) {
             h2_mplx_destroy(m);
             return NULL;
         }
-        if (status != APR_SUCCESS) {
-            return NULL;
-        }
         
+        m->bucket_alloc = apr_bucket_alloc_create(m->pool);
+        m->stream_ios = h2_io_set_create(m->pool);
+        m->ready_ios = h2_io_set_create(m->pool);
+        m->task_finished_ios = h2_io_set_create(m->pool);
+        m->out_stream_max_size = h2_config_geti(conf, 
+                                                H2_CONF_STREAM_MAX_MEM_SIZE);
     }
     return m;
 }
@@ -153,13 +148,6 @@ void h2_mplx_destroy(h2_mplx *m)
     
     if (m->pool) {
         apr_allocator_t *allocator = apr_pool_allocator_get(m->pool);
-        if (m->memlock) {
-            if (allocator) {
-                apr_allocator_mutex_set(allocator, NULL);
-            }
-            apr_thread_mutex_destroy(m->memlock);
-            m->memlock = NULL;
-        }
         apr_pool_destroy(m->pool);
         if (allocator) {
             apr_allocator_destroy(allocator);
