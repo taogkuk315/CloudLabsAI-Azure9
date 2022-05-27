@@ -52,7 +52,7 @@ h2_response *h2_response_create(int stream_id,
 
     if (hlines) {
         nghttp2_nv *nvs = (nghttp2_nv *)&head->nv;
-        H2_CREATE_NV_LIT_CS(nvs, ":status", http_status);
+        H2_CREATE_NV_LIT_CS(nvs, strdup(":status"), strdup(http_status));
 
         int seen_clen = 0;
         int nvlen = 1;
@@ -80,13 +80,14 @@ h2_response *h2_response_create(int stream_id,
                     /* never forward, ch. 8.1.2.2 */
                 }
                 else {
-                    H2_CREATE_NV_CS_CS(nv, h2_strlwr(hline), sep);
+                    H2_CREATE_NV_CS_CS(nv, strdup(h2_strlwr(hline)), 
+                                       strdup(sep));
                     ++nvlen;
                 }
             }
             else {
                 /* reached end of line, an empty header value */
-                H2_CREATE_NV_CS_LIT(nv, h2_strlwr(hline), "");
+                H2_CREATE_NV_CS_CS(nv, strdup(h2_strlwr(hline)), strdup(""));
                 ++nvlen;
             }
         }
@@ -110,9 +111,15 @@ h2_response *h2_response_create(int stream_id,
     return head;
 }
 
-void h2_response_destroy(h2_response *head)
+void h2_response_destroy(h2_response *resp)
 {
-    free(head);
+    const nghttp2_nv *nv = &resp->nv;
+    
+    for (int i = 0; i < resp->nvlen; ++i) {
+        free(nv[i].name);
+        free(nv[i].value);
+    }
+    free(resp);
 }
 
 long h2_response_get_content_length(h2_response *resp)

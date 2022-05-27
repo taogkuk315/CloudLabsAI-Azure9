@@ -105,26 +105,6 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
 }
 
 
-apr_status_t h2_task_setup(h2_task *task, conn_rec *master, apr_pool_t *parent)
-{
-    /* We need a separate pool for the task execution as this happens
-     * in another thread and pools are not multi-thread safe. 
-     * Since the task lives not longer than the stream, we'd tried
-     * making this new pool a sub pool of the stream one, but that
-     * only led to crashes. With a root pool, this does not happen.
-     */
-    task->conn = h2_conn_create(task->id, master, parent);
-    if (!task->conn) {
-        return APR_ENOMEM;
-    }
-    
-    task->input = h2_task_input_create(task->conn->pool,
-                                       task, task->stream_id, task->mplx);
-    task->output = h2_task_output_create(task->conn->pool,
-                                         task, task->stream_id, task->mplx);
-    return APR_SUCCESS;
-}
-
 h2_task *h2_task_create(long session_id,
                         int stream_id,
                         conn_rec *master,
@@ -142,29 +122,26 @@ h2_task *h2_task_create(long session_id,
     
     task->id = apr_psprintf(stream_pool, "%ld-%d", session_id, stream_id);
     task->stream_id = stream_id;
+    task->master = master;
+    task->stream_pool = stream_pool;
     task->mplx = mplx;
     
-    h2_task_setup(task, h2_mplx_get_conn(task->mplx), stream_pool);
+    /* We need a separate pool for the task execution as this happens
+     * in another thread and pools are not multi-thread safe. 
+     * Since the task lives not longer than the stream, we'd tried
+     * making this new pool a sub pool of the stream one, but that
+     * only led to crashes. With a root pool, this does not happen.
+     */
+    task->conn = h2_conn_create(task->id, task->master, task->stream_pool);
+    if (!task->conn) {
+        return NULL;
+    }
     
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
                   "h2_task(%s): created", task->id);
     return task;
 }
 
-
-apr_status_t h2_task_teardown(h2_task *task)
-{
-    assert(task);
-    if (task->input) {
-        h2_task_input_destroy(task->input);
-        task->input = NULL;
-    }
-    if (task->output) {
-        h2_task_output_destroy(task->output);
-        task->output = NULL;
-    }
-    return APR_SUCCESS;
-}
 
 apr_status_t h2_task_destroy(h2_task *task)
 {
@@ -174,12 +151,11 @@ apr_status_t h2_task_destroy(h2_task *task)
     if (task->mplx) {
         task->mplx = NULL;
     }
-    apr_status_t status = h2_task_teardown(task);
     if (task->conn) {
         h2_conn_destroy(task->conn);
         task->conn = NULL;
     }
-    return status;
+    return APR_SUCCESS;
 }
 
 void h2_task_on_finished(h2_task *task, task_callback *cb, void *cb_ctx)
@@ -194,6 +170,13 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     
     apr_status_t status = h2_conn_prep(task->conn, worker); 
     if (status == APR_SUCCESS) {
+        task->input = h2_task_input_create(task->conn->pool,
+                                           task, task->stream_id, task->mplx);
+        task->output = h2_task_output_create(task->conn->pool, task, 
+                                             task->stream_id, 
+                                             task->conn->bucket_alloc, 
+                                             task->mplx);
+
         /* save in connection that this one is for us, prevents
          * other hooks from messing with it. */
         h2_ctx_create_for(task->conn->c, task);
@@ -215,6 +198,14 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         task->on_finished(task->ctx_finished, task);
     }
 
+    if (task->input) {
+        h2_task_input_destroy(task->input);
+        task->input = NULL;
+    }
+    if (task->output) {
+        h2_task_output_destroy(task->output);
+        task->output = NULL;
+    }
     h2_conn_post(task->conn, worker); 
     
     return status;

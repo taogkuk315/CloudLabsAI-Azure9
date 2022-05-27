@@ -47,6 +47,7 @@ struct h2_task_output {
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
                                       struct h2_task *task, int stream_id,
+                                      apr_bucket_alloc_t *bucket_alloc,
                                       struct h2_mplx *m);
 
 void h2_task_output_destroy(h2_task_output *output);

@@ -36,7 +36,6 @@ struct h2_from_h1 {
     h2_from_h1_state_t state;
     apr_pool_t *pool;
     apr_bucket_brigade *bb;
-    apr_bucket_brigade *tmp;
     
     apr_size_t content_length;
     int chunked;
@@ -44,7 +43,7 @@ struct h2_from_h1 {
     const char *status;
     apr_array_header_t *hlines;
     
-    struct h2_response *head;
+    struct h2_response *response;
 };
 
 static void set_state(h2_from_h1 *from_h1, h2_from_h1_state_t state);
@@ -56,7 +55,6 @@ h2_from_h1 *h2_from_h1_create(int stream_id, apr_pool_t *pool,
     if (from_h1) {
         from_h1->stream_id = stream_id;
         from_h1->pool = pool;
-        from_h1->tmp = apr_brigade_create(pool, bucket_alloc);
         from_h1->state = H2_RESP_ST_STATUS_LINE;
         from_h1->hlines = apr_array_make(pool, 10, sizeof(char *));
     }
@@ -65,11 +63,10 @@ h2_from_h1 *h2_from_h1_create(int stream_id, apr_pool_t *pool,
 
 apr_status_t h2_from_h1_destroy(h2_from_h1 *from_h1)
 {
-    if (from_h1->head) {
-        h2_response_destroy(from_h1->head);
-        from_h1->head = NULL;
+    if (from_h1->response) {
+        h2_response_destroy(from_h1->response);
+        from_h1->response = NULL;
     }
-    from_h1->tmp = NULL;
     from_h1->bb = NULL;
     return APR_SUCCESS;
 }
@@ -89,29 +86,29 @@ static void set_state(h2_from_h1 *from_h1, h2_from_h1_state_t state)
 
 h2_response *h2_from_h1_get_response(h2_from_h1 *from_h1)
 {
-    h2_response *head = from_h1->head;
-    from_h1->head = NULL;
-    return head;
+    h2_response *response = from_h1->response;
+    from_h1->response = NULL;
+    return response;
 }
 
 static apr_status_t make_h2_headers(h2_from_h1 *from_h1, request_rec *r)
 {
-    from_h1->head = h2_response_create(from_h1->stream_id, APR_SUCCESS,
+    from_h1->response = h2_response_create(from_h1->stream_id, APR_SUCCESS,
                                        from_h1->status, from_h1->hlines,
                                        from_h1->pool);
-    if (from_h1->head == NULL) {
+    if (from_h1->response == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, r->connection,
                       "h2_from_h1(%d): unable to create resp_head",
                       from_h1->stream_id);
         return APR_EINVAL;
     }
-    from_h1->content_length = from_h1->head->content_length;
+    from_h1->content_length = from_h1->response->content_length;
     from_h1->chunked = r->chunked;
     
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, r->connection,
                   "h2_from_h1(%d): converted %d headers, content-length: %d"
                   ", chunked=%d",
-                  from_h1->stream_id, (int)from_h1->head->nvlen,
+                  from_h1->stream_id, (int)from_h1->response->nvlen,
                   (int)from_h1->content_length, (int)from_h1->chunked);
     
     set_state(from_h1, ((from_h1->chunked || from_h1->content_length > 0)?

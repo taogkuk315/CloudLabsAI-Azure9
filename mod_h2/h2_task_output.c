@@ -43,6 +43,7 @@ static int is_aborted(h2_task_output *output, ap_filter_t* filter) {
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
                                       h2_task *task, int stream_id,
+                                      apr_bucket_alloc_t *bucket_alloc,
                                       struct h2_mplx *m)
 {
     h2_task_output *output = apr_pcalloc(pool, sizeof(h2_task_output));
@@ -51,8 +52,7 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
         output->stream_id = stream_id;
         output->m = m;
         output->state = H2_TASK_OUT_INIT;
-        output->from_h1 = h2_from_h1_create(stream_id, pool, 
-                                            task->conn->bucket_alloc);
+        output->from_h1 = h2_from_h1_create(stream_id, pool, bucket_alloc);
         if (!output->from_h1) {
             return NULL;
         }

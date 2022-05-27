@@ -155,11 +155,11 @@ void h2_mplx_destroy(h2_mplx *m)
     }
 }
 
-static int teardown_task(void *ctx, h2_io *io) 
+static int abort_task(void *ctx, h2_io *io) 
 {
     h2_mplx *m = (h2_mplx *)ctx;
     if (io->task) {
-        h2_task_teardown(io->task);
+        h2_task_abort(io->task);
     }
     return 1;
 }
@@ -169,7 +169,7 @@ void h2_mplx_cleanup(h2_mplx *m)
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        h2_io_set_iter(m->task_finished_ios, teardown_task, m);
+        h2_io_set_iter(m->task_finished_ios, abort_task, m);
         h2_io_set_remove_all(m->task_finished_ios);
         
         apr_thread_mutex_unlock(m->lock);

@@ -55,6 +55,8 @@ struct h2_task {
     apr_uint32_t has_finished;
     
     struct h2_mplx *mplx;
+    struct conn_rec *master;
+    apr_pool_t *stream_pool;
     struct h2_conn *conn;
     
     struct h2_task_input *input;    /* http/1.1 input data */
@@ -73,7 +75,6 @@ h2_task *h2_task_create(long session_id,
                         struct h2_mplx *mplx);
 
 apr_status_t h2_task_destroy(h2_task *task);
-apr_status_t h2_task_teardown(h2_task *task);
 
 apr_status_t h2_task_prep_conn(h2_task *task);
 
