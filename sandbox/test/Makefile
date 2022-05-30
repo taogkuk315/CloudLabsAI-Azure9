@@ -118,6 +118,11 @@ loadtest: \
 	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 7 -m $(MAX_STREAMS) -c 8
 	$(H2LOAD) -i $(GEN)/load-urls-1.txt -n 200000 -t 8 -m $(MAX_STREAMS) -c 8
 
+xtest: \
+		$(INST_DIR)/.test-setup \
+		$(INST_DIR)/.curl-installed \
+        $(GEN)/load-urls-1.txt
+	@bash test_nghttp_post.sh http://$(HTTP_AUTH)
 
 ################################################################################
 # Setup the local httpd for our tests

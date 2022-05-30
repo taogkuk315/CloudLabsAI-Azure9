@@ -393,15 +393,6 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
     return status;
 }
 
-apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
-{
-    assert(m);
-    return h2_mplx_out_open(m, stream_id, 
-                            h2_response_create(stream_id, ss, NULL, NULL,
-                                               m->pool),
-                            NULL, NULL, NULL);
-}
-
 h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb)
 {
     assert(m);
@@ -456,6 +447,46 @@ static apr_status_t out_write(h2_mplx *m, h2_io *io,
     return status;
 }
 
+static apr_status_t out_open(h2_mplx *m, int stream_id, h2_response *response,
+                             ap_filter_t* f, apr_bucket_brigade *bb,
+                             struct apr_thread_cond_t *iowait)
+{
+    apr_status_t status = APR_SUCCESS;
+    
+    h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+    if (io) {
+        io->response = h2_response_clone(m->pool, response);
+        h2_io_set_add(m->ready_ios, io);
+        if (f && bb && iowait) {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c,
+                          "h2_mplx(%ld-%d): open response",
+                          m->id, stream_id);
+            status = out_write(m, io, f, bb, iowait);
+        }
+        have_out_data_for(m, stream_id);
+    }
+    else {
+        status = APR_ECONNABORTED;
+    }
+    return status;
+}
+
+apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
+{
+    assert(m);
+    if (m->aborted) {
+        return APR_SUCCESS;
+    }
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        status = out_open(m, stream_id, 
+                          h2_response_create(stream_id, ss, NULL, NULL, m->pool),
+                          NULL, NULL, NULL);
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}
+
 apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response,
                               ap_filter_t* f, apr_bucket_brigade *bb,
                               struct apr_thread_cond_t *iowait)
@@ -463,21 +494,7 @@ apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response,
     assert(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
-        if (io) {
-            io->response = response;
-            h2_io_set_add(m->ready_ios, io);
-            if (f && bb && iowait) {
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c,
-                              "h2_mplx(%ld-%d): open response",
-                              m->id, stream_id);
-                status = out_write(m, io, f, bb, iowait);
-            }
-            have_out_data_for(m, stream_id);
-        }
-        else {
-            status = APR_ECONNABORTED;
-        }
+        status = out_open(m, stream_id, response, f, bb, iowait);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;

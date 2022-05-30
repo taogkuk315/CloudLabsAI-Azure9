@@ -39,31 +39,26 @@ h2_response *h2_response_create(int stream_id,
     /* we allocate one block for the h2_response and the array of
      * nghtt2_nv structures.
      */
-    h2_response *head = calloc(1, sizeof(h2_response)
-                                + (nvmax * sizeof(nghttp2_nv)));
-    if (head == NULL) {
+    h2_response *response = apr_pcalloc(pool, sizeof(h2_response));
+    if (response == NULL) {
         return NULL;
     }
 
-    head->stream_id = stream_id;
-    head->task_status = task_status;
-    head->http_status = http_status;
-    head->content_length = -1;
+    response->stream_id = stream_id;
+    response->task_status = task_status;
+    response->http_status = http_status;
+    response->content_length = -1;
+    response->headers = apr_table_make(pool, hlines->nelts);
 
     if (hlines) {
-        nghttp2_nv *nvs = (nghttp2_nv *)&head->nv;
-        H2_CREATE_NV_LIT_CS(nvs, strdup(":status"), strdup(http_status));
-
         int seen_clen = 0;
-        int nvlen = 1;
         for (int i = 0; i < hlines->nelts; ++i) {
             char *hline = ((char **)hlines->elts)[i];
-            nghttp2_nv *nv = &nvs[nvlen];
             char *sep = strchr(hline, ':');
             if (!sep) {
                 ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, pool,
                               "h2_response(%d): invalid header[%d] '%s'",
-                              head->stream_id, i, (char*)hline);
+                              response->stream_id, i, (char*)hline);
                 /* not valid format, abort */
                 return NULL;
             }
@@ -71,60 +66,44 @@ h2_response *h2_response_create(int stream_id,
             while (*sep == ' ' || *sep == '\t') {
                 ++sep;
             }
-            if (*sep) {
-                if (H2_HD_MATCH_LIT_CS("connection", hline)
-                    || H2_HD_MATCH_LIT_CS("proxy-connection", hline)
-                    || H2_HD_MATCH_LIT_CS("upgrade", hline)
-                    || H2_HD_MATCH_LIT_CS("keep-alive", hline)
-                    || H2_HD_MATCH_LIT_CS("transfer-encoding", hline)) {
-                    /* never forward, ch. 8.1.2.2 */
-                }
-                else {
-                    H2_CREATE_NV_CS_CS(nv, strdup(h2_strlwr(hline)), 
-                                       strdup(sep));
-                    ++nvlen;
-                }
+            if (H2_HD_MATCH_LIT_CS("connection", hline)
+                || H2_HD_MATCH_LIT_CS("proxy-connection", hline)
+                || H2_HD_MATCH_LIT_CS("upgrade", hline)
+                || H2_HD_MATCH_LIT_CS("keep-alive", hline)
+                || H2_HD_MATCH_LIT_CS("transfer-encoding", hline)) {
+                /* never forward, ch. 8.1.2.2 */
             }
             else {
-                /* reached end of line, an empty header value */
-                H2_CREATE_NV_CS_CS(nv, strdup(h2_strlwr(hline)), strdup(""));
-                ++nvlen;
-            }
-        }
-        head->nvlen = nvlen;
-
-        for (int i = 1; i < head->nvlen; ++i) {
-            const nghttp2_nv *nv = &(&head->nv)[i];
-            if (!strcmp("content-length", (char*)nv->name)) {
-                char *end;
-                apr_int64_t clen = apr_strtoi64((char*)nv->value, &end, 10);
-                if (((char*)nv->value) == end) {
-                    ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, pool,
-                                  "h2_response(%d): content-length value not parsed: %s",
-                                  head->stream_id, (char*)nv->value);
-                    return NULL;
+                apr_table_merge(response->headers, hline, sep);
+                if (*sep && H2_HD_MATCH_LIT_CS("content-length", hline)) {
+                    char *end;
+                    response->content_length = apr_strtoi64(sep, &end, 10);
+                    if (sep == end) {
+                        ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, 
+                                      pool,"h2_response(%d): content-length"
+                                      " value not parsed: %s", 
+                                      response->stream_id, sep);
+                        response->content_length = -1;
+                    }
                 }
-                head->content_length = clen;
             }
         }
+
     }
-    return head;
+    return response;
 }
 
 void h2_response_destroy(h2_response *resp)
 {
-    const nghttp2_nv *nv = &resp->nv;
-    
-    for (int i = 0; i < resp->nvlen; ++i) {
-        free(nv[i].name);
-        free(nv[i].value);
-    }
-    free(resp);
 }
 
-long h2_response_get_content_length(h2_response *resp)
+h2_response *h2_response_clone(apr_pool_t *p, h2_response *resp)
 {
-    return resp->content_length;
+    h2_response *n = apr_palloc(p, sizeof(*resp));
+    *n = *resp;
+    n->http_status = apr_pstrdup(p, resp->http_status);
+    n->headers = apr_table_clone(p, resp->headers);
+    return n;
 }
 
 

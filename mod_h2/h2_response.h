@@ -26,12 +26,8 @@ typedef struct h2_response {
     int stream_id;
     apr_status_t task_status;
     const char *http_status;
-
+    apr_table_t *headers;
     long content_length;
-    
-    apr_size_t nvlen;
-    const nghttp2_nv nv;
-    /* must be last element */
 } h2_response;
 
 h2_response *h2_response_create(int stream_id,
@@ -42,6 +38,6 @@ h2_response *h2_response_create(int stream_id,
 
 void h2_response_destroy(h2_response *head);
 
-long h2_response_get_content_length(h2_response *resp);
+h2_response *h2_response_clone(apr_pool_t *p, h2_response *resp);
 
 #endif /* defined(__mod_h2__h2_response__) */

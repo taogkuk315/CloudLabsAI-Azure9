@@ -428,7 +428,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
     nghttp2_option *options = NULL;
 
     apr_pool_t *pool = NULL;
-    apr_status_t status = apr_pool_create(&pool, c->pool);
+    apr_status_t status = apr_pool_create(&pool, r? r->pool : c->pool);
     if (status != APR_SUCCESS) {
         return NULL;
     }
@@ -551,12 +551,12 @@ void h2_session_destroy(h2_session *session)
     assert(session);
     if (session->streams) {
         if (h2_stream_set_size(session->streams)) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
                           "h2_session(%ld): destroy, %ld streams open",
                           session->id, h2_stream_set_size(session->streams));
             /* destroy all sessions, join all existing tasks */
             h2_stream_set_iter(session->streams, close_active_iter, session);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
                           "h2_session(%ld): destroy, %ld streams remain",
                           session->id, h2_stream_set_size(session->streams));
         }
@@ -565,12 +565,12 @@ void h2_session_destroy(h2_session *session)
     }
     if (session->zombies) {
         if (h2_stream_set_size(session->zombies)) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
                           "h2_session(%ld): destroy, %ld zombie streams",
                           session->id, h2_stream_set_size(session->zombies));
             /* destroy all zombies, join all existing tasks */
             h2_stream_set_iter(session->zombies, close_zombie_iter, session);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
                           "h2_session(%ld): destroy, %ld zombies remain",
                           session->id, h2_stream_set_size(session->zombies));
         }
@@ -1042,6 +1042,77 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     return (ssize_t)nread;
 }
 
+typedef struct {
+    nghttp2_nv *nv;
+    size_t nvlen;
+    size_t offset;
+} nvctx_t;
+
+static int count_headers(void *ctx, const char *key, const char *value)
+{
+    nvctx_t *nvctx = (nvctx_t*)ctx;
+    nvctx->nvlen++;
+    return 1;
+}
+
+static int add_headers(void *ctx, const char *key, const char *value)
+{
+    nvctx_t *nvctx = (nvctx_t*)ctx;
+    if (nvctx->offset < nvctx->nvlen) {
+        H2_CREATE_NV_CS_CS((&nvctx->nv[nvctx->offset]), key, value);
+        nvctx->offset++;
+    }
+    return 1;
+}
+
+static int submit_response(h2_session *session, h2_response *response)
+{
+    nvctx_t nvctx = { NULL, 1 };
+    nghttp2_data_provider provider = {
+        response->stream_id, stream_data_cb
+    };
+    
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+                  "h2_stream(%ld-%d): submitting response %s",
+                  session->id, response->stream_id, response->http_status);
+    
+    apr_table_do(count_headers, &nvctx, response->headers, NULL);
+    nvctx.nv = calloc(nvctx.nvlen, sizeof(nghttp2_nv));
+    if (!nvctx.nv) {
+        return NGHTTP2_ERR_NOMEM;
+    }
+    
+    H2_CREATE_NV_LIT_CS((&nvctx.nv[0]), ":status", response->http_status);
+    nvctx.offset = 1;
+    apr_table_do(add_headers, &nvctx, response->headers, NULL);
+    
+    if (APLOGctrace2(session->c)) {
+        for (int i = 0; i < nvctx.nvlen; ++i) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                          "h2_stream(%ld-%d): resp header %s: %s",
+                          session->id, response->stream_id, 
+                          nvctx.nv[i].name, nvctx.nv[i].value);
+        }
+    }
+    
+    int rv = nghttp2_submit_response(session->ngh2, response->stream_id,
+                                     nvctx.nv, nvctx.nvlen, &provider);
+    free(nvctx.nv);
+    
+    if (rv != 0) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
+                      "h2_stream(%ld-%d): submit_response: %s",
+                      session->id, response->stream_id, nghttp2_strerror(rv));
+    }
+    else {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                      "h2_stream(%ld-%d): submitted response %s, rv=%d",
+                      session->id, response->stream_id, 
+                      response->http_status, rv);
+    }
+    return rv;
+}
+
 /* Start submitting the response to a stream request. This is possible
  * once we have all the response headers. The response body will be
  * read by the session using the callback we supply.
@@ -1055,31 +1126,7 @@ apr_status_t h2_session_handle_response(h2_session *session, h2_stream *stream)
     apr_status_t status = APR_SUCCESS;
     int rv = 0;
     if (stream->response->http_status) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                      "h2_stream(%ld-%d): submitting response %s with %d headers",
-                      session->id, stream->id, stream->response->http_status,
-                      (int)stream->response->nvlen);
-        assert(stream->response->nvlen);
-        
-        nghttp2_data_provider provider = {
-            stream->id, stream_data_cb
-        };
-        rv = nghttp2_submit_response(session->ngh2, stream->id,
-                                     &stream->response->nv, 
-                                     stream->response->nvlen, &provider);
-        if (rv != 0) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                          "h2_stream(%ld-%d): submit_response: %s",
-                          session->id, stream->id, nghttp2_strerror(rv));
-        }
-        else {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                          "h2_stream(%ld-%d): submitted response %s with %d "
-                          "headers, rv=%d",
-                          session->id, stream->id, 
-                          stream->response->http_status,
-                          (int)stream->response->nvlen, rv);
-        }
+        rv = submit_response(session, stream->response);
     }
     else {
         rv = nghttp2_submit_rst_stream(session->ngh2, 0,

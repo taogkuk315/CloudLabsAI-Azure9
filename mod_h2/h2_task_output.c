@@ -93,8 +93,8 @@ static apr_status_t out_write(h2_task_output *output, ap_filter_t *f,
             return APR_ECONNABORTED;
         }
         
-        return h2_mplx_out_open(output->m, output->stream_id, response,
-                                f, bb,
+        return h2_mplx_out_open(output->m, output->stream_id, 
+                                response, f, bb,
                                 h2_task_get_io_cond(output->task));
     }
     return h2_mplx_out_write(output->m, output->stream_id, f, bb,
