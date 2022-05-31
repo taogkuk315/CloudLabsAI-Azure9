@@ -116,7 +116,7 @@ h2_task *h2_task_create(long session_id,
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream_pool,
                       "h2_task(%ld-%d): create stream task", 
                       session_id, stream_id);
-        h2_mplx_out_reset(mplx, stream_id, APR_ENOMEM);
+        h2_mplx_out_close(mplx, stream_id);
         return NULL;
     }
     
@@ -190,8 +190,8 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         task->io = NULL;
     }
     
-    if (!h2_task_output_has_started(task->output)) {
-        h2_mplx_out_reset(task->mplx, task->stream_id, status);
+    if (task->output) {
+        h2_task_output_close(task->output);
     }
     
     if (task->on_finished) {
@@ -202,6 +202,7 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         h2_task_input_destroy(task->input);
         task->input = NULL;
     }
+    
     if (task->output) {
         h2_task_output_destroy(task->output);
         task->output = NULL;

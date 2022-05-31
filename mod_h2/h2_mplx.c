@@ -167,6 +167,9 @@ static int abort_task(void *ctx, h2_io *io)
 void h2_mplx_cleanup(h2_mplx *m)
 {
     assert(m);
+    if (m->aborted) {
+        return;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io_set_iter(m->task_finished_ios, abort_task, m);
@@ -229,6 +232,9 @@ static void task_finished(void *ctx, h2_task *task)
 apr_status_t h2_mplx_register_task(h2_mplx *m, h2_task *task)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, task->stream_id);
@@ -245,6 +251,9 @@ apr_status_t h2_mplx_register_task(h2_mplx *m, h2_task *task)
 apr_status_t h2_mplx_open_io(h2_mplx *m, int stream_id)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
@@ -277,6 +286,9 @@ apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
                              struct apr_thread_cond_t *iowait)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
@@ -304,6 +316,9 @@ apr_status_t h2_mplx_in_write(h2_mplx *m,
                               int stream_id, struct h2_bucket *bucket)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
@@ -324,6 +339,9 @@ apr_status_t h2_mplx_in_write(h2_mplx *m,
 apr_status_t h2_mplx_in_close(h2_mplx *m, int stream_id)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
@@ -362,6 +380,9 @@ apr_status_t h2_mplx_in_update_windows(h2_mplx *m,
                                        h2_mplx_consumed_cb *cb, void *cb_ctx)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         update_ctx ctx = { cb, cb_ctx, 0 };
@@ -376,6 +397,9 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
                               apr_bucket_brigade *bb, apr_size_t maxlen)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
@@ -396,6 +420,9 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
 h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb)
 {
     assert(m);
+    if (m->aborted) {
+        return NULL;
+    }
     h2_response *response = NULL;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
@@ -471,27 +498,14 @@ static apr_status_t out_open(h2_mplx *m, int stream_id, h2_response *response,
     return status;
 }
 
-apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t ss)
-{
-    assert(m);
-    if (m->aborted) {
-        return APR_SUCCESS;
-    }
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        status = out_open(m, stream_id, 
-                          h2_response_create(stream_id, ss, NULL, NULL, m->pool),
-                          NULL, NULL, NULL);
-        apr_thread_mutex_unlock(m->lock);
-    }
-    return status;
-}
-
 apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response,
                               ap_filter_t* f, apr_bucket_brigade *bb,
                               struct apr_thread_cond_t *iowait)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = out_open(m, stream_id, response, f, bb, iowait);
@@ -506,6 +520,9 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, int stream_id,
                                struct apr_thread_cond_t *iowait)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
@@ -524,10 +541,22 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, int stream_id,
 apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
+            if (!io->response) {
+                /* In case a close comes before a response was created,
+                 * insert an error one so that our streams can properly
+                 * reset.
+                 */
+                h2_response *r = h2_response_create(stream_id, APR_ECONNABORTED, 
+                                                    NULL, NULL, m->pool);
+                status = out_open(m, stream_id, r, NULL, NULL, NULL);
+            }
             status = h2_io_out_close(io);
             have_out_data_for(m, stream_id);
         }
@@ -542,6 +571,9 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
 int h2_mplx_in_has_eos_for(h2_mplx *m, int stream_id)
 {
     assert(m);
+    if (m->aborted) {
+        return 0;
+    }
     int has_eos = 0;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
@@ -557,6 +589,9 @@ int h2_mplx_in_has_eos_for(h2_mplx *m, int stream_id)
 int h2_mplx_out_has_data_for(h2_mplx *m, int stream_id)
 {
     assert(m);
+    if (m->aborted) {
+        return 0;
+    }
     int has_data = 0;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
@@ -573,6 +608,9 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
                                  apr_thread_cond_t *iowait)
 {
     assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         m->added_output = iowait;

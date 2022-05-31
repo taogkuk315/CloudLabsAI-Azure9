@@ -208,14 +208,4 @@ apr_status_t h2_mplx_out_write(h2_mplx *mplx, int stream_id,
  */
 apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id);
 
-/*******************************************************************************
- * Error handling of streams.
- ******************************************************************************/
-
-/**
- * Resets the given stream. Indicate, which error occured, if any. This
- * (so far) only works when the response has not already been queued.
- */
-apr_status_t h2_mplx_out_reset(h2_mplx *m, int stream_id, apr_status_t status);
-
 #endif /* defined(__mod_h2__h2_mplx__) */

@@ -43,6 +43,10 @@ h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc)
 void h2_io_cleanup(h2_io *io)
 {
     h2_bucket_queue_cleanup(&io->input);
+    if (io->response) {
+        h2_response_destroy(io->response);
+        io->response = NULL;
+    }
 }
 
 void h2_io_destroy(h2_io *io)
@@ -93,12 +97,7 @@ apr_status_t h2_io_in_close(h2_io *io)
 
 h2_response *h2_io_extract_response(h2_io *io)
 {
-    h2_response *resp = NULL;
-    if (io->response) {
-        resp = io->response;
-        io->response = NULL;
-    }
-    return resp;
+    return io->response;
 }
 
 

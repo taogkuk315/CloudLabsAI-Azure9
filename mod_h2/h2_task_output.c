@@ -71,7 +71,10 @@ void h2_task_output_destroy(h2_task_output *output)
 
 void h2_task_output_close(h2_task_output *output)
 {
-    h2_mplx_out_close(output->m, output->stream_id);
+    if (output->state != H2_TASK_OUT_DONE) {
+        h2_mplx_out_close(output->m, output->stream_id);
+        output->state = H2_TASK_OUT_DONE;
+    }
 }
 
 int h2_task_output_has_started(h2_task_output *output)
