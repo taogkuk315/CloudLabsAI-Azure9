@@ -62,6 +62,8 @@ struct h2_conn {
 };
 
 h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *parent);
+h2_conn *h2_conn_create2(const char *id, conn_rec *master,
+                         struct h2_worker *worker);
 void h2_conn_destroy(h2_conn *conn);
 
 apr_status_t h2_conn_prep(h2_conn *conn, struct h2_worker *worker);

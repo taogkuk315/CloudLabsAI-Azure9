@@ -411,6 +411,68 @@ apr_status_t h2_conn_prep(h2_conn *conn, h2_worker *worker)
     return APR_SUCCESS;
 }
 
+h2_conn *h2_conn_create2(const char *id, conn_rec *master, h2_worker *worker)
+{
+    apr_status_t status = APR_SUCCESS;
+    
+    assert(master);
+    assert(worker);
+    
+    
+    /* Setup a conn_rec for this stream with the worker's resources.
+     */
+    apr_pool_t *wpool = h2_worker_get_pool(worker);
+    apr_pool_t *cpool;
+    apr_pool_create(&cpool, wpool);
+    h2_conn *conn = apr_pcalloc(cpool, sizeof(*conn));
+    
+    conn->id = id;
+    conn->pool = cpool;
+    conn->bucket_alloc = h2_worker_get_bucket_alloc(worker);
+    conn->master = master;
+    conn->socket = ap_get_module_config(master->conn_config, &core_module);
+    
+    /* Not sure about the scoreboard handle. Reusing the one from the main
+     * connection could make sense, but I do not know enough to tell...
+     */
+    conn->c = ap_run_create_connection(conn->pool, conn->master->base_server,
+                                       conn->socket,
+                                       conn->master->id^((long)conn->pool), 
+                                       conn->master->sbh,
+                                       conn->bucket_alloc);
+    if (conn->c == NULL) {
+        ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, conn->pool,
+                      "h2_task: creating conn");
+        return NULL;
+    }
+    
+    conn->c->pool = conn->pool;
+    conn->c->bucket_alloc = conn->bucket_alloc;
+    conn->c->current_thread = h2_worker_get_thread(worker);
+    
+    conn->socket = h2_worker_get_socket(worker);
+    ap_set_module_config(conn->c->conn_config, &core_module, 
+                         conn->socket);
+    
+    /* This works for mpm_worker so far. Other mpm modules have 
+     * different needs, unfortunately. The most interesting one 
+     * being mpm_event...
+     */
+    switch (h2_conn_mpm_type()) {
+        case H2_MPM_WORKER:
+            /* all fine */
+            break;
+        case H2_MPM_EVENT: 
+            fix_event_conn(conn->c, conn->master);
+            break;
+        default:
+            /* fingers crossed */
+            break;
+    }
+    
+    return conn;
+}
+
 apr_status_t h2_conn_post(h2_conn *conn, h2_worker *worker)
 {
     assert(conn);

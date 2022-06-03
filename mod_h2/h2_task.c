@@ -126,17 +126,16 @@ h2_task *h2_task_create(long session_id,
     task->stream_pool = stream_pool;
     task->mplx = mplx;
     
-    /* We need a separate pool for the task execution as this happens
-     * in another thread and pools are not multi-thread safe. 
-     * Since the task lives not longer than the stream, we'd tried
-     * making this new pool a sub pool of the stream one, but that
-     * only led to crashes. With a root pool, this does not happen.
+    /* We would like to have this happening when our task is about
+     * to be processed by the worker. But something corrupts our
+     * stream pool if we comment this out.
+     * TODO.
      */
-    task->conn = h2_conn_create(task->id, task->master, task->stream_pool);
-    if (!task->conn) {
+    task->conn = h2_conn_create(task->id, task->master, stream_pool);
+    if (task->conn == NULL) {
         return NULL;
     }
-    
+
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
                   "h2_task(%s): created", task->id);
     return task;
@@ -166,9 +165,19 @@ void h2_task_on_finished(h2_task *task, task_callback *cb, void *cb_ctx)
 
 apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
 {
-    assert(task);
+    apr_status_t status = APR_SUCCESS;
     
-    apr_status_t status = h2_conn_prep(task->conn, worker); 
+    assert(task);
+    if (task->conn == NULL) {
+        task->conn = h2_conn_create2(task->id, task->master, worker);
+        if (task->conn == NULL) {
+            return APR_EINVAL;
+        }
+    }
+    else {
+        status = h2_conn_prep(task->conn, worker);
+    }
+    
     if (status == APR_SUCCESS) {
         task->input = h2_task_input_create(task->conn->pool,
                                            task, task->stream_id, task->mplx);
@@ -207,7 +216,11 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         h2_task_output_destroy(task->output);
         task->output = NULL;
     }
-    h2_conn_post(task->conn, worker); 
+    
+    if (task->conn) {
+        h2_conn_post(task->conn, worker);
+        task->conn = NULL;
+    }
     
     return status;
 }
