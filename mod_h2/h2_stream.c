@@ -85,7 +85,10 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
         h2_task_destroy(stream->task);
         stream->task = NULL;
     }
-    stream->bbout = NULL;
+    if (stream->bbout) {
+        apr_brigade_cleanup(stream->bbout);
+        stream->bbout = NULL;
+    }
     if (stream->pool) {
         apr_pool_destroy(stream->pool);
     }

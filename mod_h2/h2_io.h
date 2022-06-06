@@ -26,7 +26,6 @@ struct h2_task;
 typedef struct h2_io h2_io;
 struct h2_io {
     int id;                      /* stream identifier */
-    apr_pool_t *pool;            /* pool to use for holding data */
     
     h2_bucket_queue input;       /* input data for stream */
     apr_size_t input_consumed;   /* how many bytes have been read */
