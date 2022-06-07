@@ -379,3 +379,21 @@ int h2_util_has_flush_or_eos(apr_bucket_brigade *bb) {
     return 0;
 }
 
+int h2_util_has_eos(apr_bucket_brigade *bb, apr_size_t len)
+{
+    apr_off_t maxlen = len;
+    apr_bucket *b;
+    for (b = APR_BRIGADE_FIRST(bb);
+         b != APR_BRIGADE_SENTINEL(bb) && maxlen >= 0;
+         b = APR_BUCKET_NEXT(b))
+    {
+        if (APR_BUCKET_IS_EOS(b)) {
+            return 1;
+        }
+        if (b->length != -1) {
+            maxlen -= b->length;
+        }
+    }
+    return 0;
+}
+

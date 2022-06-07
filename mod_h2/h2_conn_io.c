@@ -204,6 +204,16 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf,
     return status;
 }
 
+apr_status_t h2_conn_io_write_brigade(h2_conn_io_ctx *io,
+                                      apr_bucket_brigade *bb)
+{
+    apr_status_t status = h2_util_pass(io->output, bb, 0);
+    if (status == APR_SUCCESS) {
+        status = ap_pass_brigade(io->connection->output_filters, io->output);
+    }
+    return status;
+}
+
 apr_status_t h2_conn_io_flush(h2_conn_io_ctx *io)
 {
     /* Append flush.

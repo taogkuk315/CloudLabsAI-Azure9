@@ -204,6 +204,59 @@ apr_status_t h2_stream_write_data(h2_stream *stream,
     return h2_request_write_data(stream->request, data, len, stream->m);
 }
 
+apr_status_t h2_stream_prep_read(h2_stream *stream, 
+                                 apr_size_t *plen, int *peos)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_off_t buffered_len = 0;
+    
+    *peos = 0;
+    if (stream->bbout == NULL) {
+        stream->bbout = apr_brigade_create(stream->pool, 
+                                           stream->bucket_alloc);
+    }
+    
+    status = apr_brigade_length(stream->bbout, 1, &buffered_len);
+    if (status != APR_SUCCESS) {
+        return status;
+    }
+    
+    if (buffered_len < *plen) {
+        /* Our brigade does not hold enough bytes, try to get more data.
+         */
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
+                      h2_mplx_get_conn(stream->m),
+                      "h2_stream(%ld-%d): reading from mplx",
+                      h2_mplx_get_id(stream->m), stream->id);
+        status = h2_mplx_out_read(stream->m, stream->id, stream->bbout, 0);
+        if (status == APR_SUCCESS) {
+            /* nop */
+            apr_brigade_length(stream->bbout, 1, &buffered_len);
+        }
+        else if (status == APR_EOF) {
+            *peos = 1;
+            if (APR_BRIGADE_EMPTY(stream->bbout)) {
+                return status;
+            }
+            status = APR_SUCCESS;
+        }
+        else {
+            return status;
+        }
+    }
+    
+    if (!buffered_len) {
+        *plen = 0;
+        return *peos? APR_EOF : APR_EAGAIN;
+    }
+    else if (buffered_len < *plen) {
+        *plen = buffered_len;
+    }
+    *peos = h2_util_has_eos(stream->bbout, *plen);
+    
+    return APR_SUCCESS;
+}
+
 apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
                             apr_size_t *plen, int *peos)
 {
@@ -312,6 +365,29 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
     
     *plen = written;
     return status;
+}
+
+apr_status_t h2_stream_readx(h2_stream *stream, apr_bucket_brigade *bb,
+                             apr_size_t len)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_off_t buffered_len = 0;
+    apr_size_t need = len;
+    int eos = 0;
+    
+    status = h2_stream_prep_read(stream, &need, &eos);
+    if (status != APR_SUCCESS) {
+        return status;
+    }
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, 
+                  h2_mplx_get_conn(stream->m),
+                  "h2_stream(%ld-%d): readx, need=%ld, avail=%ld",
+                  h2_mplx_get_id(stream->m), stream->id, len, need);
+
+    if (len != need) {
+        return APR_EAGAIN;
+    }
+    return h2_util_pass(bb, stream->bbout, len);
 }
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended)
