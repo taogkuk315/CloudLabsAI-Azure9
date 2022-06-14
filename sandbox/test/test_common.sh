@@ -70,7 +70,7 @@ nghttp_check_assets() {
     mkdir -p $TMP &&
     sort > $TMP/reference
     ${NGHTTP} -uans $ARGS $URL_PREFIX/$DOC > $TMP/out || fail
-    fgrep " /" $TMP/out | while read begin end dur stat size path; do
+    fgrep " /" $TMP/out | while read id begin end dur stat size path; do
         echo "$path $size $stat"
     done | sort > $TMP/output || fail
     diff $TMP/reference $TMP/output  || fail

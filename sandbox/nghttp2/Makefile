@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 
-NGHTTP2_VERSION = 0.7.11
+NGHTTP2_VERSION = 0.7.12
 NGHTTP2_DIR     = nghttp2-$(NGHTTP2_VERSION)
 NGHTTP2_TAR     = $(NGHTTP2_DIR).tar.gz
 NGHTTP2_URL     = https://github.com/tatsuhiro-t/nghttp2/releases/download/v$(NGHTTP2_VERSION)/$(NGHTTP2_TAR)
