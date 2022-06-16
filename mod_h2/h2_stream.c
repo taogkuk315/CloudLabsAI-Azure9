@@ -72,22 +72,28 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master,
     return stream;
 }
 
+void h2_stream_cleanup(h2_stream *stream)
+{
+    h2_request_destroy(stream->request);
+    h2_mplx_close_io(stream->m, stream->id);
+    if (stream->bbout) {
+        apr_brigade_cleanup(stream->bbout);
+        stream->bbout = NULL;
+    }
+}
+
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
     assert(stream);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
                   "h2_stream(%ld-%d): destroy",
                   h2_mplx_get_id(stream->m), stream->id);
-    h2_request_destroy(stream->request);
-    h2_mplx_close_io(stream->m, stream->id);
+    h2_stream_cleanup(stream);
+    
     stream->m = NULL;
     if (stream->task) {
         h2_task_destroy(stream->task);
         stream->task = NULL;
-    }
-    if (stream->bbout) {
-        apr_brigade_cleanup(stream->bbout);
-        stream->bbout = NULL;
     }
     if (stream->pool) {
         apr_pool_destroy(stream->pool);
@@ -380,7 +386,7 @@ apr_status_t h2_stream_readx(h2_stream *stream, apr_bucket_brigade *bb,
     if (status != APR_SUCCESS) {
         return status;
     }
-    ap_log_cerror(APLOG_MARK, APLOG_INFO, status, 
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, 
                   h2_mplx_get_conn(stream->m),
                   "h2_stream(%ld-%d): readx, need=%ld, avail=%ld, eos=%d",
                   h2_mplx_get_id(stream->m), stream->id, len, need, eos);

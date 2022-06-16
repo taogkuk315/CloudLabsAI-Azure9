@@ -73,7 +73,7 @@ static int stream_open(h2_session *session, int stream_id)
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
                       "h2_session: stream(%ld-%d): unable to add to pool",
-                      session->id, h2_stream_get_id(stream));
+                      session->id, stream->id);
         return NGHTTP2_ERR_INVALID_STREAM_ID;
     }
     
@@ -405,6 +405,7 @@ int on_send_data_cb(nghttp2_session *ngh2,
 {
     h2_session *session = (h2_session *)userp;
     apr_bucket *b;
+    int rv = 0;
     
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -447,14 +448,15 @@ int on_send_data_cb(nghttp2_session *ngh2,
     }
 
     status = h2_conn_io_write_brigade(&session->io, session->bbtmp);
-    if (status != APR_SUCCESS) {
+    if (status != APR_SUCCESS 
+        && status != APR_EOF) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
                       "h2_stream(%ld-%d): failed send_data_cb",
                       session->id, (int)stream_id);
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
+        rv = NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
-    return 0;
+    return rv;
 }
 
 #endif
@@ -587,8 +589,7 @@ static int stream_close_finished(void *ctx, h2_stream *stream) {
 }
 
 static void reap_zombies(h2_session *session) {
-    h2_mplx_cleanup(session->mplx);
-    if (session->zombies) {
+    if (session->zombies && !h2_stream_set_is_empty(session->zombies)) {
         /* remove all zombies, where the task has run */
         h2_stream_set_iter(session->zombies, stream_close_finished, session);
     }
@@ -847,29 +848,27 @@ typedef struct {
     int resume_count;
 } resume_ctx;
 
-static h2_stream *resume_on_data(void *ctx, h2_stream *stream) {
+static int resume_on_data(void *ctx, h2_stream *stream) {
     resume_ctx *rctx = (resume_ctx*)ctx;
     h2_session *session = rctx->session;
     assert(session);
     assert(stream);
     
     if (h2_stream_is_suspended(stream)) {
-        ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream->pool,
-                      "h2_stream(%ld-%d): suspended, checking for DATA",
-                      h2_mplx_get_id(stream->m), stream->id);
-        if (h2_mplx_out_has_data_for(stream->m, h2_stream_get_id(stream))) {
+        if (h2_mplx_out_has_data_for(stream->m, stream->id)) {
             h2_stream_set_suspended(stream, 0);
             ++rctx->resume_count;
             
-            int rv = nghttp2_session_resume_data(session->ngh2,
-                                                 h2_stream_get_id(stream));
-            ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
-                          APLOG_ERR : APLOG_DEBUG, 0, session->c,
-                          "h2_stream(%ld-%d): resuming stream %s",
-                          session->id, stream->id, nghttp2_strerror(rv));
+            int rv = nghttp2_session_resume_data(session->ngh2, stream->id);
+            if (rv) {
+                ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
+                              APLOG_ERR : APLOG_DEBUG, 0, session->c,
+                              "h2_stream(%ld-%d): resuming stream %s",
+                              session->id, stream->id, nghttp2_strerror(rv));
+            }
         }
     }
-    return NULL;
+    return 1;
 }
 
 static int h2_session_resume_streams_with_data(h2_session *session) {
@@ -879,7 +878,7 @@ static int h2_session_resume_streams_with_data(h2_session *session) {
         resume_ctx ctx = { session, 0 };
         /* Resume all streams where we have data in the out queue and
          * which had been suspended before. */
-        h2_stream_set_find(session->streams, resume_on_data, &ctx);
+        h2_stream_set_iter(session->streams, resume_on_data, &ctx);
         return ctx.resume_count;
     }
     return 0;
@@ -948,7 +947,9 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     
     if (!have_written && timeout > 0 && !h2_session_want_write(session)) {
         status = h2_mplx_out_trywait(session->mplx, timeout, session->iowait);
-        if (h2_session_resume_streams_with_data(session) > 0) {
+
+        if (status != APR_TIMEUP
+            && h2_session_resume_streams_with_data(session) > 0) {
             have_written = 1;
         }
     }
@@ -968,6 +969,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     }
     
     if (have_written) {
+        // TODO: optimize flushing
         h2_conn_io_flush(&session->io);
     }
     
@@ -1110,7 +1112,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
         *data_flags |= NGHTTP2_DATA_FLAG_EOF;
     }
     
-    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                   "h2_stream(%ld-%d): requested %ld, "
                   "sending %ld data bytes (eos=%d)",
                   session->id, (int)stream_id, (long)length, 

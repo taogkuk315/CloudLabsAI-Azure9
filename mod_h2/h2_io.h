@@ -34,8 +34,9 @@ struct h2_io {
     apr_bucket_brigade *bbout;   /* output data from stream */
     struct apr_thread_cond_t *output_drained; /* block on writing */
     
-    struct h2_task *task;         /* the task connected to this io */
     struct h2_response *response; /* submittable response created */
+    
+    apr_file_t *file;
 };
 
 /*******************************************************************************

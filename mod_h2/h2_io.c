@@ -45,6 +45,12 @@ void h2_io_cleanup(h2_io *io)
         h2_response_destroy(io->response);
         io->response = NULL;
     }
+    if (io->file) {
+        ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, io->bbout->p,
+                      "h2_io(%d): cleanup, closing file", io->id);
+        apr_file_close(io->file);
+        io->file = NULL;
+    }
 }
 
 void h2_io_destroy(h2_io *io)
@@ -101,13 +107,15 @@ h2_response *h2_io_extract_response(h2_io *io)
 apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb, 
                             apr_size_t maxlen)
 {
-    return h2_util_move(bb, io->bbout, maxlen, 0, "h2_io_out_read");
+    return h2_util_move(bb, io->bbout, maxlen, 0, &io->file, 
+                        "h2_io_out_read");
 }
 
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen)
 {
-    return h2_util_move(io->bbout, bb, maxlen, 0, "h2_io_out_write");
+    return h2_util_move(io->bbout, bb, maxlen, 0, &io->file,
+                        "h2_io_out_write");
 }
 
 

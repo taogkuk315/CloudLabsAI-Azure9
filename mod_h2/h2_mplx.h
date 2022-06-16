@@ -80,13 +80,7 @@ conn_rec *h2_mplx_get_conn(h2_mplx *mplx);
  */
 void h2_mplx_abort(h2_mplx *mplx);
 
-/* Register the task reading/writing from/to a stream */
-apr_status_t h2_mplx_register_task(h2_mplx *mplx, struct h2_task *task);
-
-/* To be invoked regularly in order to cleanup finished tasks */
-void h2_mplx_cleanup(h2_mplx *mplx);
-
-apr_size_t h2_mplx_get_out_max_mem(h2_mplx *m);
+apr_uint32_t h2_mplx_generation(h2_mplx *mplx);
 
 /*******************************************************************************
  * IO lifetime of streams.

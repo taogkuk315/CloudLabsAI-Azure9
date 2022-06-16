@@ -84,6 +84,8 @@ struct h2_session {
     
     h2_conn_io_ctx io;              /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
+    apr_uint32_t m_generation;
+    
     struct h2_stream_set *streams;  /* streams handled by this session */
     struct h2_stream_set *zombies;  /* streams that are done */
     

@@ -44,7 +44,6 @@ struct h2_mplx {
     
     h2_io_set *stream_ios;
     h2_io_set *ready_ios;
-    h2_io_set *task_finished_ios;
     
     apr_thread_mutex_t *lock;
     apr_thread_cond_t *added_output;
@@ -113,7 +112,6 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent)
         m->bucket_alloc = apr_bucket_alloc_create(m->pool);
         m->stream_ios = h2_io_set_create(m->pool);
         m->ready_ios = h2_io_set_create(m->pool);
-        m->task_finished_ios = h2_io_set_create(m->pool);
         m->out_stream_max_size = h2_config_geti(conf, 
                                                 H2_CONF_STREAM_MAX_MEM_SIZE);
     }
@@ -126,10 +124,6 @@ void h2_mplx_destroy(h2_mplx *m)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         m->aborted = 1;
-        if (m->task_finished_ios) {
-            h2_io_set_destroy(m->task_finished_ios);
-            m->task_finished_ios = NULL;
-        }
         if (m->ready_ios) {
             h2_io_set_destroy(m->ready_ios);
             m->ready_ios = NULL;
@@ -155,30 +149,6 @@ void h2_mplx_destroy(h2_mplx *m)
     }
 }
 
-static int abort_task(void *ctx, h2_io *io) 
-{
-    h2_mplx *m = (h2_mplx *)ctx;
-    if (io->task) {
-        h2_task_abort(io->task);
-    }
-    return 1;
-}
-
-void h2_mplx_cleanup(h2_mplx *m)
-{
-    assert(m);
-    if (m->aborted) {
-        return;
-    }
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        h2_io_set_iter(m->task_finished_ios, abort_task, m);
-        h2_io_set_remove_all(m->task_finished_ios);
-        
-        apr_thread_mutex_unlock(m->lock);
-    }
-}
-
 apr_pool_t *h2_mplx_get_pool(h2_mplx *m)
 {
     assert(m);
@@ -196,11 +166,6 @@ long h2_mplx_get_id(h2_mplx *m)
     return m->id;
 }
 
-apr_size_t h2_mplx_get_out_max_mem(h2_mplx *m)
-{
-    return m->out_stream_max_size;
-}
-
 void h2_mplx_abort(h2_mplx *m)
 {
     assert(m);
@@ -212,41 +177,6 @@ void h2_mplx_abort(h2_mplx *m)
     }
 }
 
-
-static void task_finished(void *ctx, h2_task *task) 
-{
-    h2_mplx *m = (h2_mplx*)ctx;
-    assert(m);
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        m->aborted = 1;
-        h2_io *io = h2_io_set_get(m->stream_ios, task->stream_id);
-        if (io) {
-            io->task = task;
-            h2_io_set_add(m->task_finished_ios, io);
-        }
-        apr_thread_mutex_unlock(m->lock);
-    }
-}
-
-apr_status_t h2_mplx_register_task(h2_mplx *m, h2_task *task)
-{
-    assert(m);
-    if (m->aborted) {
-        return APR_ECONNABORTED;
-    }
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        h2_io *io = h2_io_set_get(m->stream_ios, task->stream_id);
-        if (io) {
-            io->task = task;
-            h2_task_on_finished(task, task_finished, m);
-        }
-        status = io? APR_SUCCESS : APR_EINVAL;
-        apr_thread_mutex_unlock(m->lock);
-    }
-    return status;
-}
 
 apr_status_t h2_mplx_open_io(h2_mplx *m, int stream_id)
 {
@@ -386,8 +316,12 @@ apr_status_t h2_mplx_in_update_windows(h2_mplx *m,
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         update_ctx ctx = { cb, cb_ctx, 0 };
+        status = APR_EAGAIN;
         h2_io_set_iter(m->stream_ios, update_window, &ctx);
-        status = ctx.streams_updated? APR_SUCCESS : APR_EAGAIN;
+        
+        if (ctx.streams_updated) {
+            status = APR_SUCCESS;
+        }
         apr_thread_mutex_unlock(m->lock);
     }
     return status;

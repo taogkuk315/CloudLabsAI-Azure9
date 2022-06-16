@@ -120,7 +120,8 @@ apr_status_t h2_task_output_write(h2_task_output *output,
     
     if (h2_util_has_flush_or_eos(bb)) {
         if (output->bb && !APR_BRIGADE_EMPTY(output->bb)) {
-            status = h2_util_move(output->bb, bb, 0, 0, "task_output_write1");
+            status = h2_util_move(output->bb, bb, 0, 0, NULL, 
+                                  "task_output_write1");
             status = out_write(output, f, output->bb);
             apr_brigade_cleanup(output->bb);
         }
@@ -132,7 +133,8 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         if (!output->bb) {
             output->bb = apr_brigade_create(bb->p, output->bucket_alloc);
         }
-        status = h2_util_move(output->bb, bb, 0, 0, "task_output_write2");
+        status = h2_util_move(output->bb, bb, 0, 0, NULL, 
+                              "task_output_write2");
     }
     return status;
 }
