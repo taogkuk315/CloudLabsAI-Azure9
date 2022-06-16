@@ -404,6 +404,8 @@ int on_send_data_cb(nghttp2_session *ngh2,
                     void *userp)
 {
     h2_session *session = (h2_session *)userp;
+    apr_bucket *b;
+    
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
@@ -422,10 +424,13 @@ int on_send_data_cb(nghttp2_session *ngh2,
     assert(!h2_stream_is_suspended(stream));
     
     apr_brigade_cleanup(session->bbtmp);
-    status = apr_brigade_write(session->bbtmp, NULL, NULL, 
-                               (const char*)framehd, 9);
+    b = apr_bucket_transient_create((const char*)framehd, 9,
+                                    session->bbtmp->bucket_alloc);
+    APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
     if (padlen) {
-        status = apr_brigade_write(session->bbtmp, NULL, NULL, &padlen, 1);
+        b = apr_bucket_transient_create(&padlen, 1,
+                                        session->bbtmp->bucket_alloc);
+        APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
     }
     
     status = h2_stream_readx(stream, session->bbtmp, length); 
@@ -436,11 +441,16 @@ int on_send_data_cb(nghttp2_session *ngh2,
     if (padlen) {
         char buffer[256];
         memset(buffer, 0, padlen);
-        status = apr_brigade_write(session->bbtmp, NULL, NULL, buffer, padlen);
+        b = apr_bucket_transient_create(buffer, padlen,
+                                        session->bbtmp->bucket_alloc);
+        APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
     }
 
     status = h2_conn_io_write_brigade(&session->io, session->bbtmp);
     if (status != APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                      "h2_stream(%ld-%d): failed send_data_cb",
+                      session->id, (int)stream_id);
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     

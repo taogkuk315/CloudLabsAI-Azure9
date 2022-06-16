@@ -35,8 +35,6 @@
  * @macro
  * != 0 iff the nghttp2 library supports data callbacks.
  */
-#define NGHTTP2_HAS_DATA_CB_AVAIL @NGHTTP2_HAS_DATA_CB@
-
-#define NGHTTP2_HAS_DATA_CB 0
+#define NGHTTP2_HAS_DATA_CB @NGHTTP2_HAS_DATA_CB@
 
 #endif /* mod_h2_h2_version_h */

@@ -187,26 +187,29 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
  * still needed.
  */
 static const int DEEP_COPY = 1;
-static const int FILE_MOVE = 0;
+static const int FILE_MOVE = 1;
 
-apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, const char *msg)
+apr_status_t last_not_included(apr_bucket_brigade *bb, 
+                               apr_size_t maxlen, int count_virtual,
+                               apr_bucket **pend)
 {
+    apr_bucket *b;
     apr_status_t status = APR_SUCCESS;
     
-    assert(to);
-    assert(from);
-    int same_alloc = (to->bucket_alloc == from->bucket_alloc);
-    
-    if (!APR_BRIGADE_EMPTY(from)) {
-        apr_bucket *end = NULL;
-        apr_bucket *b;
-        
-        if (maxlen > 0) {
-            /* Find the bucket, up to which we reach maxlen bytes */
-            for (b = APR_BRIGADE_FIRST(from); 
-                 (b != APR_BRIGADE_SENTINEL(from)) && (maxlen > 0);
-                 b = APR_BUCKET_NEXT(b)) {
+    if (maxlen > 0) {
+        /* Find the bucket, up to which we reach maxlen/mem bytes */
+        for (b = APR_BRIGADE_FIRST(bb); 
+             (b != APR_BRIGADE_SENTINEL(bb));
+             b = APR_BUCKET_NEXT(b)) {
+            
+            if (APR_BUCKET_IS_METADATA(b)) {
+                /* included */
+            }
+            else {
+                if (maxlen == 0) {
+                    *pend = b;
+                    return status;
+                }
                 
                 if (b->length == -1) {
                     const char *ign;
@@ -217,9 +220,10 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     }
                 }
                 
-                if ((same_alloc || FILE_MOVE) && APR_BUCKET_IS_FILE(b)) {
+                if (!count_virtual && APR_BUCKET_IS_FILE(b)) {
                     /* this has no memory footprint really unless
-                     * it is read, disregard it in length count */
+                     * it is read, disregard it in length count,
+                     * unless we count the virtual buckets */
                 }
                 else if (maxlen < b->length) {
                     apr_bucket_split(b, maxlen);
@@ -229,7 +233,29 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     maxlen -= b->length;
                 }
             }
-            end = b;
+        }
+    }
+    *pend = APR_BRIGADE_SENTINEL(bb);
+    return status;
+}
+
+apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
+                          apr_size_t maxlen, int count_virtual, 
+                          const char *msg)
+{
+    apr_status_t status = APR_SUCCESS;
+    
+    assert(to);
+    assert(from);
+    int same_alloc = (to->bucket_alloc == from->bucket_alloc);
+    
+    if (!APR_BRIGADE_EMPTY(from)) {
+        apr_bucket *b, *end;
+        
+        status = last_not_included(from, maxlen, 
+                                   (count_virtual || !FILE_MOVE), &end);
+        if (status != APR_SUCCESS) {
+            return status;
         }
         
         while (!APR_BRIGADE_EMPTY(from) && status == APR_SUCCESS) {
@@ -244,6 +270,14 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                  * directly. */
                 APR_BUCKET_REMOVE(b);
                 APR_BRIGADE_INSERT_TAIL(to, b);
+                ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, to->p,
+                              "h2_util_move: %s, passed bucket(same bucket_alloc) "
+                              "%ld-%ld, type=%s",
+                              msg, (long)b->start, (long)b->length, 
+                              APR_BUCKET_IS_METADATA(b)? 
+                              (APR_BUCKET_IS_EOS(b)? "EOS": 
+                               (APR_BUCKET_IS_FLUSH(b)? "FLUSH" : "META")) : 
+                              (APR_BUCKET_IS_FILE(b)? "FILE" : "DATA"));
             }
             else if (DEEP_COPY) {
                 /* we have not managed the magic of passing buckets from
@@ -253,9 +287,13 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                 if (APR_BUCKET_IS_METADATA(b)) {
                     if (APR_BUCKET_IS_EOS(b)) {
                         APR_BRIGADE_INSERT_TAIL(to, apr_bucket_eos_create(to->bucket_alloc));
+                        ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, to->p,
+                                      "h2_util_move: %s, copied EOS bucket", msg);
                     }
                     else if (APR_BUCKET_IS_FLUSH(b)) {
                         APR_BRIGADE_INSERT_TAIL(to, apr_bucket_flush_create(to->bucket_alloc));
+                        ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, to->p,
+                                      "h2_util_move: %s, copied FLUSH bucket", msg);
                     }
                     else {
                         /* ignore */
@@ -271,7 +309,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     apr_file_t *fd = f->fd;
                     int setaside = (f->readpool != to->p);
                     ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, to->p,
-                                  "h2_util: %s, moving FILE bucket %ld-%ld "
+                                  "h2_util_move: %s, moving FILE bucket %ld-%ld "
                                   "from=%lx(p=%lx) to=%lx(p=%lx), setaside=%d",
                                   msg, (long)b->start, (long)b->length, 
                                   (long)from, (long)from->p, 
@@ -282,7 +320,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                         status = apr_file_setaside(&fd, fd, to->p);
                         if (status != APR_SUCCESS) {
                             ap_log_perror(APLOG_MARK, APLOG_ERR, status, to->p,
-                                          "h2_util: %s, dup on FILE", msg);
+                                          "h2_util: %s, setaside FILE", msg);
                             return status;
                         }
                     }
@@ -293,8 +331,14 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     const char *data;
                     apr_size_t len;
                     status = apr_bucket_read(b, &data, &len, APR_BLOCK_READ);
-                    if (status == APR_SUCCESS) {
+                    if (status == APR_SUCCESS && len > 0) {
                         status = apr_brigade_write(to, NULL, NULL, data, len);
+                        ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, to->p,
+                                      "h2_util_move: %s, copied bucket %ld-%ld "
+                                      "from=%lx(p=%lx) to=%lx(p=%lx)",
+                                      msg, (long)b->start, (long)b->length, 
+                                      (long)from, (long)from->p, 
+                                      (long)to, (long)to->p);
                     }
                 }
                 apr_bucket_delete(b);
@@ -303,6 +347,12 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                 apr_bucket_setaside(b, to->p);
                 APR_BUCKET_REMOVE(b);
                 APR_BRIGADE_INSERT_TAIL(to, b);
+                ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, to->p,
+                              "h2_util_move: %s, passed setaside bucket %ld-%ld "
+                              "from=%lx(p=%lx) to=%lx(p=%lx)",
+                              msg, (long)b->start, (long)b->length, 
+                              (long)from, (long)from->p, 
+                              (long)to, (long)to->p);
             }
         }
     }
@@ -311,7 +361,8 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
 }
 
 apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen)
+                          apr_size_t maxlen, int count_virtual, 
+                          const char *msg)
 {
     apr_status_t status = APR_SUCCESS;
     
@@ -319,39 +370,13 @@ apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from,
     assert(from);
     
     if (!APR_BRIGADE_EMPTY(from)) {
-        apr_bucket *end = NULL;
-        apr_bucket *b;
+        apr_bucket *b, *end;
         
-        if (maxlen > 0) {
-            /* Find the bucket, up to which we reach maxlen bytes */
-            for (b = APR_BRIGADE_FIRST(from); 
-                 (b != APR_BRIGADE_SENTINEL(from)) && (maxlen > 0);
-                 b = APR_BUCKET_NEXT(b)) {
-                
-                if (b->length == -1) {
-                    const char *ign;
-                    apr_size_t ilen;
-                    status = apr_bucket_read(b, &ign, &ilen, APR_BLOCK_READ);
-                    if (status != APR_SUCCESS) {
-                        return status;
-                    }
-                }
-                
-                if (APR_BUCKET_IS_FILE(b)) {
-                    /* this has no memory footprint really unless
-                     * it is read, disregard it in length count */
-                }
-                else if (maxlen < b->length) {
-                    apr_bucket_split(b, maxlen);
-                    maxlen = 0;
-                }
-                else {
-                    maxlen -= b->length;
-                }
-            }
-            end = b;
+        status = last_not_included(from, maxlen, count_virtual, &end);
+        if (status != APR_SUCCESS) {
+            return status;
         }
-        
+
         while (!APR_BRIGADE_EMPTY(from) && status == APR_SUCCESS) {
             b = APR_BRIGADE_FIRST(from);
             if (b == end) {
@@ -359,7 +384,25 @@ apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from,
             }
             
             APR_BUCKET_REMOVE(b);
+            if (APR_BUCKET_IS_METADATA(b)) {
+                if (!APR_BUCKET_IS_EOS(b) && !APR_BUCKET_IS_FLUSH(b)) {
+                    apr_bucket_delete(b);
+                    continue;
+                }
+            }
+            else if (b->length == 0) {
+                apr_bucket_delete(b);
+                continue;
+            }
+            
             APR_BRIGADE_INSERT_TAIL(to, b);
+            ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, to->p,
+                          "h2_util_pass: %s, passed bucket %ld-%ld, type=%s",
+                          msg, (long)b->start, (long)b->length, 
+                          APR_BUCKET_IS_METADATA(b)? 
+                          (APR_BUCKET_IS_EOS(b)? "EOS": 
+                           (APR_BUCKET_IS_FLUSH(b)? "FLUSH" : "META")) : 
+                          (APR_BUCKET_IS_FILE(b)? "FILE" : "DATA"));
         }
     }
     
@@ -381,17 +424,19 @@ int h2_util_has_flush_or_eos(apr_bucket_brigade *bb) {
 
 int h2_util_has_eos(apr_bucket_brigade *bb, apr_size_t len)
 {
-    apr_off_t maxlen = len;
-    apr_bucket *b;
+    apr_bucket *b, *end;
+    
+    apr_status_t status = last_not_included(bb, len, 1, &end);
+    if (status != APR_SUCCESS) {
+        return status;
+    }
+    
     for (b = APR_BRIGADE_FIRST(bb);
-         b != APR_BRIGADE_SENTINEL(bb) && maxlen >= 0;
+         b != APR_BRIGADE_SENTINEL(bb) && b != end;
          b = APR_BUCKET_NEXT(b))
     {
         if (APR_BUCKET_IS_EOS(b)) {
             return 1;
-        }
-        if (b->length != -1) {
-            maxlen -= b->length;
         }
     }
     return 0;

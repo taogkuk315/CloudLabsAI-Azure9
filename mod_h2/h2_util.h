@@ -74,10 +74,12 @@ apr_size_t h2_util_base64url_decode(unsigned char **decoded,
  * @param maxlen of bytes to move, 0 for all
  */
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, const char *msg);
+                          apr_size_t maxlen, int count_virtual, 
+                          const char *msg);
 
 apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen);
+                          apr_size_t maxlen, int count_virtual, 
+                          const char *msg);
 
 /**
  * Return != 0 iff there is a FLUSH or EOS bucket in the brigade.
