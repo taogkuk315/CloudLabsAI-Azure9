@@ -37,15 +37,17 @@ static const apr_off_t HEADERSIZE      = 16 * 1024;
 
 
 struct h2_to_h1 {
-    h2_bucket *data;
     int stream_id;
+    apr_pool_t *pool;
     h2_mplx *m;
     int eoh;
     int eos;
     int flushed;
     int seen_host;
+    const char *authority;
     int chunked;
     apr_size_t remain_len;
+    h2_bucket *data;
 };
 
 h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, h2_mplx *m)
@@ -53,6 +55,7 @@ h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, h2_mplx *m)
     h2_to_h1 *to_h1 = apr_pcalloc(pool, sizeof(h2_to_h1));
     if (to_h1) {
         to_h1->stream_id = stream_id;
+        to_h1->pool = pool;
         to_h1->m = m;
     }
     return to_h1;
@@ -101,6 +104,10 @@ apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
         return status;
     }
     
+    if (authority) {
+        to_h1->authority = apr_pstrdup(to_h1->pool, authority);
+    }
+    
     size_t mlen = strlen(method);
     size_t plen = strlen(path);
     size_t total = mlen + 1 + plen + HTTP_RLINE_SUFFIX_LEN;
@@ -114,10 +121,6 @@ apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
     h2_bucket_append(to_h1->data, path, plen);
     h2_bucket_append(to_h1->data, HTTP_RLINE_SUFFIX, HTTP_RLINE_SUFFIX_LEN);
 
-    if (authority) {
-        status = h2_to_h1_add_header(to_h1, "Host", 4,
-                                     authority, strlen(authority));
-    }
     return status;
 }
 
@@ -205,6 +208,19 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1)
     apr_status_t status = ensure_data(to_h1);
     if (status != APR_SUCCESS) {
         return status;
+    }
+    
+    if (!to_h1->seen_host) {
+        /* Need to add a "Host" header if not already there to
+         * make virtual hosts work correctly. */
+        if (!to_h1->authority) {
+            return APR_BADARG;
+        }
+        status = h2_to_h1_add_header(to_h1, "Host", 4, to_h1->authority, 
+                                     strlen(to_h1->authority));
+        if (status != APR_SUCCESS) {
+            return status;
+        }
     }
     
     if (!h2_bucket_has_free(to_h1->data, 2)) {
