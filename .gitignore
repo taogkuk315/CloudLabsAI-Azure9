@@ -32,3 +32,4 @@ Makefile.in
 Makefile
 mod_h2-*.tar.gz
 mod_h2/h2_version.h
+m4
