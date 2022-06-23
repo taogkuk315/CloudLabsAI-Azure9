@@ -305,6 +305,8 @@
 		B2E6FEDC1AC2F01F00D557D8 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E6FEDD1AC2F20400D557D8 /* h2.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.conf; sourceTree = "<group>"; };
 		B2E6FEDE1AC2F20400D557D8 /* h2.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.load; sourceTree = "<group>"; };
+		B2E708C81AE64AC00009EDAF /* php-wrapper */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = "php-wrapper"; sourceTree = "<group>"; };
+		B2E708C91AE64B470009EDAF /* info.php */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.php; path = info.php; sourceTree = "<group>"; };
 		B2FE998E1AA7496B00A5CE5A /* h2_to_h1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_to_h1.c; sourceTree = "<group>"; };
 		B2FE998F1AA7496B00A5CE5A /* h2_to_h1.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_to_h1.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -464,6 +466,7 @@
 		B2E6DFA61AC2EF6E00D557D8 /* test */ = {
 			isa = PBXGroup;
 			children = (
+				B2E708C71AE64AC00009EDAF /* bin */,
 				B2E6DFA71AC2EF6E00D557D8 /* clients */,
 				B2E6FDF91AC2EFA200D557D8 /* conf */,
 				B2E6FE071AC2EFA200D557D8 /* htdocs */,
@@ -549,6 +552,7 @@
 				B2E6FED01AC2EFA300D557D8 /* files */,
 				B2E6FED21AC2EFA300D557D8 /* hello.py */,
 				B2E6FED31AC2EFA300D557D8 /* index.html */,
+				B2E708C91AE64B470009EDAF /* info.php */,
 				B2E6FED41AC2EFA300D557D8 /* necho.py */,
 				B2E6FED51AC2EFA300D557D8 /* upload.py */,
 				B2E6FED61AC2EFA300D557D8 /* xxx-1.0.2a.tar.gz */,
@@ -782,6 +786,14 @@
 				B2E6FED11AC2EFA300D557D8 /* empty.txt */,
 			);
 			path = files;
+			sourceTree = "<group>";
+		};
+		B2E708C71AE64AC00009EDAF /* bin */ = {
+			isa = PBXGroup;
+			children = (
+				B2E708C81AE64AC00009EDAF /* php-wrapper */,
+			);
+			path = bin;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

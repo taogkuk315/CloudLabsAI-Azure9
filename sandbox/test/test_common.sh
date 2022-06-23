@@ -77,6 +77,20 @@ nghttp_check_assets() {
     echo ok.
 }
 
+nghttp_check_content() {
+    DOC="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@"
+    rm -rf $TMP
+    mkdir -p $TMP
+    cat > $TMP/expected
+    echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
+    ${NGHTTP} -u $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    diff  $TMP/expected $TMP/$DOC || fail
+    echo ok.
+}
+
+
 curl_check_content() {
     DOC="$1"; shift;
     MSG="$1"; shift;

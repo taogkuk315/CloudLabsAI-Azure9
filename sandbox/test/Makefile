@@ -31,6 +31,7 @@ CURL         = $(INST_DIR)/bin/curl
 NGHTTP       = $(INST_DIR)/bin/nghttp
 H2LOAD       = $(INST_DIR)/bin/h2load
 
+PHP_CGI      = $(shell type -p php-cgi)
 
 all: install
 
@@ -127,7 +128,7 @@ xtest: \
 ################################################################################
 # Setup the local httpd for our tests
 #
-SETUP_FILES = $(wildcard conf/*.conf) $(wildcard conf/sites/*.conf)
+SETUP_FILES = $(wildcard conf/*.conf) $(wildcard conf/sites/*.conf) $(wildcard bin/*)
 
 $(INST_DIR)/.testdocs-setup: \
 	$(wildcard conf/*) \
@@ -140,8 +141,8 @@ $(INST_DIR)/.testdocs-setup: \
 
 $(INST_DIR)/.test-setup: \
 		$(INST_DIR)/.httpd-installed \
-		conf/httpd.conf \
-		conf/modules.conf \
+		conf/*.conf \
+        bin/* \
 		$(wildcard conf/sites/*.conf) \
         $(INST_DIR)/conf/mods-enabled/h2.load \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
@@ -156,8 +157,10 @@ $(INST_DIR)/.test-setup: \
 			-e "s,SUBST_SERVER_NAME_SUBST,$(shell hostname -f),g" \
 			-e "s,SUBST_PORT_HTTP_SUBST,$(HTTP_PORT),g" \
 			-e "s,SUBST_PORT_HTTPS_SUBST,$(HTTPS_PORT),g" \
+            -e "s,SUBST_PHP_CGI_SUBST,$(PHP_CGI),g" \
 			< $$file > $(INST_DIR)/$$file; \
 	done
+	@for i in bin/*; do chmod +x $(INST_DIR)/$i; done
 	@cp conf/ssl/*.* $(INST_DIR)/conf/ssl
 	@echo done.
 	@touch $(INST_DIR)/.test-setup

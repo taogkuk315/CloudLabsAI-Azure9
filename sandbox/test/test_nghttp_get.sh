@@ -259,3 +259,15 @@ nghttp_check_assets 003.html "with assets" --window-bits=24 <<EOF
 /003/003_img.jpg 88K 200
 EOF
 
+################################################################################
+# check cgi generated content
+################################################################################
+echo " - CGI generated content -"
+nghttp_check_content hello.py "get hello.py"   <<EOF
+<html>
+<body>
+<h2>Hello World!</h2>
+</body>
+</html>
+EOF
+
