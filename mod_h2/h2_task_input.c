@@ -27,14 +27,14 @@
 #include "h2_stream.h"
 #include "h2_task_input.h"
 #include "h2_task.h"
+#include "h2_util.h"
 
 struct h2_task_input {
     h2_task *task;
     int stream_id;
     struct h2_mplx *m;
     
-    int eos;
-    struct h2_bucket *cur;
+    apr_bucket_brigade *bb;
 };
 
 
@@ -43,76 +43,99 @@ static int is_aborted(h2_task_input *input, ap_filter_t *f)
     return (f->c->aborted || h2_task_is_aborted(input->task));
 }
 
-/** stream is in state of input closed. That means no input is pending
- * on the connection and all input (if any) is in the input queue.
- */
-static int all_queued(h2_task_input *input)
-{
-    return input->eos || h2_mplx_in_has_eos_for(input->m, input->stream_id);
-}
-
-static void cleanup(h2_task_input *input) {
-    if (input->cur) {
-        /* we read all in a previous call, time to remove
-         * this bucket. */
-        h2_bucket_destroy(input->cur);
-        input->cur = NULL;
-    }
-}
-
 h2_task_input *h2_task_input_create(apr_pool_t *pool, h2_task *task, 
-                                    int stream_id, h2_mplx *m)
+                                    int stream_id, 
+                                    apr_bucket_alloc_t *bucket_alloc,
+                                    h2_mplx *m)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
         input->task = task;
         input->stream_id = stream_id;
         input->m = m;
+        input->bb = apr_brigade_create(pool, bucket_alloc);
     }
     return input;
 }
 
 void h2_task_input_destroy(h2_task_input *input)
 {
-    if (input->cur) {
-        h2_bucket_destroy(input->cur);
-        input->cur = NULL;
-    }
+    input->bb = NULL;
 }
 
 apr_status_t h2_task_input_read(h2_task_input *input,
                                 ap_filter_t* filter,
-                                apr_bucket_brigade* brigade,
+                                apr_bucket_brigade* bb,
                                 ap_input_mode_t mode,
                                 apr_read_type_e block,
                                 apr_off_t readbytes)
 {
     apr_status_t status = APR_SUCCESS;
-    apr_size_t nread = 0;
 
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
+                  "h2_task_input(%s): read, mode=%d, block=%d, readbytes=%ld",
+                  h2_task_get_id(input->task), mode, block, (long)readbytes);
+    
     if (is_aborted(input, filter)) {
         return APR_ECONNABORTED;
     }
     
-    if (input->cur && input->cur->data_len <= 0) {
-        cleanup(input);
-    }
-    
-    if (!input->eos && !input->cur) {
+    if (APR_BRIGADE_EMPTY(input->bb)) {
         /* Try to get new data for our stream from the queue.
          * If all data is in queue (could be none), do not block.
          * Getting none back in that case means we reached the
          * end of the input.
          */
+        apr_off_t nread = 0;
         status = h2_mplx_in_read(input->m, block,
-                                 input->stream_id, &input->cur, 
+                                 input->stream_id, input->bb, 
                                  h2_task_get_io_cond(input->task));
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                      "h2_task_input(%s): mplx returned %ld bytes",
-                      h2_task_get_id(input->task), 
-                      (long)(input->cur? input->cur->data_len : -1L));
-        if (status == APR_EOF) {
-            input->eos = 1;
+        apr_brigade_length(input->bb, 1, &nread);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
+                      "h2_task_input(%s): mplx in read, %ld bytes in brigade",
+                      h2_task_get_id(input->task), (long)nread);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+    }
+    
+    if (!APR_BRIGADE_EMPTY(input->bb)) {
+        if (mode == AP_MODE_EXHAUSTIVE) {
+            /* return all we have */
+            return h2_util_move(bb, input->bb, readbytes, 0, 
+                                NULL, "task_input_read(exhaustive)");
+        }
+        else if (mode == AP_MODE_READBYTES) {
+            return h2_util_move(bb, input->bb, readbytes, 1, 
+                                NULL, "task_input_read(readbytes)");
+        }
+        else if (mode == AP_MODE_SPECULATIVE) {
+            /* return not more than was asked for */
+            return h2_util_copy(bb, input->bb, readbytes, 1, 
+                                "task_input_read(speculative)");
+        }
+        else if (mode == AP_MODE_GETLINE) {
+            /* we are reading a single LF line, e.g. the HTTP headers */
+            status = apr_brigade_split_line(bb, input->bb, block, 
+                                            HUGE_STRING_LEN);
+            if (APLOGctrace1(filter->c)) {
+                char buffer[1024];
+                apr_size_t len = sizeof(buffer)-1;
+                apr_brigade_flatten(bb, buffer, &len);
+                buffer[len] = 0;
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
+                              "h2_task_input(%s): getline: %s",
+                              h2_task_get_id(input->task), buffer);
+            }
+            return status;
+        }
+        else {
+            /* Hmm, well. There is mode AP_MODE_EATCRLF, but we chose not
+             * to support it. Seems to work. */
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOTIMPL, filter->c,
+                          "h2_task_input, unsupported READ mode %d",
+                          mode);
+            return APR_ENOTIMPL;
         }
     }
     
@@ -120,78 +143,6 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         return APR_ECONNABORTED;
     }
     
-    if (input->eos) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, filter->c,
-                      "h2_task_input(%s): read returns EOF",
-                      h2_task_get_id(input->task));
-        cleanup(input);
-        return APR_EOF;
-    }
-    
-    if (input->cur) {
-        /* Got data, depends on the read mode how much we return. */
-        h2_bucket *b = input->cur;
-        apr_size_t avail = b->data_len;
-        if (avail > 0) {
-            if (mode == AP_MODE_EXHAUSTIVE) {
-                /* return all we have */
-                nread = avail;
-            }
-            else if (mode == AP_MODE_READBYTES
-                     || mode == AP_MODE_SPECULATIVE) {
-                /* return not more than was asked for */
-                nread = (avail > readbytes)? readbytes : avail;
-            }
-            else if (mode == AP_MODE_GETLINE) {
-                /* Look for a linebreak in the first GetLineMax bytes.
-                 * If we do not find one, return all we have. */
-                apr_size_t scan = 0;
-                apr_size_t scan_max = ((b->data_len > 4096)?
-                                       4096 : b->data_len);
-                apr_off_t index = -1;
-                for (/**/; scan < scan_max; ++scan) {
-                    if (b->data[scan] == '\n') {
-                        index = scan;
-                        break;
-                    }
-                }
-                
-                nread = (index >= 0)? (index + 1) : avail;
-            }
-            else {
-                /* Hmm, well. There is mode AP_MODE_EATCRLF, but we chose not
-                 * to support it. Seems to work. */
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOTIMPL, filter->c,
-                              "h2_task_input, unsupported READ mode %d",
-                              mode);
-                return APR_ENOTIMPL;
-            }
-            
-        }
-    }
-    
-    if (is_aborted(input, filter)) {
-        return APR_ECONNABORTED;
-    }
-    
-    if (nread > 0) {
-        /* We got actual data. */
-        apr_bucket *b = apr_bucket_transient_create(input->cur->data, nread, 
-                                                    brigade->bucket_alloc);
-        APR_BRIGADE_INSERT_TAIL(brigade, b);
-        if (mode != AP_MODE_SPECULATIVE) {
-            h2_bucket_consume(input->cur, nread);
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, filter->c,
-                          "h2_task_input(%s): forward %d bytes",
-                          h2_task_get_id(input->task), (int)nread);
-        }
-    }
-    
-    if (nread == 0 && !input->eos && block == APR_NONBLOCK_READ) {
-        /* no EOS, no data and call was non blocking. Caller may try again. */
-        return APR_EAGAIN;
-    }
-    
-    return APR_SUCCESS;
+    return (block == APR_NONBLOCK_READ)? APR_EAGAIN : APR_EOF;
 }
 

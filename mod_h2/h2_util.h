@@ -27,6 +27,8 @@ int h2_util_header_print(char *buffer, size_t maxlen,
 
 char *h2_strlwr(char *s);
 
+void h2_util_camel_case_header(char *s, size_t len);
+
 /**
  * Return != 0 iff the string s contains the token, as specified in
  * HTTP header syntax, rfc7230.
@@ -72,11 +74,37 @@ apr_size_t h2_util_base64url_decode(unsigned char **decoded,
  * @param to the brigade to move the data to
  * @param from the brigade to get the data from
  * @param maxlen of bytes to move, 0 for all
+ * @param count_virtual if virtual buckets like FILE do count against maxlen
+ * @param msg message for use in logging
  */
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
                           apr_size_t maxlen, int count_virtual, 
                           apr_file_t **pfile, const char *msg);
 
+/**
+ * Copies buckets from one brigade into another. If maxlen > 0, it only
+ * copies up to maxlen bytes into the target brigade, making bucket splits
+ * if needed.
+ * @param to the brigade to copy the data to
+ * @param from the brigade to get the data from
+ * @param maxlen of bytes to copy, 0 for all
+ * @param count_virtual if virtual buckets like FILE do count against maxlen
+ * @param msg message for use in logging
+ */
+apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from, 
+                          apr_size_t maxlen, int count_virtual, 
+                          const char *msg);
+
+/**
+ * Pass the buckets from one brigade into another, without any setaside. 
+ * Only recommended if both brigades use the same bucket alloc or if
+ * you really know what you are doing.
+ * @param to the brigade to pass the buckets to
+ * @param from the brigade to get the buckets from
+ * @param maxlen of bucket bytes to copy, 0 for all
+ * @param count_virtual if virtual buckets like FILE do count against maxlen
+ * @param msg message for use in logging
+ */
 apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from, 
                           apr_size_t maxlen, int count_virtual, 
                           const char *msg);

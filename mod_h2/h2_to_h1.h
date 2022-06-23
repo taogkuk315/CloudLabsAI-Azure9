@@ -23,7 +23,8 @@ typedef struct h2_to_h1 h2_to_h1;
  * HTTP/1.1 format. The serialized data will be written onto the
  * given h2_mplx instance.
  */
-h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, struct h2_mplx *m);
+h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, 
+                          apr_bucket_alloc_t *bucket_alloc, struct h2_mplx *m);
 
 /* Destroy the converter and free resources. */
 void h2_to_h1_destroy(h2_to_h1 *to_h1);

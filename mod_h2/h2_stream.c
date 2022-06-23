@@ -64,7 +64,7 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master,
         stream->pool = spool;
         stream->bucket_alloc = bucket_alloc;
         stream->m = m;
-        stream->request = h2_request_create(id, spool, m);
+        stream->request = h2_request_create(id, spool, stream->bucket_alloc, m);
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(m),
                       "h2_stream(%ld-%d): created",
                       h2_mplx_get_id(stream->m), stream->id);

@@ -30,13 +30,14 @@
 #include "h2_util.h"
 
 
-h2_request *h2_request_create(int id, apr_pool_t *pool, h2_mplx *m)
+h2_request *h2_request_create(int id, apr_pool_t *pool, 
+                              apr_bucket_alloc_t *bucket_alloc, h2_mplx *m)
 {
     h2_request *req = apr_pcalloc(pool, sizeof(h2_request));
     if (req) {
         req->id = id;
         req->pool = pool;
-        req->to_h1 = h2_to_h1_create(id, pool, m);
+        req->to_h1 = h2_to_h1_create(id, pool, bucket_alloc, m);
     }
     return req;
 }

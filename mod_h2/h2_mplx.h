@@ -117,8 +117,8 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
  * The condition passed in will be used for blocking/signalling and will
  * be protected by the mplx's own mutex.
  */
-apr_status_t h2_mplx_in_read(h2_mplx *mplx, apr_read_type_e block,
-                             int stream_id, struct h2_bucket **pbucket,
+apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
+                             int stream_id, apr_bucket_brigade *bb,
                              struct apr_thread_cond_t *iowait);
 
 /**
@@ -126,7 +126,7 @@ apr_status_t h2_mplx_in_read(h2_mplx *mplx, apr_read_type_e block,
  * not subject to flow control.
  */
 apr_status_t h2_mplx_in_write(h2_mplx *mplx, int stream_id, 
-                              struct h2_bucket *bucket);
+                              apr_bucket_brigade *bb);
 
 /**
  * Closes the input for the given stream_id.

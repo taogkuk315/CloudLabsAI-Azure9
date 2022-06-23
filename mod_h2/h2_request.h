@@ -45,7 +45,9 @@ struct h2_request {
     const char *scheme;
 };
 
-h2_request *h2_request_create(int id, apr_pool_t *pool, struct h2_mplx *m);
+h2_request *h2_request_create(int id, apr_pool_t *pool, 
+                              apr_bucket_alloc_t *bucket_alloc, 
+                              struct h2_mplx *m);
 void h2_request_destroy(h2_request *req);
 
 apr_status_t h2_request_flush(h2_request *req, struct h2_mplx *m);

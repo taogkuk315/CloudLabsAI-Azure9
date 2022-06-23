@@ -21,13 +21,14 @@ struct h2_bucket;
 struct h2_response;
 struct h2_task;
 
-#include "h2_bucket_queue.h"
-
 typedef struct h2_io h2_io;
+
 struct h2_io {
     int id;                      /* stream identifier */
     
-    h2_bucket_queue input;       /* input data for stream */
+    apr_bucket_brigade *bbin;    /* input data for stream */
+    int eos_in;
+    
     apr_size_t input_consumed;   /* how many bytes have been read */
     struct apr_thread_cond_t *input_arrived; /* block on reading */
     
@@ -70,12 +71,13 @@ int h2_io_out_has_data(h2_io *io);
  * Reads the next bucket from the input. Returns APR_EAGAIN if none
  * is currently available, APR_EOF if end of input has been reached.
  */
-apr_status_t h2_io_in_read(h2_io *io, struct h2_bucket **pbucket);
+apr_status_t h2_io_in_read(h2_io *io, apr_bucket_brigade *bb, 
+                           apr_size_t maxlen);
 
 /**
  * Appends given bucket to the input.
  */
-apr_status_t h2_io_in_write(h2_io *io, struct h2_bucket *bucket);
+apr_status_t h2_io_in_write(h2_io *io, apr_bucket_brigade *bb);
 
 /**
  * Closes the input. After existing data has been read, APR_EOF will

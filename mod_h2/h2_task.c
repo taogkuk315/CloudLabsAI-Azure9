@@ -180,7 +180,9 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     
     if (status == APR_SUCCESS) {
         task->input = h2_task_input_create(task->conn->pool,
-                                           task, task->stream_id, task->mplx);
+                                           task, task->stream_id, 
+                                           task->conn->bucket_alloc, 
+                                           task->mplx);
         task->output = h2_task_output_create(task->conn->pool, task, 
                                              task->stream_id, 
                                              task->conn->bucket_alloc, 
