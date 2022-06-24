@@ -31,7 +31,7 @@ CURL         = $(INST_DIR)/bin/curl
 NGHTTP       = $(INST_DIR)/bin/nghttp
 H2LOAD       = $(INST_DIR)/bin/h2load
 
-PHP_CGI      = $(shell type -p php-cgi)
+PHP_CGI      = $(shell bash -c 'type -p php-cgi')
 
 all: install
 
@@ -142,7 +142,7 @@ $(INST_DIR)/.testdocs-setup: \
 $(INST_DIR)/.test-setup: \
 		$(INST_DIR)/.httpd-installed \
 		conf/*.conf \
-        bin/* \
+       		$(wildcard bin/*) \
 		$(wildcard conf/sites/*.conf) \
         $(INST_DIR)/conf/mods-enabled/h2.load \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
@@ -160,7 +160,7 @@ $(INST_DIR)/.test-setup: \
             -e "s,SUBST_PHP_CGI_SUBST,$(PHP_CGI),g" \
 			< $$file > $(INST_DIR)/$$file; \
 	done
-	@for i in bin/*; do chmod +x $(INST_DIR)/$i; done
+	@for i in bin/*; do chmod +x $(INST_DIR)/$$i; done
 	@cp conf/ssl/*.* $(INST_DIR)/conf/ssl
 	@echo done.
 	@touch $(INST_DIR)/.test-setup
