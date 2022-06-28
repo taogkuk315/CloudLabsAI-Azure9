@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 
-CURL_VERSION = 7.41.0
+CURL_VERSION = 7.42.0
 CURL_DIR     = curl-$(CURL_VERSION)
 CURL_TAR     = $(CURL_DIR).tar.gz
 CURL_URL     = http://curl.haxx.se/download/$(CURL_TAR)
