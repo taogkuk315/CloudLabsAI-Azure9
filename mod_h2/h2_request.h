@@ -35,9 +35,6 @@ struct h2_request {
     struct h2_to_h1 *to_h1; /* Converter to HTTP/1.1 format*/
     int started;            /* request line serialized */
     
-    int chunked;
-    apr_size_t remain_len;
-
     /* pseudo header values, see ch. 8.1.2.3 */
     const char *method;
     const char *path;

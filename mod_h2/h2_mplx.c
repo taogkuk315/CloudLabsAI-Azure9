@@ -223,16 +223,15 @@ apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
+            io->input_arrived = iowait;
             status = h2_io_in_read(io, bb, 0);
             while (status == APR_EAGAIN 
                    && !is_aborted(m, &status)
                    && block == APR_BLOCK_READ) {
-                io->input_arrived = iowait;
                 apr_thread_cond_wait(io->input_arrived, m->lock);
-                io->input_arrived = NULL;
-                
                 status = h2_io_in_read(io, bb, 0);
             }
+            io->input_arrived = NULL;
         }
         else {
             status = APR_EOF;
@@ -257,11 +256,11 @@ apr_status_t h2_mplx_in_write(h2_mplx *m, int stream_id,
             if (io->input_arrived) {
                 apr_thread_cond_signal(io->input_arrived);
             }
-            apr_thread_mutex_unlock(m->lock);
         }
         else {
             status = APR_EOF;
         }
+        apr_thread_mutex_unlock(m->lock);
     }
     return status;
 }

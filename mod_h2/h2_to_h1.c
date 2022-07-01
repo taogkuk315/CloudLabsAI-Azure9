@@ -29,11 +29,6 @@
 #include "h2_to_h1.h"
 #include "h2_util.h"
 
-#define HTTP_RLINE_SUFFIX       " HTTP/1.1\r\n"
-#define HTTP_RLINE_SUFFIX_LEN   11
-
-static const apr_off_t HEADERSIZE      = 16 * 1024;
-
 
 struct h2_to_h1 {
     int stream_id;
@@ -45,7 +40,8 @@ struct h2_to_h1 {
     int seen_host;
     const char *authority;
     int chunked;
-    apr_size_t remain_len;
+    apr_off_t content_len;
+    apr_off_t remain_len;
     apr_table_t *headers;
     apr_bucket_brigade *bb;
 };
@@ -60,6 +56,8 @@ h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool,
         to_h1->m = m;
         to_h1->headers = apr_table_make(to_h1->pool, 5);
         to_h1->bb = apr_brigade_create(pool, bucket_alloc);
+        to_h1->chunked = 0; /* until we see a content-type and no length */
+        to_h1->content_len = -1;
     }
     return to_h1;
 }
@@ -92,7 +90,7 @@ apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
     }
     
     status = apr_brigade_printf(to_h1->bb, NULL, NULL, 
-                                "%s %s"HTTP_RLINE_SUFFIX, method, path);
+                                "%s %s HTTP/1.1\r\n", method, path);
 
     return status;
 }
@@ -104,12 +102,16 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
 {
     if (H2_HD_MATCH_LIT("transfer-encoding", name, nlen)) {
         if (!apr_strnatcasecmp("chunked", value)) {
-            to_h1->chunked = 1;
+            /* This should never arrive here in a HTTP/2 request */
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_BADARG, 
+                          h2_mplx_get_conn(to_h1->m),
+                          "h2_to_h1: 'transfer-encoding: chunked' received");
+            return APR_BADARG;
         }
     }
     else if (H2_HD_MATCH_LIT("content-length", name, nlen)) {
         char *end;
-        to_h1->remain_len = apr_strtoi64(value, &end, 10);
+        to_h1->content_len = apr_strtoi64(value, &end, 10);
         if (value == end) {
             ap_log_cerror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, 
                           h2_mplx_get_conn(to_h1->m),
@@ -117,6 +119,13 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
                           to_h1->stream_id, value);
             return APR_EINVAL;
         }
+        to_h1->remain_len = to_h1->content_len;
+        to_h1->chunked = 0;
+    }
+    else if (H2_HD_MATCH_LIT("content-type", name, nlen)) {
+        /* If we see a content-type and have no length (yet),
+         * we need to chunk. */
+        to_h1->chunked = (to_h1->content_len == -1);
     }
     else if ((to_h1->seen_host && H2_HD_MATCH_LIT("host", name, nlen))
              || H2_HD_MATCH_LIT("expect", name, nlen)
@@ -185,6 +194,13 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1)
         apr_table_set(to_h1->headers, "Host", to_h1->authority);
     }
 
+    if (to_h1->chunked) {
+        /* We have not seen a content-length. We therefore must
+         * pass any request content in chunked form.
+         */
+        apr_table_mergen(to_h1->headers, "Transfer-Encoding", "chunked");
+    }
+    
     serialize_headers(to_h1);
     apr_brigade_puts(to_h1->bb, NULL, NULL, "\r\n");
     
@@ -233,8 +249,8 @@ apr_status_t h2_to_h1_add_data(h2_to_h1 *to_h1,
                                const char *data, size_t len)
 {
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_conn(to_h1->m),
-                  "h2_to_h1(%d): add %ld data bytes", 
-                  to_h1->stream_id, (long)len);
+                  "h2_to_h1(%ld-%d): add %ld data bytes", 
+                  h2_mplx_get_id(to_h1->m), to_h1->stream_id, (long)len);
     
     if (to_h1->chunked) {
         /* if input may have a body and we have not seen any
@@ -250,8 +266,19 @@ apr_status_t h2_to_h1_add_data(h2_to_h1 *to_h1,
         }
         return status;
     }
-    
-    return h2_to_h1_add_data_raw(to_h1, data, len);
+    else {
+        to_h1->remain_len -= len;
+        if (to_h1->remain_len < 0) {
+            ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, 
+                          h2_mplx_get_conn(to_h1->m),
+                          "h2_to_h1(%ld-%d): got %ld more content bytes than announced "
+                          "in content-length header: %ld", 
+                          h2_mplx_get_id(to_h1->m),
+                          to_h1->stream_id, (long)to_h1->content_len,
+                          -(long)to_h1->remain_len);
+        }
+        return h2_to_h1_add_data_raw(to_h1, data, len);
+    }
 }
 
 apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1)
@@ -277,10 +304,10 @@ apr_status_t h2_to_h1_close(h2_to_h1 *to_h1)
 {
     apr_status_t status = APR_SUCCESS;
     if (!to_h1->eos) {
-        to_h1->eos = 1;
         if (to_h1->chunked) {
             status = h2_to_h1_add_data_raw(to_h1, "0\r\n\r\n", 5);
         }
+        to_h1->eos = 1;
         status = h2_to_h1_flush(to_h1);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, h2_mplx_get_conn(to_h1->m),
                       "h2_to_h1(%d): close", to_h1->stream_id);

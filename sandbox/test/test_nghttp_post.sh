@@ -51,10 +51,24 @@ fi
 # Tests witht the nghttp client that *requires* h2/h2c. Sends "OPTIONS *"
 # on h2c which is a good test.
 #
-nghttp_post_file upload.py $GEN/data-1k   "1k upload via http/2"
-nghttp_post_file upload.py $GEN/data-10k  "10k upload via http/2"
-nghttp_post_file upload.py $GEN/data-100k "100k upload via http/2"
-nghttp_post_file upload.py $GEN/data-1m "1m upload via http/2"
+nghttp_remove_file upload.py data-1k  "rm data-1k"
+nghttp_post_file upload.py $GEN/data-1k   "1k upload"
+nghttp_remove_file upload.py data-10k  "rm data-10k"
+nghttp_post_file upload.py $GEN/data-10k  "10k upload"
+nghttp_remove_file upload.py data-100k  "rm data-100k"
+nghttp_post_file upload.py $GEN/data-100k "100k upload"
+nghttp_remove_file upload.py data-1m  "rm data-1m"
+nghttp_post_file upload.py $GEN/data-1m   "1m upload"
+
+# Tests without content-length announced
+nghttp_remove_file upload.py data-1k  "rm data-1k"
+nghttp_post_file upload.py $GEN/data-1k   "1k upload w/o c-len" --no-content-length
+nghttp_remove_file upload.py data-10k  "rm data-10k"
+nghttp_post_file upload.py $GEN/data-10k  "10k upload w/o c-len" --no-content-length
+nghttp_remove_file upload.py data-100k  "rm data-100k"
+nghttp_post_file upload.py $GEN/data-100k "100k upload w/o c-len" --no-content-length
+nghttp_remove_file upload.py data-1m  "rm data-1m"
+nghttp_post_file upload.py $GEN/data-1m   "1m upload w/o c-len" --no-content-length
 
 
 

@@ -82,12 +82,8 @@ test: \
 	@bash test_curl_post.sh   https://$(HTTPS_AUTH)
 	@bash test_nghttp_get.sh  http://$(HTTP_AUTH)
 	@bash test_nghttp_post.sh http://$(HTTP_AUTH)
-
-# disabled curl HTTP tests as we have hangers on the client side:
-# reported: https://github.com/bagder/curl/issues/192
-#
-#@bash test_curl_get.sh https://$(HTTP_AUTH)
-#@bash test_curl_post.sh https://$(HTTP_AUTH)
+	@bash test_curl_get.sh    http://$(HTTP_AUTH)
+	@bash test_curl_post.sh   http://$(HTTP_AUTH)
 
 ################################################################################
 # Load Test
@@ -123,7 +119,7 @@ xtest: \
 		$(INST_DIR)/.test-setup \
 		$(INST_DIR)/.curl-installed \
         $(GEN)/load-urls-1.txt
-	@bash test_nghttp_post.sh http://$(HTTP_AUTH)
+	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)
 
 ################################################################################
 # Setup the local httpd for our tests

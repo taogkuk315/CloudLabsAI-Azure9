@@ -92,6 +92,9 @@ apr_status_t h2_io_in_read(h2_io *io, apr_bucket_brigade *bb,
     if (status == APR_SUCCESS) {
         apr_off_t end_len = 0;
         apr_brigade_length(bb, 1, &end_len);
+        if (end_len == start_len) {
+            return APR_EAGAIN;
+        }
         io->input_consumed += (end_len - start_len);
     }
     return status;

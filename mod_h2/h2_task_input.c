@@ -71,34 +71,58 @@ apr_status_t h2_task_input_read(h2_task_input *input,
                                 apr_off_t readbytes)
 {
     apr_status_t status = APR_SUCCESS;
-
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
-                  "h2_task_input(%s): read, mode=%d, block=%d, readbytes=%ld",
-                  h2_task_get_id(input->task), mode, block, (long)readbytes);
+    apr_off_t bblen = 0;
     
     if (is_aborted(input, filter)) {
         return APR_ECONNABORTED;
     }
     
-    if (APR_BRIGADE_EMPTY(input->bb)) {
-        /* Try to get new data for our stream from the queue.
-         * If all data is in queue (could be none), do not block.
-         * Getting none back in that case means we reached the
-         * end of the input.
+    if (mode == AP_MODE_INIT) {
+        return APR_SUCCESS;
+    }
+    
+    status = apr_brigade_length(input->bb, 1, &bblen);
+    if (status != APR_SUCCESS) {
+        return status;
+    }
+    
+    while ((bblen == 0) || (mode == AP_MODE_READBYTES && bblen < readbytes)) {
+        /* Get more data for our stream from mplx.
          */
-        apr_off_t nread = 0;
-        status = h2_mplx_in_read(input->m, block,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
+                      "h2_task_input(%s): get more data from mplx, block=%d, "
+                      "readbytes=%ld, queued=%ld",
+                      h2_task_get_id(input->task), block, 
+                      (long)readbytes, (long)bblen);
+        
+        /* Although we sometimes get called with APR_NONBLOCK_READs, 
+         we seem to  fill our buffer blocking. Otherwise we get EAGAIN,
+         return that to our caller and everyone throws up their hands,
+         never calling us again. */
+        status = h2_mplx_in_read(input->m, APR_BLOCK_READ,
                                  input->stream_id, input->bb, 
                                  h2_task_get_io_cond(input->task));
-        apr_brigade_length(input->bb, 1, &nread);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
-                      "h2_task_input(%s): mplx in read, %ld bytes in brigade",
-                      h2_task_get_id(input->task), (long)nread);
         if (status != APR_SUCCESS) {
             return status;
         }
+        status = apr_brigade_length(input->bb, 1, &bblen);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+        if ((bblen == 0) && (block == APR_NONBLOCK_READ)) {
+            return APR_EAGAIN;
+        }
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
+                      "h2_task_input(%s): mplx in read, %ld bytes in brigade",
+                      h2_task_get_id(input->task), (long)bblen);
     }
     
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
+                  "h2_task_input(%s): read, mode=%d, block=%d, "
+                  "readbytes=%ld, queued=%ld",
+                  h2_task_get_id(input->task), mode, block, 
+                  (long)readbytes, (long)bblen);
+           
     if (!APR_BRIGADE_EMPTY(input->bb)) {
         if (mode == AP_MODE_EXHAUSTIVE) {
             /* return all we have */
@@ -106,12 +130,12 @@ apr_status_t h2_task_input_read(h2_task_input *input,
                                 NULL, "task_input_read(exhaustive)");
         }
         else if (mode == AP_MODE_READBYTES) {
-            return h2_util_move(bb, input->bb, readbytes, 1, 
+            return h2_util_move(bb, input->bb, readbytes, 0, 
                                 NULL, "task_input_read(readbytes)");
         }
         else if (mode == AP_MODE_SPECULATIVE) {
             /* return not more than was asked for */
-            return h2_util_copy(bb, input->bb, readbytes, 1, 
+            return h2_util_copy(bb, input->bb, readbytes, 0, 
                                 "task_input_read(speculative)");
         }
         else if (mode == AP_MODE_GETLINE) {

@@ -164,6 +164,27 @@ curl_post_data() {
     echo ok.
 }
 
+nghttp_remove_file() {
+    DOC="$1"; shift;
+    FILE="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@"
+    fname="$(basename $FILE)"
+    rm -rf $TMP
+    mkdir -p $TMP
+    cat > $TMP/updata <<EOF
+--DSAJKcd9876
+Content-Disposition: form-data; name="remove";
+Content-Type: text/plain
+
+$fname
+--DSAJKcd9876--
+EOF
+    echo -n "nghttp $URL_PREFIX/$DOC: rm $fname..."
+    ${NGHTTP} -uv $ARGS --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error removing $fname"
+    echo ok.
+}
+
 nghttp_post_file() {
     DOC="$1"; shift;
     FILE="$1"; shift;
@@ -189,8 +210,9 @@ EOF
 --DSAJKcd9876--
 EOF
     echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
-    ${NGHTTP} -uv --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
-    ${NGHTTP} -u $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
+    ${NGHTTP} -uv $ARGS --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
+
+    ${NGHTTP} -u $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
     diff  $FILE $TMP/data.down || fail
     echo ok.
 }
