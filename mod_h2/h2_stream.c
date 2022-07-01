@@ -26,7 +26,6 @@
 #include <nghttp2/nghttp2.h>
 
 #include "h2_private.h"
-#include "h2_bucket.h"
 #include "h2_mplx.h"
 #include "h2_request.h"
 #include "h2_response.h"

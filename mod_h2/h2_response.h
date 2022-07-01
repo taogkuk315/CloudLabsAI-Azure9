@@ -20,8 +20,6 @@
  * suitable prepared to be fed to nghttp2 for response submit. 
  */
 
-struct h2_bucket;
-
 typedef struct h2_response {
     int stream_id;
     apr_status_t task_status;

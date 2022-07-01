@@ -23,7 +23,6 @@
 #include <http_log.h>
 
 #include "h2_private.h"
-#include "h2_bucket.h"
 #include "h2_mplx.h"
 #include "h2_to_h1.h"
 #include "h2_request.h"

@@ -40,7 +40,6 @@ struct h2_conn;
 struct h2_mplx;
 struct h2_task;
 struct h2_resp_head;
-struct h2_bucket;
 struct h2_worker;
 
 typedef struct h2_task h2_task;

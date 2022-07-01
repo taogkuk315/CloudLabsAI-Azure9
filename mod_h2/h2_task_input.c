@@ -21,7 +21,6 @@
 #include <http_connection.h>
 
 #include "h2_private.h"
-#include "h2_bucket.h"
 #include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"

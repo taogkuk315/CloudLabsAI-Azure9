@@ -24,7 +24,6 @@
 #include <http_connection.h>
 
 #include "h2_private.h"
-#include "h2_bucket.h"
 #include "h2_response.h"
 #include "h2_from_h1.h"
 #include "h2_task.h"

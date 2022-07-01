@@ -17,7 +17,6 @@
 #define __mod_h2__h2_io__
 
 struct apr_thread_cond_t;
-struct h2_bucket;
 struct h2_response;
 struct h2_task;
 

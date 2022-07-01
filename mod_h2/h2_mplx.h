@@ -17,7 +17,7 @@
 #define __mod_h2__h2_mplx__
 
 /**
- * The stream multiplexer. It pushes h2_buckets from the connection
+ * The stream multiplexer. It pushes buckets from the connection
  * thread to the stream task threads and vice versa. It's thread-safe
  * to use.
  *
@@ -37,7 +37,6 @@
 struct apr_pool_t;
 struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
-struct h2_bucket;
 struct h2_config;
 struct h2_response;
 struct h2_task;
@@ -111,7 +110,7 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
  ******************************************************************************/
 
 /**
- * Reads a h2_bucket for the given stream_id. Will return ARP_EAGAIN when
+ * Reads a buckets for the given stream_id. Will return ARP_EAGAIN when
  * called with APR_NONBLOCK_READ and no data present. Will return APR_EOF
  * when the end of the stream input has been reached.
  * The condition passed in will be used for blocking/signalling and will

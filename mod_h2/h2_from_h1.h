@@ -23,9 +23,7 @@
  * - a series of bytes that represent the response body alone, without
  *   any meta data, such as inserted by chunked transfer encoding.
  *
- * All data is allocated from the connection memory pool. Body data
- * is passed "through" into the given h2_bucket(s) and will not
- * cause allocations.
+ * All data is allocated from the stream memory pool. 
  *
  * Again, see comments in h2_request: ideally we would take the headers
  * and status from the httpd structures instead of parsing them here, but
@@ -40,7 +38,6 @@ typedef enum {
     H2_RESP_ST_DONE         /* complete response converted */
 } h2_from_h1_state_t;
 
-struct h2_bucket;
 struct h2_response;
 
 typedef struct h2_from_h1 h2_from_h1;

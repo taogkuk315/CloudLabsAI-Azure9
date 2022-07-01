@@ -21,7 +21,6 @@
  * for our pseudo httpd conn_rec that is handling a specific h2_task.
  * 
  */
-struct h2_bucket;
 struct h2_mplx;
 struct h2_response;
 struct h2_task;

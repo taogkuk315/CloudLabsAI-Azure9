@@ -48,10 +48,6 @@
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27D32E81A9487B4003DBAF4 /* h2_mplx.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_mplx.c; sourceTree = "<group>"; };
 		B27D32E91A9487B4003DBAF4 /* h2_mplx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_mplx.h; sourceTree = "<group>"; };
-		B284ACC31A792AC600C35863 /* h2_bucket_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_bucket_queue.c; sourceTree = "<group>"; };
-		B284ACC41A792AC600C35863 /* h2_bucket_queue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_bucket_queue.h; sourceTree = "<group>"; };
-		B284ACC71A7A605200C35863 /* h2_bucket.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_bucket.c; sourceTree = "<group>"; };
-		B284ACC81A7A605200C35863 /* h2_bucket.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_bucket.h; sourceTree = "<group>"; };
 		B284ACC91A7B9DF900C35863 /* h2_task_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_input.c; sourceTree = "<group>"; };
 		B284ACCA1A7B9DF900C35863 /* h2_task_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_input.h; sourceTree = "<group>"; };
 		B2A6EF171A9B598B005DFC5B /* h2_request.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_request.c; sourceTree = "<group>"; };
@@ -319,10 +315,6 @@
 			children = (
 				B24CB1221AC94D6A0057413B /* h2_alt_svc.c */,
 				B24CB1231AC94D6A0057413B /* h2_alt_svc.h */,
-				B284ACC31A792AC600C35863 /* h2_bucket_queue.c */,
-				B284ACC41A792AC600C35863 /* h2_bucket_queue.h */,
-				B284ACC71A7A605200C35863 /* h2_bucket.c */,
-				B284ACC81A7A605200C35863 /* h2_bucket.h */,
 				B225490D1A6EAE9F004BDEC9 /* h2_config.c */,
 				B225490E1A6EAE9F004BDEC9 /* h2_config.h */,
 				B225493A1A711985004BDEC9 /* h2_conn_io.c */,

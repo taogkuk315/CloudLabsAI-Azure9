@@ -45,7 +45,6 @@ typedef enum {
     H2_STREAM_ST_CLOSED,
 } h2_stream_state_t;
 
-struct h2_bucket;
 struct h2_mplx;
 struct h2_request;
 struct h2_response;

@@ -26,7 +26,6 @@
 
 #include "h2_private.h"
 #include "h2_config.h"
-#include "h2_bucket.h"
 #include "h2_conn.h"
 #include "h2_io.h"
 #include "h2_io_set.h"

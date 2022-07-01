@@ -23,7 +23,6 @@
  * Ideally, we would make a request_rec without serializing the headers
  * we have only to make someone else parse them back.
  */
-struct h2_bucket;
 struct h2_to_h1;
 struct h2_mplx;
 

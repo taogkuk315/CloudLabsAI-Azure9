@@ -23,8 +23,6 @@ mod_h2_la_LDFLAGS  = -module
 
 OBJECTS = \
     h2_alt_svc.c \
-    h2_bucket.c \
-    h2_bucket_queue.c \
     h2_config.c \
     h2_conn.c \
     h2_conn_io.c \
@@ -52,8 +50,6 @@ OBJECTS = \
 
 HFILES = \
     h2_alt_svc.h \
-    h2_bucket.h \
-    h2_bucket_queue.h \
     h2_config.h \
     h2_conn.h \
     h2_conn_io.h \
