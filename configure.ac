@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_h2], [0.5.2-DEV], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_h2], [0.5.2], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -42,7 +42,7 @@ AM_INIT_AUTOMAKE([subdir-objects no-define])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
-AC_CONFIG_SRCDIR([mod_h2/h2_bucket.c])
+AC_CONFIG_SRCDIR([mod_h2/h2_config.c])
 AC_CONFIG_HEADERS([mod_h2/config.h])
 
 

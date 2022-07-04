@@ -125,19 +125,6 @@ The main causes for this performance penalty seem to be:
   We know currently of no way to directly have httpd processing a request_rec.
   Maybe that can be done with some internal know-how use as temporary
   work around...
-- Data copying:
-  APR and httpd have wonderful bucket brigades, but mod_h2 is not using them
-  to the fullest capabilities. There are questions regarding multi-thread use
-  of pools, subpools and brigades that make expert advice needed.
-  So, what copying is done?
-  INPUT:
-    brigade(socket) --> nghttp2 read --> h2_bucket --> brigade(h2_task)
-  OUTPUT
-    brigade(h2_task) --> h2_bucket --> nghttp2 buffer --> brigade(socket)
-  Due to async handling and the capabilities of nghttp2, we have to make
-  copies at certain points in the process. Maybe we could avoid one copy
-  in the OUTPUT queue, if we get a grip on multi-threaded bucket brigade
-  handling...
 - MPM MODULES:
   mpm_event currently requires a hack (see h2_conn.c) to make it work. The
   problem is its own event_conn_state struct that needs to be setup 
