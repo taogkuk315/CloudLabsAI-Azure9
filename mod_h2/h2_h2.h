@@ -39,6 +39,7 @@ apr_status_t h2_h2_child_init(apr_pool_t *pool, server_rec *s);
  */
 int h2_h2_pre_conn(conn_rec* c, void *arg);
 int h2_h2_process_conn(conn_rec* c);
+int h2_h2_cleanup_conn(conn_rec* c);
 int h2_h2_stream_pre_conn(conn_rec* c, void *arg);
 
 /* Is the connection a TLS connection?

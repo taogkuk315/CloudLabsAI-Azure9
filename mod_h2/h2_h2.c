@@ -87,9 +87,6 @@ static int (*opt_ssl_register_npn)(conn_rec*,
                                     ssl_npn_advertise_protos,
                                     ssl_npn_proto_negotiated);
 
-static const char *const mod_ssl[] = { "mod_ssl.c", NULL};
-static const char *const more_core[] = { "core.c", NULL};
-
 static void check_sni_host(conn_rec *c) 
 {
     h2_ctx *ctx = h2_ctx_get(c, 1);
@@ -104,6 +101,10 @@ static void check_sni_host(conn_rec *c)
 }
 
 
+static const char *const mod_ssl[] = { "mod_ssl.c", NULL};
+static const char *const mod_core[] = { "core.c", NULL};
+static const char *const mod_reqtimeout[] = { "reqtimeout.c", NULL};
+
 void h2_h2_register_hooks(void)
 {
     /* This hook runs on new connections before mod_ssl has a say.
@@ -117,12 +118,17 @@ void h2_h2_register_hooks(void)
      * httpd. Its purpose is to register, if TLS is used, the ALPN callbacks
      * that enable us to chose "h2" as next procotol if the client supports it.
      */
-    ap_hook_pre_connection(h2_h2_pre_conn, mod_ssl, more_core, APR_HOOK_LAST);
+    ap_hook_pre_connection(h2_h2_pre_conn, mod_ssl, mod_core, APR_HOOK_LAST);
     
     /* When the connection processing actually starts, we might to
      * take over, if h2* was selected by ALPN on a TLS connection.
      */
-    ap_hook_process_connection(h2_h2_process_conn, NULL, NULL, APR_HOOK_FIRST);
+    ap_hook_process_connection(h2_h2_process_conn, 
+                               NULL, NULL, APR_HOOK_FIRST);
+    /* Perform connection cleanup before the actual processing happens.
+     */
+    ap_hook_process_connection(h2_h2_cleanup_conn, 
+                               mod_reqtimeout, NULL, APR_HOOK_LAST);
     
     ap_hook_post_read_request(h2_h2_post_read_req, NULL, NULL, APR_HOOK_MIDDLE);
 }
@@ -333,6 +339,24 @@ int h2_h2_pre_conn(conn_rec* c, void *arg)
                       "h2_h2, pre_connection, found stream task");
         h2_task *task = h2_ctx_get_task(ctx);
         return h2_task_pre_conn(task, c);
+    }
+    
+    return DECLINED;
+}
+
+int h2_h2_cleanup_conn(conn_rec* c)
+{
+    h2_ctx *ctx = h2_ctx_get(c, 0);
+    
+    if (ctx) {
+        if (h2_ctx_is_task(c)) {
+            /* cleanup on task connections */
+            ap_remove_input_filter_byhandle(c->input_filters, "reqtimeout");
+        }
+        else if (!h2_ctx_is_negotiated(c)) {
+            /* cleanup on master h2 connections */
+            ap_remove_input_filter_byhandle(c->input_filters, "reqtimeout");
+        }
     }
     
     return DECLINED;

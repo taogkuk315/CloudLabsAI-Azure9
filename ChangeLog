@@ -1,3 +1,23 @@
+v0.5.3-DEV
+--------------------------------------------------------------------------------
+ * removing reqtimeout filters on stream connections
+
+v0.5.2
+--------------------------------------------------------------------------------
+ * rewrote the input handling
+    * forwarding headers in camel case to HTTP/1 request prossing
+    * merging duplicate headers into single line with proper separators
+    * eliminated h2_bucket by using apr_bucket_brigades everywhere
+    * added test cases and fixed chunked input processing
+ * sandbox now uses curl 7.42.0
+ * enhanced alpn patch slightly, compatible to old one, no need to repatch mod_ssl on existing installations
+ * adding some tests with fcgi, for sandbox testing please install php5-cgi
+
+v0.5.1
+--------------------------------------------------------------------------------
+ * ensuring HOST header is properly set for internal request handling
+ * updated sandbox to latest nghttp2 release
+
 v0.5.0
 --------------------------------------------------------------------------------
  * improved resource handling and performance

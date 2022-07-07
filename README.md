@@ -120,7 +120,7 @@ just fine.
 
 Ubuntu :Install the prerequisite software. On a 14.04 LTS server, that should be:
 ```
-> sudo apt-get install git gcc g++ libpcre3-dev libcunit1-dev libev-dev libjansson-dev libjemalloc-dev cython make binutils autoconf automake autotools-dev libtool pkg-config zlib1g-dev libssl-dev libxml2-dev libevent-dev python3.4-dev libevent-openssl-2.0-5
+> sudo apt-get install git gcc g++ libpcre3-dev libcunit1-dev libev-dev libjansson-dev libjemalloc-dev cython make binutils autoconf automake autotools-dev libtool pkg-config zlib1g-dev libssl-dev libxml2-dev libevent-dev python3.4-dev libevent-openssl-2.0-5 php5-cgi
 ```
 
 OS X: on OS X 10.10, building the project requires a homebrew installation and the following packages installed via brew:
@@ -134,7 +134,7 @@ OS X: on OS X 10.10, building the project requires a homebrew installation and t
     * zlib
     * libev
   exact versions and download urls in httpd/Makefile
-
+* for sandbox tests you will need php5-cgi from homebrew
 
 ##Architecture, Limits, Details
 See DISCUSS.
@@ -177,7 +177,9 @@ information for request scheduling.
 * mpm_event: supported by a hack atm. Needs an official patch with an Optional
 function
 * http trailers are not implemented
-
+* mod_h2 removes mod_reqtimeout for its connection (rightly so), and its
+  stream handling (due to problems in long processing fcgi php requests). 
+  The later may hurt. How should timeouts be handled on streams?
 
 ##Licensing
 Please see the file called LICENSE.
@@ -190,6 +192,6 @@ SPDY protocol. And without Tatsuhiro Tsujikawa excellent nghttp2 work, this
 would not have been possible.
 
 
-Münster, 14.04.2015,
+Münster, 23.04.2015,
 
 Stefan Eissing, greenbytes GmbH
