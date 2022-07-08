@@ -40,6 +40,7 @@ struct h2_task_output {
     h2_task_output_state_t state;
     struct h2_mplx *m;
     struct h2_from_h1 *from_h1;
+    struct h2_response *response;
     
     apr_bucket_alloc_t *bucket_alloc;
     apr_bucket_brigade *bb;
@@ -51,10 +52,6 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
                                       struct h2_mplx *m);
 
 void h2_task_output_destroy(h2_task_output *output);
-
-apr_status_t h2_task_output_open(h2_task_output *output,
-                                 struct h2_response *response);
-
 
 apr_status_t h2_task_output_write(h2_task_output *output,
                                   ap_filter_t* filter,

@@ -42,6 +42,22 @@ struct h2_response;
 
 typedef struct h2_from_h1 h2_from_h1;
 
+struct h2_from_h1 {
+    int stream_id;
+    h2_from_h1_state_t state;
+    apr_pool_t *pool;
+    apr_bucket_brigade *bb;
+    
+    apr_size_t content_length;
+    int chunked;
+    
+    const char *status;
+    apr_array_header_t *hlines;
+    
+    struct h2_response *response;
+};
+
+
 typedef void h2_from_h1_state_change_cb(struct h2_from_h1 *resp,
                                          h2_from_h1_state_t prevstate,
                                          void *cb_ctx);
@@ -61,5 +77,7 @@ apr_status_t h2_from_h1_read_response(h2_from_h1 *from_h1,
 struct h2_response *h2_from_h1_get_response(h2_from_h1 *from_h1);
 
 h2_from_h1_state_t h2_from_h1_get_state(h2_from_h1 *from_h1);
+
+apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb);
 
 #endif /* defined(__mod_h2__h2_from_h1__) */

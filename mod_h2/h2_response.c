@@ -34,10 +34,6 @@ h2_response *h2_response_create(int stream_id,
                                   apr_array_header_t *hlines,
                                   apr_pool_t *pool)
 {
-    apr_size_t nvmax = 1 + (hlines? hlines->nelts : 0);
-    /* we allocate one block for the h2_response and the array of
-     * nghtt2_nv structures.
-     */
     h2_response *response = apr_pcalloc(pool, sizeof(h2_response));
     if (response == NULL) {
         return NULL;
@@ -89,6 +85,23 @@ h2_response *h2_response_create(int stream_id,
         }
 
     }
+    return response;
+}
+
+h2_response *h2_response_rcreate(int stream_id, request_rec *r,
+                                 apr_table_t *headers, apr_pool_t *pool)
+{
+    h2_response *response = apr_pcalloc(pool, sizeof(h2_response));
+    if (response == NULL) {
+        return NULL;
+    }
+    
+    response->stream_id = stream_id;
+    response->task_status = APR_SUCCESS;
+    response->http_status = apr_psprintf(pool, "%d", (int)r->status);
+    response->content_length = -1;
+    response->headers = headers;
+    
     return response;
 }
 

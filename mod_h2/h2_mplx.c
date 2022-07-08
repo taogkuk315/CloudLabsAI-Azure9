@@ -392,13 +392,16 @@ static apr_status_t out_write(h2_mplx *m, h2_io *io,
         
         /* Wait for data to drain until there is room again */
         while (!APR_BRIGADE_EMPTY(bb) 
+               && iowait
                && status == APR_SUCCESS
                && (m->out_stream_max_size <= h2_io_out_length(io))
                && !is_aborted(m, &status)) {
             io->output_drained = iowait;
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
-                          "h2_mplx(%ld-%d): waiting for out drain", 
-                          m->id, io->id);
+            if (f) {
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
+                              "h2_mplx(%ld-%d): waiting for out drain", 
+                              m->id, io->id);
+            }
             apr_thread_cond_wait(io->output_drained, m->lock);
             io->output_drained = NULL;
         }
@@ -414,12 +417,14 @@ static apr_status_t out_open(h2_mplx *m, int stream_id, h2_response *response,
     
     h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
     if (io) {
-        io->response = h2_response_clone(m->pool, response);
-        h2_io_set_add(m->ready_ios, io);
-        if (f && bb && iowait) {
+        if (f) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c,
                           "h2_mplx(%ld-%d): open response",
                           m->id, stream_id);
+        }
+        io->response = h2_response_clone(m->pool, response);
+        h2_io_set_add(m->ready_ios, io);
+        if (bb) {
             status = out_write(m, io, f, bb, iowait);
         }
         have_out_data_for(m, stream_id);

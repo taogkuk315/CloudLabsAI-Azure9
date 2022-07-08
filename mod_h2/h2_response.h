@@ -34,6 +34,9 @@ h2_response *h2_response_create(int stream_id,
                                   apr_array_header_t *hlines,
                                   apr_pool_t *pool);
 
+h2_response *h2_response_rcreate(int stream_id, request_rec *r,
+                                 apr_table_t *header, apr_pool_t *pool);
+
 void h2_response_destroy(h2_response *head);
 
 h2_response *h2_response_clone(apr_pool_t *p, h2_response *resp);

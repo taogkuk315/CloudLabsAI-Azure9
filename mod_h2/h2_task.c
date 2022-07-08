@@ -74,6 +74,8 @@ static apr_status_t h2_filter_read_response(ap_filter_t* f,
 
 void h2_task_register_hooks(void)
 {
+    ap_register_output_filter("H2_RESPONSE", h2_response_output_filter,
+                              NULL, AP_FTYPE_PROTOCOL);
     ap_register_input_filter("H2_TO_H1", h2_filter_stream_input,
                              NULL, AP_FTYPE_NETWORK);
     ap_register_output_filter("H1_TO_H2", h2_filter_stream_output,
@@ -95,6 +97,7 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
                   task->id);
     
     ap_add_input_filter("H2_TO_H1", task, NULL, c);
+    ap_add_output_filter("H1_RESPONSE", task, NULL, c);
     ap_add_output_filter("H1_TO_H2", task, NULL, c);
     
     /* prevent processing by anyone else, including httpd core */

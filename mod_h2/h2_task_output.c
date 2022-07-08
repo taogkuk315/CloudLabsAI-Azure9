@@ -69,8 +69,32 @@ void h2_task_output_destroy(h2_task_output *output)
     }
 }
 
+static apr_status_t open_if_needed(h2_task_output *output, ap_filter_t *f,
+                                   apr_bucket_brigade *bb)
+{
+    if (output->state == H2_TASK_OUT_INIT) {
+        output->state = H2_TASK_OUT_STARTED;
+        output->response = h2_from_h1_get_response(output->from_h1);
+        if (!output->response) {
+            if (f) {
+                ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, f->c,
+                              "h2_task_output(%s): write without response",
+                              h2_task_get_id(output->task));
+            }
+            h2_task_abort(output->task);
+            return APR_ECONNABORTED;
+        }
+        
+        return h2_mplx_out_open(output->m, output->stream_id, 
+                                output->response, f, bb,
+                                h2_task_get_io_cond(output->task));
+    }
+    return APR_EOF;
+}
+
 void h2_task_output_close(h2_task_output *output)
 {
+    open_if_needed(output, NULL, NULL);
     if (output->state != H2_TASK_OUT_DONE) {
         h2_mplx_out_close(output->m, output->stream_id);
         output->state = H2_TASK_OUT_DONE;
@@ -85,20 +109,9 @@ int h2_task_output_has_started(h2_task_output *output)
 static apr_status_t out_write(h2_task_output *output, ap_filter_t *f,
                               apr_bucket_brigade *bb)
 {
-    if (output->state == H2_TASK_OUT_INIT) {
-        output->state = H2_TASK_OUT_STARTED;
-        h2_response *response = h2_from_h1_get_response(output->from_h1);
-        if (!response) {
-            ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, f->c,
-                          "h2_task_output(%s): write without response",
-                          h2_task_get_id(output->task));
-            h2_task_abort(output->task);
-            return APR_ECONNABORTED;
-        }
-        
-        return h2_mplx_out_open(output->m, output->stream_id, 
-                                response, f, bb,
-                                h2_task_get_io_cond(output->task));
+    apr_status_t status = open_if_needed(output, f, bb);
+    if (status != APR_EOF) {
+        return status;
     }
     return h2_mplx_out_write(output->m, output->stream_id, f, bb,
                              h2_task_get_io_cond(output->task));
