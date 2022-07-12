@@ -22,7 +22,6 @@
  * 
  */
 struct h2_mplx;
-struct h2_response;
 struct h2_task;
 struct h2_from_h1;
 
@@ -40,7 +39,6 @@ struct h2_task_output {
     h2_task_output_state_t state;
     struct h2_mplx *m;
     struct h2_from_h1 *from_h1;
-    struct h2_response *response;
     
     apr_bucket_alloc_t *bucket_alloc;
     apr_bucket_brigade *bb;

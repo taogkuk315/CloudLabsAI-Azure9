@@ -88,16 +88,12 @@ int h2_task_pre_conn(h2_task *task, conn_rec *c)
 {
     assert(task);
     /* Add our own, network level in- and output filters.
-     * These will take input from the h2_session->request_data
-     * bucket queue and place the output into the
-     * h2_session->response_data bucket queue.
      */
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_stream(%s): task_pre_conn, installing filters",
                   task->id);
     
     ap_add_input_filter("H2_TO_H1", task, NULL, c);
-    ap_add_output_filter("H1_RESPONSE", task, NULL, c);
     ap_add_output_filter("H1_TO_H2", task, NULL, c);
     
     /* prevent processing by anyone else, including httpd core */

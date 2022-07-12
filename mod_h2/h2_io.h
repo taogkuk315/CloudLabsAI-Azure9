@@ -16,8 +16,9 @@
 #ifndef __mod_h2__h2_io__
 #define __mod_h2__h2_io__
 
+#include "h2_response.h"
+
 struct apr_thread_cond_t;
-struct h2_response;
 struct h2_task;
 
 typedef struct h2_io h2_io;
@@ -34,7 +35,7 @@ struct h2_io {
     apr_bucket_brigade *bbout;   /* output data from stream */
     struct apr_thread_cond_t *output_drained; /* block on writing */
     
-    struct h2_response *response; /* submittable response created */
+    h2_response response;        /* submittable response created */
     
     apr_file_t *file;
 };
@@ -87,8 +88,6 @@ apr_status_t h2_io_in_close(h2_io *io);
 /*******************************************************************************
  * Output handling of streams.
  ******************************************************************************/
-
-struct h2_response *h2_io_extract_response(h2_io *io);
 
 /**
  * Read a bucket from the output head. Return APR_EAGAIN if non is available,

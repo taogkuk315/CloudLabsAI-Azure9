@@ -385,7 +385,7 @@ static int copy_header(void *ctx, const char *name, const char *value)
 {
     apr_table_t *headers = ctx;
     
-    apr_table_add(headers, name, value);
+    apr_table_addn(headers, name, value);
     return 1;
 }
 
@@ -544,7 +544,7 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
         apr_table_unset(r->headers_out, "Content-Length");
     }
     
-    apr_table_t *headers = apr_table_make(c->pool, 10);
+    apr_table_t *headers = apr_table_make(r->pool, 10);
     
     set_basic_http_header(r, headers);
     if (r->status == HTTP_NOT_MODIFIED) {
@@ -568,13 +568,13 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
     }
     
     from_h1->response = h2_response_rcreate(from_h1->stream_id, r, 
-                                            headers, c->pool);
+                                            headers, r->pool);
     if (from_h1->response == NULL) {
         return APR_ENOMEM;
     }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c,
-                  "h2_from_h1(%d): output_filter, created response: %s", 
-                  from_h1->stream_id, from_h1->response->http_status);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
+                  "h2_from_h1(%d): output_filter, created response %s", 
+                  from_h1->stream_id, from_h1->response->headers->status);
     
     if (r->header_only) {
         apr_brigade_cleanup(bb);

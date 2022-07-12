@@ -52,12 +52,6 @@ struct h2_mplx {
     apr_size_t out_stream_max_size;
 };
 
-static void free_response(void *p)
-{
-    h2_response *head = (h2_response *)p;
-    h2_response_destroy(head);
-}
-
 static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
     assert(m);
     if (m->aborted) {
@@ -359,8 +353,8 @@ h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get_highest_prio(m->ready_ios);
-        if (io && io->response) {
-            response = h2_io_extract_response(io);
+        if (io && io->response.headers) {
+            response = &io->response;
             h2_io_set_remove(m->ready_ios, io);
             if (bb) {
                 h2_io_out_read(io, bb, 0);
@@ -419,10 +413,10 @@ static apr_status_t out_open(h2_mplx *m, int stream_id, h2_response *response,
     if (io) {
         if (f) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c,
-                          "h2_mplx(%ld-%d): open response",
-                          m->id, stream_id);
+                          "h2_mplx(%ld-%d): open response: %s",
+                          m->id, stream_id, response->headers->status);
         }
-        io->response = h2_response_clone(m->pool, response);
+        h2_response_copy(&io->response, response);
         h2_io_set_add(m->ready_ios, io);
         if (bb) {
             status = out_write(m, io, f, bb, iowait);
@@ -485,7 +479,7 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
-            if (!io->response) {
+            if (!io->response.headers) {
                 /* In case a close comes before a response was created,
                  * insert an error one so that our streams can properly
                  * reset.

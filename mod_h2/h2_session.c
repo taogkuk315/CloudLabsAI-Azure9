@@ -934,7 +934,6 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
             status = h2_session_handle_response(session, stream);
             have_written = 1;
         }
-        h2_response_destroy(response);
         response = NULL;
         apr_brigade_cleanup(session->bbtmp);
     }
@@ -1151,30 +1150,11 @@ static int submit_response(h2_session *session, h2_response *response)
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                   "h2_stream(%ld-%d): submitting response %s",
-                  session->id, response->stream_id, response->http_status);
-    
-    apr_table_do(count_headers, &nvctx, response->headers, NULL);
-    nvctx.nv = calloc(nvctx.nvlen, sizeof(nghttp2_nv));
-    if (!nvctx.nv) {
-        return NGHTTP2_ERR_NOMEM;
-    }
-    
-    H2_CREATE_NV_LIT_CS((&nvctx.nv[0]), ":status", response->http_status);
-    nvctx.offset = 1;
-    apr_table_do(add_headers, &nvctx, response->headers, NULL);
-    
-    if (APLOGctrace2(session->c)) {
-        for (int i = 0; i < nvctx.nvlen; ++i) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                          "h2_stream(%ld-%d): resp header %s: %s",
-                          session->id, response->stream_id, 
-                          nvctx.nv[i].name, nvctx.nv[i].value);
-        }
-    }
+                  session->id, response->stream_id, response->headers->status);
     
     int rv = nghttp2_submit_response(session->ngh2, response->stream_id,
-                                     nvctx.nv, nvctx.nvlen, &provider);
-    free(nvctx.nv);
+                                     response->headers->nv, 
+                                     response->headers->nvlen, &provider);
     
     if (rv != 0) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
@@ -1185,7 +1165,7 @@ static int submit_response(h2_session *session, h2_response *response)
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                       "h2_stream(%ld-%d): submitted response %s, rv=%d",
                       session->id, response->stream_id, 
-                      response->http_status, rv);
+                      response->headers->status, rv);
     }
     return rv;
 }
@@ -1202,7 +1182,7 @@ apr_status_t h2_session_handle_response(h2_session *session, h2_stream *stream)
     
     apr_status_t status = APR_SUCCESS;
     int rv = 0;
-    if (stream->response->http_status) {
+    if (stream->response->headers) {
         rv = submit_response(session, stream->response);
     }
     else {

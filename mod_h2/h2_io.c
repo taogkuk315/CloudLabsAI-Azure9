@@ -38,10 +38,7 @@ h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc)
 
 void h2_io_cleanup(h2_io *io)
 {
-    if (io->response) {
-        h2_response_destroy(io->response);
-        io->response = NULL;
-    }
+    h2_response_cleanup(&io->response);
     if (io->file) {
         ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, io->bbout->p,
                       "h2_io(%d): cleanup, closing file", io->id);
@@ -114,12 +111,6 @@ apr_status_t h2_io_in_close(h2_io *io)
     io->eos_in = 1;
     return APR_SUCCESS;
 }
-
-h2_response *h2_io_extract_response(h2_io *io)
-{
-    return io->response;
-}
-
 
 apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb, 
                             apr_size_t maxlen)

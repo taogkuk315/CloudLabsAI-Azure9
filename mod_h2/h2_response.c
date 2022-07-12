@@ -28,6 +28,9 @@
 #include "h2_util.h"
 #include "h2_response.h"
 
+static void convert_header(h2_response *response, apr_table_t *headers,
+                           const char *http_status);
+
 h2_response *h2_response_create(int stream_id,
                                   apr_status_t task_status,
                                   const char *http_status,
@@ -41,9 +44,9 @@ h2_response *h2_response_create(int stream_id,
 
     response->stream_id = stream_id;
     response->task_status = task_status;
-    response->http_status = http_status;
     response->content_length = -1;
-    response->headers = apr_table_make(pool, hlines->nelts);
+    
+    apr_table_t *header = apr_table_make(pool, hlines->nelts);
 
     if (hlines) {
         int seen_clen = 0;
@@ -69,7 +72,7 @@ h2_response *h2_response_create(int stream_id,
                 /* never forward, ch. 8.1.2.2 */
             }
             else {
-                apr_table_merge(response->headers, hline, sep);
+                apr_table_merge(header, hline, sep);
                 if (*sep && H2_HD_MATCH_LIT_CS("content-length", hline)) {
                     char *end;
                     response->content_length = apr_strtoi64(sep, &end, 10);
@@ -83,13 +86,14 @@ h2_response *h2_response_create(int stream_id,
                 }
             }
         }
-
     }
-    return response;
+    
+    convert_header(response, header, http_status);
+    return response->headers? response : NULL;
 }
 
 h2_response *h2_response_rcreate(int stream_id, request_rec *r,
-                                 apr_table_t *headers, apr_pool_t *pool)
+                                 apr_table_t *header, apr_pool_t *pool)
 {
     h2_response *response = apr_pcalloc(pool, sizeof(h2_response));
     if (response == NULL) {
@@ -98,24 +102,117 @@ h2_response *h2_response_rcreate(int stream_id, request_rec *r,
     
     response->stream_id = stream_id;
     response->task_status = APR_SUCCESS;
-    response->http_status = apr_psprintf(pool, "%d", (int)r->status);
     response->content_length = -1;
-    response->headers = headers;
+    convert_header(response, header, apr_psprintf(pool, "%d", r->status));
     
-    return response;
+    return response->headers? response : NULL;
 }
 
-void h2_response_destroy(h2_response *resp)
+void h2_response_cleanup(h2_response *response)
 {
+    if (response->headers) {
+        if (--response->headers->refs == 0) {
+            free(response->headers);
+        }
+        response->headers = NULL;
+    }
 }
 
-h2_response *h2_response_clone(apr_pool_t *p, h2_response *resp)
+void h2_response_destroy(h2_response *response)
 {
-    h2_response *n = apr_palloc(p, sizeof(*resp));
-    *n = *resp;
-    n->http_status = apr_pstrdup(p, resp->http_status);
-    n->headers = apr_table_clone(p, resp->headers);
-    return n;
+    h2_response_cleanup(response);
 }
 
+void h2_response_copy(h2_response *to, h2_response *from)
+{
+    h2_response_cleanup(to);
+    *to = *from;
+    if (from->headers) {
+        ++from->headers->refs;
+    }
+}
+
+typedef struct {
+    nghttp2_nv *nv;
+    size_t nvlen;
+    size_t nvstrlen;
+    size_t offset;
+    char *strbuf;
+} nvctx_t;
+
+static int count_headers(void *ctx, const char *key, const char *value)
+{
+    nvctx_t *nvctx = (nvctx_t*)ctx;
+    nvctx->nvlen++;
+    nvctx->nvstrlen += strlen(key) + strlen(value) + 2;
+    return 1;
+}
+
+#define NV_ADD_LIT_CS(nv, k, v)     addnv_lit_cs(nv, k, sizeof(k) - 1, v, strlen(v))
+#define NV_ADD_CS_CS(nv, k, v)      addnv_cs_cs(nv, k, strlen(k), v, strlen(v))
+#define NV_BUF_ADD(nv, s, len)      memcpy(nv->strbuf, s, len); \
+                                    s = nv->strbuf; \
+                                    nv->strbuf += len + 1
+
+static void addnv_cs_cs(nvctx_t *ctx, const char *key, size_t key_len,
+                        const char *value, size_t val_len)
+{
+    nghttp2_nv *nv = &ctx->nv[ctx->offset];
+    
+    NV_BUF_ADD(ctx, key, key_len);
+    NV_BUF_ADD(ctx, value, val_len);
+    
+    nv->name = (uint8_t*)key;
+    nv->namelen = key_len;
+    nv->value = (uint8_t*)value;
+    nv->valuelen = val_len;
+    
+    ctx->offset++;
+}
+
+static void addnv_lit_cs(nvctx_t *ctx, const char *key, size_t key_len,
+                         const char *value, size_t val_len)
+{
+    nghttp2_nv *nv = &ctx->nv[ctx->offset];
+    
+    NV_BUF_ADD(ctx, value, val_len);
+    
+    nv->name = (uint8_t*)key;
+    nv->namelen = key_len;
+    nv->value = (uint8_t*)value;
+    nv->valuelen = val_len;
+    
+    ctx->offset++;
+}
+
+static int add_header(void *ctx, const char *key, const char *value)
+{
+    NV_ADD_CS_CS(ctx, key, value);
+    return 1;
+}
+
+static void convert_header(h2_response *response, apr_table_t *headers,
+                           const char *status)
+{
+    nvctx_t ctx = { NULL, 1, strlen(status) + 1, 0, NULL };
+    
+    apr_table_do(count_headers, &ctx, headers, NULL);
+    
+    size_t n =  (sizeof(h2_headers)
+                 + (ctx.nvlen * sizeof(nghttp2_nv)) + ctx.nvstrlen); 
+    h2_headers *h = calloc(1, n);
+    if (h) {
+        ctx.nv = (nghttp2_nv*)(h + 1);
+        ctx.strbuf = (char*)&ctx.nv[ctx.nvlen];
+        
+        NV_ADD_LIT_CS(&ctx, ":status", status);
+        apr_table_do(add_header, &ctx, headers, NULL);
+        
+        h->nv = ctx.nv;
+        h->nvlen = ctx.nvlen;
+        h->status = (const char *)ctx.nv[0].value;
+        h->refs = 1;
+        response->headers = h;
+    }
+}
 
