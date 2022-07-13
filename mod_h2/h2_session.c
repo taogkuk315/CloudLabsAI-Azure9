@@ -370,8 +370,12 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             }
             break;
     }
-    
-    if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+
+    /* only DATA and HEADERS frame can bear END_STREAM flag.  Other
+       frame types may have other flag which has the same value, so we
+       have to check the frame type first.  */
+    if ((frame->hd.type == NGHTTP2_DATA || frame->hd.type == NGHTTP2_HEADERS) &&
+        frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
         h2_stream * stream = h2_stream_set_get(session->streams,
                                                frame->hd.stream_id);
         if (stream != NULL) {
