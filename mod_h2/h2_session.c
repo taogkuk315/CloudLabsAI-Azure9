@@ -340,11 +340,10 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                               (int)frame->hd.stream_id);
                 return NGHTTP2_ERR_INVALID_STREAM_ID;
             }
-            
-            if (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS) {
-                int eos = (frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
-                status = stream_end_headers(session, stream, eos);
-            }
+
+            int eos = (frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
+            status = stream_end_headers(session, stream, eos);
+
             break;
         }
         case NGHTTP2_DATA: {
