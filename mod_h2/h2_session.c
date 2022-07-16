@@ -151,6 +151,7 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
                                  int32_t stream_id,
                                  const uint8_t *data, size_t len, void *userp)
 {
+    int rv;
     h2_session *session = (h2_session *)userp;
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -160,14 +161,26 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
                       "h2_session:  stream(%ld-%d): on_data_chunk for unknown stream",
                       session->id, (int)stream_id);
-        return NGHTTP2_ERR_INVALID_STREAM_ID;
+        rv = nghttp2_submit_rst_stream(ngh2, NGHTTP2_FLAG_NONE, stream_id,
+                                       NGHTTP2_INTERNAL_ERROR);
+        if (nghttp2_is_fatal(rv)) {
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
+        }
+        return 0;
     }
     
     apr_status_t status = h2_stream_write_data(stream, (const char *)data, len);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, session->c,
                   "h2_stream(%ld-%d): written DATA, length %ld",
                   session->id, stream_id, len);
-    return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_PROTO;
+    if (status != APR_SUCCESS) {
+        rv = nghttp2_submit_rst_stream(ngh2, NGHTTP2_FLAG_NONE, stream_id,
+                                       NGHTTP2_INTERNAL_ERROR);
+        if (nghttp2_is_fatal(rv)) {
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
+        }
+    }
+    return 0;
 }
 
 static int before_frame_send_cb(nghttp2_session *ngh2,
@@ -282,7 +295,13 @@ static int on_begin_headers_cb(nghttp2_session *ngh2,
                                const nghttp2_frame *frame, void *userp)
 {
     /* This starts a new stream. */
-    return stream_open((h2_session *)userp, frame->hd.stream_id);
+    int rv = stream_open((h2_session *)userp, frame->hd.stream_id);
+    if (rv != NGHTTP2_ERR_CALLBACK_FAILURE) {
+      /* on_header_cb or on_frame_recv_cb will dectect that stream
+         does not exist and submit RST_STREAM. */
+      return 0;
+    }
+    return NGHTTP2_ERR_CALLBACK_FAILURE;
 }
 
 static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
@@ -301,13 +320,16 @@ static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
                       "h2_session:  stream(%ld-%d): on_header for unknown stream",
                       session->id, (int)frame->hd.stream_id);
-        return NGHTTP2_ERR_INVALID_STREAM_ID;
+        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
     
     apr_status_t status = h2_stream_write_header(stream,
                                                (const char *)name, namelen,
                                                (const char *)value, valuelen);
-    return (status == APR_SUCCESS)? 0 : NGHTTP2_ERR_PROTO;
+    if (status != APR_SUCCESS) {
+        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+    return 0;
 }
 
 /**
@@ -319,6 +341,7 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                             const nghttp2_frame *frame,
                             void *userp)
 {
+    int rv;
     h2_session *session = (h2_session *)userp;
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -338,7 +361,13 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                               "h2_session:  stream(%ld-%d): HEADERS frame "
                               "for unknown stream", session->id,
                               (int)frame->hd.stream_id);
-                return NGHTTP2_ERR_INVALID_STREAM_ID;
+                rv = nghttp2_submit_rst_stream(ng2s, NGHTTP2_FLAG_NONE,
+                                               frame->hd.stream_id,
+                                               NGHTTP2_INTERNAL_ERROR);
+                if (nghttp2_is_fatal(rv)) {
+                    return NGHTTP2_ERR_CALLBACK_FAILURE;
+                }
+                return 0;
             }
 
             int eos = (frame->hd.flags & NGHTTP2_FLAG_END_STREAM);
@@ -354,7 +383,13 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                               "h2_session:  stream(%ld-%d): DATA frame "
                               "for unknown stream", session->id,
                               (int)frame->hd.stream_id);
-                return NGHTTP2_ERR_PROTO;
+                rv = nghttp2_submit_rst_stream(ng2s, NGHTTP2_FLAG_NONE,
+                                               frame->hd.stream_id,
+                                               NGHTTP2_INTERNAL_ERROR);
+                if (nghttp2_is_fatal(rv)) {
+                    return NGHTTP2_ERR_CALLBACK_FAILURE;
+                }
+                return 0;
             }
             break;
         }
@@ -389,7 +424,13 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
                       "h2_session: stream(%ld-%d): error handling frame",
                       session->id, (int)frame->hd.stream_id);
-        return NGHTTP2_ERR_INVALID_STREAM_STATE;
+        rv = nghttp2_submit_rst_stream(ng2s, NGHTTP2_FLAG_NONE,
+                                       frame->hd.stream_id,
+                                       NGHTTP2_INTERNAL_ERROR);
+        if (nghttp2_is_fatal(rv)) {
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
+        }
+        return 0;
     }
     
     return 0;
