@@ -1250,8 +1250,8 @@ apr_status_t h2_session_handle_response(h2_session *session, h2_stream *stream)
         rv = submit_response(session, stream->response);
     }
     else {
-        rv = nghttp2_submit_rst_stream(session->ngh2, 0,
-                                       stream->id, NGHTTP2_ERR_INVALID_STATE);
+        rv = nghttp2_submit_rst_stream(session->ngh2, NGHTTP2_FLAG_NONE,
+                                       stream->id, NGHTTP2_PROTOCOL_ERROR);
     }
     
     if (nghttp2_is_fatal(rv)) {
