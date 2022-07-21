@@ -33,7 +33,6 @@ OBJECTS = \
     h2_io.c \
     h2_io_set.c \
     h2_mplx.c \
-    h2_queue.c \
     h2_request.c \
     h2_response.c \
     h2_session.c \
@@ -61,7 +60,6 @@ HFILES = \
     h2_io_set.h \
     h2_mplx.h \
     h2_private.h \
-    h2_queue.h \
     h2_request.h \
     h2_response.h \
     h2_session.h \

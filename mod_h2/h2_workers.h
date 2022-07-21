@@ -38,11 +38,10 @@ struct h2_workers {
     
     apr_threadattr_t *thread_attr;
     
-    int worker_count;
     APR_RING_HEAD(h2_worker_list, h2_worker) workers;
+    APR_RING_HEAD(h2_task_list, h2_task) tasks;
     
-    struct h2_queue *tasks_scheduled;
-    
+    int worker_count;
     volatile apr_uint32_t max_idle_secs;
     volatile apr_uint32_t idle_worker_count;
     
@@ -73,10 +72,6 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task);
  * with APR_EAGAIN.
  */
 apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait);
-
-/* Log some statistics about budy/idle workers etc. 
- */
-void h2_workers_log_stats(h2_workers *workers);
 
 void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs);
 

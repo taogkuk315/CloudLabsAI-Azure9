@@ -23,7 +23,6 @@
 #include <http_log.h>
 
 #include "h2_private.h"
-#include "h2_queue.h"
 #include "h2_task.h"
 #include "h2_worker.h"
 #include "h2_workers.h"
@@ -31,11 +30,13 @@
 static h2_task* pop_next_task(h2_workers *workers)
 {
     // TODO: prio scheduling
-    h2_task *task = h2_queue_pop(workers->tasks_scheduled);
-    if (task) {
+    if (!H2_TASK_LIST_EMPTY(&workers->tasks)) {
+        h2_task *task = H2_TASK_LIST_FIRST(&workers->tasks);
+        H2_TASK_REMOVE(task);
         h2_task_set_started(task, 1);
+        return task;
     }
-    return task;
+    return NULL;
 }
 
 static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
@@ -178,7 +179,7 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         apr_threadattr_create(&workers->thread_attr, workers->pool);
         
         APR_RING_INIT(&workers->workers, h2_worker, link);
-        workers->tasks_scheduled = h2_queue_create(workers->pool, NULL);
+        APR_RING_INIT(&workers->tasks, h2_task, link);
         
         status = apr_thread_mutex_create(&workers->lock,
                                          APR_THREAD_MUTEX_DEFAULT,
@@ -209,9 +210,9 @@ void h2_workers_destroy(h2_workers *workers)
         apr_thread_mutex_destroy(workers->lock);
         workers->lock = NULL;
     }
-    if (workers->tasks_scheduled) {
-        h2_queue_destroy(workers->tasks_scheduled);
-        workers->tasks_scheduled = NULL;
+    while (!H2_TASK_LIST_EMPTY(&workers->tasks)) {
+        h2_task *task = H2_TASK_LIST_FIRST(&workers->tasks);
+        H2_TASK_REMOVE(task);
     }
     while (!H2_WORKER_LIST_EMPTY(&workers->workers)) {
         h2_worker *w = H2_WORKER_LIST_FIRST(&workers->workers);
@@ -227,7 +228,7 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
                      "h2_workers: scheduling task(%s)",
                      h2_task_get_id(task));
         
-        h2_queue_append(workers->tasks_scheduled, task);
+        H2_TASK_LIST_INSERT_TAIL(&workers->tasks, task);
         
         h2_worker *worker = NULL;
         if (workers->idle_worker_count > 0) {
@@ -262,6 +263,49 @@ static int find_task(void *ctx, int id, void *entry, int index)
     return 1;
 }
 
+
+static apr_status_t join(h2_workers *workers, h2_task *task, int wait)
+{
+    if (h2_task_has_finished(task)) {
+        return APR_SUCCESS;
+    }
+    
+    if (!h2_task_has_started(task)) {
+        /* might still be on scheduled tasks list */
+        h2_task *t;
+        for (t = H2_TASK_LIST_FIRST(&workers->tasks); 
+             t != H2_TASK_LIST_SENTINEL(&workers->tasks);
+             t = H2_TASK_NEXT(t)) {
+            if (t == task) {
+                H2_TASK_REMOVE(task);
+                return APR_SUCCESS;
+            }
+        }
+    }
+    
+    /* not on scheduled list, wait until not running */
+    assert(h2_task_has_started(task));
+    if (wait) {
+        for (int i = 0; !h2_task_has_finished(task) && i < 100; ++i) {
+            h2_task_interrupt(task);
+            apr_thread_cond_t *iowait = task->io;
+            if (iowait) {
+                apr_thread_cond_timedwait(iowait, workers->lock, 20 * 1000);
+            }
+            else {
+                if (!h2_task_has_finished(task)) {
+                    ap_log_error(APLOG_MARK, APLOG_WARNING, 0, workers->s,
+                                 "h2_workers: join task(%s) started, but "
+                                 "not finished, no worker found",
+                                 h2_task_get_id(task));
+                }
+                break;
+            }
+        }
+    }
+    return h2_task_has_finished(task)? APR_SUCCESS : APR_EAGAIN;
+}
+
 apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
@@ -269,30 +313,7 @@ apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
         ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                      "h2_workers: join task(%s) started",
                      h2_task_get_id(task));
-        
-        if (!h2_queue_remove(workers->tasks_scheduled, task)) {
-            /* not on scheduled list, wait until not running */
-            assert(h2_task_has_started(task));
-            for (int i = 0; wait && !h2_task_has_finished(task) && i < 100; ++i) {
-                h2_task_interrupt(task);
-                apr_thread_cond_t *iowait = task->io;
-                if (iowait) {
-                    apr_thread_cond_timedwait(iowait, workers->lock, 20 * 1000);
-                }
-                else {
-                    if (!h2_task_has_finished(task)) {
-                        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, workers->s,
-                                     "h2_workers: join task(%s) started, but "
-                                     "not finished, no worker found",
-                                     h2_task_get_id(task));
-                    }
-                    break;
-                }
-            }
-            if (!h2_task_has_finished(task)) {
-                status = APR_EAGAIN;
-            }
-        }
+        status = join(workers, task, wait);
         apr_thread_mutex_unlock(workers->lock);
     }
     return status;
@@ -309,14 +330,3 @@ void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs)
     apr_atomic_set32(&workers->max_idle_secs, idle_secs);
 }
 
-void h2_workers_log_stats(h2_workers *workers)
-{
-    apr_status_t status = apr_thread_mutex_lock(workers->lock);
-    if (status == APR_SUCCESS) {
-        ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
-                     "h2_workers: %d workers, %ld tasks todo",
-                     (int)workers->worker_count,
-                     h2_queue_size(workers->tasks_scheduled));
-        apr_thread_mutex_unlock(workers->lock);
-    }
-}
