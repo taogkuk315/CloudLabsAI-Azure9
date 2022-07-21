@@ -25,23 +25,6 @@
 #include "h2_task.h"
 #include "h2_worker.h"
 
-struct h2_worker {
-    int id;
-    apr_thread_t *thread;
-    apr_pool_t *pool;
-    apr_bucket_alloc_t *bucket_alloc;
-    apr_thread_cond_t *io;
-    apr_socket_t *socket;
-    
-    h2_worker_task_next_fn *get_next;
-    h2_worker_task_done_fn *task_done;
-    h2_worker_done_fn *worker_done;
-    void *ctx;
-    
-    int aborted;
-    struct h2_task *current;
-};
-
 static void *execute(apr_thread_t *thread, void *wctx)
 {
     h2_worker *worker = (h2_worker *)wctx;
@@ -104,6 +87,8 @@ h2_worker *h2_worker_create(int id,
     
     h2_worker *w = apr_pcalloc(pool, sizeof(h2_worker));
     if (w) {
+        APR_RING_ELEM_INIT(w, link);
+        
         w->id = id;
         w->pool = pool;
         w->bucket_alloc = apr_bucket_alloc_create(pool);

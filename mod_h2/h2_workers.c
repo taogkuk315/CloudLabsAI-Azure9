@@ -28,28 +28,6 @@
 #include "h2_worker.h"
 #include "h2_workers.h"
 
-struct h2_workers {
-    server_rec *s;
-    apr_pool_t *pool;
-    int aborted;
-    
-    int next_worker_id;
-    int min_size;
-    int max_size;
-    
-    apr_threadattr_t *thread_attr;
-    
-    int worker_count;
-    struct h2_queue *workers;
-    struct h2_queue *tasks_scheduled;
-    
-    volatile apr_uint32_t max_idle_secs;
-    volatile apr_uint32_t idle_worker_count;
-    
-    struct apr_thread_mutex_t *lock;
-    struct apr_thread_cond_t *task_added;
-};
-
 static h2_task* pop_next_task(h2_workers *workers)
 {
     // TODO: prio scheduling
@@ -142,8 +120,8 @@ static void worker_done(h2_worker *worker, void *ctx)
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                      "h2_worker(%d): done", h2_worker_get_id(worker));
-        h2_queue_remove(workers->workers, worker);
-        workers->worker_count = h2_queue_size(workers->workers);
+        H2_WORKER_REMOVE(worker);
+        --workers->worker_count;
         h2_worker_destroy(worker);
         
         apr_thread_mutex_unlock(workers->lock);
@@ -163,7 +141,8 @@ static apr_status_t add_worker(h2_workers *workers)
     ap_log_error(APLOG_MARK, APLOG_TRACE2, 0, workers->s,
                  "h2_workers: adding worker(%d)", h2_worker_get_id(w));
     ++workers->worker_count;
-    return h2_queue_append(workers->workers, w);
+    H2_WORKER_LIST_INSERT_TAIL(&workers->workers, w);
+    return APR_SUCCESS;
 }
 
 static apr_status_t h2_workers_start(h2_workers *workers) {
@@ -198,7 +177,7 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         
         apr_threadattr_create(&workers->thread_attr, workers->pool);
         
-        workers->workers = h2_queue_create(workers->pool, NULL);
+        APR_RING_INIT(&workers->workers, h2_worker, link);
         workers->tasks_scheduled = h2_queue_create(workers->pool, NULL);
         
         status = apr_thread_mutex_create(&workers->lock,
@@ -234,9 +213,9 @@ void h2_workers_destroy(h2_workers *workers)
         h2_queue_destroy(workers->tasks_scheduled);
         workers->tasks_scheduled = NULL;
     }
-    if (workers->workers) {
-        h2_queue_destroy(workers->workers);
-        workers->workers = NULL;
+    while (!H2_WORKER_LIST_EMPTY(&workers->workers)) {
+        h2_worker *w = H2_WORKER_LIST_FIRST(&workers->workers);
+        H2_WORKER_REMOVE(w);
     }
 }
 
@@ -283,13 +262,6 @@ static int find_task(void *ctx, int id, void *entry, int index)
     return 1;
 }
 
-h2_worker *h2_workers_get_task_worker(h2_workers *workers, h2_task *task)
-{
-    find_task_ctx ctx = { task, NULL };
-    h2_queue_iter(workers->workers, find_task, &ctx);
-    return ctx.found;
-}
-
 apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
@@ -302,11 +274,10 @@ apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
             /* not on scheduled list, wait until not running */
             assert(h2_task_has_started(task));
             for (int i = 0; wait && !h2_task_has_finished(task) && i < 100; ++i) {
-                h2_worker *worker = h2_workers_get_task_worker(workers, task);
                 h2_task_interrupt(task);
-                if (worker) {
-                    apr_thread_cond_timedwait(h2_worker_get_cond(worker), 
-                                              workers->lock, 20 * 1000);
+                apr_thread_cond_t *iowait = task->io;
+                if (iowait) {
+                    apr_thread_cond_timedwait(iowait, workers->lock, 20 * 1000);
                 }
                 else {
                     if (!h2_task_has_finished(task)) {
@@ -343,8 +314,8 @@ void h2_workers_log_stats(h2_workers *workers)
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
-                     "h2_workers: %ld threads, %ld tasks todo",
-                     h2_queue_size(workers->workers),
+                     "h2_workers: %d workers, %ld tasks todo",
+                     (int)workers->worker_count,
                      h2_queue_size(workers->tasks_scheduled));
         apr_thread_mutex_unlock(workers->lock);
     }

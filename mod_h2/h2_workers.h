@@ -27,6 +27,30 @@ struct h2_task;
 
 typedef struct h2_workers h2_workers;
 
+struct h2_workers {
+    server_rec *s;
+    apr_pool_t *pool;
+    int aborted;
+    
+    int next_worker_id;
+    int min_size;
+    int max_size;
+    
+    apr_threadattr_t *thread_attr;
+    
+    int worker_count;
+    APR_RING_HEAD(h2_worker_list, h2_worker) workers;
+    
+    struct h2_queue *tasks_scheduled;
+    
+    volatile apr_uint32_t max_idle_secs;
+    volatile apr_uint32_t idle_worker_count;
+    
+    struct apr_thread_mutex_t *lock;
+    struct apr_thread_cond_t *task_added;
+};
+
+
 /* Create a worker pool with the given minimum and maximum number of
  * threads.
  */
