@@ -26,35 +26,36 @@
 #include "h2_private.h"
 #include "h2_mplx.h"
 #include "h2_response.h"
+#include "h2_task.h"
 #include "h2_to_h1.h"
 #include "h2_util.h"
 
 
-struct h2_to_h1 {
-    int stream_id;
-    apr_pool_t *pool;
-    h2_mplx *m;
-    int eoh;
-    int eos;
-    int flushed;
-    int seen_host;
-    const char *authority;
-    int chunked;
-    apr_off_t content_len;
-    apr_off_t remain_len;
-    apr_table_t *headers;
-    apr_bucket_brigade *bb;
-};
-
 h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, 
-                          apr_bucket_alloc_t *bucket_alloc, h2_mplx *m)
+                          apr_bucket_alloc_t *bucket_alloc, 
+                          const char *method, const char *path,
+                          const char *authority, struct h2_mplx *m)
 {
+    if (!method) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_conn(m),
+                      "h2_to_h1: header start but :method missing");
+        return NULL;
+    }
+    if (!path) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_conn(m),
+                      "h2_to_h1: header start but :path missing");
+        return NULL;
+    }
+    
     h2_to_h1 *to_h1 = apr_pcalloc(pool, sizeof(h2_to_h1));
     if (to_h1) {
         to_h1->stream_id = stream_id;
         to_h1->pool = pool;
+        to_h1->method = method;
+        to_h1->path = path;
+        to_h1->authority = authority;
         to_h1->m = m;
-        to_h1->headers = apr_table_make(to_h1->pool, 5);
+        to_h1->headers = apr_table_make(to_h1->pool, 10);
         to_h1->bb = apr_brigade_create(pool, bucket_alloc);
         to_h1->chunked = 0; /* until we see a content-type and no length */
         to_h1->content_len = -1;
@@ -66,35 +67,6 @@ void h2_to_h1_destroy(h2_to_h1 *to_h1)
 {
     to_h1->bb = NULL;
 }
-
-apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1,
-                                    int stream_id,
-                                    const char *method,
-                                    const char *path,
-                                    const char *authority)
-{
-    apr_status_t status = APR_SUCCESS;
-    if (!method) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_conn(to_h1->m),
-                      "h2_to_h1: header start but :method missing");
-        return APR_EGENERAL;
-    }
-    if (!path) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_conn(to_h1->m),
-                      "h2_to_h1: header start but :path missing");
-        return APR_EGENERAL;
-    }
-    
-    if (authority) {
-        to_h1->authority = apr_pstrdup(to_h1->pool, authority);
-    }
-    
-    status = apr_brigade_printf(to_h1->bb, NULL, NULL, 
-                                "%s %s HTTP/1.1\r\n", method, path);
-
-    return status;
-}
-
 
 apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
                                  const char *name, size_t nlen,
@@ -162,19 +134,7 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
 }
 
 
-static int ser_header(void *ctx, const char *name, const char *value) 
-{
-    h2_to_h1 *to_h1 = (h2_to_h1*)ctx;
-    apr_brigade_printf(to_h1->bb, NULL, NULL, "%s: %s\r\n", name, value);
-    return 1;
-}
-
-static void serialize_headers(h2_to_h1 *to_h1) 
-{
-    apr_table_do(ser_header, to_h1, to_h1->headers, NULL);
-}
-
-apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1)
+apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, h2_task *task, int eos)
 {
     conn_rec *c = h2_mplx_get_conn(to_h1->m);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
@@ -201,30 +161,20 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1)
         apr_table_mergen(to_h1->headers, "Transfer-Encoding", "chunked");
     }
     
-    serialize_headers(to_h1);
-    apr_brigade_puts(to_h1->bb, NULL, NULL, "\r\n");
-    
-    if (APLOGctrace1(c)) {
-        char buffer[1024];
-        apr_size_t len = sizeof(buffer)-1;
-        apr_brigade_flatten(to_h1->bb, buffer, &len);
-        buffer[len] = 0;
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                      "h2_to_h1(%ld-%d): request is: %s", 
-                      h2_mplx_get_id(to_h1->m), to_h1->stream_id, 
-                      buffer);
-    }
-    
-    apr_status_t status = h2_to_h1_flush(to_h1);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, c,
-                      "h2_to_h1(%ld-%d): end headers. flush", 
-                      h2_mplx_get_id(to_h1->m), to_h1->stream_id);
-    }
-    
+    h2_task_set_request(task, to_h1->method, to_h1->path, 
+                        to_h1->authority, to_h1->headers, eos);
     to_h1->eoh = 1;
-
-    return status;
+    
+    if (eos) {
+        apr_status_t status = h2_to_h1_close(to_h1);
+        if (status != APR_SUCCESS) {
+            ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, c,
+                          "h2_to_h1(%ld-%d): end headers, eos=%d", 
+                          h2_mplx_get_id(to_h1->m), to_h1->stream_id, eos);
+        }
+        return status;
+    }
+    return APR_SUCCESS;
 }
 
 static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,

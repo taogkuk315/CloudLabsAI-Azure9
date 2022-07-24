@@ -141,6 +141,16 @@ h2_task *h2_task_create(long session_id,
     return task;
 }
 
+void h2_task_set_request(h2_task *task, 
+                         const char *method, const char *path, 
+                         const char *authority, apr_table_t *headers, int eos)
+{
+    task->method = method;
+    task->path = path;
+    task->authority = authority;
+    task->headers = headers;
+    task->input_eos = eos;
+}
 
 apr_status_t h2_task_destroy(h2_task *task)
 {
@@ -182,7 +192,10 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         task->input = h2_task_input_create(task->conn->pool,
                                            task, task->stream_id, 
                                            task->conn->bucket_alloc, 
-                                           task->mplx);
+                                           task->method, task->path,
+                                           task->authority, task->headers,
+                                           task->input_eos, task->mplx);
+        
         task->output = h2_task_output_create(task->conn->pool, task, 
                                              task->stream_id, 
                                              task->conn->bucket_alloc, 

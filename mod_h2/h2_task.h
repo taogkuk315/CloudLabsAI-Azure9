@@ -61,6 +61,12 @@ struct h2_task {
     apr_pool_t *stream_pool;
     struct h2_conn *conn;
     
+    const char *method;
+    const char *path;
+    const char *authority;
+    apr_table_t *headers;
+    int input_eos;
+    
     struct h2_task_input *input;    /* http/1.1 input data */
     struct h2_task_output *output;  /* response body data */
     struct apr_thread_cond_t *io;   /* optional condition to wait for io on */
@@ -137,11 +143,11 @@ struct h2_task {
 #define H2_TASK_REMOVE(e)	APR_RING_REMOVE((e), link)
 
 
-h2_task *h2_task_create(long session_id,
-                        int stream_id,
-                        conn_rec *master,
-                        apr_pool_t *pool, 
-                        struct h2_mplx *mplx);
+h2_task *h2_task_create(long session_id, int stream_id, conn_rec *master,
+                        apr_pool_t *pool, struct h2_mplx *mplx);
+
+void h2_task_set_request(h2_task *task, const char *method, const char *path, 
+                         const char *authority, apr_table_t *headers, int eos);
 
 apr_status_t h2_task_destroy(h2_task *task);
 

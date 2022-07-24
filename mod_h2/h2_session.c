@@ -34,6 +34,7 @@
 #include "h2_session.h"
 #include "h2_util.h"
 #include "h2_version.h"
+#include "h2_workers.h"
 
 static int frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen);
 
@@ -87,20 +88,8 @@ static int stream_open(h2_session *session, int stream_id)
 static apr_status_t stream_end_headers(h2_session *session,
                                        h2_stream *stream, int eos)
 {
-    apr_status_t status = h2_stream_write_eoh(stream);
-    if (status == APR_SUCCESS) {
-        if (eos) {
-            status = h2_stream_write_eos(stream);
-        }
-        
-        if (status == APR_SUCCESS && session->after_stream_opened_cb) {
-            h2_task *task = h2_stream_create_task(stream, session->c);
-            session->after_stream_opened_cb(session, stream, task);
-        }
-    }
-    return status;
+    return h2_stream_write_eoh(stream, eos);
 }
-
 
 /*
  * Callback when nghttp2 wants to send bytes back to the client.
@@ -237,11 +226,16 @@ static apr_status_t close_active_stream(h2_session *session,
                   session->id, (int)stream->id);
     
     h2_stream_set_remove(session->streams, stream);
-    if (session->before_stream_close_cb && stream->task) {
-        status = session->before_stream_close_cb(session, stream,
-                                                 stream->task, join);
+    if (stream->task) {
+        h2_task_abort(stream->task);
+        status = h2_workers_join(stream->m->workers, stream->task, 0);
+        if (status != APR_SUCCESS && status != APR_EAGAIN) {
+            ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
+                          "h2_stream: close, join task(%s)",
+                          h2_task_get_id(stream->task));
+        }
     }
-    
+
     if (status == APR_SUCCESS) {
         h2_stream_destroy(stream);
     }
@@ -262,9 +256,9 @@ static apr_status_t join_zombie_stream(h2_session *session, h2_stream *stream)
                   session->id, (int)stream->id);
     
     h2_stream_set_remove(session->zombies, stream);
-    if (session->before_stream_close_cb && stream->task) {
-        status = session->before_stream_close_cb(session, stream,
-                                                 stream->task, 1);
+    if (stream->task) {
+        h2_task_abort(stream->task);
+        status = h2_workers_join(stream->m->workers, stream->task, 1);
     }
     h2_stream_destroy(stream);
     return status;
@@ -536,7 +530,8 @@ static apr_status_t init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
 
 static h2_session *h2_session_create_int(conn_rec *c,
                                          request_rec *r,
-                                         h2_config *config)
+                                         h2_config *config, 
+                                         h2_workers *workers)
 {
     nghttp2_session_callbacks *callbacks = NULL;
     nghttp2_option *options = NULL;
@@ -553,6 +548,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->c = c;
         session->r = r;
         session->ngh2 = NULL;
+        session->workers = workers;
         
         session->pool = pool;
         session->bbtmp = apr_brigade_create(session->pool, c->bucket_alloc);
@@ -565,7 +561,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->streams = h2_stream_set_create(session->pool);
         session->zombies = h2_stream_set_create(session->pool);
         
-        session->mplx = h2_mplx_create(c, session->pool);
+        session->mplx = h2_mplx_create(c, session->pool, session->workers);
         
         h2_conn_io_init(&session->io, c, 0);
         
@@ -637,14 +633,16 @@ static void reap_zombies(h2_session *session) {
     }
 }
 
-h2_session *h2_session_create(conn_rec *c, h2_config *config)
+h2_session *h2_session_create(conn_rec *c, h2_config *config, 
+                              h2_workers *workers)
 {
-    return h2_session_create_int(c, NULL, config);
+    return h2_session_create_int(c, NULL, config, workers);
 }
 
-h2_session *h2_session_rcreate(request_rec *r, h2_config *config)
+h2_session *h2_session_rcreate(request_rec *r, h2_config *config, 
+                               h2_workers *workers)
 {
-    return h2_session_create_int(r->connection, r, config);
+    return h2_session_create_int(r->connection, r, config, workers);
 }
 
 static int close_active_iter(void *ctx, h2_stream *stream) {
@@ -838,10 +836,6 @@ apr_status_t h2_session_start(h2_session *session, int *rv)
             return status;
         }
         status = stream_end_headers(session, stream, 1);
-        if (status != APR_SUCCESS) {
-            return status;
-        }
-        status = h2_stream_write_eos(stream);
         if (status != APR_SUCCESS) {
             return status;
         }
@@ -1065,18 +1059,6 @@ apr_status_t h2_session_close(h2_session *session)
 {
     assert(session);
     return h2_conn_io_flush(&session->io);
-}
-
-void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb)
-{
-    assert(session);
-    session->before_stream_close_cb = cb;
-}
-
-void h2_session_set_stream_open_cb(h2_session *session, after_stream_open *cb)
-{
-    assert(session);
-    session->after_stream_opened_cb = cb;
 }
 
 static h2_stream *match_any(void *ctx, h2_stream *stream) {

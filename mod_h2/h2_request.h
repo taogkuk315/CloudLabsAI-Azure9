@@ -25,14 +25,15 @@
  */
 struct h2_to_h1;
 struct h2_mplx;
+struct h2_task;
 
 typedef struct h2_request h2_request;
 
 struct h2_request {
     int id;                 /* http2 stream id */
     apr_pool_t *pool;
+    apr_bucket_alloc_t *bucket_alloc;
     struct h2_to_h1 *to_h1; /* Converter to HTTP/1.1 format*/
-    int started;            /* request line serialized */
     
     /* pseudo header values, see ch. 8.1.2.3 */
     const char *method;
@@ -57,7 +58,8 @@ apr_status_t h2_request_write_data(h2_request *request,
                                    const char *data, size_t len,
                                    struct h2_mplx *m);
 
-apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m);
+apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m, 
+                                    struct h2_task *task, int eos);
 
 apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m);
 

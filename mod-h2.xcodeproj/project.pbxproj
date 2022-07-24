@@ -38,8 +38,6 @@
 		B2546D981A7FC2A60033A875 /* h2_from_h1.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_from_h1.h; sourceTree = "<group>"; };
 		B2546D991A81079D0033A875 /* h2_stream_set.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream_set.c; sourceTree = "<group>"; };
 		B2546D9A1A81079D0033A875 /* h2_stream_set.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream_set.h; sourceTree = "<group>"; };
-		B2546D9B1A810A450033A875 /* h2_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_queue.c; sourceTree = "<group>"; };
-		B2546D9C1A810A450033A875 /* h2_queue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_queue.h; sourceTree = "<group>"; };
 		B256C4BA1ADD5FF10042C760 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		B271425E1AB9DD59004EF82E /* h2_io_set.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_io_set.c; sourceTree = "<group>"; };
 		B271425F1AB9DD59004EF82E /* h2_io_set.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_io_set.h; sourceTree = "<group>"; };
@@ -336,8 +334,6 @@
 				B27D32E81A9487B4003DBAF4 /* h2_mplx.c */,
 				B27D32E91A9487B4003DBAF4 /* h2_mplx.h */,
 				B22549371A6FCE13004BDEC9 /* h2_private.h */,
-				B2546D9B1A810A450033A875 /* h2_queue.c */,
-				B2546D9C1A810A450033A875 /* h2_queue.h */,
 				B2A6EF171A9B598B005DFC5B /* h2_request.c */,
 				B2A6EF181A9B598B005DFC5B /* h2_request.h */,
 				B2CB61101A8A0FB400D270A6 /* h2_response.c */,

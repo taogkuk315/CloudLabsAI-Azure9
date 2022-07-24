@@ -82,12 +82,14 @@ apr_status_t h2_io_in_read(h2_io *io, apr_bucket_brigade *bb,
     }
     
     apr_brigade_length(bb, 1, &start_len);
+    apr_bucket *last = APR_BRIGADE_LAST(bb);
     apr_status_t status = h2_util_move(bb, io->bbin, maxlen, 0, 
                                        NULL, "h2_io_in_read");
     if (status == APR_SUCCESS) {
+        apr_bucket *nlast = APR_BRIGADE_LAST(bb);
         apr_off_t end_len = 0;
         apr_brigade_length(bb, 1, &end_len);
-        if (end_len == start_len) {
+        if (last == nlast) {
             return APR_EAGAIN;
         }
         io->input_consumed += (end_len - start_len);

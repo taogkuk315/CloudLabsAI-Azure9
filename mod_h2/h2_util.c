@@ -256,7 +256,7 @@ apr_status_t last_not_included(apr_bucket_brigade *bb,
     return status;
 }
 
-#define LOG_LEVEL APLOG_TRACE1
+#define LOG_LEVEL APLOG_TRACE2
 
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
                           apr_size_t maxlen, int count_virtual, 

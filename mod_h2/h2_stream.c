@@ -39,7 +39,7 @@
 
 static void set_state(h2_stream *stream, h2_stream_state_t state)
 {
-    assert(stream);
+    AP_DEBUG_ASSERT(stream);
     if (stream->state != state) {
         h2_stream_state_t oldstate = stream->state;
         stream->state = state;
@@ -83,7 +83,7 @@ void h2_stream_cleanup(h2_stream *stream)
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
-    assert(stream);
+    AP_DEBUG_ASSERT(stream);
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
                   "h2_stream(%ld-%d): destroy",
                   h2_mplx_get_id(stream->m), stream->id);
@@ -102,13 +102,13 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
 
 int h2_stream_get_id(h2_stream *stream)
 {
-    assert(stream);
+    AP_DEBUG_ASSERT(stream);
     return stream->id;
 }
 
 void h2_stream_abort(h2_stream *stream)
 {
-    assert(stream);
+    AP_DEBUG_ASSERT(stream);
     stream->aborted = 1;
 }
 
@@ -129,42 +129,16 @@ apr_status_t h2_stream_set_response(h2_stream *stream,
 
 h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master)
 {
-    assert(stream);
-    stream->task = h2_task_create(h2_mplx_get_id(stream->m), stream->id, 
-                                  master, stream->pool, stream->m);
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, master,
-                  "h2_stream(%ld-%d): created task for %s %s (%s)",
-                  h2_mplx_get_id(stream->m), stream->id,
-                  stream->request->method, stream->request->path,
-                  stream->request->authority);
+    AP_DEBUG_ASSERT(stream);
     return stream->task;
 }
 
-apr_status_t h2_stream_write_eoh(h2_stream *stream)
+static int set_closed(h2_stream *stream) 
 {
-    assert(stream);
-    return h2_request_end_headers(stream->request, stream->m);
-}
-
-apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
-{
-    assert(stream);
-    set_state(stream, H2_STREAM_ST_OPEN);
-    apr_status_t status = h2_request_rwrite(stream->request, r, stream->m);
-    return status;
-}
-
-apr_status_t h2_stream_write_eos(h2_stream *stream)
-{
-    assert(stream);
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
-                  "h2_stream(%ld-%d): closing input",
-                  h2_mplx_get_id(stream->m), stream->id);
-    apr_status_t status = APR_SUCCESS;
     switch (stream->state) {
         case H2_STREAM_ST_CLOSED_INPUT:
         case H2_STREAM_ST_CLOSED:
-            return APR_SUCCESS; /* ignore, idempotent */
+            return 0; /* ignore, idempotent */
         case H2_STREAM_ST_CLOSED_OUTPUT:
             /* both closed now */
             set_state(stream, H2_STREAM_ST_CLOSED);
@@ -174,14 +148,58 @@ apr_status_t h2_stream_write_eos(h2_stream *stream)
             set_state(stream, H2_STREAM_ST_CLOSED_INPUT);
             break;
     }
-    return h2_request_close(stream->request, stream->m);
+    return 1;
+}
+
+apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
+{
+    AP_DEBUG_ASSERT(stream);
+    set_state(stream, H2_STREAM_ST_OPEN);
+    apr_status_t status = h2_request_rwrite(stream->request, r, stream->m);
+    return status;
+}
+
+apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos)
+{
+    AP_DEBUG_ASSERT(stream);
+    conn_rec *c = h2_mplx_get_conn(stream->m);
+    stream->task = h2_task_create(h2_mplx_get_id(stream->m), stream->id, 
+                                  c, stream->pool, stream->m);
+    
+    apr_status_t status = h2_request_end_headers(stream->request, 
+                                                 stream->m, stream->task, eos);
+    if (status == APR_SUCCESS) {
+        status = h2_mplx_do_async(stream->m, stream->id, stream->task);
+    }
+    if (eos) {
+        status = h2_stream_write_eos(stream);
+    }
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
+                  "h2_stream(%ld-%d): end header, task %s %s (%s)",
+                  h2_mplx_get_id(stream->m), stream->id,
+                  stream->request->method, stream->request->path,
+                  stream->request->authority);
+    
+    return status;
+}
+
+apr_status_t h2_stream_write_eos(h2_stream *stream)
+{
+    AP_DEBUG_ASSERT(stream);
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
+                  "h2_stream(%ld-%d): closing input",
+                  h2_mplx_get_id(stream->m), stream->id);
+    if (set_closed(stream)) {
+        return h2_request_close(stream->request, stream->m);
+    }
+    return APR_SUCCESS;
 }
 
 apr_status_t h2_stream_write_header(h2_stream *stream,
                                     const char *name, size_t nlen,
                                     const char *value, size_t vlen)
 {
-    assert(stream);
+    AP_DEBUG_ASSERT(stream);
     switch (stream->state) {
         case H2_STREAM_ST_IDLE:
             set_state(stream, H2_STREAM_ST_OPEN);
@@ -198,8 +216,8 @@ apr_status_t h2_stream_write_header(h2_stream *stream,
 apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len)
 {
-    assert(stream);
-    assert(stream);
+    AP_DEBUG_ASSERT(stream);
+    AP_DEBUG_ASSERT(stream);
     switch (stream->state) {
         case H2_STREAM_ST_OPEN:
             break;
@@ -398,13 +416,13 @@ apr_status_t h2_stream_readx(h2_stream *stream, apr_bucket_brigade *bb,
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended)
 {
-    assert(stream);
+    AP_DEBUG_ASSERT(stream);
     stream->suspended = !!suspended;
 }
 
 int h2_stream_is_suspended(h2_stream *stream)
 {
-    assert(stream);
+    AP_DEBUG_ASSERT(stream);
     return stream->suspended;
 }
 

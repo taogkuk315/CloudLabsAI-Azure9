@@ -79,8 +79,6 @@ void h2_stream_cleanup(h2_stream *stream);
 
 void h2_stream_abort(h2_stream *stream);
 
-struct h2_task *h2_stream_create_task(h2_stream *stream, conn_rec *master);
-
 apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r);
 
 apr_status_t h2_stream_write_eos(h2_stream *stream);
@@ -89,7 +87,7 @@ apr_status_t h2_stream_write_header(h2_stream *stream,
                                     const char *name, size_t nlen,
                                     const char *value, size_t vlen);
 
-apr_status_t h2_stream_write_eoh(h2_stream *stream);
+apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos);
 
 apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len);

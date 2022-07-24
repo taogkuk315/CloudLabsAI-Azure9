@@ -34,23 +34,8 @@
 #include "h2_task.h"
 #include "h2_task_input.h"
 #include "h2_task_output.h"
+#include "h2_workers.h"
 
-struct h2_mplx {
-    long id;
-    conn_rec *c;
-    apr_pool_t *pool;
-    apr_bucket_alloc_t *bucket_alloc;
-    
-    h2_io_set *stream_ios;
-    h2_io_set *ready_ios;
-    
-    apr_thread_mutex_t *lock;
-    apr_thread_cond_t *added_output;
-    
-    int aborted;
-    
-    apr_size_t out_stream_max_size;
-};
 
 static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
     assert(m);
@@ -74,7 +59,7 @@ static void have_out_data_for(h2_mplx *m, int stream_id);
  *   their HTTP/1 cousins, the separate allocator seems to work better
  *   than protecting a shared h2_session one with an own lock.
  */
-h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent)
+h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
 {
     apr_status_t status = APR_SUCCESS;
     h2_config *conf = h2_config_get(c);
@@ -107,6 +92,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent)
         m->ready_ios = h2_io_set_create(m->pool);
         m->out_stream_max_size = h2_config_geti(conf, 
                                                 H2_CONF_STREAM_MAX_MEM_SIZE);
+        m->workers = workers;
     }
     return m;
 }
@@ -561,5 +547,17 @@ static void have_out_data_for(h2_mplx *m, int stream_id)
     if (m->added_output) {
         apr_thread_cond_signal(m->added_output);
     }
+}
+
+apr_status_t h2_mplx_do_async(h2_mplx *m, int stream_id,
+                              struct h2_task *task)
+{
+    apr_status_t status = h2_workers_schedule(m->workers, task);
+    if (status != APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, m->c,
+                      "scheduling task(%ld-%d)",
+                      m->id, stream_id);
+    }
+    return status;
 }
 

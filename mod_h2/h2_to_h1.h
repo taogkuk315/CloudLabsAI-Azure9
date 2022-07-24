@@ -17,24 +17,41 @@
 #define __mod_h2__h2_to_h1__
 
 struct h2_mplx;
+struct h2_task;
 typedef struct h2_to_h1 h2_to_h1;
+
+struct h2_to_h1 {
+    int stream_id;
+    apr_pool_t *pool;
+    h2_mplx *m;
+
+    const char *method;
+    const char *path;
+    const char *authority;
+    
+    int chunked;
+    int eoh;
+    int eos;
+    int flushed;
+    int seen_host;
+    
+    apr_off_t content_len;
+    apr_off_t remain_len;
+    apr_table_t *headers;
+    apr_bucket_brigade *bb;
+};
 
 /* Create a converter from a HTTP/2 request to a serialzation in
  * HTTP/1.1 format. The serialized data will be written onto the
  * given h2_mplx instance.
  */
 h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool, 
-                          apr_bucket_alloc_t *bucket_alloc, struct h2_mplx *m);
+                          apr_bucket_alloc_t *bucket_alloc, 
+                          const char *method, const char *path,
+                          const char *authority, struct h2_mplx *m);
 
 /* Destroy the converter and free resources. */
 void h2_to_h1_destroy(h2_to_h1 *to_h1);
-
-/* Start a request with the given method, path and optional authority. For
- * traceablility reasons, the stream identifier is also given.
- */
-apr_status_t h2_to_h1_start_request(h2_to_h1 *to_h1, int stream_id, 
-                                    const char *method, const char *path,
-                                    const char *authority);
 
 /* Add a header to the serialization. Only valid to call after start
  * and before end_headers.
@@ -43,9 +60,10 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
                                  const char *name, size_t nlen,
                                  const char *value, size_t vlen);
 
-/* End the request headers.
+/** End the request headers.
  */
-apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1);
+apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, 
+                                  struct h2_task *task, int eos);
 
 /* Add request body data.
  */

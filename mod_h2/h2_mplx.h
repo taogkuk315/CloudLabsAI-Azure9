@@ -40,8 +40,31 @@ struct apr_thread_cond_t;
 struct h2_config;
 struct h2_response;
 struct h2_task;
+struct h2_io_set;
+struct apr_thread_cond_t;
+struct h2_workers;
 
 typedef struct h2_mplx h2_mplx;
+
+struct h2_mplx {
+    long id;
+    conn_rec *c;
+    apr_pool_t *pool;
+    apr_bucket_alloc_t *bucket_alloc;
+    
+    APR_RING_HEAD(h2_tasks, h2_task) tasks;
+    
+    struct h2_io_set *stream_ios;
+    struct h2_io_set *ready_ios;
+    
+    apr_thread_mutex_t *lock;
+    struct apr_thread_cond_t *added_output;
+    
+    int aborted;
+    apr_size_t out_stream_max_size;
+    
+    struct h2_workers *workers;
+};
 
 /*******************************************************************************
  * Object lifecycle and information.
@@ -50,7 +73,8 @@ typedef struct h2_mplx h2_mplx;
 /**
  * Create the multiplexer for the given HTTP2 session.
  */
-h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *master);
+h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *master, 
+                        struct h2_workers *workers);
 
 /**
  * Destroys the multiplexer. Cleans up memory. Should only be called
@@ -79,8 +103,6 @@ conn_rec *h2_mplx_get_conn(h2_mplx *mplx);
  */
 void h2_mplx_abort(h2_mplx *mplx);
 
-apr_uint32_t h2_mplx_generation(h2_mplx *mplx);
-
 /*******************************************************************************
  * IO lifetime of streams.
  ******************************************************************************/
@@ -104,6 +126,16 @@ int h2_mplx_out_has_data_for(h2_mplx *m, int stream_id);
  */
 apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
                                  struct apr_thread_cond_t *iowait);
+
+/*******************************************************************************
+ * Stream processing.
+ ******************************************************************************/
+
+/**
+ * Perform the task on the given stream.
+ */
+apr_status_t h2_mplx_do_async(h2_mplx *mplx, int stream_id,
+                              struct h2_task *task);
 
 /*******************************************************************************
  * Input handling of streams.

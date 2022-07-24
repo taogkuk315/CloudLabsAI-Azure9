@@ -45,29 +45,11 @@ struct h2_response;
 struct h2_session;
 struct h2_stream;
 struct h2_task;
+struct h2_workers;
 
 struct nghttp2_session;
 
 typedef struct h2_session h2_session;
-
-/* Callback when a new task for a stream has been created. The callback
- * should schedule the task for execution and return immediately. 
- */
-typedef void after_stream_open(h2_session *session,
-                               struct h2_stream *stream,
-                               struct h2_task *task);
-
-/* Callback before a stream is closed and the task gets destroyed. The callback
- * should clean any reference it made to the stream/task, e.g. remove it from
- * the schedule queue or wait for a running task to complete. 
- * If wait != 0, the callback may block until all references are purged
- * On successful removal of references, the callback should return APR_SUCCESS. 
- * If the callback returns APR_EAGAIN, closing/destroying of the stream was 
- * delayed and the callback should be invoked again at some future time.
- */
-typedef apr_status_t before_stream_close(h2_session *session,
-                                         struct h2_stream *stream,
-                                         struct h2_task *task, int wait);
 
 struct h2_session {
     long id;                        /* identifier of this session, unique
@@ -89,22 +71,22 @@ struct h2_session {
     struct h2_stream_set *streams;  /* streams handled by this session */
     struct h2_stream_set *zombies;  /* streams that are done */
     
-    after_stream_open *after_stream_opened_cb; /* stream task can start */
-    before_stream_close *before_stream_close_cb; /* stream will close */
-
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
+    struct h2_workers *workers;
 };
 
 
 /* Create a new h2_session for the given connection (mode 'h2').
  * The session will apply the configured parameter.
  */
-h2_session *h2_session_create(conn_rec *c, struct h2_config *cfg);
+h2_session *h2_session_create(conn_rec *c, struct h2_config *cfg, 
+                              struct h2_workers *workers);
 
 /* Create a new h2_session for the given request (mode 'h2c').
  * The session will apply the configured parameter.
  */
-h2_session *h2_session_rcreate(request_rec *r, struct h2_config *cfg);
+h2_session *h2_session_rcreate(request_rec *r, struct h2_config *cfg,
+                               struct h2_workers *workers);
 
 /* Destroy the session and all object it still contains. This will not
  * destroy h2_task instances that not finished yet. */
@@ -146,13 +128,6 @@ apr_status_t h2_session_write(h2_session *session,
  * once we have all the response headers. */
 apr_status_t h2_session_handle_response(h2_session *session,
                                         struct h2_stream *stream);
-
-/* Set the callback to be invoked when new h2_task instances are created.  */
-void h2_session_set_stream_open_cb(h2_session *session, after_stream_open *cb);
-
-/* Set the callback to be invoked when a stream has been closed and
- * will be destroyed.  */
-void h2_session_set_stream_close_cb(h2_session *session, before_stream_close *cb);
 
 /* Get the h2_stream for the given stream idenrtifier. */
 struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);

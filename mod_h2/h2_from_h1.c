@@ -403,6 +403,9 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
 
     AP_DEBUG_ASSERT(from_h1 != NULL);
     
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
+                  "h2_from_h1(%d): output_filter called", from_h1->stream_id);
+    
     if (r->header_only && task->output && from_h1->response) {
         /* throw away any data after we have compiled the response */
         apr_brigade_cleanup(bb);
