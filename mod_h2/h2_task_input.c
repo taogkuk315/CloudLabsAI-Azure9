@@ -124,6 +124,10 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         return status;
     }
     
+    if ((bblen == 0) && input->eos) {
+        return APR_EOF;
+    }
+    
     while ((bblen == 0) || (mode == AP_MODE_READBYTES && bblen < readbytes)) {
         /* Get more data for our stream from mplx.
          */
