@@ -110,7 +110,6 @@ static h2_task *task_done(h2_worker *worker, h2_task *task,
     h2_task *next_task = NULL;
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        h2_task_set_finished(task, 1);
         next_task = pop_next_task(workers);
         
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,

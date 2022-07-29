@@ -237,6 +237,8 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         task->conn = NULL;
     }
     
+    h2_task_set_finished(task, 1);
+
     return status;
 }
 
