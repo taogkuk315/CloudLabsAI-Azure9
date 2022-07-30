@@ -426,6 +426,9 @@ apr_status_t h2_mplx_out_open(h2_mplx *m, int stream_id, h2_response *response,
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         status = out_open(m, stream_id, response, f, bb, iowait);
+        if (m->aborted) {
+            return APR_ECONNABORTED;
+        }
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
@@ -446,6 +449,9 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, int stream_id,
         if (io) {
             status = out_write(m, io, f, bb, iowait);
             have_out_data_for(m, stream_id);
+            if (m->aborted) {
+                return APR_ECONNABORTED;
+            }
         }
         else {
             status = APR_ECONNABORTED;
@@ -476,6 +482,12 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
             }
             status = h2_io_out_close(io);
             have_out_data_for(m, stream_id);
+            if (m->aborted) {
+                /* if we were the last output, the whole session might
+                 * have gone down in the meantime.
+                 */
+                return APR_SUCCESS;
+            }
         }
         else {
             status = APR_ECONNABORTED;
