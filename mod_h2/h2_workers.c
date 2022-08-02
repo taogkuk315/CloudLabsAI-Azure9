@@ -291,7 +291,7 @@ static apr_status_t join(h2_workers *workers, h2_task *task, int wait)
     /* not on scheduled list, wait until not running */
     assert(h2_task_has_started(task));
     if (wait) {
-        for (int i = 0; !h2_task_has_finished(task) && i < 100; ++i) {
+        for (int i = 0; !h2_task_has_finished(task) && i < 10000; ++i) {
             h2_task_interrupt(task);
             apr_thread_cond_t *iowait = task->io;
             if (iowait) {
