@@ -210,8 +210,6 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         assert(task->io);
         
         status = h2_conn_process(task->conn);
-        
-        task->io = NULL;
     }
     
     if (task->output) {
@@ -238,6 +236,7 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     }
     
     h2_task_set_finished(task, 1);
+    task->io = NULL;
 
     return status;
 }
