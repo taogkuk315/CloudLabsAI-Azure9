@@ -291,15 +291,15 @@ static apr_status_t join(h2_workers *workers, h2_task *task, int wait)
     /* not on scheduled list, wait until not running */
     assert(h2_task_has_started(task));
     if (wait) {
-        for (int i = 0; !h2_task_has_finished(task) && i < 10000; ++i) {
+        while (!h2_task_has_finished(task)) {
             h2_task_interrupt(task);
             apr_thread_cond_t *iowait = task->io;
             if (iowait) {
-                apr_thread_cond_timedwait(iowait, workers->lock, 20 * 1000);
+                apr_thread_cond_wait(iowait, workers->lock);
             }
             else {
                 if (!h2_task_has_finished(task)) {
-                    ap_log_error(APLOG_MARK, APLOG_WARNING, 0, workers->s,
+                    ap_log_error(APLOG_MARK, APLOG_ERR, 0, workers->s,
                                  "h2_workers: join task(%s) started, but "
                                  "not finished, no worker found",
                                  h2_task_get_id(task));
