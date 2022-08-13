@@ -25,7 +25,8 @@
 		B225493B1A711985004BDEC9 /* h2_conn_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_conn_io.h; sourceTree = "<group>"; };
 		B225493C1A713D18004BDEC9 /* h2_util.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_util.c; sourceTree = "<group>"; };
 		B225493D1A713D18004BDEC9 /* h2_util.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_util.h; sourceTree = "<group>"; };
-		B227966D1AEE1A3C00376B40 /* httpd-trunk-alpn-unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-trunk-alpn-unified.diff.patch"; sourceTree = "<group>"; };
+		B227966D1AEE1A3C00376B40 /* httpd-alpn-unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-alpn-unified.diff.patch"; sourceTree = "<group>"; };
+		B227966E1AEE93B000376B40 /* httpd-npn.unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-npn.unified.diff.patch"; sourceTree = "<group>"; };
 		B22D25281AA89A0B0041D8E5 /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		B24CB1221AC94D6A0057413B /* h2_alt_svc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_alt_svc.c; sourceTree = "<group>"; };
 		B24CB1231AC94D6A0057413B /* h2_alt_svc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_alt_svc.h; sourceTree = "<group>"; };
@@ -431,7 +432,8 @@
 		B2E6DF9F1AC2EF6E00D557D8 /* patches */ = {
 			isa = PBXGroup;
 			children = (
-				B227966D1AEE1A3C00376B40 /* httpd-trunk-alpn-unified.diff.patch */,
+				B227966E1AEE93B000376B40 /* httpd-npn.unified.diff.patch */,
+				B227966D1AEE1A3C00376B40 /* httpd-alpn-unified.diff.patch */,
 				B2E708CB1AE78EA10009EDAF /* alpn-trunk-2.unified.diff.patch */,
 				B20E44211ACC2A06003D21AE /* alpn-trunk.unified.diff.patch */,
 				B2E708CC1AE795DE0009EDAF /* alpn-doc.patch */,

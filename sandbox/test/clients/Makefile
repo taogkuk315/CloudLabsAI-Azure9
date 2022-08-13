@@ -33,8 +33,6 @@ ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0))
     CURL_CONF   += --with-ssl=$(BLD_PREFIX)
 endif
 
-
-
 all: install-curl
 
 dirs:

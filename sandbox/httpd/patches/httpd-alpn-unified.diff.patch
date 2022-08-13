@@ -1,7 +1,7 @@
-diff -ru ../httpd-2.4.x/modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
---- ../httpd-2.4.x/modules/ssl/mod_ssl.c	2015-04-22 10:00:12.000000000 +0200
+diff -ru modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
+--- modules/ssl/mod_ssl.c	2015-04-22 10:00:12.000000000 +0200
 +++ modules/ssl/mod_ssl.c	2015-04-27 09:16:02.000000000 +0200
-@@ -273,6 +283,12 @@
+@@ -273,6 +273,12 @@
                  "OpenSSL configuration command")
  #endif
  
@@ -67,8 +67,8 @@ diff -ru ../httpd-2.4.x/modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
  
      ap_register_auth_provider(p, AUTHZ_PROVIDER_GROUP, "ssl",
                                AUTHZ_PROVIDER_VERSION,
-diff -ru ../httpd-2.4.x/modules/ssl/mod_ssl.h modules/ssl/mod_ssl.h
---- ../httpd-2.4.x/modules/ssl/mod_ssl.h	2015-01-07 17:03:34.000000000 +0100
+diff -ru modules/ssl/mod_ssl.h modules/ssl/mod_ssl.h
+--- modules/ssl/mod_ssl.h	2015-01-07 17:03:34.000000000 +0100
 +++ modules/ssl/mod_ssl.h	2015-04-27 09:15:37.000000000 +0200
 @@ -63,5 +93,46 @@
  
@@ -117,10 +117,10 @@ diff -ru ../httpd-2.4.x/modules/ssl/mod_ssl.h modules/ssl/mod_ssl.h
 +
  #endif /* __MOD_SSL_H__ */
  /** @} */
-diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_config.c
---- ../httpd-2.4.x/modules/ssl/ssl_engine_config.c	2015-04-22 10:00:12.000000000 +0200
+diff -ru modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_config.c
+--- modules/ssl/ssl_engine_config.c	2015-04-22 10:00:12.000000000 +0200
 +++ modules/ssl/ssl_engine_config.c	2015-04-27 09:15:37.000000000 +0200
-@@ -160,6 +160,9 @@
+@@ -159,6 +160,9 @@
      SSL_CONF_CTX_set_flags(mctx->ssl_ctx_config, SSL_CONF_FLAG_CERTIFICATE);
      mctx->ssl_ctx_param = apr_array_make(p, 5, sizeof(ssl_ctx_param_t));
  #endif
@@ -130,7 +130,7 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_c
  }
  
  static void modssl_ctx_init_proxy(SSLSrvConfigRec *sc,
-@@ -304,6 +307,9 @@
+@@ -301,6 +307,9 @@
  #ifdef HAVE_SSL_CONF_CMD
      cfgMergeArray(ssl_ctx_param);
  #endif
@@ -140,7 +140,7 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_c
  }
  
  static void modssl_ctx_cfg_merge_proxy(apr_pool_t *p,
-@@ -1882,6 +1868,16 @@
+@@ -1875,6 +1868,16 @@
  }
  #endif
  
@@ -157,10 +157,10 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_c
  #ifdef HAVE_SRP
  
  const char *ssl_cmd_SSLSRPVerifierFile(cmd_parms *cmd, void *dcfg,
-diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_init.c
---- ../httpd-2.4.x/modules/ssl/ssl_engine_init.c	2015-04-22 10:00:12.000000000 +0200
+diff -ru modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_init.c
+--- modules/ssl/ssl_engine_init.c	2015-04-22 10:00:12.000000000 +0200
 +++ modules/ssl/ssl_engine_init.c	2015-04-27 09:15:37.000000000 +0200
-@@ -625,6 +646,11 @@
+@@ -623,6 +646,11 @@
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
  
      SSL_CTX_set_info_callback(ctx, ssl_callback_Info);
@@ -172,8 +172,8 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_ini
  }
  
  static apr_status_t ssl_init_ctx_verify(server_rec *s,
-diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
---- ../httpd-2.4.x/modules/ssl/ssl_engine_io.c	2015-01-19 16:52:30.000000000 +0100
+diff -ru modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
+--- modules/ssl/ssl_engine_io.c	2015-01-19 16:52:30.000000000 +0100
 +++ modules/ssl/ssl_engine_io.c	2015-04-27 09:15:37.000000000 +0200
 @@ -28,6 +28,7 @@
                                    core keeps dumping.''
@@ -241,8 +241,8 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
  }
  
  /* The request_rec pointer is passed in here only to ensure that the
-diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_kernel.c
---- ../httpd-2.4.x/modules/ssl/ssl_engine_kernel.c	2015-04-27 09:17:07.000000000 +0200
+diff -ru modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_kernel.c
+--- modules/ssl/ssl_engine_kernel.c	2015-04-27 09:17:07.000000000 +0200
 +++ modules/ssl/ssl_engine_kernel.c	2015-04-27 09:15:37.000000000 +0200
 @@ -29,6 +29,7 @@
                                    time I was too famous.''
@@ -252,7 +252,7 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_k
  #include "util_md5.h"
  
  static void ssl_configure_env(request_rec *r, SSLConnRec *sslconn);
-@@ -2149,6 +2162,153 @@
+@@ -2137,6 +2162,153 @@
  }
  #endif /* HAVE_TLS_SESSION_TICKETS */
  
@@ -406,8 +406,8 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_k
  #ifdef HAVE_SRP
  
  int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
-diff -ru ../httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
---- ../httpd-2.4.x/modules/ssl/ssl_private.h	2015-04-27 09:17:07.000000000 +0200
+diff -ru modules/ssl/ssl_private.h modules/ssl/ssl_private.h
+--- modules/ssl/ssl_private.h	2015-04-27 09:17:07.000000000 +0200
 +++ modules/ssl/ssl_private.h	2015-04-27 09:16:05.000000000 +0200
 @@ -182,6 +182,11 @@
  #include <openssl/srp.h>
@@ -434,7 +434,7 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
      server_rec *server;
  } SSLConnRec;
  
-@@ -623,6 +624,10 @@
+@@ -633,6 +633,10 @@
      SSL_CONF_CTX *ssl_ctx_config; /* Configuration context */
      apr_array_header_t *ssl_ctx_param; /* parameters to pass to SSL_CTX */
  #endif
@@ -445,7 +445,7 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
  } modssl_ctx_t;
  
  struct SSLSrvConfigRec {
-@@ -749,6 +754,10 @@
+@@ -763,6 +763,10 @@
  const char *ssl_cmd_SSLOpenSSLConfCmd(cmd_parms *cmd, void *dcfg, const char *arg1, const char *arg2);
  #endif
  
@@ -456,7 +456,7 @@ diff -ru ../httpd-2.4.x/modules/ssl/ssl_private.h modules/ssl/ssl_private.h
  #ifdef HAVE_SRP
  const char *ssl_cmd_SSLSRPVerifierFile(cmd_parms *cmd, void *dcfg, const char *arg);
  const char *ssl_cmd_SSLSRPUnknownUserSeed(cmd_parms *cmd, void *dcfg, const char *arg);
-@@ -797,6 +806,12 @@
+@@ -815,6 +815,12 @@
                                         EVP_CIPHER_CTX *, HMAC_CTX *, int);
  #endif
  
