@@ -18,7 +18,7 @@ NGHTTP2_DIR     = nghttp2-$(NGHTTP2_VERSION)
 NGHTTP2_TAR     = $(NGHTTP2_DIR).tar.gz
 NGHTTP2_URL     = https://github.com/tatsuhiro-t/nghttp2/releases/download/v$(NGHTTP2_VERSION)/$(NGHTTP2_TAR)
 
-NGHTTP2_CONF_ENV= PKG_CONFIG_LIBDIR=$(BLD_PREFIX)/lib/pkgconfig
+NGHTTP2_CONF_ENV=
 NGHTTP2_DEPS    =
 NGHTTP2_CONF    = --prefix=$(BLD_PREFIX) --enable-app
 
