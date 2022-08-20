@@ -204,10 +204,6 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         /* save in connection that this one is for us, prevents
          * other hooks from messing with it. */
         h2_ctx_create_for(task->conn->c, task);
-        /* borrow the condition from the worker during our processing. we
-         * will use it for io blocking and signalling. */
-        task->io = h2_worker_get_cond(worker);
-        assert(task->io);
         
         status = h2_conn_process(task->conn);
     }
@@ -235,8 +231,7 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         task->conn = NULL;
     }
     
-    h2_task_set_finished(task, 1);
-    task->io = NULL;
+    h2_task_set_finished(task);
 
     return status;
 }
@@ -273,10 +268,11 @@ int h2_task_has_started(h2_task *task)
     return apr_atomic_read32(&task->has_started);
 }
 
-void h2_task_set_started(h2_task *task, int started)
+void h2_task_set_started(h2_task *task, apr_thread_cond_t *cond)
 {
     assert(task);
-    apr_atomic_set32(&task->has_started, started);
+    task->io = cond;
+    apr_atomic_set32(&task->has_started, 1);
 }
 
 int h2_task_has_finished(h2_task *task)
@@ -285,10 +281,11 @@ int h2_task_has_finished(h2_task *task)
     return apr_atomic_read32(&task->has_finished);
 }
 
-void h2_task_set_finished(h2_task *task, int finished)
+void h2_task_set_finished(h2_task *task)
 {
     assert(task);
-    apr_atomic_set32(&task->has_finished, finished);
+    task->io = NULL;
+    apr_atomic_set32(&task->has_finished, 1);
 }
 
 apr_thread_cond_t *h2_task_get_io_cond(h2_task *task)

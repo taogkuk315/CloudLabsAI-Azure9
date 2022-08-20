@@ -127,7 +127,7 @@ apr_status_t h2_request_write_header(h2_request *req,
             char buffer[32];
             memset(buffer, 0, 32);
             strncpy(buffer, name, (nlen > 31)? 31 : nlen);
-            ap_log_perror(APLOG_MARK, APLOG_INFO, 0, req->pool,
+            ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, req->pool,
                           "h2_request(%d): ignoring unknown pseudo header %s",
                           req->id, buffer);
         }

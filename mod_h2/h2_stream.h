@@ -67,6 +67,7 @@ struct h2_stream {
     struct h2_task *task;       /* task created for this stream */
     struct h2_response *response; /* the response, once ready */
     apr_bucket_brigade *bbout;  /* output DATA */
+    apr_off_t bytes_sent;
 };
 
 

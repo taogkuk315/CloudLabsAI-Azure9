@@ -27,13 +27,13 @@
 #include "h2_worker.h"
 #include "h2_workers.h"
 
-static h2_task* pop_next_task(h2_workers *workers)
+static h2_task* pop_next_task(h2_workers *workers, h2_worker *worker)
 {
     // TODO: prio scheduling
     if (!H2_TASK_LIST_EMPTY(&workers->tasks)) {
         h2_task *task = H2_TASK_LIST_FIRST(&workers->tasks);
         H2_TASK_REMOVE(task);
-        h2_task_set_started(task, 1);
+        h2_task_set_started(task, h2_worker_get_cond(worker));
         return task;
     }
     return NULL;
@@ -54,7 +54,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                      "h2_worker(%d): looking for work", h2_worker_get_id(worker));
         while (!h2_worker_is_aborted(worker) && !workers->aborted) {
-            h2_task *task = pop_next_task(workers);
+            h2_task *task = pop_next_task(workers, worker);
             if (task) {
                 *ptask = task;
                 status = APR_SUCCESS;
@@ -110,7 +110,7 @@ static h2_task *task_done(h2_worker *worker, h2_task *task,
     h2_task *next_task = NULL;
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        next_task = pop_next_task(workers);
+        next_task = pop_next_task(workers, worker);
         
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                      "h2_worker(%d): task(%s) done, next(%s)",
@@ -301,7 +301,7 @@ static apr_status_t join(h2_workers *workers, h2_task *task, int wait)
                 if (!h2_task_has_finished(task)) {
                     ap_log_error(APLOG_MARK, APLOG_ERR, 0, workers->s,
                                  "h2_workers: join task(%s) started, but "
-                                 "not finished, no worker found",
+                                 "not finished, no cond set",
                                  h2_task_get_id(task));
                 }
                 break;

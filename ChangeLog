@@ -1,6 +1,15 @@
 v0.5.3-DEV
---------------------------------------------------------------------------------
+ --------------------------------------------------------------------------------
+ * moving request handling and http/1 emulation into worker thread, offloading 
+   main
+ * some fixes in connection shutdown re race condition with still active workers
  * removing reqtimeout filters on stream connections
+ * taking in latest alpn changes from httpd trunk, made separate npn patch for
+   those who need to run with openssl 1.0.1
+ * fixed handling of transient bucket in stream output data (led to corrupted
+   responses)
+ * reworked task join to eliminate race conditions during session shutdown
+ * info logging is less verbose
 
 v0.5.2
 --------------------------------------------------------------------------------

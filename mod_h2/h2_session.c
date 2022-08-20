@@ -277,7 +277,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
     }
     
     if (error_code) {
-        ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                       "h2_stream(%ld-%d): close error %d",
                       session->id, (int)stream_id, error_code);
     }
@@ -662,12 +662,12 @@ void h2_session_destroy(h2_session *session)
     assert(session);
     if (session->streams) {
         if (h2_stream_set_size(session->streams)) {
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                           "h2_session(%ld): destroy, %ld streams open",
                           session->id, h2_stream_set_size(session->streams));
             /* destroy all sessions, join all existing tasks */
             h2_stream_set_iter(session->streams, close_active_iter, session);
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                           "h2_session(%ld): destroy, %ld streams remain",
                           session->id, h2_stream_set_size(session->streams));
         }
@@ -676,12 +676,12 @@ void h2_session_destroy(h2_session *session)
     }
     if (session->zombies) {
         if (h2_stream_set_size(session->zombies)) {
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                           "h2_session(%ld): destroy, %ld zombie streams",
                           session->id, h2_stream_set_size(session->zombies));
             /* destroy all zombies, join all existing tasks */
             h2_stream_set_iter(session->zombies, close_zombie_iter, session);
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                           "h2_session(%ld): destroy, %ld zombies remain",
                           session->id, h2_stream_set_size(session->zombies));
         }
@@ -741,9 +741,11 @@ static apr_status_t h2_session_abort_int(h2_session *session, int reason)
     if (!session->aborted) {
         session->aborted = 1;
         if (session->ngh2) {
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
-                          "session(%ld): aborting session, reason=%d %s",
-                          session->id, reason, nghttp2_strerror(reason));
+            if (reason) {
+                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+                              "session(%ld): aborting session, reason=%d %s",
+                              session->id, reason, nghttp2_strerror(reason));
+            }
             nghttp2_session_terminate_session(session->ngh2, reason);
             nghttp2_submit_goaway(session->ngh2, 0, 0, reason, NULL, 0);
             nghttp2_session_send(session->ngh2);
@@ -952,7 +954,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         status = APR_SUCCESS;
         int rv = nghttp2_session_send(session->ngh2);
         if (rv != 0) {
-            ap_log_cerror( APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, session->c,
                           "h2_session: send: %s", nghttp2_strerror(rv));
             if (nghttp2_is_fatal(rv)) {
                 h2_session_abort_int(session, rv);
@@ -993,7 +995,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         status = APR_SUCCESS;
         int rv = nghttp2_session_send(session->ngh2);
         if (rv != 0) {
-            ap_log_cerror( APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, session->c,
                           "h2_session: send: %s", nghttp2_strerror(rv));
             if (nghttp2_is_fatal(rv)) {
                 h2_session_abort_int(session, rv);
@@ -1135,12 +1137,6 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
         *data_flags |= NGHTTP2_DATA_FLAG_EOF;
     }
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                  "h2_stream(%ld-%d): requested %ld, "
-                  "sending %ld data bytes (eos=%d)",
-                  session->id, (int)stream_id, (long)length, 
-                  (ssize_t)nread, eos);
-    
     return (ssize_t)nread;
 }
 
@@ -1239,7 +1235,7 @@ static int log_stream(void *ctx, h2_stream *stream)
 {
     h2_session *session = (h2_session *)ctx;
     assert(session);
-    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                   "h2_stream(%ld-%d): in set, suspended=%d, aborted=%d, "
                   "has_data=%d",
                   session->id, stream->id, stream->suspended, stream->aborted,
@@ -1250,7 +1246,7 @@ static int log_stream(void *ctx, h2_stream *stream)
 void h2_session_log_stats(h2_session *session)
 {
     assert(session);
-    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                   "h2_session(%ld): %ld open streams",
                   session->id, h2_stream_set_size(session->streams));
     h2_stream_set_iter(session->streams, log_stream, session);

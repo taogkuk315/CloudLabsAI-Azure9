@@ -67,7 +67,7 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
         }
     }
     
-    ap_log_error(APLOG_MARK, APLOG_INFO, 0, s,
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
                  "h2_conn: child init with conf[%s]: "
                  "min_workers=%d, max_workers=%d, "
                  "mpm-threads=%d, mpm-threads-limit=%d, "
@@ -178,7 +178,7 @@ apr_status_t h2_session_process(h2_session *session)
     status = h2_session_start(session, &rv);
     
     h2_ctx *ctx = h2_ctx_get(session->c, 1);
-    ap_log_cerror(APLOG_MARK, APLOG_INFO, status, session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
                   "h2_session(%ld): starting on %s:%d", session->id,
                   ctx->hostname? ctx->hostname : "<default>",
                   session->c->local_addr->port);
@@ -210,7 +210,7 @@ apr_status_t h2_session_process(h2_session *session)
             }
         }
         else {
-            ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
+            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
                           "h2_session(%ld): writing, terminating",
                           session->id);
             h2_session_abort(session, status, 0);
@@ -266,7 +266,7 @@ apr_status_t h2_session_process(h2_session *session)
         }
     }
     
-    ap_log_cerror( APLOG_MARK, APLOG_INFO, status, session->c,
+    ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
                   "h2_session(%ld): done", session->id);
     
     h2_session_close(session);

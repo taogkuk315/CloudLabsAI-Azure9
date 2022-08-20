@@ -160,9 +160,9 @@ int h2_task_is_aborted(h2_task *task);
 void h2_task_interrupt(h2_task *task);
 
 int h2_task_has_started(h2_task *task);
-void h2_task_set_started(h2_task *task, int started);
+void h2_task_set_started(h2_task *task, struct apr_thread_cond_t *cond);
 int h2_task_has_finished(h2_task *task);
-void h2_task_set_finished(h2_task *task, int finished);
+void h2_task_set_finished(h2_task *task);
 
 void h2_task_on_finished(h2_task *task, task_callback *cb, void *cb_ctx);
 

@@ -50,17 +50,20 @@ distdir:
 	@rm -f $(distdir)/conf/sites/mod-h2.greebytes.de.conf
 
 start: $(INST_DIR)/.test-setup
-	@$(INST_DIR)/bin/apachectl restart
+	@$(INST_DIR)/bin/apachectl -k start
+
+start-debug: $(INST_DIR)/.test-setup
+	@$(INST_DIR)/bin/apachectl -k start -X
 
 restart: $(INST_DIR)/.test-setup
 	@echo -n shutting down httpd...
-	@$(INST_DIR)/bin/apachectl stop
-	@while true; do pkill -U $(USER) httpd; test "$$?" != "0" && break; done   
+	@$(INST_DIR)/bin/apachectl -k stop
+	@#while true; do pkill -U $(USER) httpd; test "$$?" != "0" && break; done   
 	@echo done.
-	@$(INST_DIR)/bin/apachectl restart
+	@$(INST_DIR)/bin/apachectl -k restart
 
 stop:
-	@$(INST_DIR)/bin/apachectl stop
+	@$(INST_DIR)/bin/apachectl -k stop
 
 
 install:

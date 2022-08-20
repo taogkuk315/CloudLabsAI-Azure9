@@ -40,6 +40,7 @@ struct h2_task_output {
     struct h2_mplx *m;
     struct h2_from_h1 *from_h1;
     
+    apr_pool_t *pool;
     apr_bucket_alloc_t *bucket_alloc;
     apr_bucket_brigade *bb;
 };

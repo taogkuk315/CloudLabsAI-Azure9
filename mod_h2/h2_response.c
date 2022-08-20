@@ -29,7 +29,15 @@
 #include "h2_response.h"
 
 static void convert_header(h2_response *response, apr_table_t *headers,
-                           const char *http_status);
+                           const char *http_status, request_rec *r);
+static int ignore_header(const char *name) 
+{
+    return (H2_HD_MATCH_LIT_CS("connection", name)
+            || H2_HD_MATCH_LIT_CS("proxy-connection", name)
+            || H2_HD_MATCH_LIT_CS("upgrade", name)
+            || H2_HD_MATCH_LIT_CS("keep-alive", name)
+            || H2_HD_MATCH_LIT_CS("transfer-encoding", name));
+}
 
 h2_response *h2_response_create(int stream_id,
                                   apr_status_t task_status,
@@ -64,11 +72,7 @@ h2_response *h2_response_create(int stream_id,
             while (*sep == ' ' || *sep == '\t') {
                 ++sep;
             }
-            if (H2_HD_MATCH_LIT_CS("connection", hline)
-                || H2_HD_MATCH_LIT_CS("proxy-connection", hline)
-                || H2_HD_MATCH_LIT_CS("upgrade", hline)
-                || H2_HD_MATCH_LIT_CS("keep-alive", hline)
-                || H2_HD_MATCH_LIT_CS("transfer-encoding", hline)) {
+            if (ignore_header(hline)) {
                 /* never forward, ch. 8.1.2.2 */
             }
             else {
@@ -78,7 +82,7 @@ h2_response *h2_response_create(int stream_id,
                     response->content_length = apr_strtoi64(sep, &end, 10);
                     if (sep == end) {
                         ap_log_perror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, 
-                                      pool,"h2_response(%d): content-length"
+                                      pool, "h2_response(%d): content-length"
                                       " value not parsed: %s", 
                                       response->stream_id, sep);
                         response->content_length = -1;
@@ -88,7 +92,7 @@ h2_response *h2_response_create(int stream_id,
         }
     }
     
-    convert_header(response, header, http_status);
+    convert_header(response, header, http_status, NULL);
     return response->headers? response : NULL;
 }
 
@@ -103,7 +107,7 @@ h2_response *h2_response_rcreate(int stream_id, request_rec *r,
     response->stream_id = stream_id;
     response->task_status = APR_SUCCESS;
     response->content_length = -1;
-    convert_header(response, header, apr_psprintf(pool, "%d", r->status));
+    convert_header(response, header, apr_psprintf(pool, "%d", r->status), r);
     
     return response->headers? response : NULL;
 }
@@ -138,13 +142,18 @@ typedef struct {
     size_t nvstrlen;
     size_t offset;
     char *strbuf;
+    h2_response *response;
+    int debug;
+    request_rec *r;
 } nvctx_t;
 
 static int count_headers(void *ctx, const char *key, const char *value)
 {
-    nvctx_t *nvctx = (nvctx_t*)ctx;
-    nvctx->nvlen++;
-    nvctx->nvstrlen += strlen(key) + strlen(value) + 2;
+    if (!ignore_header(key)) {
+        nvctx_t *nvctx = (nvctx_t*)ctx;
+        nvctx->nvlen++;
+        nvctx->nvstrlen += strlen(key) + strlen(value) + 2;
+    }
     return 1;
 }
 
@@ -187,14 +196,23 @@ static void addnv_lit_cs(nvctx_t *ctx, const char *key, size_t key_len,
 
 static int add_header(void *ctx, const char *key, const char *value)
 {
-    NV_ADD_CS_CS(ctx, key, value);
+    if (!ignore_header(key)) {
+        nvctx_t *nvctx = (nvctx_t*)ctx;
+        if (nvctx->debug) {
+            ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, 
+                          nvctx->r, "h2_response(%d) header ->sen %s: %s",
+                          nvctx->response->stream_id, key, value);
+        }
+        NV_ADD_CS_CS(ctx, key, value);
+    }
     return 1;
 }
 
 static void convert_header(h2_response *response, apr_table_t *headers,
-                           const char *status)
+                           const char *status, request_rec *r)
 {
-    nvctx_t ctx = { NULL, 1, strlen(status) + 1, 0, NULL };
+    nvctx_t ctx = { NULL, 1, strlen(status) + 1, 0, NULL, 
+        response, r? APLOGrdebug(r) : 0, r };
     
     apr_table_do(count_headers, &ctx, headers, NULL);
     

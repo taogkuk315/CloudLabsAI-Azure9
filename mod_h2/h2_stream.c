@@ -286,6 +286,7 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
 {
     apr_status_t status = APR_SUCCESS;
     apr_off_t buffered_len = 0;
+    apr_size_t requested = *plen;
     apr_size_t avail = *plen;
     apr_size_t written = 0;
     
@@ -354,7 +355,7 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
             const char *data;
             apr_size_t data_len;
             if (APR_BUCKET_IS_FILE(b)) {
-                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
                               h2_mplx_get_conn(stream->m),
                               "h2_stream(%ld-%d): reading FILE(%ld-%ld)",
                               h2_mplx_get_id(stream->m), stream->id,
@@ -379,13 +380,15 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
         apr_bucket_delete(b);
     }
 
-    if (0) {
-        ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
-                      h2_mplx_get_conn(stream->m),
-                      "h2_stream(%ld-%d): requested=%ld, written=%ld bytes of DATA",
-                      h2_mplx_get_id(stream->m), stream->id,
-                      (long)*plen, (long)written);
+    if (status == APR_SUCCESS) {
+        stream->bytes_sent += written;
     }
+    
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, h2_mplx_get_conn(stream->m),
+                  "h2_stream(%ld-%d): requested %ld, "
+                  "sending %ld data bytes (eos=%d, total=%ld)",
+                  h2_mplx_get_id(stream->m), stream->id, (long)requested, 
+                  (long)written, *peos, (long)stream->bytes_sent);
     
     *plen = written;
     return status;
