@@ -231,8 +231,6 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         task->conn = NULL;
     }
     
-    h2_task_set_finished(task);
-
     return status;
 }
 
@@ -240,6 +238,7 @@ void h2_task_abort(h2_task *task)
 {
     assert(task);
     task->aborted =  1;
+    h2_task_interrupt(task);
 }
 
 int h2_task_is_aborted(h2_task *task)
@@ -250,10 +249,9 @@ int h2_task_is_aborted(h2_task *task)
 
 void h2_task_interrupt(h2_task *task)
 {
-    apr_thread_cond_t *cond = task->io;
-    if (cond) {
-        /* task is waiting on io */
-        apr_thread_cond_broadcast(cond);
+    if (task->io) {
+        /* wake everyone waiting on this */
+        apr_thread_cond_broadcast(task->io);
     }
 }
 
@@ -283,9 +281,14 @@ int h2_task_has_finished(h2_task *task)
 
 void h2_task_set_finished(h2_task *task)
 {
+    apr_thread_cond_t *io = task->io;
     assert(task);
+    
     task->io = NULL;
     apr_atomic_set32(&task->has_finished, 1);
+    if (io) {
+        apr_thread_cond_signal(io);
+    }
 }
 
 apr_thread_cond_t *h2_task_get_io_cond(h2_task *task)

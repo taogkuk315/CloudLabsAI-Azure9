@@ -227,7 +227,6 @@ static apr_status_t close_active_stream(h2_session *session,
     
     h2_stream_set_remove(session->streams, stream);
     if (stream->task) {
-        h2_task_abort(stream->task);
         status = h2_workers_join(stream->m->workers, stream->task, 0);
         if (status != APR_SUCCESS && status != APR_EAGAIN) {
             ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
@@ -257,7 +256,6 @@ static apr_status_t join_zombie_stream(h2_session *session, h2_stream *stream)
     
     h2_stream_set_remove(session->zombies, stream);
     if (stream->task) {
-        h2_task_abort(stream->task);
         status = h2_workers_join(stream->m->workers, stream->task, 1);
     }
     h2_stream_destroy(stream);

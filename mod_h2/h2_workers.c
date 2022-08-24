@@ -110,6 +110,7 @@ static h2_task *task_done(h2_worker *worker, h2_task *task,
     h2_task *next_task = NULL;
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
+        h2_task_set_finished(task);
         next_task = pop_next_task(workers, worker);
         
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
@@ -277,22 +278,14 @@ static apr_status_t join(h2_workers *workers, h2_task *task, int wait)
     
     if (!h2_task_has_started(task)) {
         /* might still be on scheduled tasks list */
-        h2_task *t;
-        for (t = H2_TASK_LIST_FIRST(&workers->tasks); 
-             t != H2_TASK_LIST_SENTINEL(&workers->tasks);
-             t = H2_TASK_NEXT(t)) {
-            if (t == task) {
-                H2_TASK_REMOVE(task);
-                return APR_SUCCESS;
-            }
-        }
+        H2_TASK_REMOVE(task);
+        return APR_SUCCESS;
     }
     
     /* not on scheduled list, wait until not running */
     assert(h2_task_has_started(task));
     if (wait) {
         while (!h2_task_has_finished(task)) {
-            h2_task_interrupt(task);
             apr_thread_cond_t *iowait = task->io;
             if (iowait) {
                 apr_thread_cond_wait(iowait, workers->lock);
@@ -313,6 +306,10 @@ static apr_status_t join(h2_workers *workers, h2_task *task, int wait)
 
 apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
 {
+    if (h2_task_has_finished(task)) {
+        return APR_SUCCESS;
+    }
+    
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
