@@ -32,8 +32,8 @@ static h2_task* pop_next_task(h2_workers *workers, h2_worker *worker)
     // TODO: prio scheduling
     if (!H2_TASK_LIST_EMPTY(&workers->tasks)) {
         h2_task *task = H2_TASK_LIST_FIRST(&workers->tasks);
-        H2_TASK_REMOVE(task);
         h2_task_set_started(task, h2_worker_get_cond(worker));
+        H2_TASK_REMOVE(task);
         return task;
     }
     return NULL;
@@ -270,56 +270,30 @@ static int find_task(void *ctx, int id, void *entry, int index)
 }
 
 
-static apr_status_t join(h2_workers *workers, h2_task *task, int wait)
+apr_status_t h2_workers_unschedule(h2_workers *workers, h2_task *task)
 {
-    if (h2_task_has_finished(task)) {
-        return APR_SUCCESS;
-    }
-    
-    if (!h2_task_has_started(task)) {
-        /* might still be on scheduled tasks list */
-        H2_TASK_REMOVE(task);
-        return APR_SUCCESS;
-    }
-    
-    /* not on scheduled list, wait until not running */
-    assert(h2_task_has_started(task));
-    if (wait) {
-        while (!h2_task_has_finished(task)) {
-            apr_thread_cond_t *iowait = task->io;
-            if (iowait) {
-                apr_thread_cond_wait(iowait, workers->lock);
-            }
-            else {
-                if (!h2_task_has_finished(task)) {
-                    ap_log_error(APLOG_MARK, APLOG_ERR, 0, workers->s,
-                                 "h2_workers: join task(%s) started, but "
-                                 "not finished, no cond set",
-                                 h2_task_get_id(task));
-                }
-                break;
-            }
-        }
-    }
-    return h2_task_has_finished(task)? APR_SUCCESS : APR_EAGAIN;
-}
-
-apr_status_t h2_workers_join(h2_workers *workers, h2_task *task, int wait)
-{
-    if (h2_task_has_finished(task)) {
-        return APR_SUCCESS;
-    }
-    
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
+        status = APR_EAGAIN;
+        
         ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
-                     "h2_workers: join task(%s) started",
+                     "h2_workers: unschedule task(%s)",
                      h2_task_get_id(task));
-        status = join(workers, task, wait);
+        h2_task *t;
+        for (t = H2_TASK_LIST_FIRST(&workers->tasks); 
+             t != H2_TASK_LIST_SENTINEL(&workers->tasks);
+             t = H2_TASK_NEXT(t)) {
+            if (t == task) {
+                H2_TASK_REMOVE(task);
+                status = APR_SUCCESS;
+            }
+        }
         apr_thread_mutex_unlock(workers->lock);
     }
+    
     return status;
 }
+
 
 void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs)
 {

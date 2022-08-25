@@ -53,8 +53,8 @@ struct h2_task {
     const char *id;
     int stream_id;
     int aborted;
-    apr_uint32_t has_started;
-    apr_uint32_t has_finished;
+    volatile apr_uint32_t has_started;
+    volatile apr_uint32_t has_finished;
     
     struct h2_mplx *mplx;
     struct conn_rec *master;

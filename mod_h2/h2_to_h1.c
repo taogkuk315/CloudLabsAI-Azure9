@@ -133,6 +133,18 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
     return APR_SUCCESS;
 }
 
+static int set_header(void *ctx, const char *key, const char *value)
+{
+    h2_to_h1 *to_h1 = (h2_to_h1*)ctx;
+    h2_to_h1_add_header(to_h1, key, strlen(key), value, strlen(value));
+    return 1;
+}
+
+apr_status_t h2_to_h1_add_headers(h2_to_h1 *to_h1, apr_table_t *headers)
+{
+    apr_table_do(set_header, to_h1, headers, NULL);
+    return APR_SUCCESS;
+}
 
 apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, h2_task *task, int eos)
 {
@@ -154,7 +166,14 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, h2_task *task, int eos)
         apr_table_set(to_h1->headers, "Host", to_h1->authority);
     }
 
-    if (to_h1->chunked) {
+    if (eos && to_h1->chunked) {
+        /* We had chunking figured out, but the EOS is already there.
+         * unmark chunking and set a definitive content-length.
+         */
+        to_h1->chunked = 0;
+        apr_table_setn(to_h1->headers, "Content-Length", "0");
+    }
+    else if (to_h1->chunked) {
         /* We have not seen a content-length. We therefore must
          * pass any request content in chunked form.
          */

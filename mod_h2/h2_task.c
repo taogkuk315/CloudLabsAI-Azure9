@@ -178,15 +178,7 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     apr_status_t status = APR_SUCCESS;
     
     assert(task);
-    if (task->conn == NULL) {
-        task->conn = h2_conn_create2(task->id, task->master, worker);
-        if (task->conn == NULL) {
-            return APR_EINVAL;
-        }
-    }
-    else {
-        status = h2_conn_prep(task->conn, worker);
-    }
+    status = h2_conn_prep(task->conn, worker);
     
     if (status == APR_SUCCESS) {
         task->input = h2_task_input_create(task->conn->pool,

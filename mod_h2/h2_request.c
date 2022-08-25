@@ -52,19 +52,6 @@ void h2_request_destroy(h2_request *req)
 
 static apr_status_t insert_request_line(h2_request *req, h2_mplx *m);
 
-struct whctx {
-    h2_to_h1 *to_h1;
-};
-
-static int write_header(void *puser, const char *key, const char *value)
-{
-    struct whctx *ctx = (struct whctx*)puser;
-    apr_status_t status = h2_to_h1_add_header(ctx->to_h1,
-                                              key, strlen(key),
-                                              value, strlen(value));
-    return status == APR_SUCCESS;
-}
-
 apr_status_t h2_request_rwrite(h2_request *req, request_rec *r, h2_mplx *m)
 {
     req->method = r->method;
@@ -76,10 +63,12 @@ apr_status_t h2_request_rwrite(h2_request *req, request_rec *r, h2_mplx *m)
     }
     req->scheme = NULL;
     
-    apr_status_t status = insert_request_line(req, m);
-    struct whctx ctx = { req->to_h1 };
-    apr_table_do(write_header, &ctx, r->headers_in, NULL);
     
+    apr_status_t status = insert_request_line(req, m);
+    if (status == APR_SUCCESS) {
+        status = h2_to_h1_add_headers(req->to_h1, r->headers_in);
+    }
+
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, status, r,
                   "h2_request(%d): written request %s %s, host=%s",
                   req->id, req->method, req->path, req->authority);

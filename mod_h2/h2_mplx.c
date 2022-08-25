@@ -573,3 +573,53 @@ apr_status_t h2_mplx_do_async(h2_mplx *m, int stream_id,
     return status;
 }
 
+static apr_status_t join(h2_mplx *m, h2_task *task)
+{
+    assert(h2_task_has_started(task));
+    while (!h2_task_has_finished(task)) {
+        apr_thread_cond_t *io = task->io;
+        if (io) {
+            apr_thread_cond_wait(io, m->lock);
+        }
+        else {
+            if (!h2_task_has_finished(task)) {
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, m->c,
+                             "h2_workers: join task(%s) started, but "
+                             "not finished, no cond set",
+                             h2_task_get_id(task));
+                return APR_EINVAL;
+            }
+            break;
+        }
+    }
+    return APR_SUCCESS;
+}
+
+
+apr_status_t h2_mplx_join_task(h2_mplx *m, h2_task *task, int wait)
+{
+    assert(m);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        status = APR_EAGAIN;
+        
+        if (h2_task_has_finished(task)) {
+            status = APR_SUCCESS;
+        }
+        else if (!h2_task_has_started(task)) {
+            
+            status = h2_workers_unschedule(m->workers, task);
+            if (status != APR_SUCCESS && !h2_task_has_started(task)) {
+                /* hmm, not know to workers and not started, assume
+                 * it never will. */
+                status = APR_SUCCESS;
+            }
+        }
+        
+        if (wait && status != APR_SUCCESS && h2_task_has_started(task)) {
+            status = join(m, task);
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}

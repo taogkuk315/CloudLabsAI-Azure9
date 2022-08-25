@@ -127,6 +127,8 @@ int h2_mplx_out_has_data_for(h2_mplx *m, int stream_id);
 apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
                                  struct apr_thread_cond_t *iowait);
 
+apr_status_t h2_mplx_join_task(h2_mplx *m, struct h2_task *task, int wait);
+
 /*******************************************************************************
  * Stream processing.
  ******************************************************************************/
