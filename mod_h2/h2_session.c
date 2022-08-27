@@ -216,9 +216,7 @@ static int on_frame_not_send_cb(nghttp2_session *ngh2,
     return 0;
 }
 
-static apr_status_t close_active_stream(h2_session *session,
-                                        h2_stream *stream,
-                                        int join)
+static apr_status_t close_stream(h2_session *session, h2_stream *stream)
 {
     apr_status_t status = APR_SUCCESS;
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
@@ -227,27 +225,19 @@ static apr_status_t close_active_stream(h2_session *session,
     
     h2_stream_set_remove(session->streams, stream);
     if (stream->task) {
-        status = h2_mplx_join_task(stream->m, stream->task, 0);
-        if (status != APR_SUCCESS && status != APR_EAGAIN) {
-            ap_log_cerror( APLOG_MARK, APLOG_WARNING, status, session->c,
-                          "h2_stream: close, join task(%s)",
-                          h2_task_get_id(stream->task));
-        }
+        h2_stream_set_add(session->zombies, stream);
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+                      "h2_stream(%ld-%d): is zombie now",
+                      session->id, (int)stream->id);
     }
-
-    if (status == APR_SUCCESS) {
+    else {
         h2_stream_destroy(stream);
     }
-    else if (status == APR_EAGAIN) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
-                      "h2_stream(%ld-%d): close delayed by callback",
-                      session->id, (int)stream->id);
-        h2_stream_set_add(session->zombies, stream);
-    }
+
     return status;
 }
 
-static apr_status_t join_zombie_stream(h2_session *session, h2_stream *stream)
+static apr_status_t join_stream_task(h2_session *session, h2_stream *stream)
 {
     apr_status_t status = APR_SUCCESS;
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
@@ -257,6 +247,11 @@ static apr_status_t join_zombie_stream(h2_session *session, h2_stream *stream)
     h2_stream_set_remove(session->zombies, stream);
     if (stream->task) {
         status = h2_mplx_join_task(stream->m, stream->task, 1);
+        if (status != APR_SUCCESS) {
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                          "h2_stream(%ld-%d): join zombie",
+                          session->id, (int)stream->id);
+        }
     }
     h2_stream_destroy(stream);
     return status;
@@ -271,7 +266,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
     }
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (stream) {
-        apr_status_t status = close_active_stream(session, stream, 0);
+        apr_status_t status = close_stream(session, stream);
     }
     
     if (error_code) {
@@ -645,13 +640,13 @@ h2_session *h2_session_rcreate(request_rec *r, h2_config *config,
 
 static int close_active_iter(void *ctx, h2_stream *stream) {
     assert(ctx);
-    close_active_stream((h2_session *)ctx, stream, 1);
+    close_stream((h2_session *)ctx, stream);
     return 1;
 }
 
 static int close_zombie_iter(void *ctx, h2_stream *stream) {
     assert(ctx);
-    join_zombie_stream((h2_session *)ctx, stream);
+    join_stream_task((h2_session *)ctx, stream);
     return 1;
 }
 
