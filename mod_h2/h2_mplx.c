@@ -456,7 +456,9 @@ apr_status_t h2_mplx_out_write(h2_mplx *m, int stream_id,
         else {
             status = APR_ECONNABORTED;
         }
-        apr_thread_mutex_unlock(m->lock);
+        if (m->lock) {
+            apr_thread_mutex_unlock(m->lock);
+        }
     }
     return status;
 }
