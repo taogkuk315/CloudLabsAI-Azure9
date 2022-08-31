@@ -1,4 +1,4 @@
-v0.5.3-DEV
+v0.5.4
  --------------------------------------------------------------------------------
  * moving request handling and http/1 emulation into worker thread, offloading 
    main
