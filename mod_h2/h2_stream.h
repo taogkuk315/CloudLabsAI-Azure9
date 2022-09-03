@@ -94,8 +94,7 @@ apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len);
 
 apr_status_t h2_stream_set_response(h2_stream *stream, 
-                                    struct h2_response *response,
-                                    apr_bucket_brigade *bb);
+                                    struct h2_response *response);
 
 apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
                             apr_size_t *plen, int *peos);

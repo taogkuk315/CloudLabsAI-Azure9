@@ -328,7 +328,13 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
     return status;
 }
 
-h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb)
+apr_status_t h2_mplx_out_readb(h2_mplx *mplx, int stream_id, 
+                               char *buffer, apr_size_t *plen, int *peos)
+{
+    return APR_EINVAL; /* TODO */
+}
+
+h2_response *h2_mplx_pop_response(h2_mplx *m)
 {
     assert(m);
     if (m->aborted) {
@@ -341,10 +347,7 @@ h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb)
         if (io && io->response.headers) {
             response = &io->response;
             h2_io_set_remove(m->ready_ios, io);
-            if (bb) {
-                h2_io_out_read(io, bb, 0);
-            }
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, m->c,
                           "h2_mplx(%ld): popped response(%d)",
                           m->id, response->stream_id);
         }

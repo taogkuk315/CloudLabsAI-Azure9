@@ -196,10 +196,8 @@ apr_status_t h2_mplx_in_update_windows(h2_mplx *m,
  * Gets a response from a stream that is ready for submit. Will return
  * NULL if none is available.
  * @param m the mplxer to get a response from
- * @param bb optional bucket brigade to receive any data for the returned
- *           response
  */
-struct h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb);
+struct h2_response *h2_mplx_pop_response(h2_mplx *m);
 
 /**
  * Reads output data from the given stream. Will never block, but
@@ -208,6 +206,8 @@ struct h2_response *h2_mplx_pop_response(h2_mplx *m, apr_bucket_brigade *bb);
 apr_status_t h2_mplx_out_read(h2_mplx *mplx, int stream_id, 
                               apr_bucket_brigade *bb, apr_size_t maxlen);
 
+apr_status_t h2_mplx_out_readb(h2_mplx *mplx, int stream_id, 
+                               char *buffer, apr_size_t *plen, int *peos);
 
 /**
  * Opens the output for the given stream with the specified response.

@@ -858,11 +858,10 @@ apr_status_t h2_session_start(h2_session *session, int *rv)
     return status;
 }
 
-h2_response *h2_session_pop_response(h2_session *session, 
-                                     apr_bucket_brigade *data)
+h2_response *h2_session_pop_response(h2_session *session)
 {
     assert(session);
-    return h2_mplx_pop_response(session->mplx, data);
+    return h2_mplx_pop_response(session->mplx);
 }
 
 
@@ -959,11 +958,10 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     
     /* If we have responses ready, submit them now. */
     apr_brigade_cleanup(session->bbtmp);
-    while ((response = h2_session_pop_response(session, 
-                                               session->bbtmp)) != NULL) {
+    while ((response = h2_session_pop_response(session)) != NULL) {
         h2_stream *stream = h2_session_get_stream(session, response->stream_id);
         if (stream) {
-            h2_stream_set_response(stream, response, session->bbtmp);
+            h2_stream_set_response(stream, response);
             status = h2_session_handle_response(session, stream);
             have_written = 1;
         }

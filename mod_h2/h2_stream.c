@@ -112,18 +112,9 @@ void h2_stream_abort(h2_stream *stream)
     stream->aborted = 1;
 }
 
-apr_status_t h2_stream_set_response(h2_stream *stream, 
-                                    struct h2_response *response,
-                                    apr_bucket_brigade *bb)
+apr_status_t h2_stream_set_response(h2_stream *stream, h2_response *response)
 {
     stream->response = response;
-    if (bb) {
-        if (stream->bbout == NULL) {
-            stream->bbout = apr_brigade_create(stream->pool, 
-                                               stream->bucket_alloc);
-        }
-        return h2_util_pass(stream->bbout, bb, 0, 0, "stream_set_response");
-    }
     return APR_SUCCESS;
 }
 
@@ -279,6 +270,12 @@ apr_status_t h2_stream_prep_read(h2_stream *stream,
     }
     
     return APR_SUCCESS;
+}
+
+apr_status_t h2_stream_readb(h2_stream *stream, char *buffer, 
+                            apr_size_t *plen, int *peos)
+{
+    return h2_mplx_out_readb(stream->m, stream->id, buffer, plen, peos);
 }
 
 apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
