@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		B20938241AF12A1800028F50 /* alpn-2.4-proposal-2015-04-29.diff */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "alpn-2.4-proposal-2015-04-29.diff"; sourceTree = "<group>"; };
 		B20E441F1ACC07E8003D21AE /* test_curl_get.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_get.sh; sourceTree = "<group>"; };
 		B20E44201ACC088E003D21AE /* test_curl_post.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_post.sh; sourceTree = "<group>"; };
-		B20E44211ACC2A06003D21AE /* alpn-trunk.unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "alpn-trunk.unified.diff.patch"; sourceTree = "<group>"; };
 		B225490C1A6EAC37004BDEC9 /* mod_h2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mod_h2.c; sourceTree = "<group>"; };
 		B225490D1A6EAE9F004BDEC9 /* h2_config.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_config.c; sourceTree = "<group>"; };
 		B225490E1A6EAE9F004BDEC9 /* h2_config.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_config.h; sourceTree = "<group>"; };
@@ -302,8 +302,6 @@
 		B2E6FEDE1AC2F20400D557D8 /* h2.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.load; sourceTree = "<group>"; };
 		B2E708C81AE64AC00009EDAF /* php-wrapper */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = "php-wrapper"; sourceTree = "<group>"; };
 		B2E708C91AE64B470009EDAF /* info.php */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.php; path = info.php; sourceTree = "<group>"; };
-		B2E708CB1AE78EA10009EDAF /* alpn-trunk-2.unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "alpn-trunk-2.unified.diff.patch"; sourceTree = "<group>"; };
-		B2E708CC1AE795DE0009EDAF /* alpn-doc.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "alpn-doc.patch"; sourceTree = "<group>"; };
 		B2FE998E1AA7496B00A5CE5A /* h2_to_h1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_to_h1.c; sourceTree = "<group>"; };
 		B2FE998F1AA7496B00A5CE5A /* h2_to_h1.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_to_h1.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -434,9 +432,7 @@
 			children = (
 				B227966E1AEE93B000376B40 /* httpd-npn.unified.diff.patch */,
 				B227966D1AEE1A3C00376B40 /* httpd-alpn-unified.diff.patch */,
-				B2E708CB1AE78EA10009EDAF /* alpn-trunk-2.unified.diff.patch */,
-				B20E44211ACC2A06003D21AE /* alpn-trunk.unified.diff.patch */,
-				B2E708CC1AE795DE0009EDAF /* alpn-doc.patch */,
+				B20938241AF12A1800028F50 /* alpn-2.4-proposal-2015-04-29.diff */,
 			);
 			path = patches;
 			sourceTree = "<group>";

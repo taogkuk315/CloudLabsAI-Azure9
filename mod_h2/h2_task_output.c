@@ -51,8 +51,6 @@ h2_task_output *h2_task_output_create(apr_pool_t *pool,
         output->stream_id = stream_id;
         output->m = m;
         output->state = H2_TASK_OUT_INIT;
-        output->pool = pool;
-        output->bucket_alloc = bucket_alloc;
         output->from_h1 = h2_from_h1_create(stream_id, pool, bucket_alloc);
         if (!output->from_h1) {
             return NULL;
@@ -130,28 +128,6 @@ apr_status_t h2_task_output_write(h2_task_output *output,
         return APR_SUCCESS;
     }
     
-    if (1) {
-        status = out_write(output, f, bb);
-    }
-    else if (h2_util_has_flush_or_eos(bb)) {
-        if (output->bb && !APR_BRIGADE_EMPTY(output->bb)) {
-            status = h2_util_pass(output->bb, bb, 0, 0, "task_output_write1");
-            status = out_write(output, f, output->bb);
-            apr_brigade_cleanup(output->bb);
-        }
-        else {
-            status = out_write(output, f, bb);
-        }
-    }
-    else if (1) {
-        if (!output->bb) {
-            output->bb = apr_brigade_create(output->pool, output->bucket_alloc);
-        }
-        status = h2_util_move(output->bb, bb, 0, 0, NULL, "task_output_write2");
-    }
-    else {
-        status = ap_save_brigade(f, &output->bb, &bb, output->pool);
-    }
-    return status;
+    return out_write(output, f, bb);
 }
 

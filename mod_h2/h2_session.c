@@ -451,8 +451,6 @@ int on_send_data_cb(nghttp2_session *ngh2,
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
-    assert(!h2_stream_is_suspended(stream));
-    
     apr_brigade_cleanup(session->bbtmp);
     b = apr_bucket_transient_create((const char*)framehd, 9,
                                     session->bbtmp->bucket_alloc);
@@ -540,9 +538,10 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->id = c->id;
         session->c = c;
         session->r = r;
-        session->ngh2 = NULL;
-        session->workers = workers;
         
+        session->max_stream_count = h2_config_geti(config, H2_CONF_MAX_STREAMS);
+        session->max_stream_mem = h2_config_geti(config, H2_CONF_STREAM_MAX_MEM);
+
         session->pool = pool;
         session->bbtmp = apr_brigade_create(session->pool, c->bucket_alloc);
         
@@ -554,7 +553,8 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->streams = h2_stream_set_create(session->pool);
         session->zombies = h2_stream_set_create(session->pool);
         
-        session->mplx = h2_mplx_create(c, session->pool, session->workers);
+        session->workers = workers;
+        session->mplx = h2_mplx_create(c, session->pool, workers);
         
         h2_conn_io_init(&session->io, c, 0);
         
@@ -579,10 +579,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
          * before the preface was read. 
          */
         nghttp2_option_set_recv_client_preface(options, 1);
-        /* Set a value, to be observed before we receive any SETTINGS
-         * from the client. */
-        nghttp2_option_set_peer_max_concurrent_streams(options, 
-             h2_config_geti(config, H2_CONF_MAX_STREAMS));
+        nghttp2_option_set_peer_max_concurrent_streams(options, session->max_stream_count);
 
         /* We need to handle window updates ourself, otherwise we
          * get flooded by nghttp2. */
@@ -619,10 +616,16 @@ static int stream_close_finished(void *ctx, h2_stream *stream) {
     return 1;
 }
 
-static void reap_zombies(h2_session *session) {
-    if (session->zombies && !h2_stream_set_is_empty(session->zombies)) {
-        /* remove all zombies, where the task has run */
-        h2_stream_set_iter(session->zombies, stream_close_finished, session);
+static void reap_zombies(h2_session *session, int take_your_time) {
+    if (session->zombies) {
+        apr_size_t count = h2_stream_set_size(session->zombies);
+        /* If we have time, or if the number of accumulated zombie streams
+         * have reached a certain threshold, check all zombies and
+         * cleanup those whose task has finished 
+         */
+        if (count && (take_your_time || count > (session->max_stream_count/2))) {
+            h2_stream_set_iter(session->zombies, stream_close_finished, session);
+        }
     }
 }
 
@@ -841,8 +844,7 @@ apr_status_t h2_session_start(h2_session *session, int *rv)
             h2_config_geti(config, H2_CONF_MAX_HL_SIZE) },
         { NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE,
             h2_config_geti(config, H2_CONF_WIN_SIZE) },
-        {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 
-            h2_config_geti(config, H2_CONF_MAX_STREAMS) }, 
+        {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, session->max_stream_count }, 
     };
     *rv = nghttp2_submit_settings(session->ngh2, NGHTTP2_FLAG_NONE,
                                  settings,
@@ -891,12 +893,10 @@ static int resume_on_data(void *ctx, h2_stream *stream) {
             ++rctx->resume_count;
             
             int rv = nghttp2_session_resume_data(session->ngh2, stream->id);
-            if (rv) {
-                ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
-                              APLOG_ERR : APLOG_DEBUG, 0, session->c,
-                              "h2_stream(%ld-%d): resuming stream %s",
-                              session->id, stream->id, nghttp2_strerror(rv));
-            }
+            ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
+                          APLOG_ERR : APLOG_INFO, 0, session->c,
+                          "h2_stream(%ld-%d): resuming stream %s",
+                          session->id, stream->id, nghttp2_strerror(rv));
         }
     }
     return 1;
@@ -982,6 +982,10 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
             && h2_session_resume_streams_with_data(session) > 0) {
             have_written = 1;
         }
+        else {
+            /* nothing happened to ongoing streams, do some house-keeping */
+            reap_zombies(session, 1);
+        }
     }
     
     if (h2_session_want_write(session)) {
@@ -1003,7 +1007,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         h2_conn_io_flush(&session->io);
     }
     
-    reap_zombies(session);
+    reap_zombies(session, 0);
 
     return status;
 }

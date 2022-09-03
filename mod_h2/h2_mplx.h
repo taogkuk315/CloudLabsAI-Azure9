@@ -61,7 +61,7 @@ struct h2_mplx {
     struct apr_thread_cond_t *added_output;
     
     int aborted;
-    apr_size_t out_stream_max_size;
+    apr_size_t stream_max_mem;
     
     struct h2_workers *workers;
 };

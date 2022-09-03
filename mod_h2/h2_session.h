@@ -59,6 +59,8 @@ struct h2_session {
                                      * of 'h2c', NULL otherwise */
     int aborted;                    /* this session is being aborted */
     apr_size_t frames_received;     /* number of http/2 frames received */
+    apr_size_t max_stream_count;    /* max number of open streams */
+    apr_size_t max_stream_mem;      /* max buffer memory for a single stream */
     
     apr_pool_t *pool;               /* pool to use in session handling */
     apr_bucket_brigade *bbtmp;      /* brigade for keeping temporary data */
@@ -66,13 +68,12 @@ struct h2_session {
     
     h2_conn_io_ctx io;              /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
-    apr_uint32_t m_generation;
     
     struct h2_stream_set *streams;  /* streams handled by this session */
     struct h2_stream_set *zombies;  /* streams that are done */
     
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
-    struct h2_workers *workers;
+    struct h2_workers *workers;     /* for executing stream tasks */
 };
 
 

@@ -39,10 +39,6 @@ struct h2_task_output {
     h2_task_output_state_t state;
     struct h2_mplx *m;
     struct h2_from_h1 *from_h1;
-    
-    apr_pool_t *pool;
-    apr_bucket_alloc_t *bucket_alloc;
-    apr_bucket_brigade *bb;
 };
 
 h2_task_output *h2_task_output_create(apr_pool_t *pool,

@@ -90,8 +90,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
         m->bucket_alloc = apr_bucket_alloc_create(m->pool);
         m->stream_ios = h2_io_set_create(m->pool);
         m->ready_ios = h2_io_set_create(m->pool);
-        m->out_stream_max_size = h2_config_geti(conf, 
-                                                H2_CONF_STREAM_MAX_MEM_SIZE);
+        m->stream_max_mem = h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM);
         m->workers = workers;
     }
     return m;
@@ -368,13 +367,13 @@ static apr_status_t out_write(h2_mplx *m, h2_io *io,
            && (status == APR_SUCCESS)
            && !is_aborted(m, &status)) {
         
-        status = h2_io_out_write(io, bb, m->out_stream_max_size);
+        status = h2_io_out_write(io, bb, m->stream_max_mem);
         
         /* Wait for data to drain until there is room again */
         while (!APR_BRIGADE_EMPTY(bb) 
                && iowait
                && status == APR_SUCCESS
-               && (m->out_stream_max_size <= h2_io_out_length(io))
+               && (m->stream_max_mem <= h2_io_out_length(io))
                && !is_aborted(m, &status)) {
             io->output_drained = iowait;
             if (f) {

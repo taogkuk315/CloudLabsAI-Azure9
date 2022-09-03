@@ -58,7 +58,7 @@ start-debug: $(INST_DIR)/.test-setup
 restart: $(INST_DIR)/.test-setup
 	@echo -n shutting down httpd...
 	@$(INST_DIR)/bin/apachectl -k stop
-	@#while true; do pkill -U $(USER) httpd; test "$$?" != "0" && break; done   
+	@while true; do sleep 1; pkill -U $(USER) httpd; test "$$?" != "0" && break; done   
 	@echo done.
 	@$(INST_DIR)/bin/apachectl -k restart
 

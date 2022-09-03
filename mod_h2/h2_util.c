@@ -204,7 +204,7 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
  * still needed.
  */
 static const int DEEP_COPY = 1;
-static const int FILE_MOVE = 0;
+static const int FILE_MOVE = 1;
 
 apr_status_t last_not_included(apr_bucket_brigade *bb, 
                                apr_size_t maxlen, int count_virtual,
@@ -318,7 +318,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                         /* ignore */
                     }
                 }
-                else if (FILE_MOVE && APR_BUCKET_IS_FILE(b)) {
+                else if (pfile && FILE_MOVE && APR_BUCKET_IS_FILE(b)) {
                     /* We do not want to read files when passing buckets, if
                      * we can avoid it. However, what we've come up so far
                      * is not working corrently, resulting either in crashes or

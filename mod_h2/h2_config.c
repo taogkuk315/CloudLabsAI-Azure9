@@ -128,7 +128,7 @@ int h2_config_geti(h2_config *conf, h2_config_var_t var)
             return H2_CONFIG_GET(conf, &defconf, max_workers);
         case H2_CONF_MAX_WORKER_IDLE_SECS:
             return H2_CONFIG_GET(conf, &defconf, max_worker_idle_secs);
-        case H2_CONF_STREAM_MAX_MEM_SIZE:
+        case H2_CONF_STREAM_MAX_MEM:
             return H2_CONFIG_GET(conf, &defconf, stream_max_mem_size);
         case H2_CONF_ALT_SVC_MAX_AGE:
             return H2_CONFIG_GET(conf, &defconf, alt_svc_max_age);

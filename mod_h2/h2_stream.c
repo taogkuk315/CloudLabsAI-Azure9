@@ -398,7 +398,7 @@ apr_status_t h2_stream_readx(h2_stream *stream, apr_bucket_brigade *bb,
                              apr_size_t len)
 {
     apr_status_t status = APR_SUCCESS;
-    apr_off_t buffered_len = 0;
+/*    apr_off_t buffered_len = 0;
     apr_size_t need = len;
     int eos = 0;
     
@@ -414,7 +414,7 @@ apr_status_t h2_stream_readx(h2_stream *stream, apr_bucket_brigade *bb,
     if (len != need) {
         return APR_EAGAIN;
     }
-    return h2_util_pass(bb, stream->bbout, len, 1, "stream_readx");
+*/    return h2_util_pass(bb, stream->bbout, len, 1, "stream_readx");
 }
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended)
