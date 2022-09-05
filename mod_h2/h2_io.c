@@ -121,6 +121,55 @@ apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb,
                         "h2_io_out_read");
 }
 
+apr_status_t h2_io_out_readb(h2_io *io, char *buffer, 
+                             apr_size_t *plen, int *peos)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_size_t avail = *plen;
+    apr_size_t written = 0;
+    
+    /* Copy data in our brigade into the buffer until it is filled or
+     * we encounter an EOS.
+     */
+    while ((status == APR_SUCCESS) 
+           && !APR_BRIGADE_EMPTY(io->bbout)
+           && (avail > 0)) {
+        
+        apr_bucket *b = APR_BRIGADE_FIRST(io->bbout);
+        if (APR_BUCKET_IS_METADATA(b)) {
+            if (APR_BUCKET_IS_EOS(b)) {
+                *peos = 1;
+            }
+            else {
+                /* ignore */
+            }
+        }
+        else {
+            const char *data;
+            apr_size_t data_len;
+            if (b->length != -1 && b->length > avail) {
+                apr_bucket_split(b, avail);
+            }
+            status = apr_bucket_read(b, &data, &data_len, 
+                                     APR_NONBLOCK_READ);
+            if (status == APR_SUCCESS && data_len > 0) {
+                if (data_len > avail) {
+                    apr_bucket_split(b, avail);
+                    data_len = avail;
+                }
+                memcpy(buffer, data, data_len);
+                avail -= data_len;
+                buffer += data_len;
+                written += data_len;
+            }
+        }
+        apr_bucket_delete(b);
+    }
+    
+    *plen = written;
+    return status;
+}
+
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen)
 {

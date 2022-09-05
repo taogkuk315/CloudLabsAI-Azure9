@@ -272,13 +272,13 @@ apr_status_t h2_stream_prep_read(h2_stream *stream,
     return APR_SUCCESS;
 }
 
-apr_status_t h2_stream_readb(h2_stream *stream, char *buffer, 
+apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
                             apr_size_t *plen, int *peos)
 {
     return h2_mplx_out_readb(stream->m, stream->id, buffer, plen, peos);
 }
 
-apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
+apr_status_t h2_stream_readbb(h2_stream *stream, char *buffer, 
                             apr_size_t *plen, int *peos)
 {
     apr_status_t status = APR_SUCCESS;

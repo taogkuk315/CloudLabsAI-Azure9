@@ -96,6 +96,9 @@ apr_status_t h2_io_in_close(h2_io *io);
  */
 apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb, 
                             apr_size_t maxlen);
+apr_status_t h2_io_out_readb(h2_io *io, char *buffer, 
+                             apr_size_t *plen, int *peos);
+
 
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen);

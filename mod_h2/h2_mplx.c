@@ -328,10 +328,29 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
     return status;
 }
 
-apr_status_t h2_mplx_out_readb(h2_mplx *mplx, int stream_id, 
+apr_status_t h2_mplx_out_readb(h2_mplx *m, int stream_id, 
                                char *buffer, apr_size_t *plen, int *peos)
 {
-    return APR_EINVAL; /* TODO */
+    assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
+    h2_response *response = NULL;
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+        if (io) {
+            status = h2_io_out_readb(io, buffer, plen, peos);
+            if (status == APR_SUCCESS && io->output_drained) {
+                apr_thread_cond_signal(io->output_drained);
+            }
+        }
+        else {
+            status = APR_ECONNABORTED;
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
 }
 
 h2_response *h2_mplx_pop_response(h2_mplx *m)
