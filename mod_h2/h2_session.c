@@ -738,7 +738,8 @@ static apr_status_t h2_session_abort_int(h2_session *session, int reason)
         session->aborted = 1;
         if (session->ngh2) {
             if (reason) {
-                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+                ap_log_cerror(APLOG_MARK, (reason == NGHTTP2_ERR_EOF)?
+                              APLOG_DEBUG : APLOG_INFO, 0, session->c,
                               "session(%ld): aborting session, reason=%d %s",
                               session->id, reason, nghttp2_strerror(reason));
             }
@@ -764,6 +765,7 @@ apr_status_t h2_session_abort(h2_session *session, apr_status_t reason, int rv)
             case APR_EOF:
                 rv = 0;
                 break;
+            case APR_EBADF:
             case APR_ECONNABORTED:
                 rv = NGHTTP2_ERR_EOF;
                 break;
@@ -991,7 +993,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         int rv = nghttp2_session_send(session->ngh2);
         if (rv != 0) {
             ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                          "h2_session: send: %s", nghttp2_strerror(rv));
+                          "h2_session: send2: %s", nghttp2_strerror(rv));
             if (nghttp2_is_fatal(rv)) {
                 h2_session_abort_int(session, rv);
                 status = APR_ECONNABORTED;
@@ -1211,8 +1213,7 @@ apr_status_t h2_session_handle_response(h2_session *session, h2_stream *stream)
         status = APR_EGENERAL;
         h2_session_abort_int(session, rv);
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                      "submit_response: %s",
-                      nghttp2_strerror(rv));
+                      "submit_response: %s", nghttp2_strerror(rv));
     }
     return status;
 }

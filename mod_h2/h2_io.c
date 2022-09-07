@@ -147,6 +147,12 @@ apr_status_t h2_io_out_readb(h2_io *io, char *buffer,
         else {
             const char *data;
             apr_size_t data_len;
+            
+            if (0 && APR_BUCKET_IS_FILE(b)) {
+                ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, io->bbout->p,
+                              "h2_io(%d): reading from file(len=%ld) %ld bytes", 
+                              io->id, (long)b->length, (long)avail);
+            }
             if (b->length != -1 && b->length > avail) {
                 apr_bucket_split(b, avail);
             }

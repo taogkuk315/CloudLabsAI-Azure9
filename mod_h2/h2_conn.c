@@ -240,6 +240,7 @@ apr_status_t h2_session_process(h2_session *session)
                 break;
             case APR_EAGAIN:
                 break;
+            case APR_EBADF:
             case APR_EOF:
             case APR_ECONNABORTED:
                 ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
