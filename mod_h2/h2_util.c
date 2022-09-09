@@ -269,7 +269,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
     int same_alloc = (to->bucket_alloc == from->bucket_alloc);
     
     if (!APR_BRIGADE_EMPTY(from)) {
-        apr_bucket *b, *end;
+        apr_bucket *b, *end, *cpy;
         
         status = last_not_included(from, maxlen, 
                                    (count_virtual || !FILE_MOVE), &end);

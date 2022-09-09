@@ -143,7 +143,7 @@ apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
     
     status = ap_get_brigade(io->connection->input_filters,
                         io->input, AP_MODE_READBYTES,
-                        block, 4096);
+                        block, 16 * 4096);
     switch (status) {
         case APR_SUCCESS:
             return h2_conn_io_bucket_read(io, block, on_read_cb, puser, &done);
@@ -158,7 +158,7 @@ apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
     return status;
 }
 
-static apr_status_t do_flush(apr_bucket_brigade *bb, void *ctx) {
+static apr_status_t do_pass(apr_bucket_brigade *bb, void *ctx) {
     h2_conn_io_ctx *io = (h2_conn_io_ctx *)ctx;
     apr_status_t status = ap_pass_brigade(io->connection->output_filters, bb);
     apr_brigade_cleanup(bb);
@@ -179,6 +179,7 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf,
 
     /* Send it out through installed filters to the client */
     status = ap_pass_brigade(io->connection->output_filters, io->output);
+    
     if (APLOGctrace2(io->connection)) {
         char buffer[32];
         h2_util_hex_dump(buffer, sizeof(buffer)/sizeof(buffer[0]), buf, length);

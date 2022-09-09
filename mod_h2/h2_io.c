@@ -114,19 +114,24 @@ apr_status_t h2_io_in_close(h2_io *io)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb, 
-                            apr_size_t maxlen)
-{
-    return h2_util_move(bb, io->bbout, maxlen, 0, &io->file, 
-                        "h2_io_out_read");
-}
-
-apr_status_t h2_io_out_readb(h2_io *io, char *buffer, 
-                             apr_size_t *plen, int *peos)
+apr_status_t h2_io_out_read(h2_io *io, char *buffer, 
+                            apr_size_t *plen, int *peos)
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t avail = *plen;
     apr_size_t written = 0;
+    apr_bucket *b;
+    
+    if (buffer == NULL) {
+        /* test read to determine available length */
+        apr_off_t blen = 0;
+        status = apr_brigade_length(io->bbout, 0, &blen);
+        if (blen < *plen) {
+            *plen = blen;
+        }
+        *peos = h2_util_has_eos(io->bbout, *plen);
+        return status;
+    }
     
     /* Copy data in our brigade into the buffer until it is filled or
      * we encounter an EOS.
@@ -147,7 +152,7 @@ apr_status_t h2_io_out_readb(h2_io *io, char *buffer,
         else {
             const char *data;
             apr_size_t data_len;
-            
+
             if (0 && APR_BUCKET_IS_FILE(b)) {
                 ap_log_perror(APLOG_MARK, APLOG_NOTICE, 0, io->bbout->p,
                               "h2_io(%d): reading from file(len=%ld) %ld bytes", 

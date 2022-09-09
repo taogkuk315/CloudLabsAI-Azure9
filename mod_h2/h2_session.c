@@ -433,17 +433,27 @@ int on_send_data_cb(nghttp2_session *ngh2,
                     void *userp)
 {
     h2_session *session = (h2_session *)userp;
-    apr_bucket *b;
+    apr_status_t status = APR_SUCCESS;
+    int stream_id = (int)frame->hd.stream_id;
+    const unsigned char padlen = frame->data.padlen;
+    apr_size_t frame_len = 9 + (padlen? 1 : 0) + length + padlen;
+    apr_size_t data_len = length;
     int rv = 0;
+    int eos;
+    h2_stream *stream;
     
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
-    apr_status_t status = APR_SUCCESS;
-    int stream_id = (int)frame->hd.stream_id;
-    const char padlen = frame->data.padlen;
     
-    h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
+    if (frame_len > sizeof(session->buffer)) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_BADARG, session->c,
+                      "h2_stream(%ld-%d): too large frame, flen=%ld",
+                      session->id, (int)stream_id, (long)frame_len);
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    
+    stream = h2_stream_set_get(session->streams, stream_id);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_NOTFOUND, session->c,
                       "h2_stream(%ld-%d): send_data",
@@ -451,30 +461,28 @@ int on_send_data_cb(nghttp2_session *ngh2,
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
-    apr_brigade_cleanup(session->bbtmp);
-    b = apr_bucket_transient_create((const char*)framehd, 9,
-                                    session->bbtmp->bucket_alloc);
-    APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
+    char *p = session->buffer;
+    memcpy(p, framehd, 9);
+    p += 9;
     if (padlen) {
-        b = apr_bucket_transient_create(&padlen, 1,
-                                        session->bbtmp->bucket_alloc);
-        APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
+        *p++ = padlen;
     }
-    
-    status = h2_stream_readx(stream, session->bbtmp, length); 
-    if (status != APR_SUCCESS) {
+    status = h2_stream_read(stream, p, &data_len, &eos); 
+    if (status != APR_SUCCESS || data_len != length) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                      "h2_stream(%ld-%d): too little data, needed=%ld, got=%ld",
+                      session->id, (int)stream_id, 
+                      (long)length, (long)data_len);
         return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
     
+    p += data_len;
     if (padlen) {
-        char buffer[256];
-        memset(buffer, 0, padlen);
-        b = apr_bucket_transient_create(buffer, padlen,
-                                        session->bbtmp->bucket_alloc);
-        APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
+        memset(p, 0, padlen);
     }
-
-    status = h2_conn_io_write_brigade(&session->io, session->bbtmp);
+    
+    status = h2_conn_io_write(&session->io, session->buffer, 
+                              frame_len, &data_len);
     if (status != APR_SUCCESS 
         && status != APR_EOF) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
@@ -543,7 +551,6 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->max_stream_mem = h2_config_geti(config, H2_CONF_STREAM_MAX_MEM);
 
         session->pool = pool;
-        session->bbtmp = apr_brigade_create(session->pool, c->bucket_alloc);
         
         status = apr_thread_cond_create(&session->iowait, session->pool);
         if (status != APR_SUCCESS) {
@@ -959,7 +966,6 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     }
     
     /* If we have responses ready, submit them now. */
-    apr_brigade_cleanup(session->bbtmp);
     while ((response = h2_session_pop_response(session)) != NULL) {
         h2_stream *stream = h2_session_get_stream(session, response->stream_id);
         if (stream) {
@@ -968,7 +974,6 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
             have_written = 1;
         }
         response = NULL;
-        apr_brigade_cleanup(session->bbtmp);
     }
     
     if (h2_session_resume_streams_with_data(session) > 0) {
@@ -1000,11 +1005,6 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
             }
         }
         have_written = 1;
-    }
-    
-    if (have_written) {
-        // TODO: optimize flushing
-        h2_conn_io_flush(&session->io);
     }
     
     reap_zombies(session, 0);

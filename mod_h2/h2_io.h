@@ -91,13 +91,16 @@ apr_status_t h2_io_in_close(h2_io *io);
 
 /**
  * Read a bucket from the output head. Return APR_EAGAIN if non is available,
- * APR_EOF if none available and output has been closed. Will, on successful
- * read, set peos != 0 if data is the last data of the output.
+ * APR_EOF if none available and output has been closed. 
+ * May be called with buffer == NULL in order to find out how much data
+ * is available.
+ * @param io the h2_io to read output from
+ * @param buffer the buffer to copy the data to, may be NULL
+ * @param plen the requested max len, set to amount of data on return
+ * @param peos != 0 iff the end of stream has been reached
  */
-apr_status_t h2_io_out_read(h2_io *io, apr_bucket_brigade *bb, 
-                            apr_size_t maxlen);
-apr_status_t h2_io_out_readb(h2_io *io, char *buffer, 
-                             apr_size_t *plen, int *peos);
+apr_status_t h2_io_out_read(h2_io *io, char *buffer, 
+                            apr_size_t *plen, int *peos);
 
 
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 

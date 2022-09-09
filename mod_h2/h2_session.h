@@ -74,6 +74,8 @@ struct h2_session {
     
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
     struct h2_workers *workers;     /* for executing stream tasks */
+    
+    char buffer[ 32 * 1024 ];
 };
 
 

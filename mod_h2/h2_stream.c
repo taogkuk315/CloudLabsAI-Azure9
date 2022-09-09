@@ -75,10 +75,6 @@ void h2_stream_cleanup(h2_stream *stream)
 {
     h2_request_destroy(stream->request);
     h2_mplx_close_io(stream->m, stream->id);
-    if (stream->bbout) {
-        apr_brigade_cleanup(stream->bbout);
-        stream->bbout = NULL;
-    }
 }
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
@@ -221,197 +217,23 @@ apr_status_t h2_stream_write_data(h2_stream *stream,
 apr_status_t h2_stream_prep_read(h2_stream *stream, 
                                  apr_size_t *plen, int *peos)
 {
-    apr_status_t status = APR_SUCCESS;
-    apr_off_t buffered_len = 0;
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
+                  h2_mplx_get_conn(stream->m),
+                  "h2_stream(%ld-%d): prep_read from mplx",
+                  h2_mplx_get_id(stream->m), stream->id);
     
-    *peos = 0;
-    if (stream->bbout == NULL) {
-        stream->bbout = apr_brigade_create(stream->pool, 
-                                           stream->bucket_alloc);
+    apr_status_t status = h2_mplx_out_read(stream->m, stream->id, 
+                                           NULL, plen, peos);
+    if (status == APR_SUCCESS && !*peos && !plen) {
+        return APR_EAGAIN;
     }
-    
-    status = apr_brigade_length(stream->bbout, 1, &buffered_len);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    
-    *peos = h2_util_has_eos(stream->bbout, *plen);
-    if (!*peos && buffered_len < *plen) {
-        /* Our brigade does not hold enough bytes, try to get more data.
-         */
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
-                      h2_mplx_get_conn(stream->m),
-                      "h2_stream(%ld-%d): prep_read from mplx",
-                      h2_mplx_get_id(stream->m), stream->id);
-        status = h2_mplx_out_read(stream->m, stream->id, stream->bbout, 0);
-        if (status == APR_SUCCESS) {
-            /* nop */
-            apr_brigade_length(stream->bbout, 1, &buffered_len);
-        }
-        else if (status == APR_EOF) {
-            *peos = 1;
-            if (APR_BRIGADE_EMPTY(stream->bbout)) {
-                return status;
-            }
-            status = APR_SUCCESS;
-        }
-        else {
-            return status;
-        }
-    }
-    
-    *peos = h2_util_has_eos(stream->bbout, *plen);
-    if (!buffered_len) {
-        *plen = 0;
-        return *peos? APR_EOF : APR_EAGAIN;
-    }
-    else if (buffered_len < *plen) {
-        *plen = buffered_len;
-    }
-    
-    return APR_SUCCESS;
+    return status;
 }
 
 apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
                             apr_size_t *plen, int *peos)
 {
-    return h2_mplx_out_readb(stream->m, stream->id, buffer, plen, peos);
-}
-
-apr_status_t h2_stream_readbb(h2_stream *stream, char *buffer, 
-                            apr_size_t *plen, int *peos)
-{
-    apr_status_t status = APR_SUCCESS;
-    apr_off_t buffered_len = 0;
-    apr_size_t requested = *plen;
-    apr_size_t avail = *plen;
-    apr_size_t written = 0;
-    
-    *peos = 0;
-    if (stream->bbout == NULL) {
-        stream->bbout = apr_brigade_create(stream->pool, 
-                                           stream->bucket_alloc);
-    }
-    
-    status = apr_brigade_length(stream->bbout, 1, &buffered_len);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    
-    if (buffered_len < avail) {
-        /* Our brigade does not hold enough bytes, try to get more data.
-         */
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
-                      h2_mplx_get_conn(stream->m),
-                      "h2_stream(%ld-%d): reading from mplx",
-                      h2_mplx_get_id(stream->m), stream->id);
-        status = h2_mplx_out_read(stream->m, stream->id, stream->bbout, 0);
-        if (status == APR_SUCCESS) {
-            /* nop */
-            apr_brigade_length(stream->bbout, 1, &buffered_len);
-        }
-        else if (status == APR_EOF) {
-            *peos = 1;
-            if (APR_BRIGADE_EMPTY(stream->bbout)) {
-                return status;
-            }
-            status = APR_SUCCESS;
-        }
-        else {
-            return status;
-        }
-    }
-    
-    if (avail >= 8192 && !*peos && buffered_len < 128) {
-        /* We have only few bytes, but could send many. If there
-         * is no flush or EOS in the buffered brigade, tell the
-         * caller to try again later.
-         */
-        if (!h2_util_has_flush_or_eos(stream->bbout)) {
-            return APR_EAGAIN;
-        }
-    }
-    
-    /* Copy data in our brigade into the buffer until it is filled or
-     * we encounter an EOS.
-     */
-    while ((status == APR_SUCCESS) 
-           && !APR_BRIGADE_EMPTY(stream->bbout)
-           && (avail > 0)) {
-        
-        apr_bucket *b = APR_BRIGADE_FIRST(stream->bbout);
-        if (APR_BUCKET_IS_METADATA(b)) {
-            if (APR_BUCKET_IS_EOS(b)) {
-                *peos = 1;
-            }
-            else {
-                /* ignore */
-            }
-        }
-        else {
-            const char *data;
-            apr_size_t data_len;
-            if (APR_BUCKET_IS_FILE(b)) {
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
-                              h2_mplx_get_conn(stream->m),
-                              "h2_stream(%ld-%d): reading FILE(%ld-%ld)",
-                              h2_mplx_get_id(stream->m), stream->id,
-                              (long)b->start, (long)b->length);
-            }
-            if (b->length != -1 && b->length > avail) {
-                apr_bucket_split(b, avail);
-            }
-            status = apr_bucket_read(b, &data, &data_len, 
-                                     APR_NONBLOCK_READ);
-            if (status == APR_SUCCESS && data_len > 0) {
-                if (data_len > avail) {
-                    apr_bucket_split(b, avail);
-                    data_len = avail;
-                }
-                memcpy(buffer, data, data_len);
-                avail -= data_len;
-                buffer += data_len;
-                written += data_len;
-            }
-        }
-        apr_bucket_delete(b);
-    }
-
-    if (status == APR_SUCCESS) {
-        stream->bytes_sent += written;
-    }
-    
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, h2_mplx_get_conn(stream->m),
-                  "h2_stream(%ld-%d): requested %ld, "
-                  "sending %ld data bytes (eos=%d, total=%ld)",
-                  h2_mplx_get_id(stream->m), stream->id, (long)requested, 
-                  (long)written, *peos, (long)stream->bytes_sent);
-    
-    *plen = written;
-    return status;
-}
-
-apr_status_t h2_stream_readx(h2_stream *stream, apr_bucket_brigade *bb,
-                             apr_size_t len)
-{
-    apr_status_t status = APR_SUCCESS;
-/*    apr_off_t buffered_len = 0;
-    apr_size_t need = len;
-    int eos = 0;
-    
-    status = h2_stream_prep_read(stream, &need, &eos);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, 
-                  h2_mplx_get_conn(stream->m),
-                  "h2_stream(%ld-%d): readx, need=%ld, avail=%ld, eos=%d",
-                  h2_mplx_get_id(stream->m), stream->id, len, need, eos);
-
-    if (len != need) {
-        return APR_EAGAIN;
-    }
-*/    return h2_util_pass(bb, stream->bbout, len, 1, "stream_readx");
+    return h2_mplx_out_read(stream->m, stream->id, buffer, plen, peos);
 }
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended)

@@ -196,6 +196,11 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, h2_task *task, int eos)
     return APR_SUCCESS;
 }
 
+static apr_status_t flush(apr_bucket_brigade *bb, void *ctx) 
+{
+    return h2_to_h1_flush((h2_to_h1*)ctx);
+}
+
 static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
                                           const char *data, size_t len)
 {
@@ -206,7 +211,7 @@ static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
         return APR_EINVAL;
     }
     
-    status = apr_brigade_write(to_h1->bb, NULL, NULL, data, len);
+    status = apr_brigade_write(to_h1->bb, flush, to_h1, data, len);
     if (status == APR_SUCCESS) {
         status = h2_to_h1_flush(to_h1);
     }

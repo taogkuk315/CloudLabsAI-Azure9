@@ -199,6 +199,8 @@ apr_status_t h2_session_process(h2_session *session)
         if (status == APR_SUCCESS) {
             have_written = 1;
             wait_micros = 0;
+            // TODO: optimize flushing
+            h2_conn_io_flush(&session->io);
         }
         else if (status == APR_EAGAIN) {
             /* nop */
