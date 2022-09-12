@@ -91,6 +91,10 @@ static apr_status_t stream_end_headers(h2_session *session,
     return h2_stream_write_eoh(stream, eos);
 }
 
+static apr_status_t send_data(h2_session *session, const char *data, 
+                              apr_size_t length);
+static apr_status_t send_flush(h2_session *session, int deep);
+
 /*
  * Callback when nghttp2 wants to send bytes back to the client.
  */
@@ -99,17 +103,12 @@ static ssize_t send_cb(nghttp2_session *ngh2,
                        int flags, void *userp)
 {
     h2_session *session = (h2_session *)userp;
-    if (session->aborted) {
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
+    apr_status_t status = send_data(session, (const char *)data, length);
     
-    size_t written = 0;
-    apr_status_t status = h2_conn_io_write(&session->io, (const char*)data,
-                                      length, &written);
     if (status == APR_SUCCESS) {
-        return written;
+        return length;
     }
-    else if (status == APR_EAGAIN || status == APR_TIMEUP) {
+    if (status == APR_EAGAIN || status == APR_TIMEUP) {
         return NGHTTP2_ERR_WOULDBLOCK;
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
@@ -423,6 +422,61 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
     return 0;
 }
 
+static apr_status_t send_data(h2_session *session, const char *data, 
+                              apr_size_t length)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_size_t chunk_len;
+    apr_size_t avail;
+    
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                  "h2_session(%ld): send_data, %ld bytes",
+                  session->id, length);
+    if (session->aborted) {
+        return APR_ECONNABORTED;
+    }
+    
+    while (length > 0 && status == APR_SUCCESS) {
+        
+        avail = sizeof(session->buf) - session->buf_len;
+        if (avail == 0) {
+            status = send_flush(session, 0);
+            continue;
+        }
+        
+        chunk_len = (length > avail)? avail : length;
+        if (chunk_len > 0) {
+            memcpy(session->buf + session->buf_len, data, chunk_len);
+            session->buf_len += chunk_len;
+            data += chunk_len;
+            length -= chunk_len;
+        }
+    }
+    
+    return status;
+}
+
+static apr_status_t send_flush(h2_session *session, int deep)
+{
+    apr_status_t status = APR_SUCCESS;
+    
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                  "h2_session(%ld): flush_data, %ld bytes, deep=%d",
+                  session->id, (long)session->buf_len, deep);
+    if (session->buf_len) {
+        status = h2_conn_io_write(&session->io, 
+                                  session->buf, session->buf_len);
+        if (status != APR_SUCCESS) {
+            return status;
+        }
+        session->buf_len = 0;
+    }
+    if (deep) {
+        h2_conn_io_flush(&session->io);
+    }
+    return status;
+}
+
 #if NGHTTP2_HAS_DATA_CB
 
 int on_send_data_cb(nghttp2_session *ngh2, 
@@ -432,24 +486,18 @@ int on_send_data_cb(nghttp2_session *ngh2,
                     nghttp2_data_source *source, 
                     void *userp)
 {
-    h2_session *session = (h2_session *)userp;
     apr_status_t status = APR_SUCCESS;
+    h2_session *session = (h2_session *)userp;
     int stream_id = (int)frame->hd.stream_id;
     const unsigned char padlen = frame->data.padlen;
     apr_size_t frame_len = 9 + (padlen? 1 : 0) + length + padlen;
     apr_size_t data_len = length;
+    apr_size_t avail, chunk_len;
     int rv = 0;
     int eos;
     h2_stream *stream;
     
     if (session->aborted) {
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-    
-    if (frame_len > sizeof(session->buffer)) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_BADARG, session->c,
-                      "h2_stream(%ld-%d): too large frame, flen=%ld",
-                      session->id, (int)stream_id, (long)frame_len);
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
@@ -461,37 +509,55 @@ int on_send_data_cb(nghttp2_session *ngh2,
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
-    char *p = session->buffer;
-    memcpy(p, framehd, 9);
-    p += 9;
-    if (padlen) {
-        *p++ = padlen;
-    }
-    status = h2_stream_read(stream, p, &data_len, &eos); 
-    if (status != APR_SUCCESS || data_len != length) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                      "h2_stream(%ld-%d): too little data, needed=%ld, got=%ld",
-                      session->id, (int)stream_id, 
-                      (long)length, (long)data_len);
-        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    status = send_data(session, (const char *)framehd, 9);
+    if (status == APR_SUCCESS) {
+        if (padlen) {
+            status = send_data(session, (const char *)&padlen, 1);
+        }
+
+        while (length > 0 && (status == APR_SUCCESS) && !eos) {
+            avail = sizeof(session->buf) - session->buf_len;
+            if (avail == 0) {
+                send_flush(session, 0);
+                continue;
+            }
+            
+            chunk_len = (length > avail)? avail : length;
+            if (chunk_len > 0) {
+                status = h2_stream_read(stream, session->buf
+                                        + session->buf_len, 
+                                        &chunk_len, &eos); 
+                session->buf_len += chunk_len;
+                length -= chunk_len;
+            }
+        }
+        
+        if (status == APR_SUCCESS && padlen) {
+            if (padlen) {
+                char pad[256];
+                memset(pad, 0, padlen);
+                status = send_data(session, pad, padlen);
+            }
+        }
     }
     
-    p += data_len;
-    if (padlen) {
-        memset(p, 0, padlen);
+    if (status == APR_SUCCESS) {
+        if (length > 0) {
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                          "h2_stream(%ld-%d): send_data_cb, %ld bytes missing",
+                          session->id, (int)stream_id, (long)length);
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
+        }
+        return 0;
     }
-    
-    status = h2_conn_io_write(&session->io, session->buffer, 
-                              frame_len, &data_len);
-    if (status != APR_SUCCESS 
-        && status != APR_EOF) {
+    else if (status != APR_EOF) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
                       "h2_stream(%ld-%d): failed send_data_cb",
                       session->id, (int)stream_id);
-        rv = NGHTTP2_ERR_CALLBACK_FAILURE;
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
-    return rv;
+    return h2_session_status_from_apr_status(status);
 }
 
 #endif
@@ -753,7 +819,7 @@ static apr_status_t h2_session_abort_int(h2_session *session, int reason)
             nghttp2_session_terminate_session(session->ngh2, reason);
             nghttp2_submit_goaway(session->ngh2, 0, 0, reason, NULL, 0);
             nghttp2_session_send(session->ngh2);
-            h2_conn_io_flush(&session->io);
+            send_flush(session, 1);
         }
         h2_mplx_abort(session->mplx);
     }
@@ -902,7 +968,7 @@ static int resume_on_data(void *ctx, h2_stream *stream) {
             
             int rv = nghttp2_session_resume_data(session->ngh2, stream->id);
             ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
-                          APLOG_ERR : APLOG_INFO, 0, session->c,
+                          APLOG_ERR : APLOG_DEBUG, 0, session->c,
                           "h2_stream(%ld-%d): resuming stream %s",
                           session->id, stream->id, nghttp2_strerror(rv));
         }
@@ -1007,6 +1073,10 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         have_written = 1;
     }
     
+    if (have_written) {
+        send_flush(session, 1);
+    }
+    
     reap_zombies(session, 0);
 
     return status;
@@ -1051,13 +1121,16 @@ static apr_status_t session_receive(const char *data, apr_size_t len,
 apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
 {
     assert(session);
+    if (session->buf_len > 0) {
+        send_flush(session, 1);
+    }
     return h2_conn_io_read(&session->io, block, session_receive, session);
 }
 
 apr_status_t h2_session_close(h2_session *session)
 {
     assert(session);
-    return h2_conn_io_flush(&session->io);
+    return send_flush(session, 1);
 }
 
 static h2_stream *match_any(void *ctx, h2_stream *stream) {

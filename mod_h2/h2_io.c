@@ -178,6 +178,9 @@ apr_status_t h2_io_out_read(h2_io *io, char *buffer,
     }
     
     *plen = written;
+    if (status == APR_SUCCESS && !*peos && !*plen) {
+        return APR_EAGAIN;
+    }
     return status;
 }
 

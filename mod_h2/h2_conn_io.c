@@ -166,11 +166,10 @@ static apr_status_t do_pass(apr_bucket_brigade *bb, void *ctx) {
     return status;
 }
 
-apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf, 
-                              size_t length, size_t *written)
+apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, 
+                              const char *buf, size_t length)
 {
     apr_status_t status = APR_SUCCESS;
-    *written = 0;
     
     /* Append our data and pass on. */
     APR_BRIGADE_INSERT_TAIL(io->output,
@@ -194,7 +193,6 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, const char *buf,
         || APR_STATUS_IS_EPIPE(status)) {
         /* These are all fine and no reason for concern. Everything else
          * is interesting. */
-        *written = length;
         status = APR_SUCCESS;
     }
     else {

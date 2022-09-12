@@ -45,8 +45,7 @@ apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
 
 apr_status_t h2_conn_io_write(h2_conn_io_ctx *io,
                          const char *buf,
-                         size_t length,
-                         size_t *written);
+                         size_t length);
 
 apr_status_t h2_conn_io_write_brigade(h2_conn_io_ctx *io,
                                       apr_bucket_brigade *bb);
