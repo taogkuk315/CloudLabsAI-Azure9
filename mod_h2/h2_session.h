@@ -76,7 +76,7 @@ struct h2_session {
     struct h2_workers *workers;     /* for executing stream tasks */
     
     apr_size_t buf_len;             /* current amount of data in buffer */
-    char buf[ 32 * 1024 ];          /* output buffering */
+    char buf[ 4 * 1024 ];           /* output buffering */
 };
 
 
