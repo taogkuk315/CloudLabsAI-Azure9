@@ -47,10 +47,6 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io,
                          const char *buf,
                          size_t length);
 
-apr_status_t h2_conn_io_write_brigade(h2_conn_io_ctx *io,
-                                      apr_bucket_brigade *bb);
-
-
 apr_status_t h2_conn_io_flush(h2_conn_io_ctx *io);
 
 #endif /* defined(__mod_h2__h2_conn_io__) */

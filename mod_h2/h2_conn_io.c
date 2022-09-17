@@ -166,28 +166,20 @@ static apr_status_t do_pass(apr_bucket_brigade *bb, void *ctx) {
     return status;
 }
 
+static apr_status_t flush_out(apr_bucket_brigade *bb, void *ctx) 
+{
+    h2_conn_io_ctx *io = (h2_conn_io_ctx*)ctx;
+    apr_status_t status = ap_pass_brigade(io->connection->output_filters, bb);
+    apr_brigade_cleanup(bb);
+    return status;
+}
+
 apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, 
                               const char *buf, size_t length)
 {
     apr_status_t status = APR_SUCCESS;
     
-    /* Append our data and pass on. */
-    APR_BRIGADE_INSERT_TAIL(io->output,
-            apr_bucket_transient_create((const char *)buf, length,
-                                        io->output->bucket_alloc));
-
-    /* Send it out through installed filters to the client */
-    status = ap_pass_brigade(io->connection->output_filters, io->output);
-    
-    if (APLOGctrace2(io->connection)) {
-        char buffer[32];
-        h2_util_hex_dump(buffer, sizeof(buffer)/sizeof(buffer[0]), buf, length);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, io->connection,
-                      "h2_conn_io(%ld): written %ld bytes: %s",
-                      io->connection->id, length, buffer);
-    }
-    apr_brigade_cleanup(io->output);
-    
+    status = apr_brigade_write(io->output, flush_out, io, buf, length);
     if (status == APR_SUCCESS
         || APR_STATUS_IS_ECONNABORTED(status)
         || APR_STATUS_IS_EPIPE(status)) {
@@ -199,18 +191,7 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io,
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
                       "h2_conn_io: write error");
     }
-
-    return status;
-}
-
-apr_status_t h2_conn_io_write_brigade(h2_conn_io_ctx *io,
-                                      apr_bucket_brigade *bb)
-{
-    apr_status_t status = h2_util_pass(io->output, bb, 0, 0, 
-                                       "conn_io_write_brigade");
-    if (status == APR_SUCCESS) {
-        status = ap_pass_brigade(io->connection->output_filters, io->output);
-    }
+    
     return status;
 }
 
@@ -222,9 +203,7 @@ apr_status_t h2_conn_io_flush(h2_conn_io_ctx *io)
                             apr_bucket_flush_create(io->output->bucket_alloc));
     
     /* Send it out through installed filters (TLS) to the client */
-    apr_status_t status = ap_pass_brigade(io->connection->output_filters,
-                                          io->output);
-    apr_brigade_cleanup(io->output);
+    apr_status_t status = flush_out(io->output, io);
     
     if (status == APR_SUCCESS
         || APR_STATUS_IS_ECONNABORTED(status)

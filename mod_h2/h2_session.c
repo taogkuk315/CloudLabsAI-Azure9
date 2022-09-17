@@ -93,7 +93,6 @@ static apr_status_t stream_end_headers(h2_session *session,
 
 static apr_status_t send_data(h2_session *session, const char *data, 
                               apr_size_t length);
-static apr_status_t send_flush(h2_session *session, int deep);
 
 /*
  * Callback when nghttp2 wants to send bytes back to the client.
@@ -425,56 +424,7 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
 static apr_status_t send_data(h2_session *session, const char *data, 
                               apr_size_t length)
 {
-    apr_status_t status = APR_SUCCESS;
-    apr_size_t chunk_len;
-    apr_size_t avail;
-    
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                  "h2_session(%ld): send_data, %ld bytes",
-                  session->id, length);
-    if (session->aborted) {
-        return APR_ECONNABORTED;
-    }
-    
-    while (length > 0 && status == APR_SUCCESS) {
-        
-        avail = sizeof(session->buf) - session->buf_len;
-        if (avail == 0) {
-            status = send_flush(session, 0);
-            continue;
-        }
-        
-        chunk_len = (length > avail)? avail : length;
-        if (chunk_len > 0) {
-            memcpy(session->buf + session->buf_len, data, chunk_len);
-            session->buf_len += chunk_len;
-            data += chunk_len;
-            length -= chunk_len;
-        }
-    }
-    
-    return status;
-}
-
-static apr_status_t send_flush(h2_session *session, int deep)
-{
-    apr_status_t status = APR_SUCCESS;
-    
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                  "h2_session(%ld): flush_data, %ld bytes, deep=%d",
-                  session->id, (long)session->buf_len, deep);
-    if (session->buf_len) {
-        status = h2_conn_io_write(&session->io, 
-                                  session->buf, session->buf_len);
-        if (status != APR_SUCCESS) {
-            return status;
-        }
-        session->buf_len = 0;
-    }
-    if (deep) {
-        h2_conn_io_flush(&session->io);
-    }
-    return status;
+    return h2_conn_io_write(&session->io, data, length);
 }
 
 #if NGHTTP2_HAS_DATA_CB
@@ -819,7 +769,7 @@ static apr_status_t h2_session_abort_int(h2_session *session, int reason)
             nghttp2_session_terminate_session(session->ngh2, reason);
             nghttp2_submit_goaway(session->ngh2, 0, 0, reason, NULL, 0);
             nghttp2_session_send(session->ngh2);
-            send_flush(session, 1);
+            h2_conn_io_flush(&session->io);
         }
         h2_mplx_abort(session->mplx);
     }
@@ -1074,7 +1024,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     }
     
     if (have_written) {
-        send_flush(session, 1);
+        h2_conn_io_flush(&session->io);
     }
     
     reap_zombies(session, 0);
@@ -1121,16 +1071,13 @@ static apr_status_t session_receive(const char *data, apr_size_t len,
 apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
 {
     assert(session);
-    if (session->buf_len > 0) {
-        send_flush(session, 1);
-    }
     return h2_conn_io_read(&session->io, block, session_receive, session);
 }
 
 apr_status_t h2_session_close(h2_session *session)
 {
     assert(session);
-    return send_flush(session, 1);
+    return h2_conn_io_flush(&session->io);
 }
 
 static h2_stream *match_any(void *ctx, h2_stream *stream) {
