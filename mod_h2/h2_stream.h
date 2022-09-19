@@ -68,6 +68,8 @@ struct h2_stream {
     struct h2_response *response; /* the response, once ready */
     apr_bucket_brigade *bbout;  /* output DATA */
     apr_off_t bytes_sent;
+
+    apr_file_t *file;
 };
 
 
@@ -94,7 +96,8 @@ apr_status_t h2_stream_write_data(h2_stream *stream,
                                   const char *data, size_t len);
 
 apr_status_t h2_stream_set_response(h2_stream *stream, 
-                                    struct h2_response *response);
+                                    struct h2_response *response,
+                                    apr_bucket_brigade *bb);
 
 apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
                             apr_size_t *plen, int *peos);

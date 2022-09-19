@@ -180,7 +180,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         }
         else if (mode == AP_MODE_SPECULATIVE) {
             /* return not more than was asked for */
-            return h2_util_copy(bb, input->bb, readbytes, 0, 
+            return h2_util_copy(bb, input->bb, readbytes,  
                                 "task_input_read(speculative)");
         }
         else if (mode == AP_MODE_GETLINE) {

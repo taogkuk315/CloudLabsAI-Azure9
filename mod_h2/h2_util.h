@@ -88,12 +88,10 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
  * @param to the brigade to copy the data to
  * @param from the brigade to get the data from
  * @param maxlen of bytes to copy, 0 for all
- * @param count_virtual if virtual buckets like FILE do count against maxlen
  * @param msg message for use in logging
  */
 apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, int count_virtual, 
-                          const char *msg);
+                          apr_size_t maxlen, const char *msg);
 
 /**
  * Pass the buckets from one brigade into another, without any setaside. 
@@ -116,5 +114,18 @@ apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from,
  */
 int h2_util_has_flush_or_eos(apr_bucket_brigade *bb);
 int h2_util_has_eos(apr_bucket_brigade *bb, apr_size_t len);
+
+/**
+ * Check how many bytes of the desired amount are available and if the
+ * end of stream is reached by that amount.
+ * @param bb the brigade to check
+ * @param plen the desired length and, on return, the available length
+ * @param on return, if eos has been reached
+ */
+apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb, 
+                              apr_size_t *plen, int *peos);
+
+apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer, 
+                             apr_size_t *plen, int *peos);
 
 #endif /* defined(__mod_h2__h2_util__) */

@@ -334,8 +334,6 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                                   (long)from, (long)from->p, 
                                   (long)to, (long)to->p, setaside);
                     if (setaside) {
-                        /*status = apr_bucket_setaside(b, to->p);*/
-                        /*status = apr_file_dup(&fd, fd, to->p);*/
                         status = apr_file_setaside(&fd, fd, to->p);
                         *pfile = fd;
                         if (status != APR_SUCCESS) {
@@ -430,8 +428,7 @@ apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from,
 }
 
 apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, int count_virtual, 
-                          const char *msg)
+                          apr_size_t maxlen, const char *msg)
 {
     apr_status_t status = APR_SUCCESS;
     
@@ -442,8 +439,7 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
     if (!APR_BRIGADE_EMPTY(from)) {
         apr_bucket *b, *end, *cpy;
         
-        status = last_not_included(from, maxlen, 
-                                   (count_virtual || !FILE_MOVE), &end);
+        status = last_not_included(from, maxlen, 1, &end);
         if (status != APR_SUCCESS) {
             return status;
         }
@@ -528,3 +524,70 @@ int h2_util_has_eos(apr_bucket_brigade *bb, apr_size_t len)
     return 0;
 }
 
+apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb, 
+                              apr_size_t *plen, int *peos)
+{
+    apr_status_t status;
+    /* test read to determine available length */
+    apr_off_t blen = 0;
+    status = apr_brigade_length(bb, 0, &blen);
+    if (blen < *plen) {
+        *plen = blen;
+    }
+    *peos = h2_util_has_eos(bb, *plen);
+    return status;
+}
+
+apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer, 
+                             apr_size_t *plen, int *peos)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_size_t avail = *plen;
+    apr_size_t written = 0;
+    apr_bucket *b;
+
+    /* Copy data in our brigade into the buffer until it is filled or
+     * we encounter an EOS.
+     */
+    while ((status == APR_SUCCESS) 
+           && !APR_BRIGADE_EMPTY(bb)
+           && (avail > 0)) {
+        
+        apr_bucket *b = APR_BRIGADE_FIRST(bb);
+        if (APR_BUCKET_IS_METADATA(b)) {
+            if (APR_BUCKET_IS_EOS(b)) {
+                *peos = 1;
+            }
+            else {
+                /* ignore */
+            }
+        }
+        else {
+            const char *data;
+            apr_size_t data_len;
+            
+            if (b->length != -1 && b->length > avail) {
+                apr_bucket_split(b, avail);
+            }
+            status = apr_bucket_read(b, &data, &data_len, 
+                                     APR_NONBLOCK_READ);
+            if (status == APR_SUCCESS && data_len > 0) {
+                if (data_len > avail) {
+                    apr_bucket_split(b, avail);
+                    data_len = avail;
+                }
+                memcpy(buffer, data, data_len);
+                avail -= data_len;
+                buffer += data_len;
+                written += data_len;
+            }
+        }
+        apr_bucket_delete(b);
+    }
+    
+    *plen = written;
+    if (status == APR_SUCCESS && !*peos && !*plen) {
+        return APR_EAGAIN;
+    }
+    return status;
+}

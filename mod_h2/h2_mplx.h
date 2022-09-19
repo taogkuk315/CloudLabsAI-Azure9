@@ -43,6 +43,7 @@ struct h2_task;
 struct h2_io_set;
 struct apr_thread_cond_t;
 struct h2_workers;
+struct h2_stream_set;
 
 typedef struct h2_mplx h2_mplx;
 
@@ -193,11 +194,13 @@ apr_status_t h2_mplx_in_update_windows(h2_mplx *m,
  ******************************************************************************/
 
 /**
- * Gets a response from a stream that is ready for submit. Will return
- * NULL if none is available.
+ * Get a stream whose response is ready for submit. Will set response and
+ * any out data available in stream. 
  * @param m the mplxer to get a response from
+ * @param bb the brigade to place any existing repsonse body data into
  */
-struct h2_response *h2_mplx_pop_response(h2_mplx *m);
+struct h2_stream *h2_mplx_next_submit(h2_mplx *m, 
+                                      struct h2_stream_set *streams);
 
 /**
  * Reads output data from the given stream. Will never block, but

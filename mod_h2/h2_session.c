@@ -580,6 +580,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->mplx = h2_mplx_create(c, session->pool, workers);
         
         h2_conn_io_init(&session->io, c, 0);
+        session->bbtmp = apr_brigade_create(session->pool, c->bucket_alloc);
         
         apr_status_t status = init_callbacks(c, &callbacks);
         if (status != APR_SUCCESS) {
@@ -883,13 +884,6 @@ apr_status_t h2_session_start(h2_session *session, int *rv)
     return status;
 }
 
-h2_response *h2_session_pop_response(h2_session *session)
-{
-    assert(session);
-    return h2_mplx_pop_response(session->mplx);
-}
-
-
 static int h2_session_want_read(h2_session *session)
 {
     return nghttp2_session_want_read(session->ngh2);
@@ -953,7 +947,7 @@ static apr_status_t h2_session_update_windows(h2_session *session)
 apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 {
     apr_status_t status = APR_EAGAIN;
-    h2_response *response = NULL;
+    h2_stream *stream = NULL;
     int have_written = 0;
     
     assert(session);
@@ -982,14 +976,12 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     }
     
     /* If we have responses ready, submit them now. */
-    while ((response = h2_session_pop_response(session)) != NULL) {
-        h2_stream *stream = h2_session_get_stream(session, response->stream_id);
-        if (stream) {
-            h2_stream_set_response(stream, response);
-            status = h2_session_handle_response(session, stream);
-            have_written = 1;
-        }
-        response = NULL;
+    while ((stream = h2_mplx_next_submit(session->mplx, 
+                                         session->streams)) != NULL) {
+        ap_log_cerror( APLOG_MARK, APLOG_INFO, 0, session->c,
+                      "h2_session: send response");
+        status = h2_session_handle_response(session, stream);
+        have_written = 1;
     }
     
     if (h2_session_resume_streams_with_data(session) > 0) {

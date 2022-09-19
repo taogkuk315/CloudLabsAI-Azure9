@@ -31,6 +31,8 @@
 #include "h2_io_set.h"
 #include "h2_response.h"
 #include "h2_mplx.h"
+#include "h2_stream.h"
+#include "h2_stream_set.h"
 #include "h2_task.h"
 #include "h2_task_input.h"
 #include "h2_task_output.h"
@@ -329,26 +331,36 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
     return status;
 }
 
-h2_response *h2_mplx_pop_response(h2_mplx *m)
+h2_stream *h2_mplx_next_submit(h2_mplx *m, h2_stream_set *streams)
 {
     assert(m);
     if (m->aborted) {
         return NULL;
     }
-    h2_response *response = NULL;
+    h2_stream *stream = NULL;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get_highest_prio(m->ready_ios);
-        if (io && io->response.headers) {
-            response = &io->response;
+        if (io) {
+            h2_response *response = &io->response;
             h2_io_set_remove(m->ready_ios, io);
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, m->c,
-                          "h2_mplx(%ld): popped response(%d)",
-                          m->id, response->stream_id);
+            
+            stream = h2_stream_set_get(streams, response->stream_id);
+            if (stream) {
+                h2_stream_set_response(stream, response, io->bbout);
+                if (io->output_drained) {
+                    apr_thread_cond_signal(io->output_drained);
+                }
+            }
+            else {
+                ap_log_cerror(APLOG_MARK, APLOG_WARNING, APR_NOTFOUND, m->c,
+                              "h2_mplx(%ld): stream for response %d",
+                              m->id, response->stream_id);
+            }
         }
         apr_thread_mutex_unlock(m->lock);
     }
-    return response;
+    return stream;
 }
 
 static apr_status_t out_write(h2_mplx *m, h2_io *io, 
