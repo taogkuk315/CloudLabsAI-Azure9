@@ -73,13 +73,6 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master,
 
 void h2_stream_cleanup(h2_stream *stream)
 {
-    if (stream->file) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, h2_mplx_get_conn(stream->m),
-                      "h2_stream(%d): cleanup, closing file", stream->id);
-        apr_file_close(stream->file);
-        stream->file = NULL;
-    }
-
     h2_request_destroy(stream->request);
     h2_mplx_close_io(stream->m, stream->id);
 }
@@ -119,7 +112,7 @@ apr_status_t h2_stream_set_response(h2_stream *stream, h2_response *response,
                                     apr_bucket_brigade *bb)
 {
     stream->response = response;
-    if (0 && bb && !APR_BRIGADE_EMPTY(bb)) {
+    if (bb && !APR_BRIGADE_EMPTY(bb)) {
         if (!stream->bbout) {
             stream->bbout = apr_brigade_create(stream->pool, 
                                                stream->bucket_alloc);
@@ -255,10 +248,6 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
     if (stream->bbout && !APR_BRIGADE_EMPTY(stream->bbout)) {
         return h2_util_bb_read(stream->bbout, buffer, plen, peos);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, 
-                  h2_mplx_get_conn(stream->m),
-                  "h2_stream(%ld-%d): mplx read",
-                  h2_mplx_get_id(stream->m), stream->id);
     return h2_mplx_out_read(stream->m, stream->id, buffer, plen, peos);
 }
 

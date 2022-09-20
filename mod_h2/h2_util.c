@@ -204,7 +204,7 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
  * still needed.
  */
 static const int DEEP_COPY = 1;
-static const int FILE_MOVE = 1;
+static const int FILE_MOVE = 0;
 
 apr_status_t last_not_included(apr_bucket_brigade *bb, 
                                apr_size_t maxlen, int count_virtual,

@@ -978,8 +978,6 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     /* If we have responses ready, submit them now. */
     while ((stream = h2_mplx_next_submit(session->mplx, 
                                          session->streams)) != NULL) {
-        ap_log_cerror( APLOG_MARK, APLOG_INFO, 0, session->c,
-                      "h2_session: send response");
         status = h2_session_handle_response(session, stream);
         have_written = 1;
     }

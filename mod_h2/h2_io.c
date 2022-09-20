@@ -117,11 +117,6 @@ apr_status_t h2_io_in_close(h2_io *io)
 apr_status_t h2_io_out_read(h2_io *io, char *buffer, 
                             apr_size_t *plen, int *peos)
 {
-    apr_status_t status = APR_SUCCESS;
-    apr_size_t avail = *plen;
-    apr_size_t written = 0;
-    apr_bucket *b;
-    
     if (buffer == NULL) {
         return h2_util_bb_avail(io->bbout, plen, peos);
     }
@@ -132,7 +127,7 @@ apr_status_t h2_io_out_read(h2_io *io, char *buffer,
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen)
 {
-    return h2_util_move(io->bbout, bb, maxlen, 0, NULL/*&io->file*/,
+    return h2_util_move(io->bbout, bb, maxlen, 0, &io->file,
                         "h2_io_out_write");
 }
 
