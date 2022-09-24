@@ -15,15 +15,15 @@
 
 
 
-APR_VERSION  = 1.5.1
+APR_VERSION  = 1.5.2
 APR_DIR      = apr-$(APR_VERSION)
 APR_TAR      = $(APR_DIR).tar.gz
-APR_URL      = http://apache.mirror.iphh.net//apr/$(APR_TAR)
+APR_URL      = http://archive.apache.org/dist/apr/$(APR_TAR)
 
 APR-UTIL_VERSION = 1.5.4
 APR-UTIL_DIR = apr-util-$(APR-UTIL_VERSION)
 APR-UTIL_TAR = $(APR-UTIL_DIR).tar.gz
-APR-UTIL_URL = http://apache.mirror.iphh.net//apr/$(APR-UTIL_TAR)
+APR-UTIL_URL = http://archive.apache.org/dist/apr/$(APR-UTIL_TAR)
 
 HTTPD_VERSION = 2.4.12
 HTTPD_DIR    = httpd-$(HTTPD_VERSION)
