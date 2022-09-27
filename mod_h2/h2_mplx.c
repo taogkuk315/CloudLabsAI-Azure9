@@ -36,6 +36,7 @@
 #include "h2_task.h"
 #include "h2_task_input.h"
 #include "h2_task_output.h"
+#include "h2_task_queue.h"
 #include "h2_workers.h"
 
 
@@ -90,6 +91,8 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
         }
         
         m->bucket_alloc = apr_bucket_alloc_create(m->pool);
+        
+        m->q = h2_tq_create(m->id, m->pool);
         m->stream_ios = h2_io_set_create(m->pool);
         m->ready_ios = h2_io_set_create(m->pool);
         m->stream_max_mem = h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM);
@@ -104,6 +107,11 @@ void h2_mplx_destroy(h2_mplx *m)
     m->aborted = 1;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
+        if (m->q) {
+            h2_workers_unschedule(m->workers, m->q, NULL);
+            h2_tq_destroy(m->q);
+            m->q = NULL;
+        }
         if (m->ready_ios) {
             h2_io_set_destroy(m->ready_ios);
             m->ready_ios = NULL;
@@ -152,6 +160,9 @@ void h2_mplx_abort(h2_mplx *m)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         m->aborted = 1;
+        if (m->workers) {
+            h2_workers_unschedule(m->workers, m->q, NULL);
+        }
         h2_io_set_destroy_all(m->stream_ios);
         apr_thread_mutex_unlock(m->lock);
     }
@@ -575,7 +586,7 @@ static void have_out_data_for(h2_mplx *m, int stream_id)
 apr_status_t h2_mplx_do_async(h2_mplx *m, int stream_id,
                               struct h2_task *task)
 {
-    apr_status_t status = h2_workers_schedule(m->workers, task);
+    apr_status_t status = h2_workers_schedule(m->workers, m->q, task);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, m->c,
                       "scheduling task(%ld-%d)",
@@ -619,9 +630,9 @@ apr_status_t h2_mplx_join_task(h2_mplx *m, h2_task *task, int wait)
         }
         else if (!h2_task_has_started(task)) {
             
-            status = h2_workers_unschedule(m->workers, task);
+            status = h2_workers_unschedule(m->workers, m->q, task);
             if (status != APR_SUCCESS && !h2_task_has_started(task)) {
-                /* hmm, not know to workers and not started, assume
+                /* hmm, not on our list and not started, assume
                  * it never will. */
                 status = APR_SUCCESS;
             }

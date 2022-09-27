@@ -10,6 +10,8 @@
 		B20938241AF12A1800028F50 /* alpn-2.4-proposal-2015-04-29.diff */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "alpn-2.4-proposal-2015-04-29.diff"; sourceTree = "<group>"; };
 		B20E441F1ACC07E8003D21AE /* test_curl_get.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_get.sh; sourceTree = "<group>"; };
 		B20E44201ACC088E003D21AE /* test_curl_post.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_post.sh; sourceTree = "<group>"; };
+		B21BFCF91B023B840031EBCD /* h2_task_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_queue.c; sourceTree = "<group>"; };
+		B21BFCFA1B023B840031EBCD /* h2_task_queue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_queue.h; sourceTree = "<group>"; };
 		B225490C1A6EAC37004BDEC9 /* mod_h2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mod_h2.c; sourceTree = "<group>"; };
 		B225490D1A6EAE9F004BDEC9 /* h2_config.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_config.c; sourceTree = "<group>"; };
 		B225490E1A6EAE9F004BDEC9 /* h2_config.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_config.h; sourceTree = "<group>"; };
@@ -347,6 +349,8 @@
 				B284ACCA1A7B9DF900C35863 /* h2_task_input.h */,
 				B2546D8E1A7FA7D70033A875 /* h2_task_output.c */,
 				B2546D8F1A7FA7D70033A875 /* h2_task_output.h */,
+				B21BFCF91B023B840031EBCD /* h2_task_queue.c */,
+				B21BFCFA1B023B840031EBCD /* h2_task_queue.h */,
 				B2546D881A7F71F80033A875 /* h2_task.c */,
 				B2546D891A7F71F80033A875 /* h2_task.h */,
 				B2FE998E1AA7496B00A5CE5A /* h2_to_h1.c */,

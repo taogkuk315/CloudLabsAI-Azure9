@@ -44,6 +44,7 @@ struct h2_io_set;
 struct apr_thread_cond_t;
 struct h2_workers;
 struct h2_stream_set;
+struct h2_task_queue;
 
 typedef struct h2_mplx h2_mplx;
 
@@ -52,9 +53,8 @@ struct h2_mplx {
     conn_rec *c;
     apr_pool_t *pool;
     apr_bucket_alloc_t *bucket_alloc;
-    
-    APR_RING_HEAD(h2_tasks, h2_task) tasks;
-    
+
+    struct h2_task_queue *q;
     struct h2_io_set *stream_ios;
     struct h2_io_set *ready_ios;
     
@@ -234,5 +234,6 @@ apr_status_t h2_mplx_out_write(h2_mplx *mplx, int stream_id,
  * data and then only APR_EOF as result. 
  */
 apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id);
+
 
 #endif /* defined(__mod_h2__h2_mplx__) */

@@ -41,6 +41,7 @@ OBJECTS = \
     h2_task.c \
     h2_task_input.c \
     h2_task_output.c \
+    h2_task_queue.c \
     h2_to_h1.c \
     h2_util.c \
     h2_worker.c \
@@ -68,6 +69,7 @@ HFILES = \
     h2_task.h \
     h2_task_input.h \
     h2_task_output.h \
+    h2_task_queue.h \
     h2_to_h1.h \
     h2_util.h \
     h2_version.h \

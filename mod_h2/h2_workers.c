@@ -24,17 +24,25 @@
 
 #include "h2_private.h"
 #include "h2_task.h"
+#include "h2_task_queue.h"
 #include "h2_worker.h"
 #include "h2_workers.h"
 
 static h2_task* pop_next_task(h2_workers *workers, h2_worker *worker)
 {
-    // TODO: prio scheduling
-    if (!H2_TASK_LIST_EMPTY(&workers->tasks)) {
-        h2_task *task = H2_TASK_LIST_FIRST(&workers->tasks);
-        h2_task_set_started(task, h2_worker_get_cond(worker));
-        H2_TASK_REMOVE(task);
-        return task;
+    if (!H2_TQ_LIST_EMPTY(&workers->queues)) {
+        h2_task_queue *q = H2_TQ_LIST_FIRST(&workers->queues);
+        if (q) {
+            H2_TQ_REMOVE(q);
+            h2_task *task = h2_tq_pop(q);
+            if (task) {
+                h2_task_set_started(task, h2_worker_get_cond(worker));
+                if (!H2_TQ_EMPTY(q)) {
+                    H2_TQ_LIST_INSERT_TAIL(&workers->queues, q);
+                }
+                return task;
+            }
+        }
     }
     return NULL;
 }
@@ -189,7 +197,7 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         apr_threadattr_create(&workers->thread_attr, workers->pool);
         
         APR_RING_INIT(&workers->workers, h2_worker, link);
-        APR_RING_INIT(&workers->tasks, h2_task, link);
+        APR_RING_INIT(&workers->queues, h2_task_queue, link);
         
         status = apr_thread_mutex_create(&workers->lock,
                                          APR_THREAD_MUTEX_DEFAULT,
@@ -220,9 +228,10 @@ void h2_workers_destroy(h2_workers *workers)
         apr_thread_mutex_destroy(workers->lock);
         workers->lock = NULL;
     }
-    while (!H2_TASK_LIST_EMPTY(&workers->tasks)) {
-        h2_task *task = H2_TASK_LIST_FIRST(&workers->tasks);
-        H2_TASK_REMOVE(task);
+    while (!H2_TQ_LIST_EMPTY(&workers->queues)) {
+        h2_task_queue *q = H2_TQ_LIST_FIRST(&workers->queues);
+        H2_TQ_REMOVE(q);
+        h2_tq_destroy(q);
     }
     while (!H2_WORKER_LIST_EMPTY(&workers->workers)) {
         h2_worker *w = H2_WORKER_LIST_FIRST(&workers->workers);
@@ -230,15 +239,31 @@ void h2_workers_destroy(h2_workers *workers)
     }
 }
 
-apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
+static int tq_in_list(h2_workers *workers, h2_task_queue *q)
+{
+    h2_task_queue *e;
+    for (e = H2_TQ_LIST_FIRST(&workers->queues); 
+         e != H2_TQ_LIST_SENTINEL(&workers->queues);
+         e = H2_TQ_NEXT(e)) {
+        if (e == q) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+apr_status_t h2_workers_schedule(h2_workers *workers, 
+                                 h2_task_queue *q, h2_task *task)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                      "h2_workers: scheduling task(%s)",
                      h2_task_get_id(task));
-        
-        H2_TASK_LIST_INSERT_TAIL(&workers->tasks, task);        
+        h2_tq_add(q, task);
+        if (!tq_in_list(workers, q)) {
+            H2_TQ_LIST_INSERT_TAIL(&workers->queues, q);        
+        }
         apr_thread_cond_signal(workers->task_added);
         
         if (workers->idle_worker_count <= 0 
@@ -253,24 +278,8 @@ apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task)
     return status;
 }
 
-typedef struct{
-    h2_task *task;
-    h2_worker *found;
-} find_task_ctx;
-
-static int find_task(void *ctx, int id, void *entry, int index) 
-{
-    find_task_ctx *fctx = (find_task_ctx *)ctx;
-    h2_worker *worker = (h2_worker *)entry;
-    if (fctx->task == h2_worker_get_task(worker)) {
-        fctx->found = worker;
-        return 0;
-    }
-    return 1;
-}
-
-
-apr_status_t h2_workers_unschedule(h2_workers *workers, h2_task *task)
+apr_status_t h2_workers_unschedule(h2_workers *workers, 
+                                   h2_task_queue *q, h2_task *task)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
@@ -280,13 +289,9 @@ apr_status_t h2_workers_unschedule(h2_workers *workers, h2_task *task)
                      "h2_workers: unschedule task(%s)",
                      h2_task_get_id(task));
         h2_task *t;
-        for (t = H2_TASK_LIST_FIRST(&workers->tasks); 
-             t != H2_TASK_LIST_SENTINEL(&workers->tasks);
-             t = H2_TASK_NEXT(t)) {
-            if (t == task) {
-                H2_TASK_REMOVE(task);
-                status = APR_SUCCESS;
-            }
+        if (tq_in_list(workers, q)) {
+            H2_TQ_REMOVE(q);
+            status = APR_SUCCESS;
         }
         apr_thread_mutex_unlock(workers->lock);
     }

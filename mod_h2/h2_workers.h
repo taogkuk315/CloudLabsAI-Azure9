@@ -24,6 +24,7 @@
 struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 struct h2_task;
+struct h2_task_queue;
 
 typedef struct h2_workers h2_workers;
 
@@ -39,7 +40,7 @@ struct h2_workers {
     apr_threadattr_t *thread_attr;
     
     APR_RING_HEAD(h2_worker_list, h2_worker) workers;
-    APR_RING_HEAD(h2_task_list, h2_task) tasks;
+    APR_RING_HEAD(h2_task_queues, h2_task_queue) queues;
     
     int worker_count;
     volatile apr_uint32_t max_idle_secs;
@@ -62,9 +63,13 @@ void h2_workers_destroy(h2_workers *workers);
 
 /* Schedule a task for execution.
  */
-apr_status_t h2_workers_schedule(h2_workers *workers, h2_task *task);
+apr_status_t h2_workers_schedule(h2_workers *workers, 
+                                 struct h2_task_queue *q, 
+                                 struct h2_task *task);
 
-apr_status_t h2_workers_unschedule(h2_workers *workers, h2_task *task);
+apr_status_t h2_workers_unschedule(h2_workers *workers, 
+                                   struct h2_task_queue *q,
+                                   struct h2_task *task);
 
 void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs);
 
