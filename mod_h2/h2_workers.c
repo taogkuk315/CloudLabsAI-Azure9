@@ -260,10 +260,10 @@ apr_status_t h2_workers_schedule(h2_workers *workers,
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                      "h2_workers: scheduling task(%s)",
                      h2_task_get_id(task));
-        h2_tq_add(q, task);
-        if (!tq_in_list(workers, q)) {
+        if (h2_tq_empty(q)) {
             H2_TQ_LIST_INSERT_TAIL(&workers->queues, q);        
         }
+        h2_tq_add(q, task);
         apr_thread_cond_signal(workers->task_added);
         
         if (workers->idle_worker_count <= 0 

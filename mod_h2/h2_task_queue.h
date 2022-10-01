@@ -30,6 +30,8 @@ h2_task_queue *h2_tq_create(long id, apr_pool_t *pool);
 
 void h2_tq_destroy(h2_task_queue *q);
 
+int h2_tq_empty(h2_task_queue *q);
+
 void h2_tq_add(h2_task_queue *q, struct h2_task *task);
 
 h2_task *h2_tq_pop(h2_task_queue *q);

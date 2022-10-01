@@ -42,6 +42,11 @@ void h2_tq_destroy(h2_task_queue *q)
     }
 }
 
+int h2_tq_empty(h2_task_queue *q)
+{
+    return H2_TASK_LIST_EMPTY(&q->tasks);
+}
+
 void h2_tq_add(h2_task_queue *q, struct h2_task *task)
 {
     H2_TASK_LIST_INSERT_TAIL(&q->tasks, task);
