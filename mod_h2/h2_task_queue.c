@@ -42,17 +42,39 @@ void h2_tq_destroy(h2_task_queue *q)
     }
 }
 
+static int in_list(h2_task_queue *q, h2_task *task)
+{
+    h2_task *e;
+    for (e = H2_TASK_LIST_FIRST(&q->tasks); 
+         e != H2_TASK_LIST_SENTINEL(&q->tasks);
+         e = H2_TASK_NEXT(e)) {
+        if (e == task) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int h2_tq_empty(h2_task_queue *q)
 {
     return H2_TASK_LIST_EMPTY(&q->tasks);
 }
 
-void h2_tq_add(h2_task_queue *q, struct h2_task *task)
+void h2_tq_append(h2_task_queue *q, struct h2_task *task)
 {
     H2_TASK_LIST_INSERT_TAIL(&q->tasks, task);
 }
 
-h2_task *h2_tq_pop(h2_task_queue *q)
+apr_status_t h2_tq_remove(h2_task_queue *q, struct h2_task *task)
+{
+    if (in_list(q, task)) {
+        H2_TASK_REMOVE(task);
+        return APR_SUCCESS;
+    }
+    return APR_NOTFOUND;
+}
+
+h2_task *h2_tq_pop_first(h2_task_queue *q)
 {
     if (!H2_TASK_LIST_EMPTY(&q->tasks)) {
         h2_task *task = H2_TASK_LIST_FIRST(&q->tasks);

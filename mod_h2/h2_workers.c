@@ -30,11 +30,19 @@
 
 static h2_task* pop_next_task(h2_workers *workers, h2_worker *worker)
 {
+    /* Each task queue belongs to one http2 session. We perform round
+     * robin scheduling among queues and serve the tasks in the queue
+     * in the order they appear.
+     * TODO: priority scheduling of tasks should adapt the order
+     * in the individual queue. This lacks the prio information from
+     * nghttp2 library for now.
+     * 
+     */
     if (!H2_TQ_LIST_EMPTY(&workers->queues)) {
         h2_task_queue *q = H2_TQ_LIST_FIRST(&workers->queues);
         if (q) {
             H2_TQ_REMOVE(q);
-            h2_task *task = h2_tq_pop(q);
+            h2_task *task = h2_tq_pop_first(q);
             if (task) {
                 h2_task_set_started(task, h2_worker_get_cond(worker));
                 if (!H2_TQ_EMPTY(q)) {
@@ -263,7 +271,7 @@ apr_status_t h2_workers_schedule(h2_workers *workers,
         if (h2_tq_empty(q)) {
             H2_TQ_LIST_INSERT_TAIL(&workers->queues, q);        
         }
-        h2_tq_add(q, task);
+        h2_tq_append(q, task);
         apr_thread_cond_signal(workers->task_added);
         
         if (workers->idle_worker_count <= 0 
@@ -284,14 +292,17 @@ apr_status_t h2_workers_unschedule(h2_workers *workers,
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         status = APR_EAGAIN;
-        
-        ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
-                     "h2_workers: unschedule task(%s)",
-                     h2_task_get_id(task));
-        h2_task *t;
-        if (tq_in_list(workers, q)) {
-            H2_TQ_REMOVE(q);
-            status = APR_SUCCESS;
+        if (task) {
+            ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
+                         "h2_workers: unschedule task(%s)",
+                         h2_task_get_id(task));
+            status = h2_tq_remove(q, task);
+        }
+        else {
+            if (tq_in_list(workers, q)) {
+                H2_TQ_REMOVE(q);
+                status = APR_SUCCESS;
+            }
         }
         apr_thread_mutex_unlock(workers->lock);
     }

@@ -61,16 +61,34 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
  */
 void h2_workers_destroy(h2_workers *workers);
 
-/* Schedule a task for execution.
+/**
+ * Schedule a task for execution by a h2_worker. Will append
+ * the task to the queue. The task queue should not be manipulated
+ * outside the workers from now on.
+ * @param workers the workers to schedule the task with
+ * @param q the queue to keep the task until execution
+ * @param task the task to schedule
  */
 apr_status_t h2_workers_schedule(h2_workers *workers, 
                                  struct h2_task_queue *q, 
                                  struct h2_task *task);
 
+/**
+ * Unschedule a specific task or, if task == NULL, remove
+ * the complete queue from scheduling.
+ * @param workers the workers to unschedule from
+ * @param q the queue to remove (from)
+ * @param task the specific task to unschedule, or NULL
+ */
 apr_status_t h2_workers_unschedule(h2_workers *workers, 
                                    struct h2_task_queue *q,
                                    struct h2_task *task);
 
+/**
+ * Set the amount of seconds a h2_worker should wait for new tasks
+ * before shutting down (if there are more than the minimum number of
+ * workers).
+ */
 void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs);
 
 #endif /* defined(__mod_h2__h2_workers__) */

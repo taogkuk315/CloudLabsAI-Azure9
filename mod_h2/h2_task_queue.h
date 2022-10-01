@@ -18,6 +18,10 @@
 
 struct h2_task;
 
+/**
+ * A simple ring of rings that keeps a list of h2_tasks and can
+ * be ringed itself, using the APR RING macros.
+ */
 typedef struct h2_task_queue h2_task_queue;
 
 struct h2_task_queue {
@@ -26,15 +30,46 @@ struct h2_task_queue {
     long id;
 };
 
+/**
+ * Allocate a new queue from the pool and initialize.
+ * @param id the identifier of the queue
+ * @param pool the memory pool
+ */
 h2_task_queue *h2_tq_create(long id, apr_pool_t *pool);
 
+/**
+ * Release all queue tasks.
+ * @param q the queue to destroy
+ */
 void h2_tq_destroy(h2_task_queue *q);
 
+/**
+ * Return != 0 iff there are no tasks in the queue.
+ * @param q the queue to check
+ */
 int h2_tq_empty(h2_task_queue *q);
 
-void h2_tq_add(h2_task_queue *q, struct h2_task *task);
+/**
+ * Append the task to the end of the queue.
+ * @param q the queue to append the task to
+ * @param task the task to append
+  */
+void h2_tq_append(h2_task_queue *q, struct h2_task *task);
 
-h2_task *h2_tq_pop(h2_task_queue *q);
+/**
+ * Remove a task from the queue. Return APR_SUCCESS if the task
+ * was indeed queued, APR_NOTFOUND otherwise.
+ * @param q the queue to remove from
+ * @param task the task to remove
+ */
+apr_status_t h2_tq_remove(h2_task_queue *q, struct h2_task *task);
+
+/**
+ * Get the first task from the queue or NULL if the queue is empty. The
+ * task will be removed.
+ * @param q the queue to pop the first task from
+ */
+h2_task *h2_tq_pop_first(h2_task_queue *q);
 
 /*******************************************************************************
  * Queue Manipulation.
