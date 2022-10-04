@@ -200,7 +200,7 @@ static int add_header(void *ctx, const char *key, const char *value)
         nvctx_t *nvctx = (nvctx_t*)ctx;
         if (nvctx->debug) {
             ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, 
-                          nvctx->r, "h2_response(%d) header ->sen %s: %s",
+                          nvctx->r, "h2_response(%d) header -> %s: %s",
                           nvctx->response->stream_id, key, value);
         }
         NV_ADD_CS_CS(ctx, key, value);

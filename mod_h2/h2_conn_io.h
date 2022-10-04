@@ -28,25 +28,29 @@ typedef struct {
     apr_bucket_brigade *output;
     int check_preface;
     int preface_bytes_left;
-} h2_conn_io_ctx;
+    
+    char *buffer;
+    apr_size_t buflen;
+    apr_size_t bufsize;
+} h2_conn_io;
 
-apr_status_t h2_conn_io_init(h2_conn_io_ctx *io, conn_rec *c, 
+apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, 
                              int check_preface);
-void h2_conn_io_destroy(h2_conn_io_ctx *io);
+void h2_conn_io_destroy(h2_conn_io *io);
 
 typedef apr_status_t (*h2_conn_io_on_read_cb)(const char *data, apr_size_t len,
                                          apr_size_t *readlen, int *done,
                                          void *puser);
 
-apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
+apr_status_t h2_conn_io_read(h2_conn_io *io,
                         apr_read_type_e block,
                         h2_conn_io_on_read_cb on_read_cb,
                         void *puser);
 
-apr_status_t h2_conn_io_write(h2_conn_io_ctx *io,
+apr_status_t h2_conn_io_write(h2_conn_io *io,
                          const char *buf,
                          size_t length);
 
-apr_status_t h2_conn_io_flush(h2_conn_io_ctx *io);
+apr_status_t h2_conn_io_flush(h2_conn_io *io);
 
 #endif /* defined(__mod_h2__h2_conn_io__) */

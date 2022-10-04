@@ -26,23 +26,27 @@
 static const char HTTP2_PREFACE[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 static const int HTTP2_PREFACE_LEN = sizeof(HTTP2_PREFACE) - 1;
 
-apr_status_t h2_conn_io_init(h2_conn_io_ctx *io, conn_rec *c, int check_preface)
+apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, int check_preface)
 {
     io->connection = c;
     io->input = apr_brigade_create(c->pool, c->bucket_alloc);
     io->output = apr_brigade_create(c->pool, c->bucket_alloc);
     io->check_preface = check_preface;
     io->preface_bytes_left = check_preface? HTTP2_PREFACE_LEN : 0;
+    io->buflen = 0;
+    io->bufsize = 16 * 1024;
+    io->buffer = apr_pcalloc(c->pool, io->bufsize);
+    
     return APR_SUCCESS;
 }
 
-void h2_conn_io_destroy(h2_conn_io_ctx *io)
+void h2_conn_io_destroy(h2_conn_io *io)
 {
     io->input = NULL;
     io->output = NULL;
 }
 
-static apr_status_t h2_conn_io_bucket_read(h2_conn_io_ctx *io,
+static apr_status_t h2_conn_io_bucket_read(h2_conn_io *io,
                                       apr_read_type_e block,
                                       h2_conn_io_on_read_cb on_read_cb,
                                       void *puser, int *pdone)
@@ -121,7 +125,7 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io_ctx *io,
     return status;
 }
 
-apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
+apr_status_t h2_conn_io_read(h2_conn_io *io,
                          apr_read_type_e block,
                          h2_conn_io_on_read_cb on_read_cb,
                          void *puser)
@@ -159,7 +163,7 @@ apr_status_t h2_conn_io_read(h2_conn_io_ctx *io,
 }
 
 static apr_status_t do_pass(apr_bucket_brigade *bb, void *ctx) {
-    h2_conn_io_ctx *io = (h2_conn_io_ctx *)ctx;
+    h2_conn_io *io = (h2_conn_io *)ctx;
     apr_status_t status = ap_pass_brigade(io->connection->output_filters, bb);
     apr_brigade_cleanup(bb);
     
@@ -168,13 +172,16 @@ static apr_status_t do_pass(apr_bucket_brigade *bb, void *ctx) {
 
 static apr_status_t flush_out(apr_bucket_brigade *bb, void *ctx) 
 {
-    h2_conn_io_ctx *io = (h2_conn_io_ctx*)ctx;
+    h2_conn_io *io = (h2_conn_io*)ctx;
     apr_status_t status = ap_pass_brigade(io->connection->output_filters, bb);
     apr_brigade_cleanup(bb);
     return status;
 }
 
-apr_status_t h2_conn_io_write(h2_conn_io_ctx *io, 
+#define WRITE_BRIGADE   0
+
+#if WRITE_BRIGADE
+apr_status_t h2_conn_io_write(h2_conn_io *io, 
                               const char *buf, size_t length)
 {
     apr_status_t status = APR_SUCCESS;
@@ -195,7 +202,7 @@ apr_status_t h2_conn_io_write(h2_conn_io_ctx *io,
     return status;
 }
 
-apr_status_t h2_conn_io_flush(h2_conn_io_ctx *io)
+apr_status_t h2_conn_io_flush(h2_conn_io *io)
 {
     /* Append flush.
      */
@@ -218,3 +225,72 @@ apr_status_t h2_conn_io_flush(h2_conn_io_ctx *io)
     
     return status;
 }
+
+#else /* WRITE_BRIGADE */
+
+apr_status_t h2_conn_io_write(h2_conn_io *io, 
+                              const char *buf, size_t length)
+{
+    apr_status_t status = APR_SUCCESS;
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, io->connection,
+                  "h2_conn_io: buffering %ld bytes", (long)length);
+    while (length > 0 && (status == APR_SUCCESS)) {
+        apr_size_t avail = io->bufsize - io->buflen;
+        if (avail <= 0) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, io->connection,
+                          "h2_conn_io: write, flushing %ld bytes", (long)io->buflen);
+            apr_bucket *b = apr_bucket_transient_create(io->buffer, io->buflen, 
+                                                        io->output->bucket_alloc);
+            APR_BRIGADE_INSERT_TAIL(io->output, b);
+            status = flush_out(io->output, io);
+            io->buflen = 0;
+        }
+        else if (length > avail) {
+            memcpy(io->buffer + io->buflen, buf, avail);
+            io->buflen += avail;
+            length -= avail;
+            buf += avail;
+        }
+        else {
+            memcpy(io->buffer + io->buflen, buf, length);
+            io->buflen += length;
+            length = 0;
+            break;
+        }
+    }
+    return status;
+}
+
+apr_status_t h2_conn_io_flush(h2_conn_io *io)
+{
+    if (io->buflen > 0) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, io->connection,
+                      "h2_conn_io: flush, flushing %ld bytes", (long)io->buflen);
+        apr_bucket *b = apr_bucket_transient_create(io->buffer, io->buflen, 
+                                                    io->output->bucket_alloc);
+        APR_BRIGADE_INSERT_TAIL(io->output, b);
+        io->buflen = 0;
+    }
+    /* Append flush.
+     */
+    APR_BRIGADE_INSERT_TAIL(io->output,
+                            apr_bucket_flush_create(io->output->bucket_alloc));
+    
+    /* Send it out through installed filters (TLS) to the client */
+    apr_status_t status = flush_out(io->output, io);
+    
+    if (status == APR_SUCCESS
+        || APR_STATUS_IS_ECONNABORTED(status)
+        || APR_STATUS_IS_EPIPE(status)) {
+        /* These are all fine and no reason for concern. Everything else
+         * is interesting. */
+    }
+    else {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
+                      "h2_conn_io: flush error");
+    }
+    
+    return status;
+}
+
+#endif /* WRITE_BRIGADE (else) */

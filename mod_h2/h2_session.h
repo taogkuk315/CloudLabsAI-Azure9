@@ -66,7 +66,7 @@ struct h2_session {
     apr_bucket_brigade *bbtmp;      /* brigade for keeping temporary data */
     struct apr_thread_cond_t *iowait; /* our cond when trywaiting for data */
     
-    h2_conn_io_ctx io;              /* io on httpd conn filters */
+    h2_conn_io io;                  /* io on httpd conn filters */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     
     struct h2_stream_set *streams;  /* streams handled by this session */
