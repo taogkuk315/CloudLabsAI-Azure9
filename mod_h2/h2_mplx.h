@@ -46,6 +46,8 @@ struct h2_workers;
 struct h2_stream_set;
 struct h2_task_queue;
 
+#include "h2_io.h"
+
 typedef struct h2_mplx h2_mplx;
 
 struct h2_mplx {
@@ -208,6 +210,10 @@ struct h2_stream *h2_mplx_next_submit(h2_mplx *m,
  */
 apr_status_t h2_mplx_out_read(h2_mplx *mplx, int stream_id, 
                               char *buffer, apr_size_t *plen, int *peos);
+
+apr_status_t h2_mplx_out_readx(h2_mplx *mplx, int stream_id, 
+                               h2_io_data_cb *cb, void *ctx, 
+                               apr_size_t *plen, int *peos);
 
 /**
  * Opens the output for the given stream with the specified response.

@@ -324,12 +324,36 @@ apr_status_t h2_mplx_out_read(h2_mplx *m, int stream_id,
     if (m->aborted) {
         return APR_ECONNABORTED;
     }
-    h2_response *response = NULL;
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
             status = h2_io_out_read(io, buffer, plen, peos);
+            if (status == APR_SUCCESS && io->output_drained) {
+                apr_thread_cond_signal(io->output_drained);
+            }
+        }
+        else {
+            status = APR_ECONNABORTED;
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}
+
+apr_status_t h2_mplx_out_readx(h2_mplx *m, int stream_id, 
+                               h2_io_data_cb *cb, void *ctx, 
+                               apr_size_t *plen, int *peos)
+{
+    assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
+        if (io) {
+            status = h2_io_out_readx(io, cb, ctx, plen, peos);
             if (status == APR_SUCCESS && io->output_drained) {
                 apr_thread_cond_signal(io->output_drained);
             }
@@ -353,7 +377,7 @@ h2_stream *h2_mplx_next_submit(h2_mplx *m, h2_stream_set *streams)
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get_highest_prio(m->ready_ios);
         if (io) {
-            h2_response *response = &io->response;
+            h2_response *response = io->response;
             h2_io_set_remove(m->ready_ios, io);
             
             stream = h2_stream_set_get(streams, response->stream_id);
@@ -422,7 +446,8 @@ static apr_status_t out_open(h2_mplx *m, int stream_id, h2_response *response,
                           "h2_mplx(%ld-%d): open response: %s",
                           m->id, stream_id, response->headers->status);
         }
-        h2_response_copy(&io->response, response);
+        
+        h2_response_copy(io->response, response);
         h2_io_set_add(m->ready_ios, io);
         if (bb) {
             status = out_write(m, io, f, bb, iowait);
@@ -493,7 +518,7 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (io) {
-            if (!io->response.headers) {
+            if (!io->response->headers) {
                 /* In case a close comes before a response was created,
                  * insert an error one so that our streams can properly
                  * reset.

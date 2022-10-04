@@ -32,13 +32,16 @@ h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc)
         io->id = id;
         io->bbin = apr_brigade_create(pool, bucket_alloc);
         io->bbout = apr_brigade_create(pool, bucket_alloc);
+        io->response = apr_pcalloc(pool, sizeof(h2_response));
     }
     return io;
 }
 
 void h2_io_cleanup(h2_io *io)
 {
-    h2_response_cleanup(&io->response);
+    if (io->response) {
+        h2_response_cleanup(io->response);
+    }
     if (io->file) {
         ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, io->bbout->p,
                       "h2_io(%d): cleanup, closing file", io->id);
@@ -59,7 +62,7 @@ int h2_io_in_has_eos_for(h2_io *io)
 
 int h2_io_out_has_data(h2_io *io)
 {
-    return !APR_BRIGADE_EMPTY(io->bbout);
+    return h2_util_bb_has_data_or_eos(io->bbout);
 }
 
 apr_size_t h2_io_out_length(h2_io *io)
@@ -118,10 +121,22 @@ apr_status_t h2_io_out_read(h2_io *io, char *buffer,
                             apr_size_t *plen, int *peos)
 {
     if (buffer == NULL) {
+        /* just checking length available */
         return h2_util_bb_avail(io->bbout, plen, peos);
     }
     
     return h2_util_bb_read(io->bbout, buffer, plen, peos);
+}
+
+apr_status_t h2_io_out_readx(h2_io *io,  
+                             h2_io_data_cb *cb, void *ctx, 
+                             apr_size_t *plen, int *peos)
+{
+    if (cb == NULL) {
+        /* just checking length available */
+        return h2_util_bb_avail(io->bbout, plen, peos);
+    }
+    return h2_util_bb_readx(io->bbout, cb, ctx, plen, peos);
 }
 
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 

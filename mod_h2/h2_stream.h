@@ -33,7 +33,7 @@
  * never block but return APR_EAGAIN when there currently is no data (and
  * no eos) in the multiplexer for this stream.
  */
-#include "h2_request.h"
+#include "h2_io.h"
 
 typedef enum {
     H2_STREAM_ST_IDLE,
@@ -62,7 +62,7 @@ struct h2_stream {
     
     apr_pool_t *pool;           /* the memory pool for this stream */
     apr_bucket_alloc_t *bucket_alloc;
-    h2_request *request;        /* the request made in this stream */
+    struct h2_request *request; /* the request made in this stream */
     
     struct h2_task *task;       /* task created for this stream */
     struct h2_response *response; /* the response, once ready */
@@ -103,8 +103,8 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
 apr_status_t h2_stream_prep_read(h2_stream *stream, 
                                  apr_size_t *plen, int *peos);
 
-apr_status_t h2_stream_readx(h2_stream *stream, apr_bucket_brigade *bb,
-                             apr_size_t len);
+apr_status_t h2_stream_readx(h2_stream *stream, h2_io_data_cb *cb, 
+                             void *ctx, apr_size_t *plen, int *peos);
 
 void h2_stream_set_suspended(h2_stream *stream, int suspended);
 int h2_stream_is_suspended(h2_stream *stream);

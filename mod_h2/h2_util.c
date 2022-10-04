@@ -524,6 +524,39 @@ int h2_util_has_eos(apr_bucket_brigade *bb, apr_size_t len)
     return 0;
 }
 
+int h2_util_bb_has_data(apr_bucket_brigade *bb)
+{
+    apr_bucket *b;
+    for (b = APR_BRIGADE_FIRST(bb);
+         b != APR_BRIGADE_SENTINEL(bb);
+         b = APR_BUCKET_NEXT(b))
+    {
+        if (!APR_BUCKET_IS_METADATA(b)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int h2_util_bb_has_data_or_eos(apr_bucket_brigade *bb)
+{
+    apr_bucket *b;
+    for (b = APR_BRIGADE_FIRST(bb);
+         b != APR_BRIGADE_SENTINEL(bb);
+         b = APR_BUCKET_NEXT(b))
+    {
+        if (APR_BUCKET_IS_METADATA(b)) {
+            if (APR_BUCKET_IS_EOS(b)) {
+                return 1;
+            }
+        }
+        else {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb, 
                               apr_size_t *plen, int *peos)
 {
@@ -549,9 +582,8 @@ apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer,
     /* Copy data in our brigade into the buffer until it is filled or
      * we encounter an EOS.
      */
-    while ((status == APR_SUCCESS) 
-           && !APR_BRIGADE_EMPTY(bb)
-           && (avail > 0)) {
+    *peos = 0;
+    while ((status == APR_SUCCESS) && !APR_BRIGADE_EMPTY(bb)) {
         
         apr_bucket *b = APR_BRIGADE_FIRST(bb);
         if (APR_BUCKET_IS_METADATA(b)) {
@@ -562,6 +594,9 @@ apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer,
                 /* ignore */
             }
         }
+        else if (avail <= 0) {
+            break;
+        } 
         else {
             const char *data;
             apr_size_t data_len;
@@ -591,3 +626,79 @@ apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer,
     }
     return status;
 }
+
+apr_status_t h2_util_bb_readx(apr_bucket_brigade *bb, 
+                              h2_util_pass_cb *cb, void *ctx, 
+                              apr_size_t *plen, int *peos)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_size_t avail = *plen;
+    apr_size_t written = 0;
+    apr_bucket *next, *b = APR_BRIGADE_FIRST(bb);
+    int consume = (cb != NULL);
+    
+    /* Pass data in our brigade through the callback until the length
+     * is satisfied or we encounter an EOS.
+     */
+    *peos = 0;
+    for (b = APR_BRIGADE_FIRST(bb);
+         (status == APR_SUCCESS) && (b != APR_BRIGADE_SENTINEL(bb));
+         b = next) {
+        
+        if (APR_BUCKET_IS_METADATA(b)) {
+            if (APR_BUCKET_IS_EOS(b)) {
+                *peos = 1;
+            }
+            else {
+                /* ignore */
+            }
+        }
+        else if (avail <= 0) {
+            break;
+        } 
+        else {
+            const char *data = NULL;
+            apr_size_t data_len;
+            
+            if (b->length != -1) {
+                status = apr_bucket_read(b, &data, &data_len, 
+                                         APR_NONBLOCK_READ);
+            }
+            else {
+                data_len = b->length;
+            }
+            
+            if (data_len > avail) {
+                apr_bucket_split(b, avail);
+                data_len = avail;
+            }
+            
+            if (consume) {
+                if (!data) {
+                    status = apr_bucket_read(b, &data, &data_len, 
+                                             APR_NONBLOCK_READ);
+                }
+                if (status == APR_SUCCESS) {
+                    status = cb(ctx, data, data_len);
+                }
+            }
+            else {
+                data_len = b->length;
+            }
+            avail -= data_len;
+            written += data_len;
+        }
+        
+        next = APR_BUCKET_NEXT(b);
+        if (consume) {
+            apr_bucket_delete(b);
+        }
+    }
+    
+    *plen = written;
+    if (status == APR_SUCCESS && !*peos && !*plen) {
+        return APR_EAGAIN;
+    }
+    return status;
+}
+

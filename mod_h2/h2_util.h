@@ -114,6 +114,8 @@ apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from,
  */
 int h2_util_has_flush_or_eos(apr_bucket_brigade *bb);
 int h2_util_has_eos(apr_bucket_brigade *bb, apr_size_t len);
+int h2_util_bb_has_data(apr_bucket_brigade *bb);
+int h2_util_bb_has_data_or_eos(apr_bucket_brigade *bb);
 
 /**
  * Check how many bytes of the desired amount are available and if the
@@ -127,5 +129,12 @@ apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb,
 
 apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer, 
                              apr_size_t *plen, int *peos);
+
+typedef apr_status_t h2_util_pass_cb(void *ctx, 
+                                       const char *data, apr_size_t len);
+
+apr_status_t h2_util_bb_readx(apr_bucket_brigade *bb, 
+                              h2_util_pass_cb *cb, void *ctx, 
+                              apr_size_t *plen, int *peos);
 
 #endif /* defined(__mod_h2__h2_util__) */

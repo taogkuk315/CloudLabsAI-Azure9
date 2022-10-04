@@ -429,6 +429,12 @@ static apr_status_t send_data(h2_session *session, const char *data,
 
 #if NGHTTP2_HAS_DATA_CB
 
+static apr_status_t pass_data(void *ctx, 
+                              const char *data, apr_size_t length)
+{
+    return send_data((h2_session*)ctx, data, length);
+}
+
 int on_send_data_cb(nghttp2_session *ngh2, 
                     nghttp2_frame *frame, 
                     const uint8_t *framehd, 
@@ -465,20 +471,13 @@ int on_send_data_cb(nghttp2_session *ngh2,
             status = send_data(session, (const char *)&padlen, 1);
         }
 
-        while (length > 0 && (status == APR_SUCCESS) && !eos) {
-            avail = sizeof(session->buf) - session->buf_len;
-            if (avail == 0) {
-                send_flush(session, 0);
-                continue;
-            }
-            
-            chunk_len = (length > avail)? avail : length;
-            if (chunk_len > 0) {
-                status = h2_stream_read(stream, session->buf
-                                        + session->buf_len, 
-                                        &chunk_len, &eos); 
-                session->buf_len += chunk_len;
-                length -= chunk_len;
+        if (status == APR_SUCCESS) {
+            apr_size_t len = length;
+            int eos = 0;
+            status = h2_stream_readx(stream, pass_data, session, 
+                                     &len, &eos);
+            if (status == APR_SUCCESS && len != length) {
+                status = APR_EINVAL;
             }
         }
         
@@ -492,12 +491,6 @@ int on_send_data_cb(nghttp2_session *ngh2,
     }
     
     if (status == APR_SUCCESS) {
-        if (length > 0) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                          "h2_stream(%ld-%d): send_data_cb, %ld bytes missing",
-                          session->id, (int)stream_id, (long)length);
-            return NGHTTP2_ERR_CALLBACK_FAILURE;
-        }
         return 0;
     }
     else if (status != APR_EOF) {

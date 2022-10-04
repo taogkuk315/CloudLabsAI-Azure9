@@ -16,16 +16,19 @@
 #ifndef __mod_h2__h2_io__
 #define __mod_h2__h2_io__
 
-#include "h2_response.h"
-
+struct h2_response;
 struct apr_thread_cond_t;
 struct h2_task;
+
+
+typedef apr_status_t h2_io_data_cb(void *ctx, 
+                                   const char *data, apr_size_t len);
+
 
 typedef struct h2_io h2_io;
 
 struct h2_io {
     int id;                      /* stream identifier */
-    
     apr_bucket_brigade *bbin;    /* input data for stream */
     int eos_in;
     
@@ -35,8 +38,8 @@ struct h2_io {
     apr_bucket_brigade *bbout;   /* output data from stream */
     struct apr_thread_cond_t *output_drained; /* block on writing */
     
-    h2_response response;        /* submittable response created */
-    
+    struct h2_response *response;/* submittable response created */
+   
     apr_file_t *file;
 };
 
@@ -102,6 +105,9 @@ apr_status_t h2_io_in_close(h2_io *io);
 apr_status_t h2_io_out_read(h2_io *io, char *buffer, 
                             apr_size_t *plen, int *peos);
 
+apr_status_t h2_io_out_readx(h2_io *io,  
+                             h2_io_data_cb *cb, void *ctx, 
+                             apr_size_t *plen, int *peos);
 
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen);

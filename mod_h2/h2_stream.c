@@ -226,21 +226,44 @@ apr_status_t h2_stream_write_data(h2_stream *stream,
 apr_status_t h2_stream_prep_read(h2_stream *stream, 
                                  apr_size_t *plen, int *peos)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, 
-                  h2_mplx_get_conn(stream->m),
-                  "h2_stream(%ld-%d): prep_read from mplx",
-                  h2_mplx_get_id(stream->m), stream->id);
+    apr_status_t status = APR_SUCCESS;
+    const char *src;
     
     if (stream->bbout && !APR_BRIGADE_EMPTY(stream->bbout)) {
-        return h2_util_bb_avail(stream->bbout, plen, peos);
+        src = "stream";
+        status = h2_util_bb_avail(stream->bbout, plen, peos);
+        if (status == APR_SUCCESS && !*peos && !*plen) {
+            apr_brigade_cleanup(stream->bbout);
+            return h2_stream_prep_read(stream, plen, peos);
+        }
     }
-    apr_status_t status = h2_mplx_out_read(stream->m, stream->id, 
-                                           NULL, plen, peos);
-    if (status == APR_SUCCESS && !*peos && !plen) {
-        return APR_EAGAIN;
+    else {
+        src = "mplx";
+        status = h2_mplx_out_readx(stream->m, stream->id, 
+                                   NULL, NULL, plen, peos);
     }
+    if (status == APR_SUCCESS && !*peos && !*plen) {
+        status = APR_EAGAIN;
+    }
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, 
+                  h2_mplx_get_conn(stream->m),
+                  "h2_stream(%ld-%d): prep_read %s, len=%ld eos=%d",
+                  h2_mplx_get_id(stream->m), stream->id, 
+                  src, (long)*plen, *peos);
     return status;
 }
+
+apr_status_t h2_stream_readx(h2_stream *stream, 
+                             h2_io_data_cb *cb, void *ctx,
+                             apr_size_t *plen, int *peos)
+{
+    if (stream->bbout && !APR_BRIGADE_EMPTY(stream->bbout)) {
+        return h2_util_bb_readx(stream->bbout, cb, ctx, plen, peos);
+    }
+    return h2_mplx_out_readx(stream->m, stream->id, 
+                             cb, ctx, plen, peos);
+}
+
 
 apr_status_t h2_stream_read(h2_stream *stream, char *buffer, 
                             apr_size_t *plen, int *peos)
