@@ -34,7 +34,7 @@ apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, int check_preface)
     io->check_preface = check_preface;
     io->preface_bytes_left = check_preface? HTTP2_PREFACE_LEN : 0;
     io->buflen = 0;
-    io->bufsize = 16 * 1024;
+    io->bufsize = 64 * 1024;
     io->buffer = apr_pcalloc(c->pool, io->bufsize);
     
     return APR_SUCCESS;
@@ -234,6 +234,7 @@ apr_status_t h2_conn_io_write(h2_conn_io *io,
     apr_status_t status = APR_SUCCESS;
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, io->connection,
                   "h2_conn_io: buffering %ld bytes", (long)length);
+    io->unflushed = 1;
     while (length > 0 && (status == APR_SUCCESS)) {
         apr_size_t avail = io->bufsize - io->buflen;
         if (avail <= 0) {
@@ -263,34 +264,38 @@ apr_status_t h2_conn_io_write(h2_conn_io *io,
 
 apr_status_t h2_conn_io_flush(h2_conn_io *io)
 {
-    if (io->buflen > 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, io->connection,
-                      "h2_conn_io: flush, flushing %ld bytes", (long)io->buflen);
-        apr_bucket *b = apr_bucket_transient_create(io->buffer, io->buflen, 
-                                                    io->output->bucket_alloc);
-        APR_BRIGADE_INSERT_TAIL(io->output, b);
-        io->buflen = 0;
+    if (io->unflushed) {
+        if (io->buflen > 0) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, io->connection,
+                          "h2_conn_io: flush, flushing %ld bytes", (long)io->buflen);
+            apr_bucket *b = apr_bucket_transient_create(io->buffer, io->buflen, 
+                                                        io->output->bucket_alloc);
+            APR_BRIGADE_INSERT_TAIL(io->output, b);
+            io->buflen = 0;
+        }
+        /* Append flush.
+         */
+        APR_BRIGADE_INSERT_TAIL(io->output,
+                                apr_bucket_flush_create(io->output->bucket_alloc));
+        
+        /* Send it out through installed filters (TLS) to the client */
+        apr_status_t status = flush_out(io->output, io);
+        
+        if (status == APR_SUCCESS
+            || APR_STATUS_IS_ECONNABORTED(status)
+            || APR_STATUS_IS_EPIPE(status)) {
+            /* These are all fine and no reason for concern. Everything else
+             * is interesting. */
+            io->unflushed = 0;
+        }
+        else {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
+                          "h2_conn_io: flush error");
+        }
+        
+        return status;
     }
-    /* Append flush.
-     */
-    APR_BRIGADE_INSERT_TAIL(io->output,
-                            apr_bucket_flush_create(io->output->bucket_alloc));
-    
-    /* Send it out through installed filters (TLS) to the client */
-    apr_status_t status = flush_out(io->output, io);
-    
-    if (status == APR_SUCCESS
-        || APR_STATUS_IS_ECONNABORTED(status)
-        || APR_STATUS_IS_EPIPE(status)) {
-        /* These are all fine and no reason for concern. Everything else
-         * is interesting. */
-    }
-    else {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
-                      "h2_conn_io: flush error");
-    }
-    
-    return status;
+    return APR_SUCCESS;
 }
 
 #endif /* WRITE_BRIGADE (else) */

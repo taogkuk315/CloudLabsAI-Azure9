@@ -32,6 +32,7 @@ typedef struct {
     char *buffer;
     apr_size_t buflen;
     apr_size_t bufsize;
+    int unflushed;
 } h2_conn_io;
 
 apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, 

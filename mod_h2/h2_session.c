@@ -941,14 +941,14 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 {
     apr_status_t status = APR_EAGAIN;
     h2_stream *stream = NULL;
-    int have_written = 0;
+    int flush_output = 0;
     
     assert(session);
     
     /* Check that any pending window updates are sent. */
     status = h2_session_update_windows(session);
     if (status == APR_SUCCESS) {
-        have_written = 1;
+        flush_output = 1;
     }
     else if (status != APR_EAGAIN) {
         return status;
@@ -965,26 +965,26 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
                 status = APR_ECONNABORTED;
             }
         }
-        have_written = 1;
+        flush_output = 1;
     }
     
     /* If we have responses ready, submit them now. */
     while ((stream = h2_mplx_next_submit(session->mplx, 
                                          session->streams)) != NULL) {
         status = h2_session_handle_response(session, stream);
-        have_written = 1;
+        flush_output = 1;
     }
     
     if (h2_session_resume_streams_with_data(session) > 0) {
-        have_written = 1;
+        flush_output = 1;
     }
     
-    if (!have_written && timeout > 0 && !h2_session_want_write(session)) {
+    if (!flush_output && timeout > 0 && !h2_session_want_write(session)) {
         status = h2_mplx_out_trywait(session->mplx, timeout, session->iowait);
 
         if (status != APR_TIMEUP
             && h2_session_resume_streams_with_data(session) > 0) {
-            have_written = 1;
+            flush_output = 1;
         }
         else {
             /* nothing happened to ongoing streams, do some house-keeping */
@@ -1003,10 +1003,10 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
                 status = APR_ECONNABORTED;
             }
         }
-        have_written = 1;
+        flush_output = 1;
     }
     
-    if (have_written) {
+    if (flush_output) {
         h2_conn_io_flush(&session->io);
     }
     
