@@ -263,11 +263,27 @@ EOF
 # check cgi generated content
 ################################################################################
 echo " - CGI generated content -"
-nghttp_check_content hello.py "get hello.py"   <<EOF
-<html>
+
+case "$URL_PREFIX" in
+    https:*)
+CONTENT="<html>
 <body>
 <h2>Hello World!</h2>
+SSL_PROTOCOL=TLSv1.2
 </body>
-</html>
+</html>"
+        ;;
+    *)
+CONTENT="<html>
+<body>
+<h2>Hello World!</h2>
+SSL_PROTOCOL=
+</body>
+</html>"
+        ;;
+esac
+
+nghttp_check_content hello.py "get hello.py"   <<EOF
+$CONTENT
 EOF
 

@@ -34,29 +34,36 @@ curl_check_redir latest.tar.gz  xxx-1.0.2a.tar.gz  "http2"  --http2
 ################################################################################
 # check cgi generated content
 ################################################################################
-echo " - CGI generated content -"
-curl_check_content hello.py "default" <<EOF
-<html>
+case "$URL_PREFIX" in
+    https:*)
+CONTENT="<html>
 <body>
 <h2>Hello World!</h2>
+SSL_PROTOCOL=TLSv1.2
 </body>
-</html>
+</html>"
+        ;;
+    *)
+CONTENT="<html>
+<body>
+<h2>Hello World!</h2>
+SSL_PROTOCOL=
+</body>
+</html>"
+        ;;
+esac
+
+echo " - CGI generated content -"
+curl_check_content hello.py "default" <<EOF
+$CONTENT
 EOF
 
 curl_check_content hello.py "http/1.1" --http1.1 <<EOF
-<html>
-<body>
-<h2>Hello World!</h2>
-</body>
-</html>
+$CONTENT
 EOF
 
 curl_check_content hello.py "http2"    --http2 <<EOF
-<html>
-<body>
-<h2>Hello World!</h2>
-</body>
-</html>
+$CONTENT
 EOF
 
 
