@@ -1,3 +1,8 @@
+v0.5.6
+--------------------------------------------------------------------------------
+ * making SSL variables available in subprocess (e.g. CGI) environments if
+configured (fixes #19)
+
 v0.5.5
 --------------------------------------------------------------------------------
  * improved transfer of large resources by 50% by more efficient writes
