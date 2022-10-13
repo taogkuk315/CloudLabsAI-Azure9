@@ -50,12 +50,10 @@ static int ser_header(void *ctx, const char *name, const char *value)
     return 1;
 }
 
-h2_task_input *h2_task_input_create(apr_pool_t *pool, h2_task *task, 
-                                    int stream_id, 
-                                    apr_bucket_alloc_t *bucket_alloc,
-                                    const char *method, const char *path, 
-                                    const char *authority, apr_table_t *headers, 
-                                    int eos, h2_mplx *m)
+h2_task_input *h2_task_input_create2(apr_pool_t *pool, h2_task *task, 
+                                     int stream_id, 
+                                     apr_bucket_alloc_t *bucket_alloc,
+                                     int eos, h2_mplx *m)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
@@ -65,6 +63,23 @@ h2_task_input *h2_task_input_create(apr_pool_t *pool, h2_task *task,
         input->bb = apr_brigade_create(pool, bucket_alloc);
         input->eos = eos;
         
+        if (input->eos) {
+            APR_BRIGADE_INSERT_TAIL(input->bb, apr_bucket_eos_create(bucket_alloc));
+        }
+    }
+    return input;
+}
+
+h2_task_input *h2_task_input_create(apr_pool_t *pool, h2_task *task, 
+                                    int stream_id, 
+                                    apr_bucket_alloc_t *bucket_alloc,
+                                    const char *method, const char *path, 
+                                    const char *authority, apr_table_t *headers, 
+                                    int eos, h2_mplx *m)
+{
+    h2_task_input *input = h2_task_input_create2(pool, task, stream_id,
+                                                 bucket_alloc, 0, m);
+    if (input) {
         apr_brigade_printf(input->bb, NULL, NULL, "%s %s HTTP/1.1\r\n", 
                            method, path);
         apr_table_do(ser_header, input, headers, NULL);

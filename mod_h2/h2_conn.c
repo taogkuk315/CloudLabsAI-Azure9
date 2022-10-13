@@ -59,8 +59,6 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     
     for (int i = 0; ap_loaded_modules[i]; ++i) {
         module *m = ap_loaded_modules[i];
-        ap_log_error(APLOG_MARK, APLOG_INFO, 0, s,
-                     "h2_conn: loaded module %s: ", m->name);
         if (!strcmp("event.c", m->name)) {
             mpm_type = H2_MPM_EVENT;
             mpm_module = m;

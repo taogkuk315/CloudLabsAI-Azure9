@@ -104,17 +104,6 @@ int h2_task_output_has_started(h2_task_output *output)
     return output->state >= H2_TASK_OUT_STARTED;
 }
 
-static apr_status_t out_write(h2_task_output *output, ap_filter_t *f,
-                              apr_bucket_brigade *bb)
-{
-    apr_status_t status = open_if_needed(output, f, bb);
-    if (status != APR_EOF) {
-        return status;
-    }
-    return h2_mplx_out_write(output->m, output->stream_id, f, bb,
-                             h2_task_get_io_cond(output->task));
-}
-
 /* Bring the data from the brigade (which represents the result of the
  * request_rec out filter chain) into the h2_mplx for further sending
  * on the master connection. 
@@ -125,9 +114,22 @@ apr_status_t h2_task_output_write(h2_task_output *output,
     apr_status_t status = APR_SUCCESS;
     
     if (APR_BRIGADE_EMPTY(bb)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
+                      "h2_task_output(%s): empty write", h2_task_get_id(output->task));
         return APR_SUCCESS;
     }
     
-    return out_write(output, f, bb);
+    status = open_if_needed(output, f, bb);
+    if (status != APR_EOF) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
+                      "h2_task_output(%s): opened and passed brigade", 
+                      h2_task_get_id(output->task));
+        return status;
+    }
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
+                  "h2_task_output(%s): write brigade", 
+                  h2_task_get_id(output->task));
+    return h2_mplx_out_write(output->m, output->stream_id, f, bb,
+                             h2_task_get_io_cond(output->task));
 }
 

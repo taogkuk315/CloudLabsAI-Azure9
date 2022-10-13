@@ -524,7 +524,7 @@ apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id)
                  * reset.
                  */
                 h2_response *r = h2_response_create(stream_id, APR_ECONNABORTED, 
-                                                    NULL, NULL, m->pool);
+                                                    "500", NULL, m->pool);
                 status = out_open(m, stream_id, r, NULL, NULL, NULL);
             }
             status = h2_io_out_close(io);

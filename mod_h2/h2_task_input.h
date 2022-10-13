@@ -32,6 +32,11 @@ h2_task_input *h2_task_input_create(apr_pool_t *pool,
                                     const char *authority, apr_table_t *headers, 
                                     int eos, struct h2_mplx *mplx);
 
+h2_task_input *h2_task_input_create2(apr_pool_t *pool, struct h2_task *task, 
+                                     int stream_id, 
+                                     apr_bucket_alloc_t *bucket_alloc,
+                                     int eos, h2_mplx *m);
+
 void h2_task_input_destroy(h2_task_input *input);
 
 apr_status_t h2_task_input_read(h2_task_input *input,

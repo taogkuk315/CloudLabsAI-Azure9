@@ -580,6 +580,9 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
                   from_h1->stream_id, from_h1->response->headers->status);
     
     if (r->header_only) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
+                      "h2_from_h1(%d): header_only, cleanup output brigade", 
+                      from_h1->stream_id);
         apr_brigade_cleanup(bb);
         return OK;
     }
@@ -587,5 +590,12 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
     r->sent_bodyct = 1;         /* Whatever follows is real body stuff... */
     
     ap_remove_output_filter(f);
+    if (APLOGctrace1(f->c)) {
+        apr_off_t len = 0;
+        apr_brigade_length(bb, 0, &len);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
+                      "h2_from_h1(%d): removed header filter, passing brigade "
+                      "len=%ld", from_h1->stream_id, (long)len);
+    }
     return ap_pass_brigade(f->next, bb);
 }

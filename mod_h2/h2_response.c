@@ -5,7 +5,7 @@
  * You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
-
+ 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,23 +40,23 @@ static int ignore_header(const char *name)
 }
 
 h2_response *h2_response_create(int stream_id,
-                                  apr_status_t task_status,
-                                  const char *http_status,
-                                  apr_array_header_t *hlines,
-                                  apr_pool_t *pool)
+                                apr_status_t task_status,
+                                const char *http_status,
+                                apr_array_header_t *hlines,
+                                apr_pool_t *pool)
 {
+    apr_table_t *header;
     h2_response *response = apr_pcalloc(pool, sizeof(h2_response));
     if (response == NULL) {
         return NULL;
     }
-
+    
     response->stream_id = stream_id;
     response->task_status = task_status;
     response->content_length = -1;
     
-    apr_table_t *header = apr_table_make(pool, hlines->nelts);
-
     if (hlines) {
+        header = apr_table_make(pool, hlines->nelts);        
         int seen_clen = 0;
         for (int i = 0; i < hlines->nelts; ++i) {
             char *hline = ((char **)hlines->elts)[i];
@@ -90,6 +90,9 @@ h2_response *h2_response_create(int stream_id,
                 }
             }
         }
+    }
+    else {
+        header = apr_table_make(pool, 0);        
     }
     
     convert_header(response, header, http_status, NULL);
@@ -160,8 +163,8 @@ static int count_headers(void *ctx, const char *key, const char *value)
 #define NV_ADD_LIT_CS(nv, k, v)     addnv_lit_cs(nv, k, sizeof(k) - 1, v, strlen(v))
 #define NV_ADD_CS_CS(nv, k, v)      addnv_cs_cs(nv, k, strlen(k), v, strlen(v))
 #define NV_BUF_ADD(nv, s, len)      memcpy(nv->strbuf, s, len); \
-                                    s = nv->strbuf; \
-                                    nv->strbuf += len + 1
+s = nv->strbuf; \
+nv->strbuf += len + 1
 
 static void addnv_cs_cs(nvctx_t *ctx, const char *key, size_t key_len,
                         const char *value, size_t val_len)

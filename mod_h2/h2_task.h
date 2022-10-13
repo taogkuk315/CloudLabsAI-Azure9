@@ -65,6 +65,8 @@ struct h2_task {
     const char *path;
     const char *authority;
     apr_table_t *headers;
+    int serialize_request;
+
     int input_eos;
     
     struct h2_task_input *input;    /* http/1.1 input data */
@@ -154,6 +156,7 @@ apr_status_t h2_task_destroy(h2_task *task);
 apr_status_t h2_task_prep_conn(h2_task *task);
 
 apr_status_t h2_task_do(h2_task *task, struct h2_worker *worker);
+apr_status_t h2_task_process_request(h2_task *task);
 
 void h2_task_abort(h2_task *task);
 int h2_task_is_aborted(h2_task *task);

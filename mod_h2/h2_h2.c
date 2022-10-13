@@ -333,7 +333,7 @@ int h2_h2_pre_conn(conn_rec* c, void *arg)
                       "h2_h2, pre_connection, end");
     }
     else if (h2_ctx_is_task(c)) {
-        /* A connection that represents a http2 stream from another connection.
+        /* A pseudo connection for a http2 stream.
          */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_h2, pre_connection, found stream task");
@@ -368,9 +368,11 @@ int h2_h2_process_conn(conn_rec* c)
     
     if (ctx) {
         if (h2_ctx_is_task(c)) {
-            // This should not happend, as we install our own filters
-            // in h2_h2_pre_connection in such cases, so the normal
-            // connection hooks get bypassed.
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, "h2_h2, conn hook for stream");
+            if (!ctx->task->serialize_request) {
+                h2_task_process_request(ctx->task);
+                return DONE;
+            }
             return DECLINED;
         }
         else if (!h2_ctx_is_negotiated(c)) {

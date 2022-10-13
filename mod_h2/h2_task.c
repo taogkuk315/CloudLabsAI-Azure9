@@ -23,11 +23,19 @@
 #include <httpd.h>
 #include <http_core.h>
 #include <http_connection.h>
+#include <http_protocol.h>
+#include <http_request.h>
 #include <http_log.h>
+#include <http_vhost.h>
+#include <util_filter.h>
+#include <ap_mpm.h>
+#include <mod_core.h>
+#include <scoreboard.h>
 
 #include "h2_private.h"
 #include "h2_conn.h"
 #include "h2_from_h1.h"
+#include "h2_h2.h"
 #include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
@@ -176,29 +184,40 @@ void h2_task_on_finished(h2_task *task, task_callback *cb, void *cb_ctx)
 apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
 {
     apr_status_t status = APR_SUCCESS;
+    task->serialize_request = 0;
     
     assert(task);
     status = h2_conn_prep(task->conn, worker);
     
+    /* save in connection that this one is for us, prevents
+     * other hooks from messing with it. */
+    h2_ctx *ctx = h2_ctx_create_for(task->conn->c, task);
+
     if (status == APR_SUCCESS) {
-        task->input = h2_task_input_create(task->conn->pool,
-                                           task, task->stream_id, 
-                                           task->conn->bucket_alloc, 
-                                           task->method, task->path,
-                                           task->authority, task->headers,
-                                           task->input_eos, task->mplx);
-        
+        if (task->serialize_request) {
+            task->input = h2_task_input_create(task->conn->pool,
+                                               task, task->stream_id, 
+                                               task->conn->bucket_alloc, 
+                                               task->method, task->path,
+                                               task->authority, task->headers,
+                                               task->input_eos, task->mplx);
+        }
+        else {
+            task->input = h2_task_input_create2(task->conn->pool,
+                                                task, task->stream_id, 
+                                                task->conn->bucket_alloc, 
+                                                task->input_eos, task->mplx);
+        }
         task->output = h2_task_output_create(task->conn->pool, task, 
                                              task->stream_id, 
                                              task->conn->bucket_alloc, 
                                              task->mplx);
-
-        /* save in connection that this one is for us, prevents
-         * other hooks from messing with it. */
-        h2_ctx_create_for(task->conn->c, task);
         
         status = h2_conn_process(task->conn);
     }
+    
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, task->conn->c,
+                  "h2_task(%s):processing done", task->id);
     
     if (task->output) {
         h2_task_output_close(task->output);
@@ -286,6 +305,148 @@ void h2_task_set_finished(h2_task *task)
 apr_thread_cond_t *h2_task_get_io_cond(h2_task *task)
 {
     return task->io;
+}
+
+request_rec *h2_task_create_request(h2_task *task)
+{
+    conn_rec *conn = task->conn->c;
+    request_rec *r;
+    apr_pool_t *p;
+    const char *expect;
+    int access_status = HTTP_OK;
+    apr_socket_t *csd;
+    apr_interval_time_t cur_timeout;
+    
+    
+    apr_pool_create(&p, conn->pool);
+    apr_pool_tag(p, "request");
+    r = apr_pcalloc(p, sizeof(request_rec));
+    AP_READ_REQUEST_ENTRY((intptr_t)r, (uintptr_t)conn);
+    r->pool            = p;
+    r->connection      = conn;
+    r->server          = conn->base_server;
+    
+    r->user            = NULL;
+    r->ap_auth_type    = NULL;
+    
+    r->allowed_methods = ap_make_method_list(p, 2);
+    
+    r->headers_in = apr_table_copy(r->pool, task->headers);
+    r->trailers_in     = apr_table_make(r->pool, 5);
+    r->subprocess_env  = apr_table_make(r->pool, 25);
+    r->headers_out     = apr_table_make(r->pool, 12);
+    r->err_headers_out = apr_table_make(r->pool, 5);
+    r->trailers_out    = apr_table_make(r->pool, 5);
+    r->notes           = apr_table_make(r->pool, 5);
+    
+    r->request_config  = ap_create_request_config(r->pool);
+    /* Must be set before we run create request hook */
+    
+    r->proto_output_filters = conn->output_filters;
+    r->output_filters  = r->proto_output_filters;
+    r->proto_input_filters = conn->input_filters;
+    r->input_filters   = r->proto_input_filters;
+    ap_run_create_request(r);
+    r->per_dir_config  = r->server->lookup_defaults;
+    
+    r->sent_bodyct     = 0;                      /* bytect isn't for body */
+    
+    r->read_length     = 0;
+    r->read_body       = REQUEST_NO_BODY;
+    
+    r->status          = HTTP_OK;  /* Until further notice */
+    r->header_only     = 0;
+    r->the_request     = NULL;
+    
+    /* Begin by presuming any module can make its own path_info assumptions,
+     * until some module interjects and changes the value.
+     */
+    r->used_path_info = AP_REQ_DEFAULT_PATH_INFO;
+    
+    r->useragent_addr = conn->client_addr;
+    r->useragent_ip = conn->client_ip;
+    
+    ap_run_pre_read_request(r, conn);
+    
+    /* Time to populate r with the data we have. */
+    r->request_time = apr_time_now();
+    r->the_request = apr_psprintf(r->pool, "%s %s HTTP/1.1", 
+                                  task->method, task->path);
+    r->method = task->method;
+    /* Provide quick information about the request method as soon as known */
+    r->method_number = ap_method_number_of(r->method);
+    if (r->method_number == M_GET && r->method[0] == 'H') {
+        r->header_only = 1;
+    }
+
+    ap_parse_uri(r, task->path);
+    r->protocol = "HTTP/1.1";
+    r->proto_num = HTTP_VERSION(1, 1);
+    
+    r->hostname = task->authority;
+    
+    /* update what we think the virtual host is based on the headers we've
+     * now read. may update status.
+     */
+    ap_update_vhost_from_headers(r);
+    
+    /* we may have switched to another server */
+    r->per_dir_config = r->server->lookup_defaults;
+    
+    /*
+     * Add the HTTP_IN filter here to ensure that ap_discard_request_body
+     * called by ap_die and by ap_send_error_response works correctly on
+     * status codes that do not cause the connection to be dropped and
+     * in situations where the connection should be kept alive.
+     */
+    ap_add_input_filter_handle(ap_http_input_filter_handle,
+                               NULL, r, r->connection);
+    
+    if (access_status != HTTP_OK
+        || (access_status = ap_run_post_read_request(r))) {
+        ap_die(access_status, r);
+        ap_update_child_status(conn->sbh, SERVER_BUSY_LOG, r);
+        ap_run_log_transaction(r);
+        r = NULL;
+        goto traceout;
+    }
+    
+    AP_READ_REQUEST_SUCCESS((uintptr_t)r, (char *)r->method, 
+                            (char *)r->uri, (char *)r->server->defn_name, 
+                            r->status);
+    return r;
+traceout:
+    AP_READ_REQUEST_FAILURE((uintptr_t)r);
+    return r;
+}
+
+
+apr_status_t h2_task_process_request(h2_task *task)
+{
+    conn_rec *c = task->conn->c;
+    request_rec *r;
+    conn_state_t *cs = c->cs;
+    apr_socket_t *csd = NULL;
+    int mpm_state = 0;
+    apr_bucket_brigade *bb;
+    apr_bucket *b;
+
+    r = h2_task_create_request(task);
+    if (r && (r->status == HTTP_OK)) {
+        if (cs)
+            cs->state = CONN_STATE_HANDLER;
+        ap_process_request(r);
+        /* After the call to ap_process_request, the
+         * request pool will have been deleted.  We set
+         * r=NULL here to ensure that any dereference
+         * of r that might be added later in this function
+         * will result in a segfault immediately instead
+         * of nondeterministic failures later.
+         */
+        r = NULL;
+    }
+    
+    return APR_SUCCESS;
 }
 
 
