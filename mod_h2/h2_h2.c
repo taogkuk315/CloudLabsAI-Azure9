@@ -368,8 +368,9 @@ int h2_h2_process_conn(conn_rec* c)
     
     if (ctx) {
         if (h2_ctx_is_task(c)) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, "h2_h2, conn hook for stream");
-            if (!ctx->task->serialize_request) {
+            if (!ctx->task->serialize_headers) {
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, 
+                              "h2_h2, processing request directly");
                 h2_task_process_request(ctx->task);
                 return DONE;
             }
@@ -421,7 +422,7 @@ int h2_h2_post_read_req(request_rec *r)
         /* h2_task connection for a stream, not for h2c */
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                       "adding h1_to_h2_resp output filter");
-        if (0) {
+        if (task->serialize_headers) {
             ap_add_output_filter("H1_TO_H2_RESP", task, r, r->connection);
         }
         else {

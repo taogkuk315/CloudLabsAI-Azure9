@@ -35,16 +35,12 @@ typedef struct h2_task_output h2_task_output;
 
 struct h2_task_output {
     struct h2_task *task;
-    int stream_id;
     h2_task_output_state_t state;
-    struct h2_mplx *m;
     struct h2_from_h1 *from_h1;
 };
 
-h2_task_output *h2_task_output_create(apr_pool_t *pool,
-                                      struct h2_task *task, int stream_id,
-                                      apr_bucket_alloc_t *bucket_alloc,
-                                      struct h2_mplx *m);
+h2_task_output *h2_task_output_create(struct h2_task *task, apr_pool_t *pool,
+                                      apr_bucket_alloc_t *bucket_alloc);
 
 void h2_task_output_destroy(h2_task_output *output);
 

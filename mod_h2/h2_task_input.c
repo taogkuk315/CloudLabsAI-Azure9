@@ -31,8 +31,6 @@
 
 struct h2_task_input {
     h2_task *task;
-    int stream_id;
-    struct h2_mplx *m;
     int eos;
     apr_bucket_brigade *bb;
 };
@@ -50,40 +48,21 @@ static int ser_header(void *ctx, const char *name, const char *value)
     return 1;
 }
 
-h2_task_input *h2_task_input_create2(apr_pool_t *pool, h2_task *task, 
-                                     int stream_id, 
-                                     apr_bucket_alloc_t *bucket_alloc,
-                                     int eos, h2_mplx *m)
+h2_task_input *h2_task_input_create(h2_task *task, apr_pool_t *pool, 
+                                    apr_bucket_alloc_t *bucket_alloc)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
         input->task = task;
-        input->stream_id = stream_id;
-        input->m = m;
         input->bb = apr_brigade_create(pool, bucket_alloc);
-        input->eos = eos;
+        input->eos = task->input_eos;
         
-        if (input->eos) {
-            APR_BRIGADE_INSERT_TAIL(input->bb, apr_bucket_eos_create(bucket_alloc));
+        if (task->serialize_headers) {
+            apr_brigade_printf(input->bb, NULL, NULL, "%s %s HTTP/1.1\r\n", 
+                               task->method, task->path);
+            apr_table_do(ser_header, input, task->headers, NULL);
+            apr_brigade_puts(input->bb, NULL, NULL, "\r\n");
         }
-    }
-    return input;
-}
-
-h2_task_input *h2_task_input_create(apr_pool_t *pool, h2_task *task, 
-                                    int stream_id, 
-                                    apr_bucket_alloc_t *bucket_alloc,
-                                    const char *method, const char *path, 
-                                    const char *authority, apr_table_t *headers, 
-                                    int eos, h2_mplx *m)
-{
-    h2_task_input *input = h2_task_input_create2(pool, task, stream_id,
-                                                 bucket_alloc, 0, m);
-    if (input) {
-        apr_brigade_printf(input->bb, NULL, NULL, "%s %s HTTP/1.1\r\n", 
-                           method, path);
-        apr_table_do(ser_header, input, headers, NULL);
-        apr_brigade_puts(input->bb, NULL, NULL, "\r\n");
         if (input->eos) {
             APR_BRIGADE_INSERT_TAIL(input->bb, apr_bucket_eos_create(bucket_alloc));
         }
@@ -156,8 +135,8 @@ apr_status_t h2_task_input_read(h2_task_input *input,
          we seem to  fill our buffer blocking. Otherwise we get EAGAIN,
          return that to our caller and everyone throws up their hands,
          never calling us again. */
-        status = h2_mplx_in_read(input->m, APR_BLOCK_READ,
-                                 input->stream_id, input->bb, 
+        status = h2_mplx_in_read(input->task->mplx, APR_BLOCK_READ,
+                                 input->task->stream_id, input->bb, 
                                  h2_task_get_io_cond(input->task));
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
                       "h2_task_input(%s): mplx in read returned",

@@ -25,17 +25,8 @@ struct h2_task;
 
 typedef struct h2_task_input h2_task_input;
 
-h2_task_input *h2_task_input_create(apr_pool_t *pool,
-                                    struct h2_task *task, int stream_id,
-                                    apr_bucket_alloc_t *bucket_alloc,
-                                    const char *method, const char *path, 
-                                    const char *authority, apr_table_t *headers, 
-                                    int eos, struct h2_mplx *mplx);
-
-h2_task_input *h2_task_input_create2(apr_pool_t *pool, struct h2_task *task, 
-                                     int stream_id, 
-                                     apr_bucket_alloc_t *bucket_alloc,
-                                     int eos, h2_mplx *m);
+h2_task_input *h2_task_input_create(struct h2_task *task, apr_pool_t *pool,
+                                    apr_bucket_alloc_t *bucket_alloc);
 
 void h2_task_input_destroy(h2_task_input *input);
 

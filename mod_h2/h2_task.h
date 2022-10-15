@@ -65,7 +65,7 @@ struct h2_task {
     const char *path;
     const char *authority;
     apr_table_t *headers;
-    int serialize_request;
+    int serialize_headers;
 
     int input_eos;
     

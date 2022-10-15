@@ -45,6 +45,7 @@ static h2_config defconf = {
     64 * 1024,        /* stream max mem size */
     NULL,             /* no alt-svcs */
     -1,               /* alt-svc max age */
+    0,                /* serialize headers */
 };
 
 static void *h2_config_create(apr_pool_t *pool,
@@ -69,6 +70,7 @@ static void *h2_config_create(apr_pool_t *pool,
     conf->max_worker_idle_secs = DEF_VAL;
     conf->stream_max_mem_size = DEF_VAL;
     conf->alt_svc_max_age = DEF_VAL;
+    conf->serialize_headers = DEF_VAL;
     return conf;
 }
 
@@ -107,6 +109,7 @@ void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     n->stream_max_mem_size = H2_CONFIG_GET(add, base, stream_max_mem_size);
     n->alt_svcs = add->alt_svcs? add->alt_svcs : base->alt_svcs;
     n->alt_svc_max_age = H2_CONFIG_GET(add, base, alt_svc_max_age);
+    n->serialize_headers = H2_CONFIG_GET(add, base, serialize_headers);
     
     return n;
 }
@@ -132,6 +135,8 @@ int h2_config_geti(h2_config *conf, h2_config_var_t var)
             return H2_CONFIG_GET(conf, &defconf, stream_max_mem_size);
         case H2_CONF_ALT_SVC_MAX_AGE:
             return H2_CONFIG_GET(conf, &defconf, alt_svc_max_age);
+        case H2_CONF_SER_HEADERS:
+            return H2_CONFIG_GET(conf, &defconf, serialize_headers);
         default:
             return DEF_VAL;
     }
@@ -228,6 +233,14 @@ static const char *h2_conf_set_alt_svc_max_age(cmd_parms *parms,
     return NULL;
 }
 
+static const char *h2_conf_set_serialize_headers(cmd_parms *parms,
+                                                 void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    cfg->serialize_headers = !apr_strnatcasecmp(value, "On");
+    return NULL;
+}
+
 const command_rec h2_cmds[] = {
     AP_INIT_TAKE1("H2Engine", h2_conf_set_engine, NULL,
                   RSRC_CONF, "on to enable HTTP/2 protocol handling"),
@@ -249,6 +262,8 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "adds an Alt-Svc for this server"),
     AP_INIT_TAKE1("H2AltSvcMaxAge", h2_conf_set_alt_svc_max_age, NULL,
                   RSRC_CONF, "set the maximum age (in seconds) that client can rely on alt-svc information"),
+    AP_INIT_TAKE1("H2SerializeHeaders", h2_conf_set_serialize_headers, NULL,
+                  RSRC_CONF, "on to enable header serialization for compatibility"),
     {NULL}
 };
 

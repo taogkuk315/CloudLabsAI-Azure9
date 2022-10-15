@@ -34,6 +34,7 @@
 
 #include "h2_private.h"
 #include "h2_conn.h"
+#include "h2_config.h"
 #include "h2_from_h1.h"
 #include "h2_h2.h"
 #include "h2_mplx.h"
@@ -117,6 +118,7 @@ h2_task *h2_task_create(long session_id,
                         apr_pool_t *stream_pool,
                         h2_mplx *mplx)
 {
+    h2_config *cfg = h2_config_get(master);
     h2_task *task = apr_pcalloc(stream_pool, sizeof(h2_task));
     if (task == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream_pool,
@@ -133,6 +135,7 @@ h2_task *h2_task_create(long session_id,
     task->master = master;
     task->stream_pool = stream_pool;
     task->mplx = mplx;
+    task->serialize_headers = !!h2_config_geti(cfg, H2_CONF_SER_HEADERS);
     
     /* We would like to have this happening when our task is about
      * to be processed by the worker. But something corrupts our
@@ -184,7 +187,6 @@ void h2_task_on_finished(h2_task *task, task_callback *cb, void *cb_ctx)
 apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
 {
     apr_status_t status = APR_SUCCESS;
-    task->serialize_request = 0;
     
     assert(task);
     status = h2_conn_prep(task->conn, worker);
@@ -194,24 +196,11 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     h2_ctx *ctx = h2_ctx_create_for(task->conn->c, task);
 
     if (status == APR_SUCCESS) {
-        if (task->serialize_request) {
-            task->input = h2_task_input_create(task->conn->pool,
-                                               task, task->stream_id, 
-                                               task->conn->bucket_alloc, 
-                                               task->method, task->path,
-                                               task->authority, task->headers,
-                                               task->input_eos, task->mplx);
-        }
-        else {
-            task->input = h2_task_input_create2(task->conn->pool,
-                                                task, task->stream_id, 
-                                                task->conn->bucket_alloc, 
-                                                task->input_eos, task->mplx);
-        }
-        task->output = h2_task_output_create(task->conn->pool, task, 
-                                             task->stream_id, 
-                                             task->conn->bucket_alloc, 
-                                             task->mplx);
+        apr_pool_t *pool = task->conn->pool;
+        apr_bucket_alloc_t *bucket_alloc = task->conn->bucket_alloc;
+        
+        task->input = h2_task_input_create(task, pool, bucket_alloc);
+        task->output = h2_task_output_create(task, pool, bucket_alloc);
         
         status = h2_conn_process(task->conn);
     }
