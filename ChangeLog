@@ -1,3 +1,14 @@
+v0.6.0
+--------------------------------------------------------------------------------
+ * new config option "H2SerializeHeaders (On|Off)" that determines if request
+   response headers should be serialized/parsed when converting from HTTP/2 to
+   httpd's internal HTTP/1 processing or request_recs are manipulated directly.
+   "Off" is default, "On" gives better compatibility.
+ * new config options "H2HackMpmEvent (On|Off) that enables a hack to make
+   internal connection work with the mpm_event module. Has no effect if other
+   mpm modules have been configured. Defaults to "On"."
+ * upgrading sandbox to nghttp2 0.7.15
+
 v0.5.6
 --------------------------------------------------------------------------------
  * making SSL variables available in subprocess (e.g. CGI) environments if

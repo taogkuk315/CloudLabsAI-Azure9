@@ -35,6 +35,7 @@ typedef enum {
     H2_CONF_ALT_SVCS,
     H2_CONF_ALT_SVC_MAX_AGE,
     H2_CONF_SER_HEADERS,
+    H2_CONF_HACK_MPM_EVENT,
 } h2_config_var_t;
 
 /* Apache httpd module configuration for h2. */
@@ -52,6 +53,8 @@ typedef struct h2_config {
     int alt_svc_max_age;          /* seconds clients can rely on alt-svc info*/
     int serialize_headers;        /* Use serialized HTTP/1.1 headers for 
                                      processing, better compatibility */
+    int hack_mpm_event;           /* If mpm_event is detected, perform a hack
+                                     on stream connections to make it work */
 } h2_config;
 
 

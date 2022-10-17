@@ -83,7 +83,7 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     }
     workers = h2_workers_create(s, pool, minw, maxw);
     h2_workers_set_max_idle_secs(
-        workers, h2_config_geti(config, H2_CONF_MAX_WORKER_IDLE_SECS));
+                                 workers, h2_config_geti(config, H2_CONF_MAX_WORKER_IDLE_SECS));
     return status;
 }
 
@@ -170,7 +170,7 @@ apr_status_t h2_session_process(h2_session *session)
             filter = filter->next;
         }
     }
-
+    
     status = h2_session_start(session, &rv);
     
     h2_ctx *ctx = h2_ctx_get(session->c, 1);
@@ -212,7 +212,7 @@ apr_status_t h2_session_process(h2_session *session)
             h2_session_abort(session, status, 0);
             break;
         }
-
+        
         /* We would like to do blocking reads as often as possible as they
          * are more efficient in regard to server resources.
          * We can do them under the following circumstances:
@@ -300,7 +300,7 @@ h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *pool)
      * Lets allocated pools and everything else when we actually start
      * working on this new connection.
      */
-     
+    
     /* Not sure about the scoreboard handle. Reusing the one from the main
      * connection could make sense, but I do not know enough to tell...
      */
@@ -328,8 +328,8 @@ void h2_conn_destroy(h2_conn *conn)
 
 apr_status_t h2_conn_prep(h2_conn *conn, h2_worker *worker)
 {
-   assert(conn);
-   
+    h2_config *cfg = h2_config_get(conn->master);
+    
     ap_log_perror(APLOG_MARK, APLOG_TRACE3, 0, conn->pool,
                   "h2_conn(%s): created from master %ld",
                   conn->id, conn->master->id);
@@ -352,7 +352,7 @@ apr_status_t h2_conn_prep(h2_conn *conn, h2_worker *worker)
     
     ap_set_module_config(conn->c->conn_config, &core_module, 
                          conn->socket);
-
+    
     if (ssl_module) {
         /* See #19, there is a range of SSL variables to be gotten from
          * the main connection that should be available in request handlers
@@ -372,7 +372,9 @@ apr_status_t h2_conn_prep(h2_conn *conn, h2_worker *worker)
             /* all fine */
             break;
         case H2_MPM_EVENT: 
-            fix_event_conn(conn->c, conn->master);
+            if (h2_config_geti(cfg, H2_CONF_HACK_MPM_EVENT)) {
+                fix_event_conn(conn->c, conn->master);
+            }
             break;
         default:
             /* fingers crossed */
@@ -409,10 +411,6 @@ apr_status_t h2_conn_process(h2_conn *conn)
     
     return APR_SUCCESS;
 }
-
-#define H2_EVENT_HACK   1
-
-#if H2_EVENT_HACK
 
 /* This is an internal mpm event.c struct which is disguised
  * as a conn_state_t so that mpm_event can have special connection
@@ -467,17 +465,3 @@ static void fix_event_conn(conn_rec *c, conn_rec *master)
     c->cs = &(cs->pub);
 }
 
-#else /*if H2_EVENT_HACK */
-
-static int warned = 0;
-static void fix_event_conn(conn_rec *c, conn_rec *master) 
-{
-    if (!warned) {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, master,
-                      "running mod_h2 in an unhacked mpm_event server "
-                      "will most likely not work");
-        warned = 1;
-    }
-}
-
-#endif /*if H2_EVENT_HACK */

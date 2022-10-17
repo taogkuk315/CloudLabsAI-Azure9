@@ -46,6 +46,7 @@ static h2_config defconf = {
     NULL,             /* no alt-svcs */
     -1,               /* alt-svc max age */
     0,                /* serialize headers */
+    1,                /* hack mpm event */
 };
 
 static void *h2_config_create(apr_pool_t *pool,
@@ -71,6 +72,7 @@ static void *h2_config_create(apr_pool_t *pool,
     conf->stream_max_mem_size = DEF_VAL;
     conf->alt_svc_max_age = DEF_VAL;
     conf->serialize_headers = DEF_VAL;
+    conf->hack_mpm_event = DEF_VAL;
     return conf;
 }
 
@@ -110,6 +112,7 @@ void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     n->alt_svcs = add->alt_svcs? add->alt_svcs : base->alt_svcs;
     n->alt_svc_max_age = H2_CONFIG_GET(add, base, alt_svc_max_age);
     n->serialize_headers = H2_CONFIG_GET(add, base, serialize_headers);
+    n->hack_mpm_event = H2_CONFIG_GET(add, base, hack_mpm_event);
     
     return n;
 }
@@ -137,6 +140,8 @@ int h2_config_geti(h2_config *conf, h2_config_var_t var)
             return H2_CONFIG_GET(conf, &defconf, alt_svc_max_age);
         case H2_CONF_SER_HEADERS:
             return H2_CONFIG_GET(conf, &defconf, serialize_headers);
+        case H2_CONF_HACK_MPM_EVENT:
+            return H2_CONFIG_GET(conf, &defconf, hack_mpm_event);
         default:
             return DEF_VAL;
     }
@@ -241,6 +246,14 @@ static const char *h2_conf_set_serialize_headers(cmd_parms *parms,
     return NULL;
 }
 
+static const char *h2_conf_set_hack_mpm_event(cmd_parms *parms,
+                                              void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    cfg->hack_mpm_event = !apr_strnatcasecmp(value, "On");
+    return NULL;
+}
+
 const command_rec h2_cmds[] = {
     AP_INIT_TAKE1("H2Engine", h2_conf_set_engine, NULL,
                   RSRC_CONF, "on to enable HTTP/2 protocol handling"),
@@ -264,6 +277,8 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "set the maximum age (in seconds) that client can rely on alt-svc information"),
     AP_INIT_TAKE1("H2SerializeHeaders", h2_conf_set_serialize_headers, NULL,
                   RSRC_CONF, "on to enable header serialization for compatibility"),
+    AP_INIT_TAKE1("H2HackMpmEvent", h2_conf_set_hack_mpm_event, NULL,
+                  RSRC_CONF, "on to enable a hack that makes mpm_event working with mod_h2"),
     {NULL}
 };
 
