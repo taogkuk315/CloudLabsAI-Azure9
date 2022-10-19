@@ -57,6 +57,20 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     int threads_limit = 0;
     ap_mpm_query(AP_MPMQ_HARD_LIMIT_THREADS, &threads_limit);
     
+    if (minw <= 0) {
+        minw = max_threads_per_child;
+    }
+    if (maxw <= 0) {
+        maxw = threads_limit;
+        if (maxw < minw) {
+            maxw = minw;
+        }
+    }
+    
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
+                 "h2_workers: min=%d max=%d, mthrpchild=%d, thr_limit=%d", 
+                 minw, maxw, max_threads_per_child, threads_limit);
+    
     for (int i = 0; ap_loaded_modules[i]; ++i) {
         module *m = ap_loaded_modules[i];
         if (!strcmp("event.c", m->name)) {
@@ -72,15 +86,6 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
         }
     }
     
-    if (minw <= 0) {
-        minw = max_threads_per_child / 2;
-    }
-    if (maxw <= 0) {
-        maxw = threads_limit / 2;
-        if (maxw < minw) {
-            maxw = minw;
-        }
-    }
     workers = h2_workers_create(s, pool, minw, maxw);
     h2_workers_set_max_idle_secs(
                                  workers, h2_config_geti(config, H2_CONF_MAX_WORKER_IDLE_SECS));

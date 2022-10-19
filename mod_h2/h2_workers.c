@@ -99,7 +99,7 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
                 if (status == APR_TIMEUP) {
                     /* waited long enough */
                     if (workers->worker_count > workers->min_size) {
-                        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+                        ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                                      "h2_workers: aborting idle worker");
                         h2_worker_abort(worker);
                         break;
@@ -276,8 +276,9 @@ apr_status_t h2_workers_schedule(h2_workers *workers,
         
         if (workers->idle_worker_count <= 0 
             && workers->worker_count < workers->max_size) {
-            ap_log_error(APLOG_MARK, APLOG_TRACE2, 0, workers->s,
-                         "h2_workers: adding worker");
+            ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
+                         "h2_workers: got %d worker, adding 1", 
+                         workers->worker_count);
             add_worker(workers);
         }
         
