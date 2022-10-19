@@ -22,6 +22,7 @@
 #include <http_log.h>
 
 #include "h2_private.h"
+#include "h2_mplx.h"
 #include "h2_task.h"
 #include "h2_worker.h"
 
@@ -43,15 +44,29 @@ static void *execute(apr_thread_t *thread, void *wctx)
         return NULL;
     }
     
+    worker->task = NULL;
     worker->current = NULL;
     while (!worker->aborted) {
+        
         if (worker->current) {
-            status = h2_task_do(worker->current, worker);
-            worker->current = worker->task_done(worker, worker->current,
+            worker->task = h2_mplx_pop_task(worker->current);
+            while (!worker->aborted && worker->task) {
+                h2_task_set_started(worker->task, h2_worker_get_cond(worker));
+                
+                status = h2_task_do(worker->task, worker);
+                
+                h2_task_set_finished(worker->task);
+                apr_thread_cond_signal(h2_worker_get_cond(worker));
+                worker->task = h2_mplx_pop_task(worker->current);
+            }
+            
+            worker->task = NULL;
+            worker->current = worker->mplx_done(worker, worker->current,
                                                 status, worker->ctx);
         }
+        
         if (!worker->current) {
-            status = worker->get_next(worker, &worker->current,worker->ctx);
+            status = worker->get_next(worker, &worker->current, worker->ctx);
         }
     }
 
@@ -67,8 +82,8 @@ static void *execute(apr_thread_t *thread, void *wctx)
 h2_worker *h2_worker_create(int id,
                             apr_pool_t *parent_pool,
                             apr_threadattr_t *attr,
-                            h2_worker_task_next_fn *get_next,
-                            h2_worker_task_done_fn *task_done,
+                            h2_worker_mplx_next_fn *get_next,
+                            h2_worker_mplx_done_fn *mplx_done,
                             h2_worker_done_fn *worker_done,
                             void *ctx)
 {
@@ -94,7 +109,7 @@ h2_worker *h2_worker_create(int id,
         w->bucket_alloc = apr_bucket_alloc_create(pool);
 
         w->get_next = get_next;
-        w->task_done = task_done;
+        w->mplx_done = mplx_done;
         w->worker_done = worker_done;
         w->ctx = ctx;
         
@@ -148,11 +163,6 @@ apr_thread_t *h2_worker_get_thread(h2_worker *worker)
 apr_thread_cond_t *h2_worker_get_cond(h2_worker *worker)
 {
     return worker->io;
-}
-
-h2_task *h2_worker_get_task(h2_worker *worker)
-{
-    return worker->current;
 }
 
 apr_socket_t *h2_worker_get_socket(h2_worker *worker)

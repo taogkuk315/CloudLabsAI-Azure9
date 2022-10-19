@@ -23,42 +23,27 @@
 #include <http_log.h>
 
 #include "h2_private.h"
+#include "h2_mplx.h"
 #include "h2_task.h"
 #include "h2_task_queue.h"
 #include "h2_worker.h"
 #include "h2_workers.h"
 
-static h2_task* pop_next_task(h2_workers *workers, h2_worker *worker)
+static h2_mplx* pop_next_mplx(h2_workers *workers, h2_worker *worker)
 {
-    /* Each task queue belongs to one http2 session. We perform round
-     * robin scheduling among queues and serve the tasks in the queue
-     * in the order they appear.
-     * TODO: priority scheduling of tasks should adapt the order
-     * in the individual queue. This lacks the prio information from
-     * nghttp2 library for now.
-     * 
-     */
-    if (!H2_TQ_LIST_EMPTY(&workers->queues)) {
-        h2_task_queue *q = H2_TQ_LIST_FIRST(&workers->queues);
-        if (q) {
-            H2_TQ_REMOVE(q);
-            h2_task *task = h2_tq_pop_first(q);
-            if (task) {
-                h2_task_set_started(task, h2_worker_get_cond(worker));
-                if (!H2_TQ_EMPTY(q)) {
-                    H2_TQ_LIST_INSERT_TAIL(&workers->queues, q);
-                }
-                return task;
-            }
-        }
+    if (!H2_MPLX_LIST_EMPTY(&workers->mplxs)) {
+        h2_mplx *m = H2_MPLX_LIST_FIRST(&workers->mplxs);
+        H2_MPLX_REMOVE(m);
+        return m;
     }
     return NULL;
 }
 
-static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
+
+static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
 {
     h2_workers *workers = (h2_workers *)ctx;
-    *ptask = NULL;
+    *pmplx = NULL;
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         h2_task *task = NULL;
@@ -70,17 +55,17 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                      "h2_worker(%d): looking for work", h2_worker_get_id(worker));
         while (!h2_worker_is_aborted(worker) && !workers->aborted) {
-            h2_task *task = pop_next_task(workers, worker);
-            if (task) {
-                *ptask = task;
+            h2_mplx *m = pop_next_mplx(workers, worker);
+            if (m) {
+                *pmplx = m;
                 status = APR_SUCCESS;
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
-                             "h2_worker(%d): start task(%s)",
-                             h2_worker_get_id(worker), h2_task_get_id(task));
+                             "h2_worker(%d): start mplx(%ld)",
+                             h2_worker_get_id(worker), h2_mplx_get_id(m));
                 break;
             }
             
-            /* Need to wait for either a new task to arrive or, if we
+            /* Need to wait for either a new mplx to arrive or, if we
              * are not at the minimum workers count, wait our max idle
              * time until we reduce the number of workers */
             if (workers->worker_count > workers->min_size) {
@@ -119,25 +104,23 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
     return status;
 }
 
-static h2_task *task_done(h2_worker *worker, h2_task *task,
+static h2_mplx *mplx_done(h2_worker *worker, h2_mplx *m,
                           apr_status_t task_status, void *ctx)
 {
     h2_workers *workers = (h2_workers *)ctx;
-    h2_task *next_task = NULL;
+    h2_mplx *next_mplx = NULL;
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        h2_task_set_finished(task);
-        next_task = pop_next_task(workers, worker);
+        next_mplx = pop_next_mplx(workers, worker);
         
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
-                     "h2_worker(%d): task(%s) done, next(%s)",
-                     h2_worker_get_id(worker), h2_task_get_id(task),
-                     next_task? h2_task_get_id(next_task) : "null");
+                     "h2_worker(%d): mplx(%ld) done, next(%ld)",
+                     h2_worker_get_id(worker), h2_mplx_get_id(m),
+                     next_mplx? h2_mplx_get_id(next_mplx) : -1);
         
-        apr_thread_cond_signal(h2_worker_get_cond(worker));
         apr_thread_mutex_unlock(workers->lock);
     }
-    return next_task;
+    return next_mplx;
 }
 
 static void worker_done(h2_worker *worker, void *ctx)
@@ -160,7 +143,7 @@ static apr_status_t add_worker(h2_workers *workers)
 {
     h2_worker *w = h2_worker_create(workers->next_worker_id++,
                                     workers->pool, workers->thread_attr,
-                                    get_task_next, task_done, worker_done,
+                                    get_mplx_next, mplx_done, worker_done,
                                     workers);
     if (!w) {
         return APR_ENOMEM;
@@ -206,6 +189,7 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         
         APR_RING_INIT(&workers->workers, h2_worker, link);
         APR_RING_INIT(&workers->queues, h2_task_queue, link);
+        APR_RING_INIT(&workers->mplxs, h2_mplx, link);
         
         status = apr_thread_mutex_create(&workers->lock,
                                          APR_THREAD_MUTEX_DEFAULT,
@@ -260,18 +244,29 @@ static int tq_in_list(h2_workers *workers, h2_task_queue *q)
     return 0;
 }
 
-apr_status_t h2_workers_schedule(h2_workers *workers, 
-                                 h2_task_queue *q, h2_task *task)
+static int in_list(h2_workers *workers, h2_mplx *m)
+{
+    h2_mplx *e;
+    for (e = H2_MPLX_LIST_FIRST(&workers->mplxs); 
+         e != H2_MPLX_LIST_SENTINEL(&workers->mplxs);
+         e = H2_MPLX_NEXT(e)) {
+        if (e == m) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
-                     "h2_workers: scheduling task(%s)",
-                     h2_task_get_id(task));
-        if (h2_tq_empty(q)) {
-            H2_TQ_LIST_INSERT_TAIL(&workers->queues, q);        
+                     "h2_workers: register mplx(%ld)",
+                     h2_mplx_get_id(m));
+        if (!in_list(workers, m)) {
+            H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);        
         }
-        h2_tq_append(q, task);
         apr_thread_cond_signal(workers->task_added);
         
         if (workers->idle_worker_count <= 0 
@@ -287,30 +282,20 @@ apr_status_t h2_workers_schedule(h2_workers *workers,
     return status;
 }
 
-apr_status_t h2_workers_unschedule(h2_workers *workers, 
-                                   h2_task_queue *q, h2_task *task)
+apr_status_t h2_workers_unregister(h2_workers *workers, struct h2_mplx *m)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         status = APR_EAGAIN;
-        if (task) {
-            ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
-                         "h2_workers: unschedule task(%s)",
-                         h2_task_get_id(task));
-            status = h2_tq_remove(q, task);
-        }
-        else {
-            if (tq_in_list(workers, q)) {
-                H2_TQ_REMOVE(q);
-                status = APR_SUCCESS;
-            }
+        if (in_list(workers, m)) {
+            H2_MPLX_REMOVE(m);
+            status = APR_SUCCESS;
         }
         apr_thread_mutex_unlock(workers->lock);
     }
     
     return status;
 }
-
 
 void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs)
 {

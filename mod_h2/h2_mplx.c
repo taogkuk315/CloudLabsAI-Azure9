@@ -77,6 +77,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
     h2_mplx *m = apr_pcalloc(parent, sizeof(h2_mplx));
     if (m) {
         m->id = c->id;
+        APR_RING_ELEM_INIT(m, link);
         m->c = c;
         apr_pool_create_ex(&m->pool, parent, NULL, allocator);
         if (!m->pool) {
@@ -108,7 +109,7 @@ void h2_mplx_destroy(h2_mplx *m)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         if (m->q) {
-            h2_workers_unschedule(m->workers, m->q, NULL);
+            h2_workers_unregister(m->workers, m);
             h2_tq_destroy(m->q);
             m->q = NULL;
         }
@@ -161,7 +162,7 @@ void h2_mplx_abort(h2_mplx *m)
     if (APR_SUCCESS == status) {
         m->aborted = 1;
         if (m->workers) {
-            h2_workers_unschedule(m->workers, m->q, NULL);
+            h2_workers_unregister(m->workers, m);
         }
         h2_io_set_destroy_all(m->stream_ios);
         apr_thread_mutex_unlock(m->lock);
@@ -611,13 +612,38 @@ static void have_out_data_for(h2_mplx *m, int stream_id)
 apr_status_t h2_mplx_do_async(h2_mplx *m, int stream_id,
                               struct h2_task *task)
 {
-    apr_status_t status = h2_workers_schedule(m->workers, m->q, task);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, m->c,
-                      "scheduling task(%ld-%d)",
-                      m->id, stream_id);
+    assert(m);
+    if (m->aborted) {
+        return APR_ECONNABORTED;
+    }
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        int was_empty = h2_tq_empty(m->q);
+        h2_tq_append(m->q, task);
+        if (was_empty) {
+            h2_workers_register(m->workers, m);
+        }
+        apr_thread_mutex_unlock(m->lock);
     }
     return status;
+}
+
+h2_task *h2_mplx_pop_task(h2_mplx *m)
+{
+    h2_task *task = NULL;
+    assert(m);
+    if (m->aborted) {
+        return NULL;
+    }
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        task = h2_tq_pop_first(m->q);
+        if (task) {
+            h2_task_set_started(task, NULL);
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return task;
 }
 
 static apr_status_t join(h2_mplx *m, h2_task *task)
@@ -654,8 +680,7 @@ apr_status_t h2_mplx_join_task(h2_mplx *m, h2_task *task, int wait)
             status = APR_SUCCESS;
         }
         else if (!h2_task_has_started(task)) {
-            
-            status = h2_workers_unschedule(m->workers, m->q, task);
+            status = h2_tq_remove(m->q, task);
             if (status != APR_SUCCESS && !h2_task_has_started(task)) {
                 /* hmm, not on our list and not started, assume
                  * it never will. */

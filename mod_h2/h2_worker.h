@@ -17,6 +17,7 @@
 #define __mod_h2__h2_worker__
 
 struct apr_thread_cond_t;
+struct h2_mplx;
 struct h2_task;
 
 /* h2_worker is a basically a apr_thread_t that reads fromt he h2_workers
@@ -24,19 +25,19 @@ struct h2_task;
  */
 typedef struct h2_worker h2_worker;
 
-/* Invoked when the worker wants a new task. Will block
- * until a task becomes available or the worker itself
+/* Invoked when the worker wants new work. Will block
+ * until a h2_mplx becomes available or the worker itself
  * gets aborted (idle timeout, for example). */
-typedef apr_status_t h2_worker_task_next_fn(h2_worker *worker,
-                                            h2_task **ptask,
+typedef apr_status_t h2_worker_mplx_next_fn(h2_worker *worker,
+                                            struct h2_mplx **m,
                                             void *ctx);
 
-/* Invoked when the worker has finished a task. May return the 
- * next task to work on or NULL. Will not block. */
-typedef h2_task *h2_worker_task_done_fn(h2_worker *worker,
-                                        h2_task *ptask,
-                                        apr_status_t status,
-                                        void *ctx);
+/* Invoked when the worker has finished a mplx. May return the 
+ * next mplx to work on or NULL. Will not block. */
+typedef struct h2_mplx *h2_worker_mplx_done_fn(h2_worker *worker,
+                                               struct h2_mplx *m,
+                                               apr_status_t status,
+                                               void *ctx);
 
 /* Invoked just before the worker thread exits. */
 typedef void h2_worker_done_fn(h2_worker *worker, void *ctx);
@@ -53,13 +54,14 @@ struct h2_worker {
     struct apr_thread_cond_t *io;
     apr_socket_t *socket;
     
-    h2_worker_task_next_fn *get_next;
-    h2_worker_task_done_fn *task_done;
+    h2_worker_mplx_next_fn *get_next;
+    h2_worker_mplx_done_fn *mplx_done;
     h2_worker_done_fn *worker_done;
     void *ctx;
     
     int aborted;
-    struct h2_task *current;
+    struct h2_mplx *current;
+    struct h2_task *task;
 };
 
 /**
@@ -136,8 +138,8 @@ struct h2_worker {
 h2_worker *h2_worker_create(int id,
                             apr_pool_t *pool,
                             apr_threadattr_t *attr,
-                            h2_worker_task_next_fn *get_next,
-                            h2_worker_task_done_fn *task_done,
+                            h2_worker_mplx_next_fn *get_next,
+                            h2_worker_mplx_done_fn *mplx_done,
                             h2_worker_done_fn *worker_done,
                             void *ctx);
 
@@ -158,8 +160,5 @@ apr_socket_t *h2_worker_get_socket(h2_worker *worker);
 apr_thread_t *h2_worker_get_thread(h2_worker *worker);
 
 struct apr_thread_cond_t *h2_worker_get_cond(h2_worker *worker);
-
-struct h2_task *h2_worker_get_task(h2_worker *worker);
-
 
 #endif /* defined(__mod_h2__h2_worker__) */

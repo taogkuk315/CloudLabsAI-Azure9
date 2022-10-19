@@ -52,6 +52,7 @@ typedef struct h2_mplx h2_mplx;
 
 struct h2_mplx {
     long id;
+    APR_RING_ENTRY(h2_mplx) link;
     conn_rec *c;
     apr_pool_t *pool;
     apr_bucket_alloc_t *bucket_alloc;
@@ -141,6 +142,8 @@ apr_status_t h2_mplx_join_task(h2_mplx *m, struct h2_task *task, int wait);
  */
 apr_status_t h2_mplx_do_async(h2_mplx *mplx, int stream_id,
                               struct h2_task *task);
+
+struct h2_task *h2_mplx_pop_task(h2_mplx *mplx);
 
 /*******************************************************************************
  * Input handling of streams.
@@ -240,6 +243,77 @@ apr_status_t h2_mplx_out_write(h2_mplx *mplx, int stream_id,
  * data and then only APR_EOF as result. 
  */
 apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id);
+
+/*******************************************************************************
+ * h2_mplx list Manipulation.
+ ******************************************************************************/
+
+/**
+ * The magic pointer value that indicates the head of a h2_mplx list
+ * @param  b The mplx list
+ * @return The magic pointer value
+ */
+#define H2_MPLX_LIST_SENTINEL(b)	APR_RING_SENTINEL((b), h2_mplx, link)
+
+/**
+ * Determine if the mplx list is empty
+ * @param b The list to check
+ * @return true or false
+ */
+#define H2_MPLX_LIST_EMPTY(b)	APR_RING_EMPTY((b), h2_mplx, link)
+
+/**
+ * Return the first mplx in a list
+ * @param b The list to query
+ * @return The first mplx in the list
+ */
+#define H2_MPLX_LIST_FIRST(b)	APR_RING_FIRST(b)
+
+/**
+ * Return the last mplx in a list
+ * @param b The list to query
+ * @return The last mplx int he list
+ */
+#define H2_MPLX_LIST_LAST(b)	APR_RING_LAST(b)
+
+/**
+ * Insert a single mplx at the front of a list
+ * @param b The list to add to
+ * @param e The mplx to insert
+ */
+#define H2_MPLX_LIST_INSERT_HEAD(b, e) do {				\
+h2_mplx *ap__b = (e);                                        \
+APR_RING_INSERT_HEAD((b), ap__b, h2_mplx, link);	\
+} while (0)
+
+/**
+ * Insert a single mplx at the end of a list
+ * @param b The list to add to
+ * @param e The mplx to insert
+ */
+#define H2_MPLX_LIST_INSERT_TAIL(b, e) do {				\
+h2_mplx *ap__b = (e);					\
+APR_RING_INSERT_TAIL((b), ap__b, h2_mplx, link);	\
+} while (0)
+
+/**
+ * Get the next mplx in the list
+ * @param e The current mplx
+ * @return The next mplx
+ */
+#define H2_MPLX_NEXT(e)	APR_RING_NEXT((e), link)
+/**
+ * Get the previous mplx in the list
+ * @param e The current mplx
+ * @return The previous mplx
+ */
+#define H2_MPLX_PREV(e)	APR_RING_PREV((e), link)
+
+/**
+ * Remove a mplx from its list
+ * @param e The mplx to remove
+ */
+#define H2_MPLX_REMOVE(e)	APR_RING_REMOVE((e), link)
 
 
 #endif /* defined(__mod_h2__h2_mplx__) */
