@@ -30,6 +30,7 @@ static void *execute(apr_thread_t *thread, void *wctx)
 {
     h2_worker *worker = (h2_worker *)wctx;
     apr_status_t status = APR_SUCCESS;
+    const int n = 10;
     
     /* Furthermore, other code might want to see the socket for
      * this connection. Allocate one without further function...
@@ -49,14 +50,23 @@ static void *execute(apr_thread_t *thread, void *wctx)
     while (!worker->aborted) {
         
         if (worker->current) {
+            status = APR_SUCCESS;
             worker->task = h2_mplx_pop_task(worker->current);
-            while (!worker->aborted && worker->task) {
+            for (int i = 0; !worker->aborted && worker->task; ++i) {
                 h2_task_set_started(worker->task, h2_worker_get_cond(worker));
                 
-                status = h2_task_do(worker->task, worker);
+                h2_task_do(worker->task, worker);
                 
                 h2_task_set_finished(worker->task);
                 apr_thread_cond_signal(h2_worker_get_cond(worker));
+                
+                if (i >= n) {
+                    /* Do a maximum of n tasks per given mplx before giving
+                     * other connections a chance. */
+                    worker->task = NULL;
+                    status = APR_EAGAIN;
+                    break;
+                }
                 worker->task = h2_mplx_pop_task(worker->current);
             }
             

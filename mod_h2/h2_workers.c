@@ -29,6 +29,20 @@
 #include "h2_worker.h"
 #include "h2_workers.h"
 
+static int in_list(h2_workers *workers, h2_mplx *m)
+{
+    h2_mplx *e;
+    for (e = H2_MPLX_LIST_FIRST(&workers->mplxs); 
+         e != H2_MPLX_LIST_SENTINEL(&workers->mplxs);
+         e = H2_MPLX_NEXT(e)) {
+        if (e == m) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+
 static h2_mplx* pop_next_mplx(h2_workers *workers, h2_worker *worker)
 {
     if (!H2_MPLX_LIST_EMPTY(&workers->mplxs)) {
@@ -105,12 +119,17 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
 }
 
 static h2_mplx *mplx_done(h2_worker *worker, h2_mplx *m,
-                          apr_status_t task_status, void *ctx)
+                          apr_status_t mplx_status, void *ctx)
 {
     h2_workers *workers = (h2_workers *)ctx;
     h2_mplx *next_mplx = NULL;
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
+        /* If EAGAIN and not empty, place into list again */
+        if (mplx_status == APR_EAGAIN && !in_list(workers, m)) {
+            H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);        
+            apr_thread_cond_signal(workers->task_added);
+        }
         next_mplx = pop_next_mplx(workers, worker);
         
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
@@ -238,19 +257,6 @@ static int tq_in_list(h2_workers *workers, h2_task_queue *q)
          e != H2_TQ_LIST_SENTINEL(&workers->queues);
          e = H2_TQ_NEXT(e)) {
         if (e == q) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static int in_list(h2_workers *workers, h2_mplx *m)
-{
-    h2_mplx *e;
-    for (e = H2_MPLX_LIST_FIRST(&workers->mplxs); 
-         e != H2_MPLX_LIST_SENTINEL(&workers->mplxs);
-         e = H2_MPLX_NEXT(e)) {
-        if (e == m) {
             return 1;
         }
     }
