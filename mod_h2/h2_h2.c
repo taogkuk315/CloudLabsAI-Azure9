@@ -337,8 +337,8 @@ int h2_h2_pre_conn(conn_rec* c, void *arg)
          */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_h2, pre_connection, found stream task");
-        h2_task *task = h2_ctx_get_task(ctx);
-        return h2_task_pre_conn(task, c);
+        h2_task_env *env = h2_ctx_get_task(ctx);
+        return h2_task_pre_conn(env, c);
     }
     
     return DECLINED;
@@ -368,10 +368,10 @@ int h2_h2_process_conn(conn_rec* c)
     
     if (ctx) {
         if (h2_ctx_is_task(c)) {
-            if (!ctx->task->serialize_headers) {
+            if (!ctx->task_env->serialize_headers) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, 
                               "h2_h2, processing request directly");
-                h2_task_process_request(ctx->task);
+                h2_task_process_request(ctx->task_env);
                 return DONE;
             }
             return DECLINED;
@@ -417,19 +417,19 @@ int h2_h2_stream_pre_conn(conn_rec* c, void *arg)
 int h2_h2_post_read_req(request_rec *r)
 {
     h2_ctx *ctx = h2_ctx_rget(r, 0);
-    struct h2_task *task = ctx? h2_ctx_get_task(ctx) : NULL;
-    if (task) {
+    struct h2_task_env *env = ctx? h2_ctx_get_task(ctx) : NULL;
+    if (env) {
         /* h2_task connection for a stream, not for h2c */
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                       "adding h1_to_h2_resp output filter");
-        if (task->serialize_headers) {
-            ap_add_output_filter("H1_TO_H2_RESP", task, r, r->connection);
+        if (env->serialize_headers) {
+            ap_add_output_filter("H1_TO_H2_RESP", env, r, r->connection);
         }
         else {
             /* replace the core http filter that formats response headers
              * in HTTP/1 with our own that collects status and headers */
             ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
-            ap_add_output_filter("H2_RESPONSE", task, r, r->connection);
+            ap_add_output_filter("H2_RESPONSE", env, r, r->connection);
         }
     }
     return DECLINED;

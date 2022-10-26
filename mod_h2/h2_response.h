@@ -28,13 +28,11 @@ typedef struct h2_headers {
 
 typedef struct h2_response {
     int stream_id;
-    apr_status_t task_status;
     apr_off_t content_length;
     h2_headers *headers;
 } h2_response;
 
 h2_response *h2_response_create(int stream_id,
-                                  apr_status_t task_status,
                                   const char *http_status,
                                   apr_array_header_t *hlines,
                                   apr_pool_t *pool);

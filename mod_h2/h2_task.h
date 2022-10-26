@@ -44,37 +44,47 @@ struct h2_worker;
 
 typedef struct h2_task h2_task;
 
-typedef void task_callback(void *ctx, h2_task *task);
-
 struct h2_task {
     /** Links to the rest of the tasks */
     APR_RING_ENTRY(h2_task) link;
 
     const char *id;
     int stream_id;
-    int aborted;
+    struct h2_mplx *mplx;
+    
     volatile apr_uint32_t has_started;
     volatile apr_uint32_t has_finished;
-    
-    struct h2_mplx *mplx;
-    struct conn_rec *master;
-    apr_pool_t *stream_pool;
-    struct h2_conn *conn;
     
     const char *method;
     const char *path;
     const char *authority;
     apr_table_t *headers;
-    int serialize_headers;
+    int input_eos;
 
+    struct h2_conn *conn;
+    struct apr_thread_cond_t *io;   /* used to wait for events on */
+};
+
+typedef struct h2_task_env h2_task_env;
+
+struct h2_task_env {
+    const char *id;
+    int stream_id;
+    struct h2_mplx *mplx;
+    
+    const char *method;
+    const char *path;
+    const char *authority;
+    apr_table_t *headers;
     int input_eos;
     
-    struct h2_task_input *input;    /* http/1.1 input data */
-    struct h2_task_output *output;  /* response body data */
-    struct apr_thread_cond_t *io;   /* optional condition to wait for io on */
+    int serialize_headers;
+
+    struct h2_conn *conn;
+    struct h2_task_input *input;
+    struct h2_task_output *output;
     
-    task_callback *on_finished;
-    void *ctx_finished;
+    struct apr_thread_cond_t *io;   /* used to wait for events on */
 };
 
 /**
@@ -148,33 +158,22 @@ struct h2_task {
 h2_task *h2_task_create(long session_id, int stream_id, conn_rec *master,
                         apr_pool_t *pool, struct h2_mplx *mplx);
 
+apr_status_t h2_task_destroy(h2_task *task);
+
 void h2_task_set_request(h2_task *task, const char *method, const char *path, 
                          const char *authority, apr_table_t *headers, int eos);
 
-apr_status_t h2_task_destroy(h2_task *task);
-
-apr_status_t h2_task_prep_conn(h2_task *task);
 
 apr_status_t h2_task_do(h2_task *task, struct h2_worker *worker);
-apr_status_t h2_task_process_request(h2_task *task);
-
-void h2_task_abort(h2_task *task);
-int h2_task_is_aborted(h2_task *task);
-void h2_task_interrupt(h2_task *task);
+apr_status_t h2_task_process_request(h2_task_env *env);
 
 int h2_task_has_started(h2_task *task);
-void h2_task_set_started(h2_task *task, struct apr_thread_cond_t *cond);
+void h2_task_set_started(h2_task *task);
 int h2_task_has_finished(h2_task *task);
 void h2_task_set_finished(h2_task *task);
 
-void h2_task_on_finished(h2_task *task, task_callback *cb, void *cb_ctx);
-
-const char *h2_task_get_id(h2_task *task);
-
 void h2_task_register_hooks(void);
 
-int h2_task_pre_conn(h2_task *task, conn_rec *c);
-
-struct apr_thread_cond_t *h2_task_get_io_cond(h2_task *task);
+int h2_task_pre_conn(h2_task_env *env, conn_rec *c);
 
 #endif /* defined(__mod_h2__h2_task__) */

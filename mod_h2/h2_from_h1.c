@@ -80,7 +80,7 @@ h2_response *h2_from_h1_get_response(h2_from_h1 *from_h1)
 
 static apr_status_t make_h2_headers(h2_from_h1 *from_h1, request_rec *r)
 {
-    from_h1->response = h2_response_create(from_h1->stream_id, APR_SUCCESS,
+    from_h1->response = h2_response_create(from_h1->stream_id, 
                                        from_h1->status, from_h1->hlines,
                                        from_h1->pool);
     if (from_h1->response == NULL) {
@@ -392,8 +392,8 @@ static int copy_header(void *ctx, const char *name, const char *value)
 apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
 {
     apr_status_t status = APR_SUCCESS;
-    h2_task *task = f->ctx;
-    h2_from_h1 *from_h1 = task->output? task->output->from_h1 : NULL;
+    h2_task_env *env = f->ctx;
+    h2_from_h1 *from_h1 = env->output? env->output->from_h1 : NULL;
     request_rec *r = f->r;
     conn_rec *c = r->connection;
     const char *clheader;
@@ -406,7 +406,7 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
                   "h2_from_h1(%d): output_filter called", from_h1->stream_id);
     
-    if (r->header_only && task->output && from_h1->response) {
+    if (r->header_only && env->output && from_h1->response) {
         /* throw away any data after we have compiled the response */
         apr_brigade_cleanup(bb);
         return OK;

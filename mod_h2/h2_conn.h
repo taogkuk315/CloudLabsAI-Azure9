@@ -53,18 +53,17 @@ module *h2_conn_mpm_module();
 
 typedef struct h2_conn h2_conn;
 struct h2_conn {
-    const char *id;
     apr_pool_t *pool;
     apr_bucket_alloc_t *bucket_alloc;
     conn_rec *c;
     apr_socket_t *socket;
-    conn_rec *master;
 };
 
 h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *parent);
 void h2_conn_destroy(h2_conn *conn);
 
-apr_status_t h2_conn_prep(h2_conn *conn, struct h2_worker *worker);
+apr_status_t h2_conn_prep(h2_conn *conn, conn_rec *master, 
+                          struct h2_worker *worker);
 apr_status_t h2_conn_post(h2_conn *conn, struct h2_worker *worker);
 
 apr_status_t h2_conn_process(h2_conn *conn);

@@ -123,7 +123,7 @@ void h2_stream_set_remove_all(h2_stream_set *sp)
 
 int h2_stream_set_is_empty(h2_stream_set *sp)
 {
-    assert(sp);
+    AP_DEBUG_ASSERT(sp);
     return sp->list->nelts == 0;
 }
 

@@ -40,7 +40,6 @@ static int ignore_header(const char *name)
 }
 
 h2_response *h2_response_create(int stream_id,
-                                apr_status_t task_status,
                                 const char *http_status,
                                 apr_array_header_t *hlines,
                                 apr_pool_t *pool)
@@ -52,7 +51,6 @@ h2_response *h2_response_create(int stream_id,
     }
     
     response->stream_id = stream_id;
-    response->task_status = task_status;
     response->content_length = -1;
     
     if (hlines) {
@@ -108,7 +106,6 @@ h2_response *h2_response_rcreate(int stream_id, request_rec *r,
     }
     
     response->stream_id = stream_id;
-    response->task_status = APR_SUCCESS;
     response->content_length = -1;
     convert_header(response, header, apr_psprintf(pool, "%d", r->status), r);
     

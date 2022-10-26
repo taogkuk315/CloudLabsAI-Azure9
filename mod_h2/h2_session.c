@@ -620,7 +620,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
 }
 
 static int stream_close_finished(void *ctx, h2_stream *stream) {
-    assert(ctx);
+    AP_DEBUG_ASSERT(ctx);
     h2_session *session = (h2_session *)ctx;
     h2_task *task = stream->task;
     if (!task || h2_task_has_finished(task)) {
@@ -640,7 +640,7 @@ static void reap_zombies(h2_session *session, int take_your_time) {
          * have reached a certain threshold, check all zombies and
          * cleanup those whose task has finished 
          */
-        if (count && (take_your_time || count > (session->max_stream_count/2))) {
+        if (count && (take_your_time || count > (session->max_stream_count/10))) {
             h2_stream_set_iter(session->zombies, stream_close_finished, session);
         }
     }
@@ -659,20 +659,20 @@ h2_session *h2_session_rcreate(request_rec *r, h2_config *config,
 }
 
 static int close_active_iter(void *ctx, h2_stream *stream) {
-    assert(ctx);
+    AP_DEBUG_ASSERT(ctx);
     close_stream((h2_session *)ctx, stream);
     return 1;
 }
 
 static int close_zombie_iter(void *ctx, h2_stream *stream) {
-    assert(ctx);
+    AP_DEBUG_ASSERT(ctx);
     join_stream_task((h2_session *)ctx, stream);
     return 1;
 }
 
 void h2_session_destroy(h2_session *session)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     if (session->streams) {
         if (h2_stream_set_size(session->streams)) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
@@ -723,7 +723,7 @@ void h2_session_destroy(h2_session *session)
 
 apr_status_t h2_session_goaway(h2_session *session, apr_status_t reason)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     apr_status_t status = APR_SUCCESS;
     if (session->aborted) {
         return APR_EINVAL;
@@ -750,7 +750,7 @@ apr_status_t h2_session_goaway(h2_session *session, apr_status_t reason)
 
 static apr_status_t h2_session_abort_int(h2_session *session, int reason)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     if (!session->aborted) {
         session->aborted = 1;
         if (session->ngh2) {
@@ -772,7 +772,7 @@ static apr_status_t h2_session_abort_int(h2_session *session, int reason)
 
 apr_status_t h2_session_abort(h2_session *session, apr_status_t reason, int rv)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     if (rv == 0) {
         rv = NGHTTP2_ERR_PROTO;
         switch (reason) {
@@ -795,7 +795,7 @@ apr_status_t h2_session_abort(h2_session *session, apr_status_t reason, int rv)
 
 apr_status_t h2_session_start(h2_session *session, int *rv)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     /* Start the conversation by submitting our SETTINGS frame */
     apr_status_t status = APR_SUCCESS;
     *rv = 0;
@@ -895,8 +895,8 @@ typedef struct {
 static int resume_on_data(void *ctx, h2_stream *stream) {
     resume_ctx *rctx = (resume_ctx*)ctx;
     h2_session *session = rctx->session;
-    assert(session);
-    assert(stream);
+    AP_DEBUG_ASSERT(session);
+    AP_DEBUG_ASSERT(stream);
     
     if (h2_stream_is_suspended(stream)) {
         if (h2_mplx_out_has_data_for(stream->m, stream->id)) {
@@ -914,7 +914,7 @@ static int resume_on_data(void *ctx, h2_stream *stream) {
 }
 
 static int h2_session_resume_streams_with_data(h2_session *session) {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     if (!h2_stream_set_is_empty(session->streams)
         && session->mplx && !session->aborted) {
         resume_ctx ctx = { session, 0 };
@@ -943,7 +943,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
     h2_stream *stream = NULL;
     int flush_output = 0;
     
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     
     /* Check that any pending window updates are sent. */
     status = h2_session_update_windows(session);
@@ -1017,7 +1017,7 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
 
 h2_stream *h2_session_get_stream(h2_session *session, int stream_id)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     return h2_stream_set_get(session->streams, stream_id);
 }
 
@@ -1029,7 +1029,7 @@ static apr_status_t session_receive(const char *data, apr_size_t len,
                                     void *puser)
 {
     h2_session *session = (h2_session *)puser;
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     if (len > 0) {
         ssize_t n = nghttp2_session_mem_recv(session->ngh2,
                                              (const uint8_t *)data, len);
@@ -1053,13 +1053,13 @@ static apr_status_t session_receive(const char *data, apr_size_t len,
 
 apr_status_t h2_session_read(h2_session *session, apr_read_type_e block)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     return h2_conn_io_read(&session->io, block, session_receive, session);
 }
 
 apr_status_t h2_session_close(h2_session *session)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     return h2_conn_io_flush(&session->io);
 }
 
@@ -1078,7 +1078,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
                               void *puser)
 {
     h2_session *session = (h2_session *)puser;
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (!stream) {
@@ -1088,7 +1088,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
-    assert(!h2_stream_is_suspended(stream));
+    AP_DEBUG_ASSERT(!h2_stream_is_suspended(stream));
     apr_size_t nread = length;
     int eos = 0;
     
@@ -1198,9 +1198,9 @@ static int submit_response(h2_session *session, h2_response *response)
  */
 apr_status_t h2_session_handle_response(h2_session *session, h2_stream *stream)
 {
-    assert(session);
-    assert(stream);
-    assert(stream->response);
+    AP_DEBUG_ASSERT(session);
+    AP_DEBUG_ASSERT(stream);
+    AP_DEBUG_ASSERT(stream->response);
     
     apr_status_t status = APR_SUCCESS;
     int rv = 0;
@@ -1223,7 +1223,7 @@ apr_status_t h2_session_handle_response(h2_session *session, h2_stream *stream)
 
 int h2_session_is_done(h2_session *session)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     return (session->aborted
             || !session->ngh2
             || (!nghttp2_session_want_read(session->ngh2)
@@ -1233,7 +1233,7 @@ int h2_session_is_done(h2_session *session)
 static int log_stream(void *ctx, h2_stream *stream)
 {
     h2_session *session = (h2_session *)ctx;
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                   "h2_stream(%ld-%d): in set, suspended=%d, aborted=%d, "
                   "has_data=%d",
@@ -1244,7 +1244,7 @@ static int log_stream(void *ctx, h2_stream *stream)
 
 void h2_session_log_stats(h2_session *session)
 {
-    assert(session);
+    AP_DEBUG_ASSERT(session);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                   "h2_session(%ld): %ld open streams",
                   session->id, h2_stream_set_size(session->streams));

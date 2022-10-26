@@ -15,6 +15,7 @@
 
 #include <assert.h>
 
+#include <apr_thread_cond.h>
 #include <httpd.h>
 #include <http_core.h>
 #include <http_log.h>
@@ -33,21 +34,24 @@
 
 
 static int is_aborted(h2_task_output *output, ap_filter_t* filter) {
-    if (filter->c->aborted || h2_task_is_aborted(output->task)) {
+    if (filter->c->aborted) {
         filter->c->aborted = 1;
         return 1;
     }
     return 0;
 }
 
-h2_task_output *h2_task_output_create(h2_task *task, apr_pool_t *pool,
+h2_task_output *h2_task_output_create(h2_task_env *env, apr_pool_t *pool,
                                       apr_bucket_alloc_t *bucket_alloc)
 {
     h2_task_output *output = apr_pcalloc(pool, sizeof(h2_task_output));
     if (output) {
-        output->task = task;
+        output->id = env->id;
+        output->stream_id = env->stream_id;
+        output->mplx = env->mplx;
+        output->cond = env->io;
         output->state = H2_TASK_OUT_INIT;
-        output->from_h1 = h2_from_h1_create(task->stream_id, 
+        output->from_h1 = h2_from_h1_create(env->stream_id, 
                                             pool, bucket_alloc);
         if (!output->from_h1) {
             return NULL;
@@ -74,15 +78,17 @@ static apr_status_t open_if_needed(h2_task_output *output, ap_filter_t *f,
             if (f) {
                 ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, f->c,
                               "h2_task_output(%s): write without response",
-                              h2_task_get_id(output->task));
+                              output->id);
+                f->c->aborted = 1;
             }
-            h2_task_abort(output->task);
+            if (output->cond) {
+                apr_thread_cond_broadcast(output->cond);
+            }
             return APR_ECONNABORTED;
         }
         
-        return h2_mplx_out_open(output->task->mplx, output->task->stream_id, 
-                                response, f, bb,
-                                h2_task_get_io_cond(output->task));
+        return h2_mplx_out_open(output->mplx, output->stream_id, 
+                                response, f, bb, output->cond);
     }
     return APR_EOF;
 }
@@ -91,7 +97,7 @@ void h2_task_output_close(h2_task_output *output)
 {
     open_if_needed(output, NULL, NULL);
     if (output->state != H2_TASK_OUT_DONE) {
-        h2_mplx_out_close(output->task->mplx, output->task->stream_id);
+        h2_mplx_out_close(output->mplx, output->stream_id);
         output->state = H2_TASK_OUT_DONE;
     }
 }
@@ -106,14 +112,13 @@ int h2_task_output_has_started(h2_task_output *output)
  * on the master connection. 
  */
 apr_status_t h2_task_output_write(h2_task_output *output,
-                                    ap_filter_t* f, apr_bucket_brigade* bb)
+                                  ap_filter_t* f, apr_bucket_brigade* bb)
 {
     apr_status_t status = APR_SUCCESS;
     
     if (APR_BRIGADE_EMPTY(bb)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                      "h2_task_output(%s): empty write", 
-                      h2_task_get_id(output->task));
+                      "h2_task_output(%s): empty write", output->id);
         return APR_SUCCESS;
     }
     
@@ -121,13 +126,12 @@ apr_status_t h2_task_output_write(h2_task_output *output,
     if (status != APR_EOF) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
                       "h2_task_output(%s): opened and passed brigade", 
-                      h2_task_get_id(output->task));
+                      output->id);
         return status;
     }
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                  "h2_task_output(%s): write brigade", 
-                  h2_task_get_id(output->task));
-    return h2_mplx_out_write(output->task->mplx, output->task->stream_id, f, bb,
-                             h2_task_get_io_cond(output->task));
+                  "h2_task_output(%s): write brigade", output->id);
+    return h2_mplx_out_write(output->mplx, output->stream_id, f, bb,
+                             output->cond);
 }
 

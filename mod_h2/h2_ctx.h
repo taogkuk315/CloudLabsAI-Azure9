@@ -16,7 +16,7 @@
 #ifndef __mod_h2__h2_ctx__
 #define __mod_h2__h2_ctx__
 
-struct h2_task;
+struct h2_task_env;
 struct h2_config;
 
 /**
@@ -31,7 +31,7 @@ typedef struct h2_ctx {
     int is_h2;                /* h2 engine is used */
     const char *protocol;     /* the protocol negotiated */
     int is_negotiated;        /* negotiated did happen */
-    struct h2_task *task;     /* the h2_task or NULL */
+    struct h2_task_env *task_env;/* the h2_task environment or NULL */
     const char *hostname;     /* hostname negotiated via SNI, optional */
     server_rec *server;       /* httpd server config selected. */
     struct h2_config *config; /* effective config in this context */
@@ -39,7 +39,7 @@ typedef struct h2_ctx {
 
 h2_ctx *h2_ctx_get(conn_rec *c, int create);
 h2_ctx *h2_ctx_rget(request_rec *r, int create);
-h2_ctx *h2_ctx_create_for(conn_rec *c, struct h2_task *task);
+h2_ctx *h2_ctx_create_for(conn_rec *c, struct h2_task_env *env);
 
 const char *h2_ctx_get_protocol(conn_rec* c);
 h2_ctx *h2_ctx_set_protocol(conn_rec* c, const char *proto);
@@ -49,6 +49,6 @@ int h2_ctx_is_session(conn_rec * c);
 int h2_ctx_is_task(conn_rec * c);
 int h2_ctx_is_active(conn_rec * c);
 
-struct h2_task *h2_ctx_get_task(h2_ctx *ctx);
+struct h2_task_env *h2_ctx_get_task(h2_ctx *ctx);
 
 #endif /* defined(__mod_h2__h2_ctx__) */

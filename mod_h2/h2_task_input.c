@@ -29,16 +29,10 @@
 #include "h2_task.h"
 #include "h2_util.h"
 
-struct h2_task_input {
-    h2_task *task;
-    int eos;
-    apr_bucket_brigade *bb;
-};
-
 
 static int is_aborted(h2_task_input *input, ap_filter_t *f)
 {
-    return (f->c->aborted || h2_task_is_aborted(input->task));
+    return (f->c->aborted);
 }
 
 static int ser_header(void *ctx, const char *name, const char *value) 
@@ -48,33 +42,37 @@ static int ser_header(void *ctx, const char *name, const char *value)
     return 1;
 }
 
-h2_task_input *h2_task_input_create(h2_task *task, apr_pool_t *pool, 
+h2_task_input *h2_task_input_create(h2_task_env *env, apr_pool_t *pool, 
                                     apr_bucket_alloc_t *bucket_alloc)
 {
     h2_task_input *input = apr_pcalloc(pool, sizeof(h2_task_input));
     if (input) {
-        input->task = task;
+        input->id = env->id;
+        input->c = env->conn->c;
+        input->stream_id = env->stream_id;
+        input->mplx = env->mplx;
+        input->cond = env->io;
         input->bb = apr_brigade_create(pool, bucket_alloc);
-        input->eos = task->input_eos;
+        input->eos = env->input_eos;
         
-        if (task->serialize_headers) {
+        if (env->serialize_headers) {
             apr_brigade_printf(input->bb, NULL, NULL, "%s %s HTTP/1.1\r\n", 
-                               task->method, task->path);
-            apr_table_do(ser_header, input, task->headers, NULL);
+                               env->method, env->path);
+            apr_table_do(ser_header, input, env->headers, NULL);
             apr_brigade_puts(input->bb, NULL, NULL, "\r\n");
         }
         if (input->eos) {
             APR_BRIGADE_INSERT_TAIL(input->bb, apr_bucket_eos_create(bucket_alloc));
         }
         
-        if (APLOGcdebug(task->conn->c)) {
+        if (APLOGcdebug(env->conn->c)) {
             char buffer[1024];
             apr_size_t len = sizeof(buffer)-1;
             apr_brigade_flatten(input->bb, buffer, &len);
             buffer[len] = 0;
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->conn->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, env->conn->c,
                           "h2_task_input(%s): request is: %s", 
-                          task->id, buffer);
+                          env->id, buffer);
         }
     }
     return input;
@@ -95,14 +93,14 @@ apr_status_t h2_task_input_read(h2_task_input *input,
     apr_status_t status = APR_SUCCESS;
     apr_off_t bblen = 0;
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, input->task->conn->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, input->c,
                   "h2_task_input(%s): read, block=%d, mode=%d, readbytes=%ld", 
-                  input->task->id, block, mode, (long)readbytes);
+                  input->id, block, mode, (long)readbytes);
     
     if (is_aborted(input, filter)) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, input->task->conn->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, input->c,
                       "h2_task_input(%s): is aborted", 
-                      input->task->id);
+                      input->id);
         return APR_ECONNABORTED;
     }
     
@@ -112,9 +110,9 @@ apr_status_t h2_task_input_read(h2_task_input *input,
     
     status = apr_brigade_length(input->bb, 1, &bblen);
     if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, input->task->conn->c,
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, input->c,
                       "h2_task_input(%s): brigade length fail", 
-                      input->task->id);
+                      input->id);
         return status;
     }
     
@@ -128,19 +126,18 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
                       "h2_task_input(%s): get more data from mplx, block=%d, "
                       "readbytes=%ld, queued=%ld",
-                      h2_task_get_id(input->task), block, 
+                      input->id, block, 
                       (long)readbytes, (long)bblen);
         
         /* Although we sometimes get called with APR_NONBLOCK_READs, 
          we seem to  fill our buffer blocking. Otherwise we get EAGAIN,
          return that to our caller and everyone throws up their hands,
          never calling us again. */
-        status = h2_mplx_in_read(input->task->mplx, APR_BLOCK_READ,
-                                 input->task->stream_id, input->bb, 
-                                 h2_task_get_io_cond(input->task));
+        status = h2_mplx_in_read(input->mplx, APR_BLOCK_READ,
+                                 input->stream_id, input->bb, input->cond);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
                       "h2_task_input(%s): mplx in read returned",
-                      h2_task_get_id(input->task));
+                      input->id);
         if (status != APR_SUCCESS) {
             return status;
         }
@@ -153,13 +150,13 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         }
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
                       "h2_task_input(%s): mplx in read, %ld bytes in brigade",
-                      h2_task_get_id(input->task), (long)bblen);
+                      input->id, (long)bblen);
     }
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
                   "h2_task_input(%s): read, mode=%d, block=%d, "
                   "readbytes=%ld, queued=%ld",
-                  h2_task_get_id(input->task), mode, block, 
+                  input->id, mode, block, 
                   (long)readbytes, (long)bblen);
            
     if (!APR_BRIGADE_EMPTY(input->bb)) {
@@ -188,7 +185,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
                 buffer[len] = 0;
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, filter->c,
                               "h2_task_input(%s): getline: %s",
-                              h2_task_get_id(input->task), buffer);
+                              input->id, buffer);
             }
             return status;
         }

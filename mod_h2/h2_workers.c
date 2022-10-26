@@ -92,7 +92,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
                     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                                  "h2_worker(%d): waiting signal, worker_count=%d",
                                  h2_worker_get_id(worker), (int)workers->worker_count);
-                    status = apr_thread_cond_timedwait(workers->task_added,
+                    status = apr_thread_cond_timedwait(workers->mplx_added,
                                                        workers->lock, max_wait);
                 }
                 if (status == APR_TIMEUP) {
@@ -109,7 +109,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                              "h2_worker(%d): waiting signal (eternal), worker_count=%d",
                              h2_worker_get_id(worker), (int)workers->worker_count);
-                apr_thread_cond_wait(workers->task_added, workers->lock);
+                apr_thread_cond_wait(workers->mplx_added, workers->lock);
             }
         }
         --workers->idle_worker_count;
@@ -128,7 +128,7 @@ static h2_mplx *mplx_done(h2_worker *worker, h2_mplx *m,
         /* If EAGAIN and not empty, place into list again */
         if (mplx_status == APR_EAGAIN && !in_list(workers, m)) {
             H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);        
-            apr_thread_cond_signal(workers->task_added);
+            apr_thread_cond_signal(workers->mplx_added);
         }
         next_mplx = pop_next_mplx(workers, worker);
         
@@ -192,8 +192,8 @@ static apr_status_t h2_workers_start(h2_workers *workers) {
 h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
                               int min_size, int max_size)
 {
-    assert(s);
-    assert(pool);
+    AP_DEBUG_ASSERT(s);
+    AP_DEBUG_ASSERT(pool);
     apr_status_t status = APR_SUCCESS;
 
     h2_workers *workers = apr_pcalloc(pool, sizeof(h2_workers));
@@ -207,14 +207,13 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
         apr_threadattr_create(&workers->thread_attr, workers->pool);
         
         APR_RING_INIT(&workers->workers, h2_worker, link);
-        APR_RING_INIT(&workers->queues, h2_task_queue, link);
         APR_RING_INIT(&workers->mplxs, h2_mplx, link);
         
         status = apr_thread_mutex_create(&workers->lock,
                                          APR_THREAD_MUTEX_DEFAULT,
                                          workers->pool);
         if (status == APR_SUCCESS) {
-            status = apr_thread_cond_create(&workers->task_added, workers->pool);
+            status = apr_thread_cond_create(&workers->mplx_added, workers->pool);
         }
         
         if (status == APR_SUCCESS) {
@@ -231,36 +230,22 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
 
 void h2_workers_destroy(h2_workers *workers)
 {
-    if (workers->task_added) {
-        apr_thread_cond_destroy(workers->task_added);
-        workers->task_added = NULL;
+    if (workers->mplx_added) {
+        apr_thread_cond_destroy(workers->mplx_added);
+        workers->mplx_added = NULL;
     }
     if (workers->lock) {
         apr_thread_mutex_destroy(workers->lock);
         workers->lock = NULL;
     }
-    while (!H2_TQ_LIST_EMPTY(&workers->queues)) {
-        h2_task_queue *q = H2_TQ_LIST_FIRST(&workers->queues);
-        H2_TQ_REMOVE(q);
-        h2_tq_destroy(q);
+    while (!H2_MPLX_LIST_EMPTY(&workers->mplxs)) {
+        h2_mplx *m = H2_MPLX_LIST_FIRST(&workers->mplxs);
+        H2_MPLX_REMOVE(m);
     }
     while (!H2_WORKER_LIST_EMPTY(&workers->workers)) {
         h2_worker *w = H2_WORKER_LIST_FIRST(&workers->workers);
         H2_WORKER_REMOVE(w);
     }
-}
-
-static int tq_in_list(h2_workers *workers, h2_task_queue *q)
-{
-    h2_task_queue *e;
-    for (e = H2_TQ_LIST_FIRST(&workers->queues); 
-         e != H2_TQ_LIST_SENTINEL(&workers->queues);
-         e = H2_TQ_NEXT(e)) {
-        if (e == q) {
-            return 1;
-        }
-    }
-    return 0;
 }
 
 apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m)
@@ -273,7 +258,7 @@ apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m)
         if (!in_list(workers, m)) {
             H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);        
         }
-        apr_thread_cond_signal(workers->task_added);
+        apr_thread_cond_signal(workers->mplx_added);
         
         if (workers->idle_worker_count <= 0 
             && workers->worker_count < workers->max_size) {

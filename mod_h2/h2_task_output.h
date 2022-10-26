@@ -21,8 +21,9 @@
  * for our pseudo httpd conn_rec that is handling a specific h2_task.
  * 
  */
+struct apr_thread_cond_t;
 struct h2_mplx;
-struct h2_task;
+struct h2_task_env;
 struct h2_from_h1;
 
 typedef enum {
@@ -34,12 +35,15 @@ typedef enum {
 typedef struct h2_task_output h2_task_output;
 
 struct h2_task_output {
-    struct h2_task *task;
+    const char *id;
+    int stream_id;
+    struct h2_mplx *mplx;
+    struct apr_thread_cond_t *cond;
     h2_task_output_state_t state;
     struct h2_from_h1 *from_h1;
 };
 
-h2_task_output *h2_task_output_create(struct h2_task *task, apr_pool_t *pool,
+h2_task_output *h2_task_output_create(struct h2_task_env *env, apr_pool_t *pool,
                                       apr_bucket_alloc_t *bucket_alloc);
 
 void h2_task_output_destroy(h2_task_output *output);

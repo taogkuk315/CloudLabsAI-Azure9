@@ -284,18 +284,16 @@ h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *pool)
 {
     apr_status_t status = APR_SUCCESS;
     
-    assert(master);
+    AP_DEBUG_ASSERT(master);
     
     /* Setup a conn_rec for this stream.
      * General idea is borrowed from mod_spdy::slave_connection.cc,
      * partly replaced with some more modern calls to ap infrastructure.
      */
     h2_conn *conn = apr_pcalloc(pool, sizeof(*conn));
-    conn->id = id;
     conn->pool = pool;
     conn->bucket_alloc = master->bucket_alloc;
     conn->socket = ap_get_module_config(master->conn_config, &core_module);
-    conn->master = master;
     
     /* CAVEAT: it seems necessary to setup the conn_rec in the master
      * connection thread. Other attempts crashed. 
@@ -305,14 +303,13 @@ h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *pool)
      * Lets allocated pools and everything else when we actually start
      * working on this new connection.
      */
-    
     /* Not sure about the scoreboard handle. Reusing the one from the main
      * connection could make sense, but I do not know enough to tell...
      */
-    conn->c = ap_run_create_connection(conn->pool, conn->master->base_server,
+    conn->c = ap_run_create_connection(conn->pool, master->base_server,
                                        conn->socket,
-                                       conn->master->id^((long)conn->pool), 
-                                       conn->master->sbh,
+                                       master->id^((long)conn->pool), 
+                                       master->sbh,
                                        conn->bucket_alloc);
     if (conn->c == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, conn->pool,
@@ -331,13 +328,12 @@ void h2_conn_destroy(h2_conn *conn)
     }
 }
 
-apr_status_t h2_conn_prep(h2_conn *conn, h2_worker *worker)
+apr_status_t h2_conn_prep(h2_conn *conn, conn_rec *master, h2_worker *worker)
 {
-    h2_config *cfg = h2_config_get(conn->master);
+    h2_config *cfg = h2_config_get(master);
     
     ap_log_perror(APLOG_MARK, APLOG_TRACE3, 0, conn->pool,
-                  "h2_conn(%s): created from master %ld",
-                  conn->id, conn->master->id);
+                  "h2_conn(%ld): created from master", master->id);
     
     /* Ok, we are just about to start processing the connection and
      * the worker is calling us to setup all necessary resources.
@@ -362,7 +358,7 @@ apr_status_t h2_conn_prep(h2_conn *conn, h2_worker *worker)
         /* See #19, there is a range of SSL variables to be gotten from
          * the main connection that should be available in request handlers
          */
-        void *cfg = ap_get_module_config(conn->master->conn_config, ssl_module);
+        void *cfg = ap_get_module_config(master->conn_config, ssl_module);
         if (cfg) {
             ap_set_module_config(conn->c->conn_config, ssl_module, cfg);
         }
@@ -378,7 +374,7 @@ apr_status_t h2_conn_prep(h2_conn *conn, h2_worker *worker)
             break;
         case H2_MPM_EVENT: 
             if (h2_config_geti(cfg, H2_CONF_HACK_MPM_EVENT)) {
-                fix_event_conn(conn->c, conn->master);
+                fix_event_conn(conn->c, master);
             }
             break;
         default:
@@ -391,7 +387,7 @@ apr_status_t h2_conn_prep(h2_conn *conn, h2_worker *worker)
 
 apr_status_t h2_conn_post(h2_conn *conn, h2_worker *worker)
 {
-    assert(conn);
+    AP_DEBUG_ASSERT(conn);
     
     /* The worker is done with this connection. release all allocated
      * resource before we leave the worker's domain.
@@ -408,8 +404,8 @@ apr_status_t h2_conn_post(h2_conn *conn, h2_worker *worker)
 
 apr_status_t h2_conn_process(h2_conn *conn)
 {
-    assert(conn);
-    assert(conn->c);
+    AP_DEBUG_ASSERT(conn);
+    AP_DEBUG_ASSERT(conn->c);
     
     conn->c->clogging_input_filters = 1;
     ap_process_connection(conn->c, conn->socket);

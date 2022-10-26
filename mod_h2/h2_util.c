@@ -264,8 +264,8 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
 {
     apr_status_t status = APR_SUCCESS;
     
-    assert(to);
-    assert(from);
+    AP_DEBUG_ASSERT(to);
+    AP_DEBUG_ASSERT(from);
     int same_alloc = (to->bucket_alloc == from->bucket_alloc);
     
     if (!APR_BRIGADE_EMPTY(from)) {
@@ -384,8 +384,8 @@ apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from,
 {
     apr_status_t status = APR_SUCCESS;
     
-    assert(to);
-    assert(from);
+    AP_DEBUG_ASSERT(to);
+    AP_DEBUG_ASSERT(from);
     
     if (!APR_BRIGADE_EMPTY(from)) {
         apr_bucket *b, *end;
@@ -432,8 +432,8 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
 {
     apr_status_t status = APR_SUCCESS;
     
-    assert(to);
-    assert(from);
+    AP_DEBUG_ASSERT(to);
+    AP_DEBUG_ASSERT(from);
     int same_alloc = (to->bucket_alloc == from->bucket_alloc);
 
     if (!APR_BRIGADE_EMPTY(from)) {

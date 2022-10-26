@@ -152,7 +152,7 @@ void h2_io_set_remove_all(h2_io_set *sp)
 
 int h2_io_set_is_empty(h2_io_set *sp)
 {
-    assert(sp);
+    AP_DEBUG_ASSERT(sp);
     return sp->list->nelts == 0;
 }
 
