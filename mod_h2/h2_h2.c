@@ -377,8 +377,8 @@ int h2_h2_process_conn(conn_rec* c)
             // Let the client/server hellos fly and ALPN call us back.
             apr_bucket_brigade* temp_brigade = apr_brigade_create(
                 c->pool, c->bucket_alloc);
-            const apr_status_t status = ap_get_brigade(c->input_filters,
-                temp_brigade, AP_MODE_SPECULATIVE, APR_BLOCK_READ, 1);
+            ap_get_brigade(c->input_filters, temp_brigade,
+                AP_MODE_SPECULATIVE, APR_BLOCK_READ, 1);
             apr_brigade_destroy(temp_brigade);
         }
         check_sni_host(c);

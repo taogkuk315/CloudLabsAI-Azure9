@@ -264,7 +264,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
     }
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (stream) {
-        apr_status_t status = close_stream(session, stream);
+        close_stream(session, stream);
     }
     
     if (error_code) {
@@ -1165,7 +1165,6 @@ static int add_headers(void *ctx, const char *key, const char *value)
 
 static int submit_response(h2_session *session, h2_response *response)
 {
-    nvctx_t nvctx = { NULL, 1 };
     nghttp2_data_provider provider = {
         response->stream_id, stream_data_cb
     };

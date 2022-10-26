@@ -279,8 +279,6 @@ static void fix_event_conn(conn_rec *c, conn_rec *master);
 
 h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *pool)
 {
-    apr_status_t status = APR_SUCCESS;
-    
     assert(master);
     
     /* Setup a conn_rec for this stream.

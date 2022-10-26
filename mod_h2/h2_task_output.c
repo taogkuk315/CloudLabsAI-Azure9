@@ -122,8 +122,6 @@ static apr_status_t out_write(h2_task_output *output, ap_filter_t *f,
 apr_status_t h2_task_output_write(h2_task_output *output,
                                     ap_filter_t* f, apr_bucket_brigade* bb)
 {
-    apr_status_t status = APR_SUCCESS;
-    
     if (APR_BRIGADE_EMPTY(bb)) {
         return APR_SUCCESS;
     }
