@@ -1140,7 +1140,8 @@ typedef struct {
 static int submit_response(h2_session *session, h2_response *response)
 {
     nghttp2_data_provider provider = {
-        response->stream_id, stream_data_cb
+        (nghttp2_data_source) response->stream_id,
+        (nghttp2_data_source_read_callback) stream_data_cb
     };
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
