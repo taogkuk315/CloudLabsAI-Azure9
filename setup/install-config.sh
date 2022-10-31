@@ -18,20 +18,29 @@ SYSCONF="$1"
 DESTDIR="$2"
 A2ENMOD="$( type -p a2enmod )"
 
+INSTALL_LOC=""
+
 if [ -d "$DESTDIR" ]; then
-	cat << EOF
-  You need to add loading instructions to your httpd configruation
-  in order to use mod_h2.
-EOF
-elif [ -d "$SYSCONF/mods-available" ]; then
-    echo -n "installing mod_h2 config in $SYSCONF..."
-    cp h2.conf h2.load "$SYSCONF/mods-available"
+    INSTALL_LOC="$DESTDIR/$SYSCONF"
+else
+    INSTALL_LOC="$SYSCONF"
+fi
+echo "[DEBUG] Install location is assumed to be $INSTALL_LOC"
+if [ -d "$SYSCONF/mods-available" ]; then
+    echo -n "Debian layout assumed, installing mod_h2 config in $INSTALL_LOC..."
+    cp h2.conf h2.load "$INSTALL_LOC/mods-available"
     echo "done."
-    if [ -x "$A2ENMOD" ]; then
+    if [ -x "$A2ENMOD" ] && [ ! -d "$DESTDIR" ]; then
         echo -n "enabling mod_h2..."
         "$A2ENMOD" mod_h2
         echo "done."
     fi
+elif [ -d "$SYSCONF/../conf.d" ] && [ -d "$SYSCONF/../conf.modules.d" ]; then
+    # Odds are this is a Fedora box!
+    echo -n "RHEL/Fedora layout assumed, installing mod_h2 config in $INSTALL_LOC..."
+    cp h2.conf "$INSTALL_LOC/../conf.d"
+    cp h2.load "$INSTALL_LOC/../conf.modules.d/10-h2.conf"
+    echo "done."
 else
     cat <<EOF
   This does not look like a apache2 installation, as in Ubuntu or
