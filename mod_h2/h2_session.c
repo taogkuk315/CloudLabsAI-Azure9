@@ -264,7 +264,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
     }
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (stream) {
-        apr_status_t status = close_stream(session, stream);
+        close_stream(session, stream);
     }
     
     if (error_code) {
@@ -877,11 +877,6 @@ apr_status_t h2_session_start(h2_session *session, int *rv)
     return status;
 }
 
-static int h2_session_want_read(h2_session *session)
-{
-    return nghttp2_session_want_read(session->ngh2);
-}
-
 static int h2_session_want_write(h2_session *session)
 {
     return nghttp2_session_want_write(session->ngh2);
@@ -1063,10 +1058,6 @@ apr_status_t h2_session_close(h2_session *session)
     return h2_conn_io_flush(&session->io);
 }
 
-static h2_stream *match_any(void *ctx, h2_stream *stream) {
-    return stream;
-}
-
 /* The session wants to send more DATA for the given stream.
  */
 static ssize_t stream_data_cb(nghttp2_session *ng2s,
@@ -1146,28 +1137,11 @@ typedef struct {
     size_t offset;
 } nvctx_t;
 
-static int count_headers(void *ctx, const char *key, const char *value)
-{
-    nvctx_t *nvctx = (nvctx_t*)ctx;
-    nvctx->nvlen++;
-    return 1;
-}
-
-static int add_headers(void *ctx, const char *key, const char *value)
-{
-    nvctx_t *nvctx = (nvctx_t*)ctx;
-    if (nvctx->offset < nvctx->nvlen) {
-        H2_CREATE_NV_CS_CS((&nvctx->nv[nvctx->offset]), key, value);
-        nvctx->offset++;
-    }
-    return 1;
-}
-
 static int submit_response(h2_session *session, h2_response *response)
 {
-    nvctx_t nvctx = { NULL, 1 };
     nghttp2_data_provider provider = {
-        response->stream_id, stream_data_cb
+        (nghttp2_data_source) response->stream_id,
+        (nghttp2_data_source_read_callback) stream_data_cb
     };
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,

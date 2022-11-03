@@ -174,14 +174,6 @@ apr_status_t h2_conn_io_read(h2_conn_io *io,
     return status;
 }
 
-static apr_status_t do_pass(apr_bucket_brigade *bb, void *ctx) {
-    h2_conn_io *io = (h2_conn_io *)ctx;
-    apr_status_t status = ap_pass_brigade(io->connection->output_filters, bb);
-    apr_brigade_cleanup(bb);
-    
-    return status;
-}
-
 static apr_status_t flush_out(apr_bucket_brigade *bb, void *ctx) 
 {
     h2_conn_io *io = (h2_conn_io*)ctx;

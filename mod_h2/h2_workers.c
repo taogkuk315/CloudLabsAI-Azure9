@@ -61,7 +61,6 @@ static apr_status_t get_task_next(h2_worker *worker, h2_task **ptask, void *ctx)
     *ptask = NULL;
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        h2_task *task = NULL;
         status = APR_EOF;
         apr_time_t max_wait = apr_time_from_sec(apr_atomic_read32(&workers->max_idle_secs));
         apr_time_t start_wait = apr_time_now();

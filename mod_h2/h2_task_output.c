@@ -32,14 +32,6 @@
 #include "h2_util.h"
 
 
-static int is_aborted(h2_task_output *output, ap_filter_t* filter) {
-    if (filter->c->aborted || h2_task_is_aborted(output->task)) {
-        filter->c->aborted = 1;
-        return 1;
-    }
-    return 0;
-}
-
 h2_task_output *h2_task_output_create(apr_pool_t *pool,
                                       h2_task *task, int stream_id,
                                       apr_bucket_alloc_t *bucket_alloc,
@@ -122,8 +114,6 @@ static apr_status_t out_write(h2_task_output *output, ap_filter_t *f,
 apr_status_t h2_task_output_write(h2_task_output *output,
                                     ap_filter_t* f, apr_bucket_brigade* bb)
 {
-    apr_status_t status = APR_SUCCESS;
-    
     if (APR_BRIGADE_EMPTY(bb)) {
         return APR_SUCCESS;
     }

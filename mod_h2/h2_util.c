@@ -269,7 +269,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
     int same_alloc = (to->bucket_alloc == from->bucket_alloc);
     
     if (!APR_BRIGADE_EMPTY(from)) {
-        apr_bucket *b, *end, *cpy;
+        apr_bucket *b, *end;
         
         status = last_not_included(from, maxlen, 
                                    (count_virtual || !FILE_MOVE), &end);
@@ -577,7 +577,6 @@ apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer,
     apr_status_t status = APR_SUCCESS;
     apr_size_t avail = *plen;
     apr_size_t written = 0;
-    apr_bucket *b;
 
     /* Copy data in our brigade into the buffer until it is filled or
      * we encounter an EOS.

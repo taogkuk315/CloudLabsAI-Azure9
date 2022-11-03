@@ -68,7 +68,6 @@ h2_from_h1_state_t h2_from_h1_get_state(h2_from_h1 *from_h1)
 static void set_state(h2_from_h1 *from_h1, h2_from_h1_state_t state)
 {
     if (from_h1->state != state) {
-        h2_from_h1_state_t oldstate = from_h1->state;
         from_h1->state = state;
     }
 }
@@ -395,7 +394,6 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
     h2_task *task = f->ctx;
     h2_from_h1 *from_h1 = task->output? task->output->from_h1 : NULL;
     request_rec *r = f->r;
-    conn_rec *c = r->connection;
     const char *clheader;
     const char *ctype;
     apr_bucket *b;
