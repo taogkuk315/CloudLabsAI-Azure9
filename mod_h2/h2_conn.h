@@ -44,11 +44,14 @@ typedef enum {
     H2_MPM_EVENT,
 } h2_mpm_type_t;
 
-/* Returns the type of MPM module detected */
 h2_mpm_type_t h2_conn_mpm_type();
+module *h2_conn_mpm_module();
+
+/* Returns the type of MPM module detected */
+h2_mpm_type_t h2_conn_mpm_type(void);
 
 /* Gives the detected module itself or NULL if unknown */
-module *h2_conn_mpm_module();
+module *h2_conn_mpm_module(void);
 
 
 typedef struct h2_conn h2_conn;
@@ -59,7 +62,7 @@ struct h2_conn {
     apr_socket_t *socket;
 };
 
-h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *parent);
+h2_conn *h2_conn_create(conn_rec *master, apr_pool_t *parent);
 void h2_conn_destroy(h2_conn *conn);
 
 apr_status_t h2_conn_prep(h2_conn *conn, conn_rec *master, 

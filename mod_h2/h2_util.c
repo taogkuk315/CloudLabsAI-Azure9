@@ -26,12 +26,12 @@
 #include "h2_private.h"
 #include "h2_util.h"
 
-int h2_util_hex_dump(char *buffer, size_t maxlen,
-                     const char *data, size_t datalen)
+size_t h2_util_hex_dump(char *buffer, size_t maxlen,
+                        const char *data, size_t datalen)
 {
     size_t offset = 0;
     size_t maxoffset = (maxlen-4);
-    int i;
+    size_t i;
     for (i = 0; i < datalen && offset < maxoffset; ++i) {
         const char *sep = (i && i % 16 == 0)? "\n" : " ";
         int n = apr_snprintf(buffer+offset, maxoffset-offset,
@@ -42,12 +42,12 @@ int h2_util_hex_dump(char *buffer, size_t maxlen,
     return strlen(buffer);
 }
 
-int h2_util_header_print(char *buffer, size_t maxlen,
-                         const char *name, size_t namelen,
-                         const char *value, size_t valuelen)
+size_t h2_util_header_print(char *buffer, size_t maxlen,
+                            const char *name, size_t namelen,
+                            const char *value, size_t valuelen)
 {
     size_t offset = 0;
-    int i;
+    size_t i;
     for (i = 0; i < namelen && offset < maxlen; ++i, ++offset) {
         buffer[offset] = name[i];
     }
@@ -74,8 +74,8 @@ char *h2_strlwr(char *s)
 
 void h2_util_camel_case_header(char *s, size_t len)
 {
-    int start = 1;
-    for (int i = 0; i < len; ++i) {
+    size_t start = 1;
+    for (size_t i = 0; i < len; ++i) {
         if (start) {
             if (s[i] >= 'a' && s[i] <= 'z') {
                 s[i] -= 'a' - 'A';
@@ -121,7 +121,7 @@ apr_size_t h2_util_base64url_decode(unsigned char **decoded, const char *encoded
     apr_size_t mlen = (len/4)*4;
     *decoded = apr_pcalloc(pool, len+1);
     
-    int i = 0;
+    apr_size_t i = 0;
     unsigned char *d = *decoded;
     for (; i < mlen; i += 4) {
         n = ((BASE64URL_TABLE[ e[i+0] ] << 18) +
@@ -132,7 +132,7 @@ apr_size_t h2_util_base64url_decode(unsigned char **decoded, const char *encoded
         *d++ = n >> 8 & 0xffu;
         *d++ = n & 0xffu;
     }
-    int remain = len - mlen;
+    apr_size_t remain = len - mlen;
     switch (remain) {
         case 2:
             n = ((BASE64URL_TABLE[ e[mlen+0] ] << 18) +
@@ -181,7 +181,7 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
     if (s && *s) {
         for (char *c = ap_get_token(pool, &s, 0); c && *c;
              c = *s? ap_get_token(pool, &s, 0) : NULL) {
-            for (int i = 0; i < len; ++i) {
+            for (apr_size_t i = 0; i < len; ++i) {
                 if (!apr_strnatcasecmp(c, tokens[i])) {
                     return tokens[i];
                 }
@@ -206,9 +206,9 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
 static const int DEEP_COPY = 1;
 static const int FILE_MOVE = 0;
 
-apr_status_t last_not_included(apr_bucket_brigade *bb, 
-                               apr_size_t maxlen, int count_virtual,
-                               apr_bucket **pend)
+static apr_status_t last_not_included(apr_bucket_brigade *bb, 
+                                      apr_size_t maxlen, int count_virtual,
+                                      apr_bucket **pend)
 {
     apr_bucket *b;
     apr_status_t status = APR_SUCCESS;
@@ -228,7 +228,7 @@ apr_status_t last_not_included(apr_bucket_brigade *bb,
                     return status;
                 }
                 
-                if (b->length == -1) {
+                if (b->length == ((apr_size_t)-1)) {
                     const char *ign;
                     apr_size_t ilen;
                     status = apr_bucket_read(b, &ign, &ilen, APR_BLOCK_READ);
@@ -269,7 +269,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
     int same_alloc = (to->bucket_alloc == from->bucket_alloc);
     
     if (!APR_BRIGADE_EMPTY(from)) {
-        apr_bucket *b, *end, *cpy;
+        apr_bucket *b, *end;
         
         status = last_not_included(from, maxlen, 
                                    (count_virtual || !FILE_MOVE), &end);
@@ -564,7 +564,7 @@ apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb,
     /* test read to determine available length */
     apr_off_t blen = 0;
     status = apr_brigade_length(bb, 0, &blen);
-    if (blen < *plen) {
+    if (blen < (apr_off_t)*plen) {
         *plen = blen;
     }
     *peos = h2_util_has_eos(bb, *plen);
@@ -577,7 +577,6 @@ apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer,
     apr_status_t status = APR_SUCCESS;
     apr_size_t avail = *plen;
     apr_size_t written = 0;
-    apr_bucket *b;
 
     /* Copy data in our brigade into the buffer until it is filled or
      * we encounter an EOS.
@@ -601,7 +600,7 @@ apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer,
             const char *data;
             apr_size_t data_len;
             
-            if (b->length != -1 && b->length > avail) {
+            if (b->length != ((apr_size_t)-1) && b->length > avail) {
                 apr_bucket_split(b, avail);
             }
             status = apr_bucket_read(b, &data, &data_len, 
@@ -660,7 +659,7 @@ apr_status_t h2_util_bb_readx(apr_bucket_brigade *bb,
             const char *data = NULL;
             apr_size_t data_len;
             
-            if (b->length != -1) {
+            if (b->length != ((apr_size_t)-1)) {
                 status = apr_bucket_read(b, &data, &data_len, 
                                          APR_NONBLOCK_READ);
             }

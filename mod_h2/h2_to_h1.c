@@ -198,6 +198,7 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, h2_task *task, int eos)
 
 static apr_status_t flush(apr_bucket_brigade *bb, void *ctx) 
 {
+    (void)bb;
     return h2_to_h1_flush((h2_to_h1*)ctx);
 }
 
@@ -205,7 +206,7 @@ static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
                                           const char *data, size_t len)
 {
     apr_status_t status = APR_SUCCESS;
-    conn_rec *c = h2_mplx_get_conn(to_h1->m);
+    h2_mplx_get_conn(to_h1->m);
 
     if (to_h1->eos || !to_h1->eoh) {
         return APR_EINVAL;

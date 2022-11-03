@@ -155,7 +155,7 @@ struct h2_task_env {
 #define H2_TASK_REMOVE(e)	APR_RING_REMOVE((e), link)
 
 
-h2_task *h2_task_create(long session_id, int stream_id, conn_rec *master,
+h2_task *h2_task_create(long session_id, int stream_id, 
                         apr_pool_t *pool, struct h2_mplx *mplx);
 
 apr_status_t h2_task_destroy(h2_task *task);

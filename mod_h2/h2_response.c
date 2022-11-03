@@ -55,7 +55,6 @@ h2_response *h2_response_create(int stream_id,
     
     if (hlines) {
         header = apr_table_make(pool, hlines->nelts);        
-        int seen_clen = 0;
         for (int i = 0; i < hlines->nelts; ++i) {
             char *hline = ((char **)hlines->elts)[i];
             char *sep = strchr(hline, ':');

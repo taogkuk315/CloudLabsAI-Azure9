@@ -85,8 +85,8 @@ static int h2_alt_svc_request_handler(request_rec *r)
              * The security of this connection determines if we allow
              * other host names or ports only.
              */
-            char *alt_svc = "";
-            char *svc_ma = "";
+            const char *alt_svc = "";
+            const char *svc_ma = "";
             int secure = h2_h2_is_tls(r->connection);
             int ma = h2_config_geti(cfg, H2_CONF_ALT_SVC_MAX_AGE);
             if (ma >= 0) {

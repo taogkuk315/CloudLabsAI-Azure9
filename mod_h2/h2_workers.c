@@ -45,6 +45,7 @@ static int in_list(h2_workers *workers, h2_mplx *m)
 
 static h2_mplx* pop_next_mplx(h2_workers *workers, h2_worker *worker)
 {
+    (void)worker;
     if (!H2_MPLX_LIST_EMPTY(&workers->mplxs)) {
         h2_mplx *m = H2_MPLX_LIST_FIRST(&workers->mplxs);
         H2_MPLX_REMOVE(m);
@@ -60,7 +61,6 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
     *pmplx = NULL;
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        h2_task *task = NULL;
         status = APR_EOF;
         apr_time_t max_wait = apr_time_from_sec(apr_atomic_read32(&workers->max_idle_secs));
         apr_time_t start_wait = apr_time_now();

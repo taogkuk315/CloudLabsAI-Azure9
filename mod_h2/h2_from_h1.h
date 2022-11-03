@@ -62,8 +62,7 @@ typedef void h2_from_h1_state_change_cb(struct h2_from_h1 *resp,
                                          h2_from_h1_state_t prevstate,
                                          void *cb_ctx);
 
-h2_from_h1 *h2_from_h1_create(int stream_id, apr_pool_t *pool,
-                              apr_bucket_alloc_t *bucket_alloc);
+h2_from_h1 *h2_from_h1_create(int stream_id, apr_pool_t *pool);
 
 apr_status_t h2_from_h1_destroy(h2_from_h1 *response);
 

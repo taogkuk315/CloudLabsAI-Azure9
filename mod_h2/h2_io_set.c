@@ -69,7 +69,7 @@ h2_io *h2_io_set_get(h2_io_set *sp, int stream_id)
      * did not find anything. TODO: this should not be necessary
      */
     if (sp) {
-        h2_io key = { stream_id };
+        h2_io key = { stream_id, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL };
         h2_io *pkey = &key;
         h2_io **ps = bsearch(&pkey, sp->list->elts, sp->list->nelts, 
                              sp->list->elt_size, h2_stream_id_cmp);

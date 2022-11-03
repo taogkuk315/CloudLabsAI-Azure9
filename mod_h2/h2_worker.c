@@ -31,6 +31,7 @@ static void *execute(apr_thread_t *thread, void *wctx)
     h2_worker *worker = (h2_worker *)wctx;
     apr_status_t status = APR_SUCCESS;
     const int n = 1000000;
+    (void)thread;
     
     /* Furthermore, other code might want to see the socket for
      * this connection. Allocate one without further function...
@@ -121,7 +122,7 @@ h2_worker *h2_worker_create(int id,
         w->worker_done = worker_done;
         w->ctx = ctx;
         
-        apr_status_t status = apr_thread_cond_create(&w->io, w->pool);
+        status = apr_thread_cond_create(&w->io, w->pool);
         if (status != APR_SUCCESS) {
             return NULL;
         }

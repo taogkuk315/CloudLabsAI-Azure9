@@ -92,11 +92,11 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     return status;
 }
 
-h2_mpm_type_t h2_conn_mpm_type() {
+h2_mpm_type_t h2_conn_mpm_type(void) {
     return mpm_type;
 }
 
-module *h2_conn_mpm_module() {
+module *h2_conn_mpm_module(void) {
     return mpm_module;
 }
 
@@ -280,10 +280,8 @@ apr_status_t h2_session_process(h2_session *session)
 
 static void fix_event_conn(conn_rec *c, conn_rec *master);
 
-h2_conn *h2_conn_create(const char *id, conn_rec *master, apr_pool_t *pool)
+h2_conn *h2_conn_create(conn_rec *master, apr_pool_t *pool)
 {
-    apr_status_t status = APR_SUCCESS;
-    
     AP_DEBUG_ASSERT(master);
     
     /* Setup a conn_rec for this stream.
@@ -358,9 +356,9 @@ apr_status_t h2_conn_prep(h2_conn *conn, conn_rec *master, h2_worker *worker)
         /* See #19, there is a range of SSL variables to be gotten from
          * the main connection that should be available in request handlers
          */
-        void *cfg = ap_get_module_config(master->conn_config, ssl_module);
-        if (cfg) {
-            ap_set_module_config(conn->c->conn_config, ssl_module, cfg);
+        void *sslcfg = ap_get_module_config(master->conn_config, ssl_module);
+        if (sslcfg) {
+            ap_set_module_config(conn->c->conn_config, ssl_module, sslcfg);
         }
     }
     
@@ -388,6 +386,7 @@ apr_status_t h2_conn_prep(h2_conn *conn, conn_rec *master, h2_worker *worker)
 apr_status_t h2_conn_post(h2_conn *conn, h2_worker *worker)
 {
     AP_DEBUG_ASSERT(conn);
+    (void)worker;
     
     /* The worker is done with this connection. release all allocated
      * resource before we leave the worker's domain.

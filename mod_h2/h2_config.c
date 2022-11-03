@@ -152,6 +152,7 @@ static const char *h2_conf_set_engine(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->h2_enabled = !apr_strnatcasecmp(value, "On");
+    (void)arg;
     return NULL;
 }
 
@@ -160,6 +161,7 @@ static const char *h2_conf_set_max_streams(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->h2_max_streams = (int)apr_atoi64(value);
+    (void)arg;
     return NULL;
 }
 
@@ -168,6 +170,7 @@ static const char *h2_conf_set_window_size(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->h2_window_size = (int)apr_atoi64(value);
+    (void)arg;
     return NULL;
 }
 
@@ -176,6 +179,7 @@ static const char *h2_conf_set_max_hl_size(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->h2_max_hl_size = (int)apr_atoi64(value);
+    (void)arg;
     return NULL;
 }
 
@@ -184,6 +188,7 @@ static const char *h2_conf_set_min_workers(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->min_workers = (int)apr_atoi64(value);
+    (void)arg;
     return NULL;
 }
 
@@ -192,6 +197,7 @@ static const char *h2_conf_set_max_workers(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->max_workers = (int)apr_atoi64(value);
+    (void)arg;
     return NULL;
 }
 
@@ -200,6 +206,7 @@ static const char *h2_conf_set_max_worker_idle_secs(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->max_worker_idle_secs = (int)apr_atoi64(value);
+    (void)arg;
     return NULL;
 }
 
@@ -210,6 +217,7 @@ static const char *h2_conf_set_stream_max_mem_size(cmd_parms *parms,
     
     
     cfg->stream_max_mem_size = (int)apr_atoi64(value);
+    (void)arg;
     return NULL;
 }
 
@@ -227,6 +235,7 @@ static const char *h2_add_alt_svc(cmd_parms *parms,
         }
         APR_ARRAY_PUSH(cfg->alt_svcs, h2_alt_svc*) = as;
     }
+    (void)arg;
     return NULL;
 }
 
@@ -235,6 +244,7 @@ static const char *h2_conf_set_alt_svc_max_age(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->alt_svc_max_age = (int)apr_atoi64(value);
+    (void)arg;
     return NULL;
 }
 
@@ -243,6 +253,7 @@ static const char *h2_conf_set_serialize_headers(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->serialize_headers = !apr_strnatcasecmp(value, "On");
+    (void)arg;
     return NULL;
 }
 
@@ -251,9 +262,11 @@ static const char *h2_conf_set_hack_mpm_event(cmd_parms *parms,
 {
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->hack_mpm_event = !apr_strnatcasecmp(value, "On");
+    (void)arg;
     return NULL;
 }
 
+#pragma GCC diagnostic ignored "-Wmissing-braces"
 const command_rec h2_cmds[] = {
     AP_INIT_TAKE1("H2Engine", h2_conf_set_engine, NULL,
                   RSRC_CONF, "on to enable HTTP/2 protocol handling"),
@@ -279,7 +292,7 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "on to enable header serialization for compatibility"),
     AP_INIT_TAKE1("H2HackMpmEvent", h2_conf_set_hack_mpm_event, NULL,
                   RSRC_CONF, "on to enable a hack that makes mpm_event working with mod_h2"),
-    {NULL}
+    { NULL, NULL, NULL, 0, 0, NULL }
 };
 
 
@@ -315,16 +328,16 @@ h2_config *h2_config_get(conn_rec *c)
              */
             apr_uri_t uri = {};
             memset(&uri, 0, sizeof(uri));
-            uri.scheme = "https";
+            uri.scheme = (char*)"https";
             uri.hostinfo = (char*)ctx->hostname;
             uri.hostname = (char*)ctx->hostname;
-            uri.port_str = "";
+            uri.port_str = (char*)"";
             uri.port = c->local_addr->port;
-            uri.path = "/";
+            uri.path = (char*)"/";
             
             request_rec r;
             memset(&r, 0, sizeof(r));
-            r.uri = "/";
+            r.uri = (char*)"/";
             r.connection = c;
             r.pool = c->pool;
             r.hostname = ctx->hostname;

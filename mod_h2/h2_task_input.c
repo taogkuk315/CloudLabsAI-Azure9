@@ -30,7 +30,7 @@
 #include "h2_util.h"
 
 
-static int is_aborted(h2_task_input *input, ap_filter_t *f)
+static int is_aborted(ap_filter_t *f)
 {
     return (f->c->aborted);
 }
@@ -97,7 +97,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
                   "h2_task_input(%s): read, block=%d, mode=%d, readbytes=%ld", 
                   input->id, block, mode, (long)readbytes);
     
-    if (is_aborted(input, filter)) {
+    if (is_aborted(filter)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, input->c,
                       "h2_task_input(%s): is aborted", 
                       input->id);
@@ -199,7 +199,7 @@ apr_status_t h2_task_input_read(h2_task_input *input,
         }
     }
     
-    if (is_aborted(input, filter)) {
+    if (is_aborted(filter)) {
         return APR_ECONNABORTED;
     }
     

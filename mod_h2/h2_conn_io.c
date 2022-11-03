@@ -93,7 +93,7 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io *io,
                 if (io->preface_bytes_left > 0) {
                     /* still requiring bytes from the http/2 preface */
                     size_t pre_offset = HTTP2_PREFACE_LEN - io->preface_bytes_left;
-                    int check_len = io->preface_bytes_left;
+                    apr_size_t check_len = io->preface_bytes_left;
                     if (check_len > bucket_length) {
                         check_len = bucket_length;
                     }
@@ -113,7 +113,7 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io *io,
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->connection,
                                   "h2_conn_io(%ld): preface check: %d bytes "
                                   "matched, remaining %d",
-                                  io->connection->id, check_len, 
+                                  io->connection->id, (int)check_len, 
                                   io->preface_bytes_left);
                 }
                 
@@ -171,14 +171,6 @@ apr_status_t h2_conn_io_read(h2_conn_io *io,
                           "h2_conn_io: error reading");
             break;
     }
-    return status;
-}
-
-static apr_status_t do_pass(apr_bucket_brigade *bb, void *ctx) {
-    h2_conn_io *io = (h2_conn_io *)ctx;
-    apr_status_t status = ap_pass_brigade(io->connection->output_filters, bb);
-    apr_brigade_cleanup(bb);
-    
     return status;
 }
 

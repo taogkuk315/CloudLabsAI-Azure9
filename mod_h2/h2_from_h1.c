@@ -37,8 +37,7 @@
 
 static void set_state(h2_from_h1 *from_h1, h2_from_h1_state_t state);
 
-h2_from_h1 *h2_from_h1_create(int stream_id, apr_pool_t *pool, 
-                              apr_bucket_alloc_t *bucket_alloc)
+h2_from_h1 *h2_from_h1_create(int stream_id, apr_pool_t *pool)
 {
     h2_from_h1 *from_h1 = apr_pcalloc(pool, sizeof(h2_from_h1));
     if (from_h1) {
@@ -68,7 +67,6 @@ h2_from_h1_state_t h2_from_h1_get_state(h2_from_h1 *from_h1)
 static void set_state(h2_from_h1 *from_h1, h2_from_h1_state_t state)
 {
     if (from_h1->state != state) {
-        h2_from_h1_state_t oldstate = from_h1->state;
         from_h1->state = state;
     }
 }
@@ -106,6 +104,8 @@ static apr_status_t make_h2_headers(h2_from_h1 *from_h1, request_rec *r)
 
 static apr_status_t parse_header(h2_from_h1 *from_h1, ap_filter_t* f, 
                                  char *line) {
+    (void)f;
+    
     if (line[0] == ' ' || line[0] == '\t') {
         /* continuation line from the header before this */
         while (line[0] == ' ' || line[0] == '\t') {
@@ -245,6 +245,7 @@ static int uniq_field_values(void *d, const char *key, const char *val)
     char **strpp;
     int  i;
     
+    (void)key;
     values = (apr_array_header_t *)d;
     
     e = apr_pstrdup(values->pool, val);
@@ -319,7 +320,7 @@ static apr_status_t validate_status_line(request_rec *r)
     char *end;
     
     if (r->status_line) {
-        int len = strlen(r->status_line);
+        apr_size_t len = strlen(r->status_line);
         if (len < 3
             || apr_strtoi64(r->status_line, &end, 10) != r->status
             || (end - 3) != r->status_line
@@ -395,7 +396,6 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
     h2_task_env *env = f->ctx;
     h2_from_h1 *from_h1 = env->output? env->output->from_h1 : NULL;
     request_rec *r = f->r;
-    conn_rec *c = r->connection;
     const char *clheader;
     const char *ctype;
     apr_bucket *b;
@@ -430,11 +430,9 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
         }
     }
     if (eb) {
-        int status;
-        
-        status = eb->status;
+        int st = eb->status;
         apr_brigade_cleanup(bb);
-        ap_die(status, r);
+        ap_die(st, r);
         return AP_FILTER_ERROR;
     }
     

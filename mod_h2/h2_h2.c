@@ -92,7 +92,7 @@ static void check_sni_host(conn_rec *c)
     h2_ctx *ctx = h2_ctx_get(c, 1);
     if (opt_ssl_var_lookup && !ctx->hostname) {
         ctx->hostname = opt_ssl_var_lookup(c->pool, c->base_server, c, 
-                                           NULL, "SSL_TLS_SNI");
+                                           NULL, (char*)"SSL_TLS_SNI");
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_h2, connection, SNI %s",
                       ctx->hostname? ctx->hostname : "NULL");
@@ -135,6 +135,7 @@ void h2_h2_register_hooks(void)
 
 apr_status_t h2_h2_init(apr_pool_t *pool, server_rec *s)
 {
+    (void)pool;
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, "h2_h2, child_init");
     opt_ssl_engine_disable = APR_RETRIEVE_OPTIONAL_FN(ssl_engine_disable);
     opt_ssl_is_https = APR_RETRIEVE_OPTIONAL_FN(ssl_is_https);
@@ -155,6 +156,8 @@ apr_status_t h2_h2_init(apr_pool_t *pool, server_rec *s)
 
 apr_status_t h2_h2_child_init(apr_pool_t *pool, server_rec *s)
 {
+    (void)pool;
+    (void)s;
     return APR_SUCCESS;
 }
 
@@ -183,7 +186,7 @@ static int h2_h2_npn_advertise(conn_rec *c, apr_array_header_t *protos)
         return DECLINED;
     }
     
-    for (int i = 0; i < h2_protos_len; ++i) {
+    for (apr_size_t i = 0; i < h2_protos_len; ++i) {
         const char *proto = h2_protos[i];
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "NPN proposing %s from client selection", proto);
@@ -216,7 +219,7 @@ static int h2_h2_npn_negotiated(conn_rec *c,
         return DECLINED;
     }
     
-    for (int i = 0; i < h2_protos_len; ++i) {
+    for (apr_size_t i = 0; i < h2_protos_len; ++i) {
         const char *proto = h2_protos[i];
         if (proto_name_len == strlen(proto)
             && strncmp(proto, proto_name, proto_name_len) == 0) {
@@ -239,7 +242,7 @@ static int h2_h2_alpn_propose(conn_rec *c,
         return DECLINED;
     }
     
-    for (int i = 0; i < h2_protos_len; ++i) {
+    for (apr_size_t i = 0; i < h2_protos_len; ++i) {
         const char *proto = h2_protos[i];
         if (h2_util_array_index(client_protos, proto) >= 0) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
@@ -275,7 +278,7 @@ static int h2_h2_alpn_negotiated(conn_rec *c,
         return DECLINED;
     }
     
-    for (int i = 0; i < h2_protos_len; ++i) {
+    for (apr_size_t i = 0; i < h2_protos_len; ++i) {
         const char *proto = h2_protos[i];
         if (proto_name_len == strlen(proto)
             && strncmp(proto, proto_name, proto_name_len) == 0) {
@@ -290,8 +293,10 @@ static int h2_h2_alpn_negotiated(conn_rec *c,
 
 int h2_h2_pre_conn(conn_rec* c, void *arg)
 {
+    (void)arg;
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_h2, pre_connection, start");
+    
     h2_ctx *ctx = h2_ctx_get(c, 0);
     if (!ctx) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
@@ -380,8 +385,8 @@ int h2_h2_process_conn(conn_rec* c)
             // Let the client/server hellos fly and ALPN call us back.
             apr_bucket_brigade* temp_brigade = apr_brigade_create(
                 c->pool, c->bucket_alloc);
-            const apr_status_t status = ap_get_brigade(c->input_filters,
-                temp_brigade, AP_MODE_SPECULATIVE, APR_BLOCK_READ, 1);
+            ap_get_brigade(c->input_filters, temp_brigade,
+                AP_MODE_SPECULATIVE, APR_BLOCK_READ, 1);
             apr_brigade_destroy(temp_brigade);
         }
         check_sni_host(c);
@@ -401,6 +406,8 @@ int h2_h2_process_conn(conn_rec* c)
 
 int h2_h2_stream_pre_conn(conn_rec* c, void *arg)
 {
+    (void)arg;
+    
     h2_ctx *ctx = h2_ctx_get(c, 0);
     if (ctx && h2_ctx_is_task(c)) {
         /* This connection is a pseudo-connection used for a h2_task.

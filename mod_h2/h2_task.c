@@ -114,7 +114,6 @@ int h2_task_pre_conn(h2_task_env *env, conn_rec *c)
 
 h2_task *h2_task_create(long session_id,
                         int stream_id,
-                        conn_rec *master,
                         apr_pool_t *stream_pool,
                         h2_mplx *mplx)
 {
@@ -138,7 +137,7 @@ h2_task *h2_task_create(long session_id,
      * stream pool if we comment this out.
      * TODO.
      */
-    task->conn = h2_conn_create(task->id, mplx->c, stream_pool);
+    task->conn = h2_conn_create(mplx->c, stream_pool);
     if (task->conn == NULL) {
         return NULL;
     }
@@ -205,7 +204,7 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     
     /* save in connection that this one is for us, prevents
      * other hooks from messing with it. */
-    h2_ctx *ctx = h2_ctx_create_for(env.conn->c, &env);
+    h2_ctx_create_for(env.conn->c, &env);
 
     if (status == APR_SUCCESS) {
         apr_pool_t *pool = env.conn->pool;
@@ -239,7 +238,6 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     h2_task_set_finished(task);
     if (env.io) {
         apr_thread_cond_signal(env.io);
-        env.io = NULL;
     }
 
     return status;
@@ -267,16 +265,12 @@ void h2_task_set_finished(h2_task *task)
     apr_atomic_set32(&task->has_finished, 1);
 }
 
-request_rec *h2_task_create_request(h2_task_env *env)
+static request_rec *h2_task_create_request(h2_task_env *env)
 {
     conn_rec *conn = env->conn->c;
     request_rec *r;
     apr_pool_t *p;
-    const char *expect;
-    int access_status = HTTP_OK;
-    apr_socket_t *csd;
-    apr_interval_time_t cur_timeout;
-    
+    int access_status = HTTP_OK;    
     
     apr_pool_create(&p, conn->pool);
     apr_pool_tag(p, "request");
@@ -340,7 +334,7 @@ request_rec *h2_task_create_request(h2_task_env *env)
     }
 
     ap_parse_uri(r, env->path);
-    r->protocol = "HTTP/1.1";
+    r->protocol = (char*)"HTTP/1.1";
     r->proto_num = HTTP_VERSION(1, 1);
     
     r->hostname = env->authority;
@@ -386,10 +380,6 @@ apr_status_t h2_task_process_request(h2_task_env *env)
     conn_rec *c = env->conn->c;
     request_rec *r;
     conn_state_t *cs = c->cs;
-    apr_socket_t *csd = NULL;
-    int mpm_state = 0;
-    apr_bucket_brigade *bb;
-    apr_bucket *b;
 
     r = h2_task_create_request(env);
     if (r && (r->status == HTTP_OK)) {

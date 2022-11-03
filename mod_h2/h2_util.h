@@ -18,12 +18,12 @@
 
 struct nghttp2_frame;
 
-int h2_util_hex_dump(char *buffer, size_t maxlen,
-                     const char *data, size_t datalen);
+size_t h2_util_hex_dump(char *buffer, size_t maxlen,
+                        const char *data, size_t datalen);
 
-int h2_util_header_print(char *buffer, size_t maxlen,
-                         const char *name, size_t namelen,
-                         const char *value, size_t valuelen);
+size_t h2_util_header_print(char *buffer, size_t maxlen,
+                            const char *name, size_t namelen,
+                            const char *value, size_t valuelen);
 
 char *h2_strlwr(char *s);
 

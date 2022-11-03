@@ -31,7 +31,7 @@
 
 
 h2_request *h2_request_create(int id, apr_pool_t *pool, 
-                              apr_bucket_alloc_t *bucket_alloc, h2_mplx *m)
+                              apr_bucket_alloc_t *bucket_alloc)
 {
     h2_request *req = apr_pcalloc(pool, sizeof(h2_request));
     if (req) {
@@ -124,7 +124,7 @@ apr_status_t h2_request_write_header(h2_request *req,
     else {
         /* non-pseudo header, append to work bucket of stream */
         if (!req->to_h1) {
-            apr_status_t status = insert_request_line(req, m);
+            status = insert_request_line(req, m);
             if (status != APR_SUCCESS) {
                 return status;
             }
@@ -140,8 +140,7 @@ apr_status_t h2_request_write_header(h2_request *req,
 }
 
 apr_status_t h2_request_write_data(h2_request *req,
-                                   const char *data, size_t len,
-                                   struct h2_mplx *m)
+                                   const char *data, size_t len)
 {
     return h2_to_h1_add_data(req->to_h1, data, len);
 }
@@ -158,7 +157,7 @@ apr_status_t h2_request_end_headers(h2_request *req, struct h2_mplx *m,
     return h2_to_h1_end_headers(req->to_h1, task, eos);
 }
 
-apr_status_t h2_request_close(h2_request *req, struct h2_mplx *m)
+apr_status_t h2_request_close(h2_request *req)
 {
     return h2_to_h1_close(req->to_h1);
 }
@@ -170,7 +169,7 @@ static apr_status_t insert_request_line(h2_request *req, h2_mplx *m)
     return req->to_h1? APR_SUCCESS : APR_ENOMEM;
 }
 
-apr_status_t h2_request_flush(h2_request *req, h2_mplx *m)
+apr_status_t h2_request_flush(h2_request *req)
 {
     return h2_to_h1_flush(req->to_h1);
 }
