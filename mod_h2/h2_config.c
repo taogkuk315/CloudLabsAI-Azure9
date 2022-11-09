@@ -326,7 +326,7 @@ h2_config *h2_config_get(conn_rec *c)
              * connection, but we need it earlier. Simulate a request and call
              * the vhost matching stuff.
              */
-            apr_uri_t uri = {};
+            apr_uri_t uri;
             memset(&uri, 0, sizeof(uri));
             uri.scheme = (char*)"https";
             uri.hostinfo = (char*)ctx->hostname;
