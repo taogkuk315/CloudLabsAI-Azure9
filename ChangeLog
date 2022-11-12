@@ -1,5 +1,11 @@
 v0.6.0
 --------------------------------------------------------------------------------
+ * fiddling around with task/worker assignments to use the global h2_workers
+   lock less, giving better parallelism
+ * ./configure --enable-werror enables all sorts of compiler diagnostics, if
+   the chosen compiler supports them
+ * merged pull request with compiler warning fixes by LPardue and @samhurst 
+   (Thanks!)
  * new config option "H2SerializeHeaders (On|Off)" that determines if request
    response headers should be serialized/parsed when converting from HTTP/2 to
    httpd's internal HTTP/1 processing or request_recs are manipulated directly.

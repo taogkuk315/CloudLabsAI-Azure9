@@ -65,7 +65,7 @@ on any virtual hosts.
 
 ##Dependencies
 1. The module is written in plain C and links to libnghttp2 and the
-apache runtime.
+apache runtime. Currently, only nghttp2 version 0.7.x are supported. nghttp2 v1.0.0 introduced a incompatible API change. mod_h2 will change once there is a curl release working with 1.0.0. That release of mod_h2 will then stop support for nghttp2 0.7.x. Heads up.
 1. For "h2" support - the part of HTTP2 that uses TLS - a patched mod_ssl
 needs to be present in the server. The patch is available in httpd/patches
 and automatically applied in sandbox mode.
@@ -87,6 +87,7 @@ extracted, you need to:
 For general handling of 'configure', see INSTALL. For mod_h2 specifically,
 there are two arguments to know:
 * `--enable-sandbox`     build a complete sandbox installation with own httpd, own libnghttp2
+* `--enable-werror`      build with tons of compiler diagnostics enabled
 * `--with-apxs=<pathtoapxs>` for a non-sandboxed installation where the apxs (from the apache development environment) is in an unusual location.
 
 If you run 'configure' without arguments, it assumes a non-sandbox'ed built
