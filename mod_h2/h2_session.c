@@ -233,14 +233,12 @@ static apr_status_t close_stream(h2_session *session, h2_stream *stream)
                   session->id, (int)stream->id);
     
     h2_stream_set_remove(session->streams, stream);
-    if (stream->task) {
+    status = h2_stream_destroy(stream);
+    if (status == APR_EAGAIN) {
         h2_stream_set_add(session->zombies, stream);
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
                       "h2_stream(%ld-%d): is zombie now",
                       session->id, (int)stream->id);
-    }
-    else {
-        h2_stream_destroy(stream);
     }
 
     return status;
@@ -657,8 +655,13 @@ static void reap_zombies(h2_session *session, int take_your_time) {
          * have reached a certain threshold, check all zombies and
          * cleanup those whose task has finished 
          */
-        if (count && (take_your_time || count > (session->max_stream_count/10))) {
+        if (count && (take_your_time || count > (session->max_stream_count / 2))) {
             h2_stream_set_iter(session->zombies, stream_close_finished, session);
+            apr_size_t ncount = h2_stream_set_size(session->zombies);
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+                          "h2_session(%ld): zombies reaped (mode=%d): %d -> %d",
+                          session->id, take_your_time, 
+                          (int)count, (int)ncount);
         }
     }
 }

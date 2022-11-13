@@ -219,12 +219,6 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, env.conn->c,
                   "h2_task(%s):processing done", task->id);
     
-    if (env.output) {
-        h2_task_output_close(env.output);
-        h2_task_output_destroy(env.output);
-        env.output = NULL;
-    }
-    
     if (env.input) {
         h2_task_input_destroy(env.input);
         env.input = NULL;
@@ -239,7 +233,13 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     if (env.io) {
         apr_thread_cond_signal(env.io);
     }
-
+    
+    if (env.output) {
+        h2_task_output_close(env.output);
+        h2_task_output_destroy(env.output);
+        env.output = NULL;
+    }
+    
     return status;
 }
 

@@ -72,19 +72,34 @@ h2_stream *h2_stream_create(int id, apr_pool_t *master,
 
 void h2_stream_cleanup(h2_stream *stream)
 {
-    h2_request_destroy(stream->request);
-    h2_mplx_close_io(stream->m, stream->id);
+    if (stream->request) {
+        h2_request_destroy(stream->request);
+        stream->request = NULL;
+    }
+    if (stream->m) {
+        h2_mplx_close_io(stream->m, stream->id);
+        stream->m = NULL;
+    }
 }
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
     AP_DEBUG_ASSERT(stream);
+    
+    if (stream->task && !h2_task_has_finished(stream->task)) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, 
+                      h2_mplx_get_conn(stream->m),
+                      "h2_stream(%ld-%d): refused to be destroyed",
+                      h2_mplx_get_id(stream->m), (int)stream->id);
+        /* TODO: register somwhere for destruction */
+        return APR_EAGAIN;
+    }
+
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
                   "h2_stream(%ld-%d): destroy",
                   h2_mplx_get_id(stream->m), stream->id);
     h2_stream_cleanup(stream);
     
-    stream->m = NULL;
     if (stream->task) {
         h2_task_destroy(stream->task);
         stream->task = NULL;

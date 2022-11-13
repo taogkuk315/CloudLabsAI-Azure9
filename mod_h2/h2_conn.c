@@ -396,7 +396,9 @@ apr_status_t h2_conn_post(h2_conn *conn, h2_worker *worker)
     apr_pool_destroy(conn->pool);
     conn->pool = NULL;
     /* be sure no one messes with this any more */
-    memset(conn->c, 0, sizeof(conn_rec)); 
+    if (conn->c) {
+        memset(conn->c, 0, sizeof(conn_rec)); 
+    }
     
     return APR_SUCCESS;
 }
