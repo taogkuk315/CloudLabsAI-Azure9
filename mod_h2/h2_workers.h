@@ -69,7 +69,7 @@ void h2_workers_destroy(h2_workers *workers);
  * new tasks arrive, it needs to be registered again.
  */
 apr_status_t h2_workers_register(h2_workers *workers, 
-                                 struct h2_mplx *m);
+                                 struct h2_mplx *m, int single_task);
 
 /**
  * Remove a h2_mplx from the worker registry.

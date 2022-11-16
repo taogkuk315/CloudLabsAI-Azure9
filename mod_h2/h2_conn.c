@@ -58,10 +58,10 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     ap_mpm_query(AP_MPMQ_HARD_LIMIT_THREADS, &threads_limit);
     
     if (minw <= 0) {
-        minw = max_threads_per_child / 2;
+        minw = max_threads_per_child;
     }
     if (maxw <= 0) {
-        maxw = threads_limit / 2;
+        maxw = threads_limit;
         if (maxw < minw) {
             maxw = minw;
         }

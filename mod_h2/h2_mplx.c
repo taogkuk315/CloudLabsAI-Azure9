@@ -620,9 +620,7 @@ apr_status_t h2_mplx_do_task(h2_mplx *m, struct h2_task *task)
     if (APR_SUCCESS == status) {
         int was_empty = h2_tq_empty(m->q);
         h2_tq_append(m->q, task);
-        if (was_empty) {
-            h2_workers_register(m->workers, m);
-        }
+        h2_workers_register(m->workers, m, was_empty);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
