@@ -113,6 +113,10 @@ void h2_mplx_destroy(h2_mplx *m)
             h2_tq_destroy(m->q);
             m->q = NULL;
         }
+        if (m->added_task) {
+            apr_thread_cond_signal(m->added_task);
+        }
+        
         if (m->ready_ios) {
             h2_io_set_destroy(m->ready_ios);
             m->ready_ios = NULL;
@@ -620,13 +624,28 @@ apr_status_t h2_mplx_do_task(h2_mplx *m, struct h2_task *task)
     if (APR_SUCCESS == status) {
         int was_empty = h2_tq_empty(m->q);
         h2_tq_append(m->q, task);
-        h2_workers_register(m->workers, m, was_empty);
+        
+        if (m->added_task) {
+            /* someone is waiting for tasks to arrive */
+            apr_thread_cond_signal(m->added_task);
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                          "h2_mplx(%ld): new task(%s), someone waiting, "
+                          "signalled", m->id, task->id);
+        }
+        else {
+            /* no one waiting, register at workers */
+            h2_workers_register(m->workers, m, was_empty);
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                          "h2_mplx(%ld): new task(%s), none waiting, registered", 
+                          m->id, task->id);
+        }
         apr_thread_mutex_unlock(m->lock);
     }
     return status;
 }
 
-h2_task *h2_mplx_pop_task(h2_mplx *m)
+h2_task *h2_mplx_pop_task(h2_mplx *m, apr_thread_cond_t *cond, 
+                                 apr_time_t max_wait)
 {
     h2_task *task = NULL;
     AP_DEBUG_ASSERT(m);
@@ -635,7 +654,27 @@ h2_task *h2_mplx_pop_task(h2_mplx *m)
     }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
+        
         task = h2_tq_pop_first(m->q);
+        (void)cond; (void)max_wait;
+        while (task == NULL  && !m->aborted
+               && cond != NULL && m->added_task == NULL) {
+            m->added_task = cond;
+            status = apr_thread_cond_timedwait(cond, m->lock, max_wait);
+            
+            if (m->lock == NULL) {
+                /* the mplx has been destroyed. Flee! */
+                return NULL;
+            }
+            else if (status == APR_TIMEUP || m->q == NULL) {
+                /* time up or the mplx will be destroyed. Flee! */
+                m->added_task = NULL;
+                break;
+            }
+            m->added_task = NULL;
+            task = h2_tq_pop_first(m->q);
+        }
+
         if (task) {
             h2_task_set_started(task);
         }
