@@ -30,8 +30,7 @@ static void *execute(apr_thread_t *thread, void *wctx)
 {
     h2_worker *worker = (h2_worker *)wctx;
     apr_status_t status = APR_SUCCESS;
-    apr_time_t max_wait = apr_time_from_msec(1000);
-    const int n = 100;
+    const int n = 1000;
     (void)thread;
     
     /* Furthermore, other code might want to see the socket for
@@ -54,11 +53,12 @@ static void *execute(apr_thread_t *thread, void *wctx)
         if (worker->current) {
             int processed = 0;
             status = APR_SUCCESS;
-            worker->task = h2_mplx_pop_task(worker->current, 
-                                            worker->io, max_wait);
+            worker->task = h2_mplx_pop_task(worker->current);
             while (!worker->aborted && worker->task) {
                 
                 h2_task_do(worker->task, worker);
+                
+                /*apr_thread_cond_signal(h2_worker_get_cond(worker));*/
                 
                 ++processed;
                 if (processed >= n) {
@@ -67,11 +67,13 @@ static void *execute(apr_thread_t *thread, void *wctx)
                     status = APR_EAGAIN;
                     break;
                 }
-                worker->task = h2_mplx_pop_task(worker->current, 
-                                                worker->io, max_wait);
+                worker->task = h2_mplx_pop_task(worker->current);
             }
             
             worker->task = NULL;
+            ap_log_perror(APLOG_MARK, APLOG_NOTICE, status, worker->pool,
+                          "h2_worker(%d): leaving mplx after %d tasks", 
+                          worker->id, processed);
             worker->current = worker->mplx_done(worker, worker->current,
                                                 status, worker->ctx);
         }

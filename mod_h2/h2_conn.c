@@ -54,17 +54,22 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     
     int max_threads_per_child = 0;
     ap_mpm_query(AP_MPMQ_MAX_THREADS, &max_threads_per_child);
+    int threads_limit = 0;
+    ap_mpm_query(AP_MPMQ_HARD_LIMIT_THREADS, &threads_limit);
     
     if (minw <= 0) {
         minw = max_threads_per_child;
     }
     if (maxw <= 0) {
-        maxw = minw;
+        maxw = threads_limit;
+        if (maxw < minw) {
+            maxw = minw;
+        }
     }
     
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
-                 "h2_workers: min=%d max=%d, mthrpchild=%d", 
-                 minw, maxw, max_threads_per_child);
+                 "h2_workers: min=%d max=%d, mthrpchild=%d, thr_limit=%d", 
+                 minw, maxw, max_threads_per_child, threads_limit);
     
     for (int i = 0; ap_loaded_modules[i]; ++i) {
         module *m = ap_loaded_modules[i];

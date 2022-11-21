@@ -78,11 +78,12 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
                              h2_worker_get_id(worker), h2_mplx_get_id(m));
                 break;
             }
-            else {
+            
+            /* Need to wait for either a new mplx to arrive or, if we
+             * are not at the minimum workers count, wait our max idle
+             * time until we reduce the number of workers */
+            if (workers->worker_count > workers->min_size) {
                 apr_time_t now = apr_time_now();
-                /* Need to wait for either a new mplx to arrive or, if we
-                 * are not at the minimum workers count, wait our max idle
-                 * time until we reduce the number of workers */
                 if (now >= (start_wait + max_wait)) {
                     /* waited long enough without getting a task. */
                     status = APR_TIMEUP;
@@ -103,6 +104,12 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
                         break;
                     }
                 }
+            }
+            else {
+                ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+                             "h2_worker(%d): waiting signal (eternal), worker_count=%d",
+                             h2_worker_get_id(worker), (int)workers->worker_count);
+                apr_thread_cond_wait(workers->mplx_added, workers->lock);
             }
         }
         apr_atomic_dec32(&workers->idle_worker_count);
@@ -244,30 +251,28 @@ void h2_workers_destroy(h2_workers *workers)
 apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m,
                                  int single_task)
 {
-    int idle_workers = apr_atomic_read32(&workers->idle_worker_count);
-    if (!single_task && idle_workers <= 0) {
+    if (!single_task && apr_atomic_read32(&workers->idle_worker_count) <= 0) {
         /* mplx has more than one task, which means it has registered before
          * and is still in our list. If we have no idle workers right now, it
          * does not make sense to send out signals and such.
          */
-        ap_log_error(APLOG_MARK, APLOG_INFO, 0, workers->s,
-                     "h2_workers: register, not first, non idle (%ld)",
-                     m->id);
         return APR_SUCCESS;
     }
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
+                     "h2_workers: register mplx(%ld)",
+                     h2_mplx_get_id(m));
         if (!in_list(workers, m)) {
             H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);        
         }
         apr_thread_cond_signal(workers->mplx_added);
         
-        idle_workers = apr_atomic_read32(&workers->idle_worker_count);
-        if (idle_workers <= 0 && workers->worker_count < workers->max_size) {
-            ap_log_error(APLOG_MARK, APLOG_INFO, status, workers->s,
-                         "h2_workers: register mplx(%ld), adding worker, "
-                         "count=%d idle=%d", 
-                         m->id, workers->worker_count, idle_workers);
+        if (apr_atomic_read32(&workers->idle_worker_count) <= 0 
+            && workers->worker_count < workers->max_size) {
+            ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
+                         "h2_workers: got %d worker, adding 1", 
+                         workers->worker_count);
             add_worker(workers);
         }
         

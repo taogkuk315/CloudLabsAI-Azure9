@@ -63,7 +63,6 @@ struct h2_mplx {
     
     apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *added_output;
-    struct apr_thread_cond_t *added_task;
     
     int aborted;
     apr_size_t stream_max_mem;
@@ -143,8 +142,7 @@ apr_status_t h2_mplx_join_task(h2_mplx *m, struct h2_task *task, int wait);
  */
 apr_status_t h2_mplx_do_task(h2_mplx *mplx, struct h2_task *task);
 
-struct h2_task *h2_mplx_pop_task(h2_mplx *mplx, struct apr_thread_cond_t *cond, 
-                                 apr_time_t max_wait);
+struct h2_task *h2_mplx_pop_task(h2_mplx *mplx);
 
 /*******************************************************************************
  * Input handling of streams.
