@@ -65,7 +65,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
         apr_time_t max_wait = apr_time_from_sec(apr_atomic_read32(&workers->max_idle_secs));
         apr_time_t start_wait = apr_time_now();
         
-        apr_atomic_inc32(&workers->idle_worker_count);
+        ++workers->idle_worker_count;
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                      "h2_worker(%d): looking for work", h2_worker_get_id(worker));
         while (!h2_worker_is_aborted(worker) && !workers->aborted) {
@@ -112,7 +112,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
                 apr_thread_cond_wait(workers->mplx_added, workers->lock);
             }
         }
-        apr_atomic_dec32(&workers->idle_worker_count);
+        --workers->idle_worker_count;
         apr_thread_mutex_unlock(workers->lock);
     }
     return status;
@@ -248,16 +248,8 @@ void h2_workers_destroy(h2_workers *workers)
     }
 }
 
-apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m,
-                                 int single_task)
+apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m)
 {
-    if (!single_task && apr_atomic_read32(&workers->idle_worker_count) <= 0) {
-        /* mplx has more than one task, which means it has registered before
-         * and is still in our list. If we have no idle workers right now, it
-         * does not make sense to send out signals and such.
-         */
-        return APR_SUCCESS;
-    }
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
@@ -268,7 +260,7 @@ apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m,
         }
         apr_thread_cond_signal(workers->mplx_added);
         
-        if (apr_atomic_read32(&workers->idle_worker_count) <= 0 
+        if (workers->idle_worker_count <= 0 
             && workers->worker_count < workers->max_size) {
             ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                          "h2_workers: got %d worker, adding 1", 
