@@ -30,7 +30,7 @@ static void *execute(apr_thread_t *thread, void *wctx)
 {
     h2_worker *worker = (h2_worker *)wctx;
     apr_status_t status = APR_SUCCESS;
-    const int n = 10;
+    const int n = 1000000;
     (void)thread;
     
     /* Furthermore, other code might want to see the socket for
