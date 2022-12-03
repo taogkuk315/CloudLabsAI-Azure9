@@ -344,7 +344,7 @@ h2_config *h2_config_get(conn_rec *c)
             r.headers_in = apr_table_make(c->pool, 1);
             r.parsed_uri = uri;
             r.status = HTTP_OK;
-            
+            r.server = r.connection->base_server;
             ap_update_vhost_from_headers(&r);
             ctx->server = r.server;
         }
