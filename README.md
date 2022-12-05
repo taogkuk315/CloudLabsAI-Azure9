@@ -180,9 +180,9 @@ information for request scheduling.
 * mpm_event: supported by a hack atm. Needs an official patch with an Optional
 function
 * http trailers are not implemented
-* mod_h2 removes mod_reqtimeout for its connection (rightly so), and its
+* mod_h2 removes reqtimeout input filter for its connection, and its
   stream handling (due to problems in long processing fcgi php requests). 
-  The later may hurt. How should timeouts be handled on streams?
+  
 
 ##Licensing
 Please see the file called LICENSE.

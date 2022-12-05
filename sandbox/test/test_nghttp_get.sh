@@ -236,12 +236,10 @@ nghttp_check_assets 006.html "with assets" <<EOF
 /006/006.js 839 200
 EOF
 
-# form data test, TODO
 nghttp_check_assets 007.html "with assets" <<EOF
 /007.html 808 200
 EOF
 
-# file upload test, TODO
 nghttp_check_assets 008.html "with assets" <<EOF
 /008.html 618 200
 EOF

@@ -91,7 +91,6 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
                       h2_mplx_get_conn(stream->m),
                       "h2_stream(%ld-%d): refused to be destroyed",
                       h2_mplx_get_id(stream->m), (int)stream->id);
-        /* TODO: register somwhere for destruction */
         return APR_EAGAIN;
     }
 

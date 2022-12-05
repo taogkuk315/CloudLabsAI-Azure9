@@ -134,7 +134,7 @@ h2_task *h2_task_create(long session_id,
     
     /* We would like to have this happening when our task is about
      * to be processed by the worker. But something corrupts our
-     * stream pool if we comment this out.
+     * stream pool if we shift this to the worker thread.
      * TODO.
      */
     task->conn = h2_conn_create(mplx->c, stream_pool);
