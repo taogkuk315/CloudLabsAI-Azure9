@@ -26,7 +26,7 @@
 /* If we write directly to our brigade or use a char buffer to collect
  * out data.
  */
-#define H2_CONN_IO_WRITE_BRIGADE   1
+#define H2_CONN_IO_WRITE_BRIGADE   0
 
 
 static const char HTTP2_PREFACE[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";

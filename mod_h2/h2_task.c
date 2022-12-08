@@ -187,7 +187,11 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     env.stream_id = task->stream_id;
     env.mplx = task->mplx;
     
-    /* TODO: clone? */
+    /* Not cloning these task fields:
+     * If the stream is destroyed before the task is done, this might
+     * be a problem. However that should never happen as stream destruction
+     * explicitly checks if task processing has finished.
+     */
     env.method = task->method;
     env.path = task->path;
     env.authority = task->authority;
