@@ -26,7 +26,10 @@
 /* If we write directly to our brigade or use a char buffer to collect
  * out data.
  */
-#define H2_CONN_IO_WRITE_BRIGADE   0
+#define H2_CONN_IO_USE_BUFFER       1
+
+#define H2_CONN_IO_BUF_SIZE        (64 * 1024)
+#define H2_CONN_IO_SSL_WRITE_SIZE  (16 * 1024)
 
 
 static const char HTTP2_PREFACE[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
@@ -40,11 +43,11 @@ apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, int check_preface)
     io->check_preface = check_preface;
     io->preface_bytes_left = check_preface? HTTP2_PREFACE_LEN : 0;
     io->buflen = 0;
-#if H2_CONN_IO_WRITE_BRIGADE
-    io->bufsize = 0;
-#else
-    io->bufsize = 64 * 1024;
+#if H2_CONN_IO_USE_BUFFER
+    io->bufsize = H2_CONN_IO_BUF_SIZE;
     io->buffer = apr_pcalloc(c->pool, io->bufsize);
+#else
+    io->bufsize = 0;
 #endif
     
 
@@ -189,35 +192,34 @@ apr_status_t h2_conn_io_write(h2_conn_io *io,
     apr_status_t status = APR_SUCCESS;
     io->unflushed = 1;
 
-#if H2_CONN_IO_WRITE_BRIGADE
-
-    status = apr_brigade_write(io->output, flush_out, io, buf, length);
-    if (status == APR_SUCCESS
-        || APR_STATUS_IS_ECONNABORTED(status)
-        || APR_STATUS_IS_EPIPE(status)) {
-        /* These are all fine and no reason for concern. Everything else
-         * is interesting. */
-        status = APR_SUCCESS;
-    }
-    else {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
-                      "h2_conn_io: write error");
-    }
+#if H2_CONN_IO_USE_BUFFER
     
-#else /* H2_CONN_IO_WRITE_BRIGADE */
-
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, io->connection,
                   "h2_conn_io: buffering %ld bytes", (long)length);
     while (length > 0 && (status == APR_SUCCESS)) {
         apr_size_t avail = io->bufsize - io->buflen;
         if (avail <= 0) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, io->connection,
-                          "h2_conn_io: write, flushing %ld bytes", (long)io->buflen);
-            apr_bucket *b = apr_bucket_transient_create(io->buffer, io->buflen, 
-                                                        io->output->bucket_alloc);
-            APR_BRIGADE_INSERT_TAIL(io->output, b);
-            status = flush_out(io->output, io);
+            const char *data = io->buffer;
+            apr_size_t remaining = io->buflen;
+            int bcount = (int)(remaining / H2_CONN_IO_SSL_WRITE_SIZE);
+            apr_bucket *b;
+            
+            for (int i = 0; i < bcount; ++i) {
+                b = apr_bucket_transient_create(data, H2_CONN_IO_SSL_WRITE_SIZE, 
+                                                io->output->bucket_alloc);
+                APR_BRIGADE_INSERT_TAIL(io->output, b);
+                data += H2_CONN_IO_SSL_WRITE_SIZE;
+                remaining -= H2_CONN_IO_SSL_WRITE_SIZE;
+            }
+            
+            if (remaining > 0) {
+                b = apr_bucket_transient_create(data, remaining, 
+                                                io->output->bucket_alloc);
+                APR_BRIGADE_INSERT_TAIL(io->output, b);
+            }
             io->buflen = 0;
+            
+            status = flush_out(io->output, io);
         }
         else if (length > avail) {
             memcpy(io->buffer + io->buflen, buf, avail);
@@ -232,7 +234,22 @@ apr_status_t h2_conn_io_write(h2_conn_io *io,
             break;
         }
     }
-#endif /* H2_CONN_IO_WRITE_BRIGADE (else) */
+
+#else /* H2_CONN_IO_USE_BUFFER */
+    
+    status = apr_brigade_write(io->output, flush_out, io, buf, length);
+    if (status == APR_SUCCESS
+        || APR_STATUS_IS_ECONNABORTED(status)
+        || APR_STATUS_IS_EPIPE(status)) {
+        /* These are all fine and no reason for concern. Everything else
+         * is interesting. */
+        status = APR_SUCCESS;
+    }
+    else {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, io->connection,
+                      "h2_conn_io: write error");
+    }
+#endif /* H2_CONN_IO_USE_BUFFER (else) */
     
     return status;
 }
