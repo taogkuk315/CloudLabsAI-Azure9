@@ -233,15 +233,15 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         env.conn = NULL;
     }
     
-    h2_task_set_finished(task);
-    if (env.io) {
-        apr_thread_cond_signal(env.io);
-    }
-    
     if (env.output) {
         h2_task_output_close(env.output);
         h2_task_output_destroy(env.output);
         env.output = NULL;
+    }
+
+    h2_task_set_finished(task);
+    if (env.io) {
+        apr_thread_cond_signal(env.io);
     }
     
     return status;
