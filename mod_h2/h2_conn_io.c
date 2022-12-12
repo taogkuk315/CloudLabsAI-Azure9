@@ -185,6 +185,27 @@ static apr_status_t flush_out(apr_bucket_brigade *bb, void *ctx)
     return status;
 }
 
+static apr_status_t bucketeer_buffer(h2_conn_io *io) {
+    const char *data = io->buffer;
+    apr_size_t remaining = io->buflen;
+    int bcount = (int)(remaining / H2_CONN_IO_SSL_WRITE_SIZE);
+    apr_bucket *b;
+    
+    for (int i = 0; i < bcount; ++i) {
+        b = apr_bucket_transient_create(data, H2_CONN_IO_SSL_WRITE_SIZE, 
+                                        io->output->bucket_alloc);
+        APR_BRIGADE_INSERT_TAIL(io->output, b);
+        data += H2_CONN_IO_SSL_WRITE_SIZE;
+        remaining -= H2_CONN_IO_SSL_WRITE_SIZE;
+    }
+    
+    if (remaining > 0) {
+        b = apr_bucket_transient_create(data, remaining, 
+                                        io->output->bucket_alloc);
+        APR_BRIGADE_INSERT_TAIL(io->output, b);
+    }
+    return APR_SUCCESS;
+}
 
 apr_status_t h2_conn_io_write(h2_conn_io *io, 
                               const char *buf, size_t length)
@@ -199,27 +220,9 @@ apr_status_t h2_conn_io_write(h2_conn_io *io,
     while (length > 0 && (status == APR_SUCCESS)) {
         apr_size_t avail = io->bufsize - io->buflen;
         if (avail <= 0) {
-            const char *data = io->buffer;
-            apr_size_t remaining = io->buflen;
-            int bcount = (int)(remaining / H2_CONN_IO_SSL_WRITE_SIZE);
-            apr_bucket *b;
-            
-            for (int i = 0; i < bcount; ++i) {
-                b = apr_bucket_transient_create(data, H2_CONN_IO_SSL_WRITE_SIZE, 
-                                                io->output->bucket_alloc);
-                APR_BRIGADE_INSERT_TAIL(io->output, b);
-                data += H2_CONN_IO_SSL_WRITE_SIZE;
-                remaining -= H2_CONN_IO_SSL_WRITE_SIZE;
-            }
-            
-            if (remaining > 0) {
-                b = apr_bucket_transient_create(data, remaining, 
-                                                io->output->bucket_alloc);
-                APR_BRIGADE_INSERT_TAIL(io->output, b);
-            }
-            io->buflen = 0;
-            
+            bucketeer_buffer(io);
             status = flush_out(io->output, io);
+            io->buflen = 0;
         }
         else if (length > avail) {
             memcpy(io->buffer + io->buflen, buf, avail);

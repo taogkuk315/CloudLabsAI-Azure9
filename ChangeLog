@@ -1,3 +1,10 @@
+v0.6.1
+--------------------------------------------------------------------------------
+ * relaxing task finished sync due to segfaults with mpm_event
+ * mod_reqtimeout enabled on stream processing again
+ * merged pr from ecovener, fix for ap_update_vhost_from_headers use
+ * tinkering with buffering on main connection
+
 v0.6.0
 --------------------------------------------------------------------------------
  * fiddling around with task/worker assignments to use the global h2_workers
