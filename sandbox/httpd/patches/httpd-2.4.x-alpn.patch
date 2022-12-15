@@ -1,58 +1,3 @@
-Index: docs/manual/mod/directives.html.en
-===================================================================
---- docs/manual/mod/directives.html.en	(revision 1681722)
-+++ docs/manual/mod/directives.html.en	(working copy)
-@@ -548,6 +548,7 @@
- <li><a href="mod_include.html#ssistarttag">SSIStartTag</a></li>
- <li><a href="mod_include.html#ssitimeformat">SSITimeFormat</a></li>
- <li><a href="mod_include.html#ssiundefinedecho">SSIUndefinedEcho</a></li>
-+<li><a href="mod_ssl.html#sslalpnpreference">SSLALPNPreference</a></li>
- <li><a href="mod_ssl.html#sslcacertificatefile">SSLCACertificateFile</a></li>
- <li><a href="mod_ssl.html#sslcacertificatepath">SSLCACertificatePath</a></li>
- <li><a href="mod_ssl.html#sslcadnrequestfile">SSLCADNRequestFile</a></li>
-Index: docs/manual/mod/mod_ssl.html.en
-===================================================================
---- docs/manual/mod/mod_ssl.html.en	(revision 1681722)
-+++ docs/manual/mod/mod_ssl.html.en	(working copy)
-@@ -53,6 +53,7 @@
- <li><img alt="" src="../images/down.gif" /> <a href="#authzproviders">Authorization providers for use with Require</a></li>
- </ul><h3 class="directives">Directives</h3>
- <ul id="toc">
-+<li><img alt="" src="../images/down.gif" /> <a href="#sslalpnpreference">SSLALPNPreference</a></li>
- <li><img alt="" src="../images/down.gif" /> <a href="#sslcacertificatefile">SSLCACertificateFile</a></li>
- <li><img alt="" src="../images/down.gif" /> <a href="#sslcacertificatepath">SSLCACertificatePath</a></li>
- <li><img alt="" src="../images/down.gif" /> <a href="#sslcadnrequestfile">SSLCADNRequestFile</a></li>
-@@ -323,6 +324,30 @@
- 
- </div>
- <div class="top"><a href="#page-header"><img alt="top" src="../images/up.gif" /></a></div>
-+<div class="directive-section"><h2><a name="SSLALPNPreference" id="SSLALPNPreference">SSLALPNPreference</a> <a name="sslalpnpreference" id="sslalpnpreference">Directive</a></h2>
-+<table class="directive">
-+<tr><th><a href="directive-dict.html#Description">Description:</a></th><td>Configure protocol preference for Application-Layer Protocol Negotiation (RFC 7301)</td></tr>
-+<tr><th><a href="directive-dict.html#Syntax">Syntax:</a></th><td><code>SSLALPNPreference <em>protocol-id</em> ...</code></td></tr>
-+<tr><th><a href="directive-dict.html#Context">Context:</a></th><td>server config, virtual host</td></tr>
-+<tr><th><a href="directive-dict.html#Status">Status:</a></th><td>Extension</td></tr>
-+<tr><th><a href="directive-dict.html#Module">Module:</a></th><td>mod_ssl</td></tr>
-+<tr><th><a href="directive-dict.html#Compatibility">Compatibility:</a></th><td>Available if using OpenSSL 1.0.2 or later</td></tr>
-+</table>
-+<p>This directive overrides preferences by implementations of application-layer
-+protocols during negotiation. Protocol IDs must be specified in terms of the
-+"Identification Sequence" from IANA's Application-Layer Protocol
-+Negotiation (ALPN) Protocol IDs registry. The protocol specified first gets
-+precedence over later or unspecified protocols. This list is evaluated
-+against client capabilities.</p>
-+
-+<div class="example"><h3>Examples</h3><pre class="prettyprint lang-config">SSLALPNPreference h2 spdy/3</pre>
-+<p>For clients which support both protocols, <code>h2</code> will be selected. For
-+clients which only support <code>spdy/3</code>, that one will be chosen. If a client
-+supports only protocol X and there is support for X in httpd, the
-+negotiation will select X.</p></div>
-+
-+</div>
-+<div class="top"><a href="#page-header"><img alt="top" src="../images/up.gif" /></a></div>
- <div class="directive-section"><h2><a name="SSLCACertificateFile" id="SSLCACertificateFile">SSLCACertificateFile</a> <a name="sslcacertificatefile" id="sslcacertificatefile">Directive</a></h2>
- <table class="directive">
- <tr><th><a href="directive-dict.html#Description">Description:</a></th><td>File of concatenated PEM-encoded CA Certificates
 Index: docs/manual/mod/mod_ssl.xml
 ===================================================================
 --- docs/manual/mod/mod_ssl.xml	(revision 1681722)
@@ -90,70 +35,6 @@ Index: docs/manual/mod/mod_ssl.xml
 +</directivesynopsis>
 +
  </modulesynopsis>
-Index: docs/manual/mod/quickreference.html.en
-===================================================================
---- docs/manual/mod/quickreference.html.en	(revision 1681722)
-+++ docs/manual/mod/quickreference.html.en	(working copy)
-@@ -915,7 +915,8 @@
- <tr><td><a href="mod_include.html#ssistarttag">SSIStartTag <var>tag</var></a></td><td> "&lt;!--#" </td><td>sv</td><td>B</td></tr><tr><td class="descr" colspan="4">String that starts an include element</td></tr>
- <tr class="odd"><td><a href="mod_include.html#ssitimeformat">SSITimeFormat <var>formatstring</var></a></td><td> "%A, %d-%b-%Y %H:%M +</td><td>svdh</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">Configures the format in which date strings are
- displayed</td></tr>
--<tr><td><a href="mod_include.html#ssiundefinedecho">SSIUndefinedEcho <var>string</var></a></td><td> "(none)" </td><td>svdh</td><td>B</td></tr><tr><td class="descr" colspan="4">String displayed when an unset variable is echoed</td></tr>
-+<tr class="odd"><td><a href="mod_include.html#ssiundefinedecho">SSIUndefinedEcho <var>string</var></a></td><td> "(none)" </td><td>svdh</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">String displayed when an unset variable is echoed</td></tr>
-+<tr><td><a href="mod_ssl.html#sslalpnpreference">SSLALPNPreference <em>protocol-id</em> ...</a></td><td></td><td>sv</td><td>E</td></tr><tr><td class="descr" colspan="4">Configure protocol preference for Application-Layer Protocol Negotiation (RFC 7301)</td></tr>
- <tr class="odd"><td><a href="mod_ssl.html#sslcacertificatefile">SSLCACertificateFile <em>file-path</em></a></td><td></td><td>sv</td><td>E</td></tr><tr class="odd"><td class="descr" colspan="4">File of concatenated PEM-encoded CA Certificates
- for Client Auth</td></tr>
- <tr><td><a href="mod_ssl.html#sslcacertificatepath">SSLCACertificatePath <em>directory-path</em></a></td><td></td><td>sv</td><td>E</td></tr><tr><td class="descr" colspan="4">Directory of PEM-encoded CA Certificates for
-@@ -1023,6 +1024,7 @@
- client connections</td></tr>
- <tr><td><a href="core.html#timeout">TimeOut <var>seconds</var></a></td><td> 60 </td><td>sv</td><td>C</td></tr><tr><td class="descr" colspan="4">Amount of time the server will wait for
- certain events before failing a request</td></tr>
-+<<<<<<< .working
- <tr class="odd"><td><a href="core.html#traceenable">TraceEnable <var>[on|off|extended]</var></a></td><td> on </td><td>sv</td><td>C</td></tr><tr class="odd"><td class="descr" colspan="4">Determines the behavior on <code>TRACE</code> requests</td></tr>
- <tr><td><a href="mod_log_config.html#transferlog">TransferLog <var>file</var>|<var>pipe</var></a></td><td></td><td>sv</td><td>B</td></tr><tr><td class="descr" colspan="4">Specify location of a log file</td></tr>
- <tr class="odd"><td><a href="mod_mime.html#typesconfig">TypesConfig <var>file-path</var></a></td><td> conf/mime.types </td><td>s</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">The location of the <code>mime.types</code> file</td></tr>
-@@ -1033,6 +1035,18 @@
- <tr class="odd"><td><a href="mod_macro.html#use">Use <var>name</var> [<var>value1</var> ... <var>valueN</var>]
- </a></td><td></td><td>svd</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">Use a macro</td></tr>
- <tr><td><a href="core.html#usecanonicalname">UseCanonicalName On|Off|DNS</a></td><td> Off </td><td>svd</td><td>C</td></tr><tr><td class="descr" colspan="4">Configures how the server determines its own name and
-+=======
-+<tr class="odd"><td><a href="core.html#traceenable">TraceEnable <var>[on|off|extended]</var></a></td><td> on </td><td>sv</td><td>C</td></tr><tr class="odd"><td class="descr" colspan="4">Determines the behavior on <code>TRACE</code> requests</td></tr>
-+<tr><td><a href="mod_log_config.html#transferlog">TransferLog <var>file</var>|<var>pipe</var></a></td><td></td><td>sv</td><td>B</td></tr><tr><td class="descr" colspan="4">Specify location of a log file</td></tr>
-+<tr class="odd"><td><a href="mod_mime.html#typesconfig">TypesConfig <var>file-path</var></a></td><td> conf/mime.types </td><td>s</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">The location of the <code>mime.types</code> file</td></tr>
-+<tr><td><a href="core.html#undefine" id="U" name="U">UnDefine <var>parameter-name</var></a></td><td></td><td>sv</td><td>C</td></tr><tr><td class="descr" colspan="4">Undefine the existence of a variable</td></tr>
-+<tr class="odd"><td><a href="mod_macro.html#undefmacro">UndefMacro <var>name</var></a></td><td></td><td>svd</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">Undefine a macro</td></tr>
-+<tr><td><a href="mod_env.html#unsetenv">UnsetEnv <var>env-variable</var> [<var>env-variable</var>]
-+...</a></td><td></td><td>svdh</td><td>B</td></tr><tr><td class="descr" colspan="4">Removes variables from the environment</td></tr>
-+<tr class="odd"><td><a href="mod_macro.html#use">Use <var>name</var> [<var>value1</var> ... <var>valueN</var>]
-+</a></td><td></td><td>svd</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">Use a macro</td></tr>
-+<tr><td><a href="core.html#usecanonicalname">UseCanonicalName On|Off|DNS</a></td><td> Off </td><td>svd</td><td>C</td></tr><tr><td class="descr" colspan="4">Configures how the server determines its own name and
-+>>>>>>> .merge-right.r1676004
- port</td></tr>
- <tr class="odd"><td><a href="core.html#usecanonicalphysicalport">UseCanonicalPhysicalPort On|Off</a></td><td> Off </td><td>svd</td><td>C</td></tr><tr class="odd"><td class="descr" colspan="4">Configures how the server determines its own port</td></tr>
- <tr><td><a href="mod_unixd.html#user">User <var>unix-userid</var></a></td><td> #-1 </td><td>s</td><td>B</td></tr><tr><td class="descr" colspan="4">The userid under which the server will answer
-@@ -1060,13 +1074,19 @@
- a given virtual host</td></tr>
- <tr><td><a href="mod_vhost_alias.html#virtualscriptaliasip">VirtualScriptAliasIP <em>interpolated-directory</em>|none</a></td><td> none </td><td>sv</td><td>E</td></tr><tr><td class="descr" colspan="4">Dynamically configure the location of the CGI directory for
- a given virtual host</td></tr>
-+<<<<<<< .working
- <tr class="odd"><td><a href="mod_watchdog.html#watchdoginterval" id="W" name="W">WatchdogInterval <var>number-of-seconds</var></a></td><td> 1 </td><td>s</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">Watchdog interval in seconds</td></tr>
- <tr><td><a href="mod_include.html#xbithack" id="X" name="X">XBitHack on|off|full</a></td><td> off </td><td>svdh</td><td>B</td></tr><tr><td class="descr" colspan="4">Parse SSI directives in files with the execute bit
-+=======
-+<tr class="odd"><td><a href="core.html#warning" id="W" name="W">Warning <var>message</var></a></td><td></td><td>svdh</td><td>C</td></tr><tr class="odd"><td class="descr" colspan="4">Warn from configuration parsing with a custom message</td></tr>
-+<tr><td><a href="mod_watchdog.html#watchdoginterval">WatchdogInterval <var>number-of-seconds</var></a></td><td> 1 </td><td>s</td><td>B</td></tr><tr><td class="descr" colspan="4">Watchdog interval in seconds</td></tr>
-+<tr class="odd"><td><a href="mod_include.html#xbithack" id="X" name="X">XBitHack on|off|full</a></td><td> off </td><td>svdh</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">Parse SSI directives in files with the execute bit
-+>>>>>>> .merge-right.r1676004
- set</td></tr>
--<tr class="odd"><td><a href="mod_xml2enc.html#xml2encalias">xml2EncAlias <var>charset alias [alias ...]</var></a></td><td></td><td>s</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">Recognise Aliases for encoding values</td></tr>
--<tr><td><a href="mod_xml2enc.html#xml2encdefault">xml2EncDefault <var>name</var></a></td><td></td><td>svdh</td><td>B</td></tr><tr><td class="descr" colspan="4">Sets a default encoding to assume when absolutely no information
-+<tr><td><a href="mod_xml2enc.html#xml2encalias">xml2EncAlias <var>charset alias [alias ...]</var></a></td><td></td><td>s</td><td>B</td></tr><tr><td class="descr" colspan="4">Recognise Aliases for encoding values</td></tr>
-+<tr class="odd"><td><a href="mod_xml2enc.html#xml2encdefault">xml2EncDefault <var>name</var></a></td><td></td><td>svdh</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">Sets a default encoding to assume when absolutely no information
- can be <a href="#sniffing">automatically detected</a></td></tr>
--<tr class="odd"><td><a href="mod_xml2enc.html#xml2startparse">xml2StartParse <var>element [element ...]</var></a></td><td></td><td>svdh</td><td>B</td></tr><tr class="odd"><td class="descr" colspan="4">Advise the parser to skip leading junk.</td></tr>
-+<tr><td><a href="mod_xml2enc.html#xml2startparse">xml2StartParse <var>element [element ...]</var></a></td><td></td><td>svdh</td><td>B</td></tr><tr><td class="descr" colspan="4">Advise the parser to skip leading junk.</td></tr>
- </table></div>
- <div class="bottomlang">
- <p><span>Available Languages: </span><a href="../de/mod/quickreference.html" hreflang="de" rel="alternate" title="Deutsch">&nbsp;de&nbsp;</a> |
 Index: modules/ssl/mod_ssl.c
 ===================================================================
 --- modules/ssl/mod_ssl.c	(revision 1681722)
@@ -569,18 +450,6 @@ Index: modules/ssl/ssl_private.h
 ===================================================================
 --- modules/ssl/ssl_private.h	(revision 1681722)
 +++ modules/ssl/ssl_private.h	(working copy)
-@@ -148,6 +148,11 @@
- #define HAVE_ECC
- #endif
- 
-+#if OPENSSL_VERSION_NUMBER >= 0x10001000L && !defined(OPENSSL_NO_NEXTPROTONEG) \
-+    && !defined(OPENSSL_NO_TLSEXT)
-+#define HAVE_TLS_NPN
-+#endif
-+
- /* OCSP stapling */
- #if !defined(OPENSSL_NO_OCSP) && defined(SSL_CTX_set_tlsext_status_cb)
- #define HAVE_OCSP_STAPLING
 @@ -182,6 +187,11 @@
  #include <openssl/srp.h>
  #endif
@@ -641,12 +510,3 @@ Index: modules/ssl/ssl_private.h
  /**  Session Cache Support  */
  apr_status_t ssl_scache_init(server_rec *, apr_pool_t *);
  void         ssl_scache_status_register(apr_pool_t *p);
-Index: .
-===================================================================
---- .	(revision 1681722)
-+++ .	(working copy)
-
-Property changes on: .
-___________________________________________________________________
-Modified: svn:mergeinfo
-   Merged /httpd/httpd/trunk:r1332643,1487772,1670397,1670434,1670436,1670578,1675459,1676004,1676709
