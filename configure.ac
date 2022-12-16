@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_h2], [0.6.1], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_h2], [0.6.2-DEV], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -42,8 +42,6 @@ AM_INIT_AUTOMAKE([subdir-objects no-define])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
-CFLAGS=
-
 AC_CONFIG_SRCDIR([mod_h2/h2_config.c])
 AC_CONFIG_HEADERS([mod_h2/config.h])
 
@@ -69,9 +67,6 @@ AC_ARG_WITH([apxs], [AS_HELP_STRING([--with-apxs],
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_CC_STDC
-
-ac_save_CFLAGS=$CFLAGS
-CFLAGS=
 
 if test "x$werror" != "xno"; then
     AX_CHECK_COMPILE_FLAG([-Wall], [CFLAGS="$CFLAGS -Wall"])
