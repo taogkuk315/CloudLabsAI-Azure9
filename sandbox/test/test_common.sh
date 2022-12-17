@@ -18,6 +18,7 @@
 #
 
 URL_PREFIX="$1"
+OPT_DIRECT="$2"
 AUTH="${URL_PREFIX#*://}"
 HOST="${AUTH%%:*}"
 
@@ -36,6 +37,14 @@ fail() {
     exit 1
 }
 
+case "$OPT_DIRECT" in
+  "direct")
+        ARG_UPGRADE=""
+        ;;
+    *)  
+        ARG_UPGRADE=" -u"
+        ;;
+esac
 
 curl_check_doc() {
     DOC="$1"; shift;
@@ -52,11 +61,11 @@ curl_check_doc() {
 nghttp_check_doc() {
     DOC="$1"; shift;
     MSG="$1"; shift;
-    ARGS="$@"
+    ARGS="$@"$ARG_UPGRADE
     echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
     rm -rf $TMP &&
     mkdir -p $TMP &&
-    ${NGHTTP} -u $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${NGHTTP} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
     diff  $DOC_ROOT/$DOC $TMP/$DOC || fail
     echo ok.
 }
@@ -64,12 +73,12 @@ nghttp_check_doc() {
 nghttp_check_assets() {
     DOC="$1"; shift;
     MSG="$1"; shift;
-    ARGS="$@"
+    ARGS="$@"$ARG_UPGRADE
     echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
     rm -rf $TMP &&
     mkdir -p $TMP &&
     sort > $TMP/reference
-    ${NGHTTP} -uans $ARGS $URL_PREFIX/$DOC > $TMP/out || fail
+    ${NGHTTP} -ans $ARGS $URL_PREFIX/$DOC > $TMP/out || fail
     fgrep " /" $TMP/out | while read id begin end dur stat size path; do
         echo "$path $size $stat"
     done | sort > $TMP/output || fail
@@ -80,12 +89,12 @@ nghttp_check_assets() {
 nghttp_check_content() {
     DOC="$1"; shift;
     MSG="$1"; shift;
-    ARGS="$@"
+    ARGS="$@"$ARG_UPGRADE
     rm -rf $TMP
     mkdir -p $TMP
     cat > $TMP/expected
     echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
-    ${NGHTTP} -u $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${NGHTTP} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
 }
@@ -168,7 +177,7 @@ nghttp_remove_file() {
     DOC="$1"; shift;
     FILE="$1"; shift;
     MSG="$1"; shift;
-    ARGS="$@"
+    ARGS="$@"$ARG_UPGRADE
     fname="$(basename $FILE)"
     rm -rf $TMP
     mkdir -p $TMP
@@ -181,7 +190,7 @@ $fname
 --DSAJKcd9876--
 EOF
     echo -n "nghttp $URL_PREFIX/$DOC: rm $fname..."
-    ${NGHTTP} -uv $ARGS --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error removing $fname"
+    ${NGHTTP} -v $ARGS --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error removing $fname"
     echo ok.
 }
 
@@ -189,7 +198,7 @@ nghttp_post_file() {
     DOC="$1"; shift;
     FILE="$1"; shift;
     MSG="$1"; shift;
-    ARGS="$@"
+    ARGS="$@"$ARG_UPGRADE
     fname="$(basename $FILE)"
     rm -rf $TMP
     mkdir -p $TMP
@@ -210,9 +219,9 @@ EOF
 --DSAJKcd9876--
 EOF
     echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
-    ${NGHTTP} -uv $ARGS --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
+    ${NGHTTP} -v $ARGS --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
 
-    ${NGHTTP} -u $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
+    ${NGHTTP} $ARG_UPGRADE $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
     diff  $FILE $TMP/data.down || fail
     echo ok.
 }

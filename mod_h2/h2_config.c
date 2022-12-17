@@ -47,6 +47,7 @@ static h2_config defconf = {
     -1,               /* alt-svc max age */
     0,                /* serialize headers */
     1,                /* hack mpm event */
+    0,                /* h2 direct mode */
 };
 
 static void *h2_config_create(apr_pool_t *pool,
@@ -73,6 +74,7 @@ static void *h2_config_create(apr_pool_t *pool,
     conf->alt_svc_max_age = DEF_VAL;
     conf->serialize_headers = DEF_VAL;
     conf->hack_mpm_event = DEF_VAL;
+    conf->h2_direct      = DEF_VAL;
     return conf;
 }
 
@@ -113,6 +115,7 @@ void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     n->alt_svc_max_age = H2_CONFIG_GET(add, base, alt_svc_max_age);
     n->serialize_headers = H2_CONFIG_GET(add, base, serialize_headers);
     n->hack_mpm_event = H2_CONFIG_GET(add, base, hack_mpm_event);
+    n->h2_direct      = H2_CONFIG_GET(add, base, h2_direct);
     
     return n;
 }
@@ -142,6 +145,8 @@ int h2_config_geti(h2_config *conf, h2_config_var_t var)
             return H2_CONFIG_GET(conf, &defconf, serialize_headers);
         case H2_CONF_HACK_MPM_EVENT:
             return H2_CONFIG_GET(conf, &defconf, hack_mpm_event);
+        case H2_CONF_DIRECT:
+            return H2_CONFIG_GET(conf, &defconf, h2_direct);
         default:
             return DEF_VAL;
     }
@@ -266,6 +271,15 @@ static const char *h2_conf_set_hack_mpm_event(cmd_parms *parms,
     return NULL;
 }
 
+static const char *h2_conf_set_direct(cmd_parms *parms,
+                                      void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    cfg->h2_direct = !apr_strnatcasecmp(value, "On");
+    (void)arg;
+    return NULL;
+}
+
 #pragma GCC diagnostic ignored "-Wmissing-braces"
 const command_rec h2_cmds[] = {
     AP_INIT_TAKE1("H2Engine", h2_conf_set_engine, NULL,
@@ -292,6 +306,8 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "on to enable header serialization for compatibility"),
     AP_INIT_TAKE1("H2HackMpmEvent", h2_conf_set_hack_mpm_event, NULL,
                   RSRC_CONF, "on to enable a hack that makes mpm_event working with mod_h2"),
+    AP_INIT_TAKE1("H2Direct", h2_conf_set_direct, NULL,
+                  RSRC_CONF, "on to enable direct HTTP/2 mode on non-TLS"),
     { NULL, NULL, NULL, 0, 0, NULL }
 };
 

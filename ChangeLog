@@ -1,3 +1,10 @@
+v0.6.2
+--------------------------------------------------------------------------------
+ * added "H2Direct (on|off)" as config directive. On a non-TLS host, it enables
+   direct h2c communication without any Upgrade dance. Useful for testing, for
+   example with h2load.
+ * fixed concurrency issue observed on a mpm_event server when closing sessions
+
 v0.6.1
 --------------------------------------------------------------------------------
  * relaxing task finished sync due to segfaults with mpm_event

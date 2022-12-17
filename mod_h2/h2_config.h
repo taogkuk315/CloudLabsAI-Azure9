@@ -36,6 +36,7 @@ typedef enum {
     H2_CONF_ALT_SVC_MAX_AGE,
     H2_CONF_SER_HEADERS,
     H2_CONF_HACK_MPM_EVENT,
+    H2_CONF_DIRECT,
 } h2_config_var_t;
 
 /* Apache httpd module configuration for h2. */
@@ -55,6 +56,7 @@ typedef struct h2_config {
                                      processing, better compatibility */
     int hack_mpm_event;           /* If mpm_event is detected, perform a hack
                                      on stream connections to make it work */
+    int h2_direct;                /* if mod_h2 is active on non-TLS directly */
 } h2_config;
 
 

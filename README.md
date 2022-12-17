@@ -56,6 +56,7 @@ such as:
 * H2AltSvcMaxAge n           number of seconds Alt-Svc information is valid, default: will not be sent, specificatin defaults to 24h
 * H2SerializeHeaders (on/off), "off"   serialize/parse request+response headers for streams, as if they arrived in HTTP/1 format. When off, certain parts of httpd core filters are disabled/replaced to allow for a more efficient handling. 
 * H2HackMpmEvent (on/off), "on"        performs a hack on internal connection in order to make mpm_event working, has no effect on other mpm modules
+* H2Direct (on/off), "on"    to enabled h2c direct mode on a non-TLS host, default: off
 
 All these configuration parameters can be set on servers/virtual hosts and
 are not available on directory level. Note that Worker configuration is

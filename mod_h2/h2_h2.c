@@ -311,9 +311,16 @@ int h2_h2_pre_conn(conn_rec* c, void *arg)
         
         /* Are we using TLS on this connection? */
         if (!h2_h2_is_tls(c)) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                          "h2_h2, pre_connection, no TLS");
-            return DECLINED;
+            if (h2_config_geti(cfg, H2_CONF_DIRECT)) {
+                h2_ctx_set_protocol(c, "h2c");
+                return DECLINED;
+            }
+            else {
+                
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
+                              "h2_h2, pre_connection, no TLS");
+                return DECLINED;
+            }
         }
         
         /* Does mod_ssl offer ALPN/NPN support? */
