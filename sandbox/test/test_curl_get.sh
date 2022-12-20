@@ -15,12 +15,11 @@
 #
 
 source test_common.sh
-echo "-- GET Tests: $1 --"
+echo "curl GET on: $@"
 
 ################################################################################
 # check content of resources via different methods
 ################################################################################
-echo " - single document -"
 curl_check_doc index.html "default"
 curl_check_doc index.html "http/1.1" --http1.1
 curl_check_doc index.html "http2"    --http2
@@ -53,7 +52,6 @@ SSL_PROTOCOL=
         ;;
 esac
 
-echo " - CGI generated content -"
 curl_check_content hello.py "default" <<EOF
 $CONTENT
 EOF

@@ -47,7 +47,7 @@ static h2_config defconf = {
     -1,               /* alt-svc max age */
     0,                /* serialize headers */
     1,                /* hack mpm event */
-    0,                /* h2 direct mode */
+    1,                /* h2 direct mode */
 };
 
 static void *h2_config_create(apr_pool_t *pool,

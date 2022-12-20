@@ -15,12 +15,11 @@
 #
 
 source test_common.sh
-echo "-- GET Tests: $1 --"
+echo "nghttp GET on: $@"
 
 ################################################################################
 # check content of resources via different methods
 ################################################################################
-echo " - single document -"
 nghttp_check_doc index.html "default"
 nghttp_check_doc 003.html   "detault"
 
@@ -28,7 +27,6 @@ nghttp_check_doc 003.html   "detault"
 ################################################################################
 # check retrieving multiple resources from inside a page
 ################################################################################
-echo " - multiple resources -"
 nghttp_check_assets 001.html "with assets" <<EOF
 /001.html 251 200
 EOF
@@ -250,8 +248,6 @@ EOF
 ################################################################################
 # check different window sizes
 ################################################################################
-echo " - different window sizes -"
-
 nghttp_check_assets 003.html "with assets" --window-bits=24 <<EOF
 /003.html 316 200
 /003/003_img.jpg 88K 200
@@ -260,8 +256,6 @@ EOF
 ################################################################################
 # check cgi generated content
 ################################################################################
-echo " - CGI generated content -"
-
 case "$URL_PREFIX" in
     https:*)
 CONTENT="<html>

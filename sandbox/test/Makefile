@@ -17,11 +17,9 @@ HOST_NAME    = test.example.org
 
 HTTP_PORT    = 12345
 HTTPS_PORT   = 12346
-HTTP_DIRECT_PORT = 12347
 
 HTTP_AUTH    = $(HOST_NAME):$(HTTP_PORT)
 HTTPS_AUTH   = $(HOST_NAME):$(HTTPS_PORT)
-HTTP_DIRECT_AUTH = $(HOST_NAME):$(HTTP_DIRECT_PORT)
 
 GEN          = gen
 INST_DIR     = ../install
@@ -89,8 +87,8 @@ test: \
 	@bash test_nghttp_post.sh http://$(HTTP_AUTH)
 	@bash test_curl_get.sh    http://$(HTTP_AUTH)
 	@bash test_curl_post.sh   http://$(HTTP_AUTH)
-	@bash test_nghttp_get.sh  http://$(HTTP_DIRECT_AUTH) direct
-	@bash test_nghttp_post.sh http://$(HTTP_DIRECT_AUTH) direct
+	@bash test_nghttp_get.sh  http://$(HTTP_AUTH) direct
+	@bash test_nghttp_post.sh http://$(HTTP_AUTH) direct
 
 ################################################################################
 # Load Test
@@ -160,7 +158,6 @@ $(INST_DIR)/.test-setup: \
 			-e "s,SUBST_SERVER_NAME_SUBST,$(shell hostname -f),g" \
 			-e "s,SUBST_PORT_HTTP_SUBST,$(HTTP_PORT),g" \
 			-e "s,SUBST_PORT_HTTPS_SUBST,$(HTTPS_PORT),g" \
-			-e "s,SUBST_PORT_HTTP_DIRECT_SUBST,$(HTTP_DIRECT_PORT),g" \
             -e "s,SUBST_PHP_CGI_SUBST,$(PHP_CGI),g" \
 			< $$file > $(INST_DIR)/$$file; \
 	done

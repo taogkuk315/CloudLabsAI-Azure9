@@ -50,7 +50,7 @@ curl_check_doc() {
     DOC="$1"; shift;
     MSG="$1"; shift;
     ARGS="$@"
-    echo -n "curl $URL_PREFIX/$DOC: $MSG..."
+    echo -n " * curl /$DOC: $MSG..."
     rm -rf $TMP
     mkdir -p $TMP
     ${CURL} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
@@ -62,7 +62,7 @@ nghttp_check_doc() {
     DOC="$1"; shift;
     MSG="$1"; shift;
     ARGS="$@"$ARG_UPGRADE
-    echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
+    echo -n " * nghttp /$DOC: $MSG..."
     rm -rf $TMP &&
     mkdir -p $TMP &&
     ${NGHTTP} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
@@ -74,7 +74,7 @@ nghttp_check_assets() {
     DOC="$1"; shift;
     MSG="$1"; shift;
     ARGS="$@"$ARG_UPGRADE
-    echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
+    echo -n " * nghttp /$DOC: $MSG..."
     rm -rf $TMP &&
     mkdir -p $TMP &&
     sort > $TMP/reference
@@ -93,7 +93,7 @@ nghttp_check_content() {
     rm -rf $TMP
     mkdir -p $TMP
     cat > $TMP/expected
-    echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
+    echo -n " * nghttp /$DOC: $MSG..."
     ${NGHTTP} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
@@ -107,7 +107,7 @@ curl_check_content() {
     rm -rf $TMP
     mkdir -p $TMP
     cat > $TMP/expected
-    echo -n "curl $URL_PREFIX/$DOC: $MSG..."
+    echo -n " * curl /$DOC: $MSG..."
     ${CURL} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
@@ -118,7 +118,7 @@ curl_check_redir() {
     REF_DOC="$1"; shift;
     MSG="$1"; shift;
     ARGS="$@"
-    echo -n "curl redir $URL_PREFIX/$DOC: $MSG..."
+    echo -n " * curl redir /$DOC: $MSG..."
     rm -rf $TMP
     mkdir -p $TMP
     ${CURL} -D - $ARGS $URL_PREFIX/$DOC >$TMP/redir.out || fail
@@ -137,7 +137,7 @@ curl_check_necho() {
     ARGS="$@"
     rm -rf $TMP
     mkdir -p $TMP
-    echo -n "curl $URL_PREFIX/necho.py?count=$COUNT&text=$TEXT..."
+    echo -n " * curl /necho.py?count=$COUNT&text=$TEXT..."
     ${CURL} $ARGS -F count="$COUNT" -F text="$TEXT" $URL_PREFIX/necho.py > $TMP/echo || fail
     diff  $REF $TMP/echo || fail
     echo ok.
@@ -151,7 +151,7 @@ curl_post_file() {
     fname="$(basename $FILE)"
     rm -rf $TMP
     mkdir -p $TMP
-    echo -n "curl $URL_PREFIX/$DOC: $MSG..."
+    echo -n " * curl /$DOC: $MSG..."
     ${CURL} $ARGS --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
     ${CURL} $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
     diff  $FILE $TMP/data.down || fail
@@ -166,7 +166,7 @@ curl_post_data() {
     fname="$(basename $FILE)"
     rm -rf $TMP
     mkdir -p $TMP
-    echo -n "curl $URL_PREFIX/$DOC: $MSG..."
+    echo -n " * curl /$DOC: $MSG..."
     ${CURL} $ARGS --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC || fail
     ${CURL} $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down || fail
     diff  $FILE $TMP/data.down || fail
@@ -189,7 +189,7 @@ Content-Type: text/plain
 $fname
 --DSAJKcd9876--
 EOF
-    echo -n "nghttp $URL_PREFIX/$DOC: rm $fname..."
+    echo -n " * nghttp /$DOC: rm $fname..."
     ${NGHTTP} -v $ARGS --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error removing $fname"
     echo ok.
 }
@@ -218,7 +218,7 @@ EOF
     echo >> $TMP/updata <<EOF
 --DSAJKcd9876--
 EOF
-    echo -n "nghttp $URL_PREFIX/$DOC: $MSG..."
+    echo -n " * nghttp /$DOC: $MSG..."
     ${NGHTTP} -v $ARGS --data=$TMP/updata -H'Content-Type: multipart/form-data; boundary=DSAJKcd9876' $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
 
     ${NGHTTP} $ARG_UPGRADE $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
@@ -231,7 +231,7 @@ curl_check_altsvc() {
     EXP_ALT_SVC="$1"; shift;
     MSG="$1"; shift;
     mkdir -p $TMP
-    echo -n "curl check alt_svc at $URL_PREFIX/$DOC..."
+    echo -n " * curl check alt_svc at /$DOC..."
     ${CURL} "$@" -D $TMP/headers $URL_PREFIX/$DOC > /dev/null || fail
     alt_svc="$( fgrep -i 'Alt-Svc: ' $TMP/headers | tr -d "\r\n" )"
     alt_svc="${alt_svc#*: }"

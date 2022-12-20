@@ -40,6 +40,8 @@ const char *h2_protos[] = {
 };
 apr_size_t h2_protos_len = sizeof(h2_protos)/sizeof(h2_protos[0]);
 
+static const char *H2_MAGIC_TOKEN = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+
 /**
  * The optional mod_ssl functions we need. We want to compile without using
  * mod_ssl's header file.
@@ -312,7 +314,9 @@ int h2_h2_pre_conn(conn_rec* c, void *arg)
         /* Are we using TLS on this connection? */
         if (!h2_h2_is_tls(c)) {
             if (h2_config_geti(cfg, H2_CONF_DIRECT)) {
-                h2_ctx_set_protocol(c, "h2c");
+                /* It might be a direct connection, let
+                 * the connection hook figure it out. */
+                h2_ctx_get(c, 1);
                 return DECLINED;
             }
             else {
@@ -387,6 +391,8 @@ int h2_h2_process_conn(conn_rec* c)
     h2_ctx *ctx = h2_ctx_get(c, 0);
     
     if (ctx) {
+        h2_config *cfg = h2_config_get(c);
+        
         if (h2_ctx_is_task(c)) {
             if (!ctx->task_env->serialize_headers) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, 
@@ -396,15 +402,42 @@ int h2_h2_process_conn(conn_rec* c)
             }
             return DECLINED;
         }
-        else if (!h2_ctx_is_negotiated(c)) {
-            // Let the client/server hellos fly and ALPN call us back.
-            apr_bucket_brigade* temp_brigade = apr_brigade_create(
-                c->pool, c->bucket_alloc);
-            ap_get_brigade(c->input_filters, temp_brigade,
-                AP_MODE_SPECULATIVE, APR_BLOCK_READ, 1);
-            apr_brigade_destroy(temp_brigade);
+        else if (h2_h2_is_tls(c)) {
+            if (!h2_ctx_is_negotiated(c)) {
+                apr_bucket_brigade* temp;
+                // Let the client/server hellos fly and ALPN call us back.
+                temp = apr_brigade_create(c->pool, c->bucket_alloc);
+                ap_get_brigade(c->input_filters, temp,
+                               AP_MODE_SPECULATIVE, APR_BLOCK_READ, 1);
+                apr_brigade_destroy(temp);
+            }
+            check_sni_host(c);
         }
-        check_sni_host(c);
+        else if (!h2_ctx_is_negotiated(c) 
+                 && h2_config_geti(cfg, H2_CONF_DIRECT)) {
+            apr_bucket_brigade* temp;
+            apr_status_t status;
+            
+            /* this might be a direct h2c connection, check for the 
+             * magic bytes */
+            temp = apr_brigade_create(c->pool, c->bucket_alloc);
+            status = ap_get_brigade(c->input_filters, temp,
+                                    AP_MODE_SPECULATIVE, APR_BLOCK_READ, 24);
+            if (status == APR_SUCCESS) {
+                if (status == APR_SUCCESS) {
+                    char *s = NULL;
+                    apr_size_t slen;
+                    
+                    apr_brigade_pflatten(temp, &s, &slen, c->pool);
+                    if ((slen == 24) && !memcmp(H2_MAGIC_TOKEN, s, 24)) {
+                        h2_ctx_set_protocol(c, "h2c");
+                    }
+                    
+                }
+            }
+            apr_brigade_destroy(temp);
+            
+        }
     }
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, "h2_h2, connection, start");

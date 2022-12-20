@@ -1,3 +1,9 @@
+v0.6.3
+--------------------------------------------------------------------------------
+ * h2c direct mode is now enabled on http: virtual hosts. It can be disabled
+   by configuring "H2Direct off" for the base server. This works for clients
+   with prior knowledge that a http server supports h2c.
+
 v0.6.2
 --------------------------------------------------------------------------------
  * added "H2Direct (on|off)" as config directive. On a non-TLS host, it enables

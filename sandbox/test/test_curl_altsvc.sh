@@ -18,7 +18,7 @@ HTTP_URL="$1"
 HTTPS_URL="$2"
 
 source test_common.sh
-echo "-- ALT-SVC Tests: $1 --"
+echo "curl ALT-SVC on: $@"
 
 URL_PREFIX="$HTTP_URL"
 curl_check_altsvc index.html 'h2=":12346"; ma=60, h2c=":12345"; ma=60' "http/1.1" --http1.1

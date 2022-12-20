@@ -155,3 +155,4 @@ static int h2_h2c_upgrade_to(request_rec *r, const char *proto)
     
     return OK;
 }
+
