@@ -25,6 +25,7 @@
 
 #include "h2_private.h"
 #include "h2_config.h"
+#include "h2_h2.h"
 #include "h2_mplx.h"
 #include "h2_response.h"
 #include "h2_stream.h"
@@ -586,7 +587,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->workers = workers;
         session->mplx = h2_mplx_create(c, session->pool, workers);
         
-        h2_conn_io_init(&session->io, c, 0);
+        h2_conn_io_init(&session->io, c, h2_h2_is_tls(c));
         session->bbtmp = apr_brigade_create(session->pool, c->bucket_alloc);
         
         status = init_callbacks(c, &callbacks);

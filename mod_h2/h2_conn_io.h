@@ -26,8 +26,7 @@ typedef struct {
     conn_rec *connection;
     apr_bucket_brigade *input;
     apr_bucket_brigade *output;
-    int check_preface;
-    int preface_bytes_left;
+    int buffer_output;
     
     char *buffer;
     apr_size_t buflen;
@@ -35,8 +34,7 @@ typedef struct {
     int unflushed;
 } h2_conn_io;
 
-apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, 
-                             int check_preface);
+apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, int buffer_output);
 void h2_conn_io_destroy(h2_conn_io *io);
 
 typedef apr_status_t (*h2_conn_io_on_read_cb)(const char *data, apr_size_t len,

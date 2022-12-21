@@ -413,13 +413,14 @@ int h2_h2_process_conn(conn_rec* c)
             }
             check_sni_host(c);
         }
-        else if (!h2_ctx_is_negotiated(c) 
-                 && h2_config_geti(cfg, H2_CONF_DIRECT)) {
+        
+        if (!h2_ctx_is_negotiated(c) 
+            && h2_config_geti(cfg, H2_CONF_DIRECT)) {
             apr_bucket_brigade* temp;
             apr_status_t status;
             
-            /* this might be a direct h2c connection, check for the 
-             * magic bytes */
+            /* Negotiation did not happen. This might be a direct h2/h2c 
+             * connection, check for the magic bytes */
             temp = apr_brigade_create(c->pool, c->bucket_alloc);
             status = ap_get_brigade(c->input_filters, temp,
                                     AP_MODE_SPECULATIVE, APR_BLOCK_READ, 24);
