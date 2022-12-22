@@ -45,6 +45,7 @@
 		B271425F1AB9DD59004EF82E /* h2_io_set.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_io_set.h; sourceTree = "<group>"; };
 		B27142601AB9DD76004EF82E /* h2_io.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_io.c; sourceTree = "<group>"; };
 		B27142611AB9DD76004EF82E /* h2_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_io.h; sourceTree = "<group>"; };
+		B272F2311B1E13D8007A20A5 /* httpd-2.4.x-alpn-v4.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-2.4.x-alpn-v4.patch"; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27D32E81A9487B4003DBAF4 /* h2_mplx.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_mplx.c; sourceTree = "<group>"; };
 		B27D32E91A9487B4003DBAF4 /* h2_mplx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_mplx.h; sourceTree = "<group>"; };
@@ -67,7 +68,6 @@
 		B2CB61151A8B698A00D270A6 /* h2_worker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_worker.h; sourceTree = "<group>"; };
 		B2CB61161A8B699E00D270A6 /* h2_workers.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_workers.c; sourceTree = "<group>"; };
 		B2CB61171A8B699E00D270A6 /* h2_workers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_workers.h; sourceTree = "<group>"; };
-		B2DF1C321B147D3000C3E531 /* httpd-2.4.x-alpn.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-2.4.x-alpn.patch"; sourceTree = "<group>"; };
 		B2E5D5081AADAD28001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
@@ -434,7 +434,7 @@
 		B2E6DF9F1AC2EF6E00D557D8 /* patches */ = {
 			isa = PBXGroup;
 			children = (
-				B2DF1C321B147D3000C3E531 /* httpd-2.4.x-alpn.patch */,
+				B272F2311B1E13D8007A20A5 /* httpd-2.4.x-alpn-v4.patch */,
 				B227966E1AEE93B000376B40 /* httpd-npn.unified.diff.patch */,
 				B227966D1AEE1A3C00376B40 /* httpd-alpn-unified.diff.patch */,
 			);

@@ -41,6 +41,9 @@ CURL_OPTS       = --progress-bar
 OS              = $(shell uname -s)
 
 
+NGHTTP2_CONF_ENV += PKG_CONFIG_LIBDIR=$(BLD_PREFIX)/lib/pkgconfig \
+    LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
+
 # For OS X, we drag our own zlib in as the one installed is not
 # recognized by nghttp2 configure.
 # On other OS, we expect a proper zlib/zlib-dev installation
@@ -48,8 +51,6 @@ OS              = $(shell uname -s)
 ifeq ($(OS),Darwin)
     # we need our own zlib
     NGHTTP2_DEPS  += $(INST_DIR)/.zlib-installed $(INST_DIR)/.libev-installed
-    NGHTTP2_CONF_ENV += PKG_CONFIG_LIBDIR=$(BLD_PREFIX)/lib/pkgconfig \
-        LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
 endif
 
 all: install

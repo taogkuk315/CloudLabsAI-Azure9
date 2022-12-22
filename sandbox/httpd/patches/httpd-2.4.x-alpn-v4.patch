@@ -1,8 +1,25 @@
+Index: CHANGES
+===================================================================
+--- CHANGES	(revision 1681752)
++++ CHANGES	(working copy)
+@@ -12,6 +12,12 @@ Changes with Apache 2.4.13
+      calls r:wsupgrade() can cause a child process crash. 
+      [Edward Lu <Chaosed0 gmail.com>]
+ 
++  *) mod_ssl: add ALPN support by allowing other modules to register callbacks
++     for negotiation of the application layer protocol.  PR 52210.
++     [Matthew Steele <mdsteele google com>, Joe Orton, Jim Jagielski,
++      Stefan Eissing <stefan eissing org>, Rainer Jung, Ruediger Pluem,
++      Kaspar Brand]
++
+   *) mod_ssl OCSP Stapling: Don't block initial handshakes while refreshing
+      the OCSP response for a different certificate.  mod_ssl has an additional
+      global mutex, "ssl-stapling-refresh".  PR 57131 (partial fix).
 Index: docs/manual/mod/mod_ssl.xml
 ===================================================================
---- docs/manual/mod/mod_ssl.xml	(revision 1681722)
+--- docs/manual/mod/mod_ssl.xml	(revision 1681752)
 +++ docs/manual/mod/mod_ssl.xml	(working copy)
-@@ -2659,4 +2659,32 @@
+@@ -2659,4 +2659,32 @@ SSLOpenSSLConfCmd SignatureAlgorithms RSA+SHA384:E
  </usage>
  </directivesynopsis>
  
@@ -37,9 +54,9 @@ Index: docs/manual/mod/mod_ssl.xml
  </modulesynopsis>
 Index: modules/ssl/mod_ssl.c
 ===================================================================
---- modules/ssl/mod_ssl.c	(revision 1681722)
+--- modules/ssl/mod_ssl.c	(revision 1681752)
 +++ modules/ssl/mod_ssl.c	(working copy)
-@@ -273,6 +273,12 @@
+@@ -273,6 +273,12 @@ static const command_rec ssl_config_cmds[] = {
                  "OpenSSL configuration command")
  #endif
  
@@ -52,7 +69,7 @@ Index: modules/ssl/mod_ssl.c
      /* Deprecated directives. */
      AP_INIT_RAW_ARGS("SSLLog", ap_set_deprecated, NULL, OR_ALL,
        "SSLLog directive is no longer supported - use ErrorLog."),
-@@ -426,6 +432,37 @@
+@@ -426,6 +432,37 @@ int ssl_engine_disable(conn_rec *c)
      return 1;
  }
  
@@ -90,7 +107,7 @@ Index: modules/ssl/mod_ssl.c
  int ssl_init_ssl_connection(conn_rec *c, request_rec *r)
  {
      SSLSrvConfigRec *sc;
-@@ -588,6 +625,7 @@
+@@ -588,6 +625,7 @@ static void ssl_register_hooks(apr_pool_t *p)
  
      APR_REGISTER_OPTIONAL_FN(ssl_proxy_enable);
      APR_REGISTER_OPTIONAL_FN(ssl_engine_disable);
@@ -100,9 +117,9 @@ Index: modules/ssl/mod_ssl.c
                                AUTHZ_PROVIDER_VERSION,
 Index: modules/ssl/mod_ssl.h
 ===================================================================
---- modules/ssl/mod_ssl.h	(revision 1681722)
+--- modules/ssl/mod_ssl.h	(revision 1681752)
 +++ modules/ssl/mod_ssl.h	(working copy)
-@@ -63,5 +63,46 @@
+@@ -63,5 +63,46 @@ APR_DECLARE_OPTIONAL_FN(int, ssl_proxy_enable, (co
  
  APR_DECLARE_OPTIONAL_FN(int, ssl_engine_disable, (conn_rec *));
  
@@ -151,9 +168,9 @@ Index: modules/ssl/mod_ssl.h
  /** @} */
 Index: modules/ssl/ssl_engine_config.c
 ===================================================================
---- modules/ssl/ssl_engine_config.c	(revision 1681722)
+--- modules/ssl/ssl_engine_config.c	(revision 1681752)
 +++ modules/ssl/ssl_engine_config.c	(working copy)
-@@ -161,6 +161,9 @@
+@@ -161,6 +161,9 @@ static void modssl_ctx_init(modssl_ctx_t *mctx, ap
      SSL_CONF_CTX_set_flags(mctx->ssl_ctx_config, SSL_CONF_FLAG_CERTIFICATE);
      mctx->ssl_ctx_param = apr_array_make(p, 5, sizeof(ssl_ctx_param_t));
  #endif
@@ -163,7 +180,7 @@ Index: modules/ssl/ssl_engine_config.c
  }
  
  static void modssl_ctx_init_proxy(SSLSrvConfigRec *sc,
-@@ -305,6 +308,9 @@
+@@ -305,6 +308,9 @@ static void modssl_ctx_cfg_merge(apr_pool_t *p,
  #ifdef HAVE_SSL_CONF_CMD
      cfgMergeArray(ssl_ctx_param);
  #endif
@@ -173,7 +190,7 @@ Index: modules/ssl/ssl_engine_config.c
  }
  
  static void modssl_ctx_cfg_merge_proxy(apr_pool_t *p,
-@@ -1890,6 +1896,16 @@
+@@ -1890,6 +1896,16 @@ const char *ssl_cmd_SSLOpenSSLConfCmd(cmd_parms *c
  }
  #endif
  
@@ -192,9 +209,9 @@ Index: modules/ssl/ssl_engine_config.c
  const char *ssl_cmd_SSLSRPVerifierFile(cmd_parms *cmd, void *dcfg,
 Index: modules/ssl/ssl_engine_init.c
 ===================================================================
---- modules/ssl/ssl_engine_init.c	(revision 1681722)
+--- modules/ssl/ssl_engine_init.c	(revision 1681752)
 +++ modules/ssl/ssl_engine_init.c	(working copy)
-@@ -625,6 +625,10 @@
+@@ -625,6 +625,10 @@ static void ssl_init_ctx_callbacks(server_rec *s,
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
  
      SSL_CTX_set_info_callback(ctx, ssl_callback_Info);
@@ -207,7 +224,7 @@ Index: modules/ssl/ssl_engine_init.c
  static apr_status_t ssl_init_ctx_verify(server_rec *s,
 Index: modules/ssl/ssl_engine_io.c
 ===================================================================
---- modules/ssl/ssl_engine_io.c	(revision 1681722)
+--- modules/ssl/ssl_engine_io.c	(revision 1681752)
 +++ modules/ssl/ssl_engine_io.c	(working copy)
 @@ -28,6 +28,7 @@
                                    core keeps dumping.''
@@ -217,7 +234,7 @@ Index: modules/ssl/ssl_engine_io.c
  #include "apr_date.h"
  
  /*  _________________________________________________________________
-@@ -297,6 +298,9 @@
+@@ -297,6 +298,9 @@ typedef struct {
      apr_pool_t *pool;
      char buffer[AP_IOBUFSIZE];
      ssl_filter_ctx_t *filter_ctx;
@@ -227,7 +244,7 @@ Index: modules/ssl/ssl_engine_io.c
  } bio_filter_in_ctx_t;
  
  /*
-@@ -1412,6 +1416,40 @@
+@@ -1412,6 +1416,40 @@ static apr_status_t ssl_io_filter_input(ap_filter_
          APR_BRIGADE_INSERT_TAIL(bb, bucket);
      }
  
@@ -268,7 +285,7 @@ Index: modules/ssl/ssl_engine_io.c
      return APR_SUCCESS;
  }
  
-@@ -1893,6 +1931,9 @@
+@@ -1893,6 +1931,9 @@ static void ssl_io_input_add_filter(ssl_filter_ctx
      inctx->block = APR_BLOCK_READ;
      inctx->pool = c->pool;
      inctx->filter_ctx = filter_ctx;
@@ -280,7 +297,7 @@ Index: modules/ssl/ssl_engine_io.c
  /* The request_rec pointer is passed in here only to ensure that the
 Index: modules/ssl/ssl_engine_kernel.c
 ===================================================================
---- modules/ssl/ssl_engine_kernel.c	(revision 1681722)
+--- modules/ssl/ssl_engine_kernel.c	(revision 1681752)
 +++ modules/ssl/ssl_engine_kernel.c	(working copy)
 @@ -29,6 +29,7 @@
                                    time I was too famous.''
@@ -290,7 +307,7 @@ Index: modules/ssl/ssl_engine_kernel.c
  #include "util_md5.h"
  
  static void ssl_configure_env(request_rec *r, SSLConnRec *sslconn);
-@@ -2149,6 +2150,155 @@
+@@ -2149,6 +2150,152 @@ int ssl_callback_SessionTicket(SSL *ssl,
  }
  #endif /* HAVE_TLS_SESSION_TICKETS */
  
@@ -308,7 +325,7 @@ Index: modules/ssl/ssl_engine_kernel.c
 +}
 +
 +/*
-+ * Compare to ALPN protocol proposal. Result is similar to strcmp():
++ * Compare two ALPN protocol proposal. Result is similar to strcmp():
 + * 0 gives same precedence, >0 means proto1 is preferred.
 + */
 +static int ssl_cmp_alpn_protos(modssl_ctx_t *ctx,
@@ -386,9 +403,6 @@ Index: modules/ssl/ssl_engine_kernel.c
 +        i += plen;
 +    }
 +
-+    /* Regardless of installed hooks, the http/1.1 protocol is always
-+     * supported by us. Add it to the proposals if the client also
-+     * offers it. */
 +    proposed_protos = apr_array_make(c->pool, client_protos->nelts+1,
 +                                     sizeof(char *));
 +
@@ -448,9 +462,9 @@ Index: modules/ssl/ssl_engine_kernel.c
  int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
 Index: modules/ssl/ssl_private.h
 ===================================================================
---- modules/ssl/ssl_private.h	(revision 1681722)
+--- modules/ssl/ssl_private.h	(revision 1681752)
 +++ modules/ssl/ssl_private.h	(working copy)
-@@ -182,6 +187,11 @@
+@@ -182,6 +182,11 @@
  #include <openssl/srp.h>
  #endif
  
@@ -462,7 +476,7 @@ Index: modules/ssl/ssl_private.h
  #endif /* !defined(OPENSSL_NO_TLSEXT) && defined(SSL_set_tlsext_host_name) */
  
  /* mod_ssl headers */
-@@ -443,6 +453,12 @@
+@@ -443,6 +448,12 @@ typedef struct {
                       * connection */
      } reneg_state;
  
@@ -475,7 +489,7 @@ Index: modules/ssl/ssl_private.h
      server_rec *server;
  } SSLConnRec;
  
-@@ -624,6 +640,10 @@
+@@ -624,6 +635,10 @@ typedef struct {
      SSL_CONF_CTX *ssl_ctx_config; /* Configuration context */
      apr_array_header_t *ssl_ctx_param; /* parameters to pass to SSL_CTX */
  #endif
@@ -486,7 +500,7 @@ Index: modules/ssl/ssl_private.h
  } modssl_ctx_t;
  
  struct SSLSrvConfigRec {
-@@ -750,6 +770,10 @@
+@@ -750,6 +765,10 @@ const char *ssl_cmd_SSLOCSPEnable(cmd_parms *cmd,
  const char *ssl_cmd_SSLOpenSSLConfCmd(cmd_parms *cmd, void *dcfg, const char *arg1, const char *arg2);
  #endif
  
@@ -497,7 +511,7 @@ Index: modules/ssl/ssl_private.h
  #ifdef HAVE_SRP
  const char *ssl_cmd_SSLSRPVerifierFile(cmd_parms *cmd, void *dcfg, const char *arg);
  const char *ssl_cmd_SSLSRPUnknownUserSeed(cmd_parms *cmd, void *dcfg, const char *arg);
-@@ -798,6 +822,12 @@
+@@ -798,6 +817,12 @@ int         ssl_callback_SessionTicket(SSL *, unsi
                                         EVP_CIPHER_CTX *, HMAC_CTX *, int);
  #endif
  
@@ -510,3 +524,12 @@ Index: modules/ssl/ssl_private.h
  /**  Session Cache Support  */
  apr_status_t ssl_scache_init(server_rec *, apr_pool_t *);
  void         ssl_scache_status_register(apr_pool_t *p);
+Index: .
+===================================================================
+--- .	(revision 1681752)
++++ .	(working copy)
+
+Property changes on: .
+___________________________________________________________________
+Modified: svn:mergeinfo
+   Merged /httpd/httpd/trunk:r1332643,1487772,1670397,1670434,1670436,1670578,1670738,1675459,1676004,1676709,1681741,1681746
