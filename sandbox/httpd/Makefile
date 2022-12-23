@@ -151,7 +151,7 @@ $(GEN)/$(HTTPD_DIR)/.httpd-configured: \
 $(GEN)/$(HTTPD_DIR)/.httpd-patched: \
 		$(GEN)/$(HTTPD_DIR)/.httpd-extracted
 	@echo applying patches...
-	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/httpd-2.4.x-alpn-v4.patch
+	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/httpd-alpn-unified.diff.patch
 	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/httpd-npn.unified.diff.patch
 	@echo httpd patched.
 	@touch $(GEN)/$(HTTPD_DIR)/.httpd-patched
