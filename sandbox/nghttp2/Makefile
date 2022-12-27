@@ -31,11 +31,15 @@ LIBEV_VERSION    = 4.19
 LIBEV_DIR        = libev-$(LIBEV_VERSION)
 LIBEV_TAR        = $(LIBEV_DIR).tar.gz
 LIBEV_URL        = http://dist.schmorp.de/libev/$(LIBEV_TAR)
+LIBEV_CONF_ENV   += PKG_CONFIG_PATH=$(BLD_PREFIX)/lib/pkgconfig \
+    LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
 
 LIBEVENT_VERSION = 2.0.22-stable
 LIBEVENT_DIR     = libevent-$(LIBEVENT_VERSION)
 LIBEVENT_TAR     = $(LIBEVENT_DIR).tar.gz
 LIBEVENT_URL     = https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/$(LIBEVENT_TAR)
+LIBEVENT_CONF_ENV += PKG_CONFIG_PATH=$(BLD_PREFIX)/lib/pkgconfig \
+    LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
 
 GEN             = gen
 INST_DIR        = ../install
@@ -49,6 +53,7 @@ OS              = $(shell uname -s)
 NGHTTP2_CONF_ENV += PKG_CONFIG_PATH=$(BLD_PREFIX)/lib/pkgconfig \
     LDFLAGS=-L$(BLD_PREFIX)/lib CFLAGS=-I$(BLD_PREFIX)/include
 
+
 # For OS X, we drag our own zlib in as the one installed is not
 # recognized by nghttp2 configure.
 # On other OS, we expect a proper zlib/zlib-dev installation
@@ -56,6 +61,9 @@ NGHTTP2_CONF_ENV += PKG_CONFIG_PATH=$(BLD_PREFIX)/lib/pkgconfig \
 ifeq ($(OS),Darwin)
     # we need our own zlib
     NGHTTP2_DEPS  += $(INST_DIR)/.zlib-installed $(INST_DIR)/.libev-installed
+endif
+ifneq (,$(wildcard $(INST_DIR)/lib/pkgconfig/openssl.pc))
+    NGHTTP2_DEPS  += $(INST_DIR)/.libevent-installed
 endif
 
 all: install
@@ -152,11 +160,9 @@ $(GEN)/$(LIBEVENT_DIR)/.libevent-built: \
 	@touch $(GEN)/$(LIBEVENT_DIR)/.libevent-built
 
 $(GEN)/$(LIBEVENT_DIR)/.libevent-configured: \
-        $(GEN)/$(LIBEVENT_DIR)/.libevent-extracted
-	@rm -rf $(GEN)/$(LIBEVENT_DIR)
-	@cd $(GEN) && tar xfz $(LIBEVENT_TAR)
+        	$(GEN)/$(LIBEVENT_DIR)/.libevent-extracted
 	@echo -n configuring libevent...
-	@cd $(GEN)/$(LIBEVENT_DIR) && ./configure --prefix=$(BLD_PREFIX)
+	@cd $(GEN)/$(LIBEVENT_DIR) && $(LIBEVENT_CONF_ENV) ./configure --prefix=$(BLD_PREFIX) --with-sysroot=$(BLD_PREFIX)
 	@echo done.
 	@touch $(GEN)/$(LIBEVENT_DIR)/.libevent-configured
 
@@ -193,7 +199,7 @@ $(GEN)/$(LIBEV_DIR)/.libev-configured: $(GEN)/$(LIBEV_TAR)
 	@rm -rf $(GEN)/$(LIBEV_DIR)
 	@cd $(GEN) && tar xfz $(LIBEV_TAR)
 	@echo -n configuring libev...
-	@cd $(GEN)/$(LIBEV_DIR) && ./configure --prefix=$(BLD_PREFIX)
+	@cd $(GEN)/$(LIBEV_DIR) && $(LIBEV_CONF_ENV) ./configure --prefix=$(BLD_PREFIX)
 	@echo done.
 	@touch $(GEN)/$(LIBEV_DIR)/.libev-configured
 
