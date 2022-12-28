@@ -61,9 +61,10 @@ NGHTTP2_CONF_ENV += PKG_CONFIG_PATH=$(BLD_PREFIX)/lib/pkgconfig \
 ifeq ($(OS),Darwin)
     # we need our own zlib
     NGHTTP2_DEPS  += $(INST_DIR)/.zlib-installed $(INST_DIR)/.libev-installed
-endif
+else
 ifneq (,$(wildcard $(INST_DIR)/lib/pkgconfig/openssl.pc))
     NGHTTP2_DEPS  += $(INST_DIR)/.libevent-installed
+endif
 endif
 
 all: install
