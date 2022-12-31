@@ -94,7 +94,7 @@ nghttp_check_content() {
     mkdir -p $TMP
     cat > $TMP/expected
     echo -n " * nghttp /$DOC: $MSG..."
-    ${NGHTTP} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${NGHTTP} "$@" $URL_PREFIX/$DOC > $TMP/$DOC || fail
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
 }

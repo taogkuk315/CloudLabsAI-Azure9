@@ -28,13 +28,15 @@
 
 #include "h2_private.h"
 #include "h2_conn.h"
+#include "h2_config.h"
 #include "h2_ctx.h"
 #include "h2_h2.h"
 #include "h2_h2c.h"
 #include "h2_util.h"
 
 const char *h2c_protos[] = {
-    "h2c", "h2c-16", "h2c-14"
+    "h2c", "h2c-16", "h2c-14",
+    "h2"                          /* we also upgrade to "h2", seems sane */
 };
 apr_size_t h2c_protos_len = sizeof(h2c_protos)/sizeof(h2c_protos[0]);
 
@@ -62,31 +64,44 @@ static int h2_h2c_upgrade_options(request_rec *r)
 
 static int h2_h2c_request_handler(request_rec *r)
 {
-    if (h2_h2_is_tls(r->connection)) {
-        /* h2c runs only on plain connections */
-        return DECLINED;
-    }
-    if (h2_ctx_is_task(r->connection)) {
-        /* h2_task connection for a stream, not for h2c */
+    h2_ctx *ctx = h2_ctx_rget(r, 0);
+    h2_config *cfg = h2_config_rget(r);
+    int enabled_for_request = h2_config_geti(cfg, H2_CONF_ENABLED);
+    
+    if (h2_ctx_is_task(r->connection) || (ctx && ctx->is_h2)) {
+        /* talking h2 already, either task for main conn */
+        if (!enabled_for_request) {
+            /* we have a request for a server (vhost) where h2 is
+             * not enabled. This happened over a connection on which
+             * we talk h2.
+             */
+            r->status = 421;
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, r->status, r,
+                          "421-ing h2 request to host %s", r->hostname);
+            return DONE;
+        }
         return DECLINED;
     }
     
-    /* Check for the start of an h2c Upgrade dance. */
-    const char *proto = h2_get_upgrade_proto(r);
-    if (proto) {
-        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                     "seeing %s upgrade invitation", proto);
-        /* We do not handle upgradeable requests with a body.
-         * The reason being that we would need to read the body in full
-         * before we ca use HTTP2 frames on the wire.
-         */
-        const char *clen = apr_table_get(r->headers_in, "Content-Length");
-        if (clen && strcmp(clen, "0")) {
+    /* not talking h2 (yet) */
+    if (enabled_for_request) {
+        /* Check for the start of an h2c Upgrade dance. */
+        const char *proto = h2_get_upgrade_proto(r);
+        if (proto) {
             ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                          "upgrade with content-length: %s, declined", clen);
-            return DECLINED;
+                          "seeing %s upgrade invitation", proto);
+            /* We do not handle upgradeable requests with a body.
+             * The reason being that we would need to read the body in full
+             * before we ca use HTTP2 frames on the wire.
+             */
+            const char *clen = apr_table_get(r->headers_in, "Content-Length");
+            if (clen && strcmp(clen, "0")) {
+                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                              "upgrade with content-length: %s, declined", clen);
+                return DECLINED;
+            }
+            return h2_h2c_upgrade_to(r, proto);
         }
-        return h2_h2c_upgrade_to(r, proto);
     }
     
     return DECLINED;

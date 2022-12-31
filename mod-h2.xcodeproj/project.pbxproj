@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		B20946C81B25CEB10041992F /* noh2.example.org.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = noh2.example.org.conf; sourceTree = "<group>"; };
+		B20946CA1B25D4430041992F /* test_alt_host.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_alt_host.sh; sourceTree = "<group>"; };
 		B20E441F1ACC07E8003D21AE /* test_curl_get.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_get.sh; sourceTree = "<group>"; };
 		B20E44201ACC088E003D21AE /* test_curl_post.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_post.sh; sourceTree = "<group>"; };
 		B21BFCF91B023B840031EBCD /* h2_task_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_queue.c; sourceTree = "<group>"; };
@@ -472,6 +474,7 @@
 				B20E44201ACC088E003D21AE /* test_curl_post.sh */,
 				B2E6FED91AC2EFA300D557D8 /* test_nghttp_get.sh */,
 				B2E6FEDA1AC2EFA300D557D8 /* test_nghttp_post.sh */,
+				B20946CA1B25D4430041992F /* test_alt_host.sh */,
 			);
 			path = test;
 			sourceTree = "<group>";
@@ -501,6 +504,7 @@
 			children = (
 				B2E6FDFD1AC2EFA200D557D8 /* mod-h2.greenbytes.de.conf */,
 				B2E6FDFE1AC2EFA200D557D8 /* test.example.org.conf */,
+				B20946C81B25CEB10041992F /* noh2.example.org.conf */,
 			);
 			path = sites;
 			sourceTree = "<group>";

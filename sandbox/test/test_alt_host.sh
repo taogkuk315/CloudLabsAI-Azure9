@@ -1,0 +1,52 @@
+#!/bin/bash
+# Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+source test_common.sh
+echo "alt host access: $@"
+
+################################################################################
+# check access to other hosts on same connection
+################################################################################
+
+# The correct answer is 421 and mod_h2 will created if once the SSL parse 
+# request filter is no longer strict on SNI name checking. See
+# https://bz.apache.org/bugzilla/show_bug.cgi?id=58007#c9
+#
+#MISDIR_STATUS="421 Misdirected Request"
+MISDIR_STATUS="400 Bad Request"
+
+nghttp_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<html><head>
+<title>$MISDIR_STATUS</title>
+</head><body>
+<h1>Bad Request</h1>
+<p>Your browser sent a request that this server could not understand.<br />
+</p>
+</body></html>
+EOF
+
+curl_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<html><head>
+<title>$MISDIR_STATUS</title>
+</head><body>
+<h1>Bad Request</h1>
+<p>Your browser sent a request that this server could not understand.<br />
+</p>
+</body></html>
+EOF
+

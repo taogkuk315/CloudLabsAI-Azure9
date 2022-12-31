@@ -89,6 +89,7 @@ test: \
 	@bash test_curl_post.sh   http://$(HTTP_AUTH)
 	@bash test_nghttp_get.sh  http://$(HTTP_AUTH) direct
 	@bash test_nghttp_post.sh http://$(HTTP_AUTH) direct
+	@bash test_alt_host.sh https://$(HTTPS_AUTH)
 
 ################################################################################
 # Load Test
