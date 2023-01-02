@@ -28,29 +28,29 @@ curl_check_doc index.html "http2"    --http2
 # check some redir handling
 ################################################################################
 curl_check_doc xxx-1.0.2a.tar.gz  "http2"  --http2
-curl_check_redir latest.tar.gz  xxx-1.0.2a.tar.gz  "http2"  --http2
+
+if [ "$URL_PATH" = "" ]; then
+    curl_check_redir latest.tar.gz  xxx-1.0.2a.tar.gz  "http2"  --http2
+fi
 
 ################################################################################
 # check cgi generated content
 ################################################################################
-case "$URL_PREFIX" in
-    https:*)
-CONTENT="<html>
+if [ "$URL_SCHEME" = "https" ]; then
+    CONTENT="<html>
 <body>
 <h2>Hello World!</h2>
 SSL_PROTOCOL=TLSv1.2
 </body>
 </html>"
-        ;;
-    *)
-CONTENT="<html>
+else
+    CONTENT="<html>
 <body>
 <h2>Hello World!</h2>
 SSL_PROTOCOL=
 </body>
 </html>"
-        ;;
-esac
+fi
 
 curl_check_content hello.py "default" <<EOF
 $CONTENT

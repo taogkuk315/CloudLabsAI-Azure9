@@ -21,6 +21,11 @@ URL_PREFIX="$1"
 OPT_DIRECT="$2"
 AUTH="${URL_PREFIX#*://}"
 HOST="${AUTH%%:*}"
+URL_SCHEME="${URL_PREFIX%%:*}"
+URL_PATH="/${AUTH#*/}"
+if [ "$URL_PATH" = "/$AUTH" ]; then
+    URL_PATH=""
+fi
 
 INSTALL_DIR="../install"
 BIN_DIR="${INSTALL_DIR}/bin"

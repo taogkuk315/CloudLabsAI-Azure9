@@ -79,17 +79,33 @@ test: \
 	@mkdir -p $(GEN)/tmp
 	@$(INST_DIR)/bin/apachectl restart
 	@bash test_curl_altsvc.sh http://$(HTTP_AUTH) https://$(HTTPS_AUTH)
+	@bash test_alt_host.sh https://$(HTTPS_AUTH)
 	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH)
 	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)
 	@bash test_curl_get.sh    https://$(HTTPS_AUTH)
 	@bash test_curl_post.sh   https://$(HTTPS_AUTH)
+	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH)/proxy
+	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)/proxy
+	@bash test_curl_get.sh    https://$(HTTPS_AUTH)/proxy
+	@bash test_curl_post.sh   https://$(HTTPS_AUTH)/proxy
+	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH)/rewrite
+	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)/rewrite
+	@bash test_curl_get.sh    https://$(HTTPS_AUTH)/rewrite
+	@bash test_curl_post.sh   https://$(HTTPS_AUTH)/rewrite
 	@bash test_nghttp_get.sh  http://$(HTTP_AUTH)
 	@bash test_nghttp_post.sh http://$(HTTP_AUTH)
 	@bash test_curl_get.sh    http://$(HTTP_AUTH)
 	@bash test_curl_post.sh   http://$(HTTP_AUTH)
 	@bash test_nghttp_get.sh  http://$(HTTP_AUTH) direct
 	@bash test_nghttp_post.sh http://$(HTTP_AUTH) direct
-	@bash test_alt_host.sh https://$(HTTPS_AUTH)
+	@bash test_nghttp_get.sh  http://$(HTTP_AUTH)/proxy
+	@bash test_nghttp_post.sh http://$(HTTP_AUTH)/proxy
+	@bash test_curl_get.sh    http://$(HTTP_AUTH)/proxy
+	@bash test_curl_post.sh   http://$(HTTP_AUTH)/proxy
+	@bash test_nghttp_get.sh  http://$(HTTP_AUTH)/rewrite
+	@bash test_nghttp_post.sh http://$(HTTP_AUTH)/rewrite
+	@bash test_curl_get.sh    http://$(HTTP_AUTH)/rewrite
+	@bash test_curl_post.sh   http://$(HTTP_AUTH)/rewrite
 
 ################################################################################
 # Load Test
