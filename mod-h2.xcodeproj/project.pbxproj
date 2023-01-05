@@ -287,8 +287,6 @@
 		B2E6FEC81AC2EFA300D557D8 /* 006.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = 006.html; sourceTree = "<group>"; };
 		B2E6FECA1AC2EFA300D557D8 /* 007.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = 007.py; sourceTree = "<group>"; };
 		B2E6FECB1AC2EFA300D557D8 /* 007.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = 007.html; sourceTree = "<group>"; };
-		B2E6FECD1AC2EFA300D557D8 /* 008.php */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.php; path = 008.php; sourceTree = "<group>"; };
-		B2E6FECE1AC2EFA300D557D8 /* 008.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = 008.html; sourceTree = "<group>"; };
 		B2E6FECF1AC2EFA300D557D8 /* 009.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = 009.py; sourceTree = "<group>"; };
 		B2E6FED11AC2EFA300D557D8 /* empty.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = empty.txt; sourceTree = "<group>"; };
 		B2E6FED21AC2EFA300D557D8 /* hello.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = hello.py; sourceTree = "<group>"; };
@@ -544,8 +542,6 @@
 				B2E6FEC81AC2EFA300D557D8 /* 006.html */,
 				B2E6FEC91AC2EFA300D557D8 /* 007 */,
 				B2E6FECB1AC2EFA300D557D8 /* 007.html */,
-				B2E6FECC1AC2EFA300D557D8 /* 008 */,
-				B2E6FECE1AC2EFA300D557D8 /* 008.html */,
 				B2E6FECF1AC2EFA300D557D8 /* 009.py */,
 				B2E6FED01AC2EFA300D557D8 /* files */,
 				B2E6FED21AC2EFA300D557D8 /* hello.py */,
@@ -768,14 +764,6 @@
 				B2E6FECA1AC2EFA300D557D8 /* 007.py */,
 			);
 			path = 007;
-			sourceTree = "<group>";
-		};
-		B2E6FECC1AC2EFA300D557D8 /* 008 */ = {
-			isa = PBXGroup;
-			children = (
-				B2E6FECD1AC2EFA300D557D8 /* 008.php */,
-			);
-			path = 008;
 			sourceTree = "<group>";
 		};
 		B2E6FED01AC2EFA300D557D8 /* files */ = {
