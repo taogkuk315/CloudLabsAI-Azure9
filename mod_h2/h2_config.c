@@ -25,6 +25,7 @@
 
 #include "h2_alt_svc.h"
 #include "h2_ctx.h"
+#include "h2_conn.h"
 #include "h2_config.h"
 #include "h2_private.h"
 

@@ -78,6 +78,25 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
                  "mod_h2 (v%s), initializing...",
                  MOD_H2_VERSION);
     
+    switch (h2_conn_mpm_type()) {
+        case H2_MPM_EVENT:
+        case H2_MPM_WORKER:
+            /* all fine, we know these ones */
+            break;
+        case H2_MPM_PREFORK:
+            ap_log_error( APLOG_MARK, APLOG_WARNING, 0, s,
+                         "This httpd uses mpm_prefork for multiprocessing. "
+                         "Please take notice that mod_h2 always with run "
+                         "requests in a multi-threaded environment. If you "
+                         "use prefork for single-thread connection handling, "
+                         " mod_h2 might pose problems.");
+            break;
+        case H2_MPM_UNKNOWN:
+            /* ??? */
+            ap_log_error( APLOG_MARK, APLOG_ERR, 0, s,
+                         "post_config: mpm type unknown");
+            break;
+    }
     apr_status_t status = h2_h2_init(p, s);
     return status;
 }

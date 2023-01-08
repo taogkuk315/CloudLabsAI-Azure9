@@ -42,8 +42,33 @@ static apr_status_t h2_session_process(h2_session *session);
 
 static h2_mpm_type_t mpm_type = H2_MPM_UNKNOWN;
 static module *mpm_module;
-
 static module *ssl_module;
+static int checked;
+
+static void check_modules() 
+{
+    if (!checked) {
+        for (int i = 0; ap_loaded_modules[i]; ++i) {
+            module *m = ap_loaded_modules[i];
+            if (!strcmp("event.c", m->name)) {
+                mpm_type = H2_MPM_EVENT;
+                mpm_module = m;
+            }
+            else if (!strcmp("worker.c", m->name)) {
+                mpm_type = H2_MPM_WORKER;
+                mpm_module = m;
+            }
+            else if (!strcmp("prefork.c", m->name)) {
+                mpm_type = H2_MPM_PREFORK;
+                mpm_module = m;
+            }
+            else if (!strcmp("mod_ssl.c", m->name)) {
+                ssl_module = m;
+            }
+        }
+        checked = 1;
+    }
+}
 
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
@@ -81,22 +106,29 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
             mpm_type = H2_MPM_WORKER;
             mpm_module = m;
         }
+        else if (!strcmp("prefork.c", m->name)) {
+            mpm_type = H2_MPM_PREFORK;
+            mpm_module = m;
+        }
         else if (!strcmp("mod_ssl.c", m->name)) {
             ssl_module = m;
         }
     }
     
     workers = h2_workers_create(s, pool, minw, maxw);
-    h2_workers_set_max_idle_secs(
-                                 workers, h2_config_geti(config, H2_CONF_MAX_WORKER_IDLE_SECS));
+    int idle_secs = h2_config_geti(config, H2_CONF_MAX_WORKER_IDLE_SECS);
+    h2_workers_set_max_idle_secs(workers, idle_secs);
+    
     return status;
 }
 
 h2_mpm_type_t h2_conn_mpm_type(void) {
+    check_modules();
     return mpm_type;
 }
 
 module *h2_conn_mpm_module(void) {
+    check_modules();
     return mpm_module;
 }
 

@@ -42,6 +42,7 @@ typedef enum {
     H2_MPM_UNKNOWN,
     H2_MPM_WORKER,
     H2_MPM_EVENT,
+    H2_MPM_PREFORK,
 } h2_mpm_type_t;
 
 h2_mpm_type_t h2_conn_mpm_type();

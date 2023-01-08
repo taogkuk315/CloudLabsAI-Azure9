@@ -15,8 +15,8 @@ it with the Apache infrastructure.
 
 
 ##Status
-In development. Not hardened enough for a production environment most likely. 
-Use at your own risk.
+In development. Use at your own risk. See [Known Problems](#known-problems) below for a list
+of things you might encounter.
 
 ##Tested Platforms
 * OS: Ubuntu 14.04, OS X 10.10
@@ -172,17 +172,19 @@ certificate and test browsers successfully there. But I cannot share this
 certificate with the world. If there is a better way to test browser interop,
 I am happy to be given pointers.
 
+#Known Problems
+* If you use the "prefork" mpm, there are reported problems with using mod_h2 and mod_prody/mod_rewrite against another server which disappear when using mpm_event or mpm_worker in the otherwise unchanged configuration.
+* If you test chrome/firefox against a httpd with mod_h2 and get "ERR_SPDY_INADEQUATE_TRANSPORT_SECURITY", this means that the browser consideres the installer SSL certificates as not good enough to use HTTP/2. This for example will happen with the sandbox installation, as that has only a self-signed certificate. If you disable mod_h2, chrome/firefox will seem to be working fine again against your server. This is due to the fact that SSL requirements are, for backward compatibility, relaxed when talking HTTP/1.
+
 
 ##TODO
 * Thanks to the excellent nghttp2, the module currently supports stream priority
-handling, but nghttp2 offers at the moment (v0.7.9) no way to use the prio
+handling, but nghttp2 offers at the moment (v0.7.15) no way to use the prio
 information for request scheduling.
-* Proper documentation needs to be added
 * mpm_event: supported by a hack atm. Needs an official patch with an Optional
 function
 * http trailers are not implemented
-* mod_h2 removes reqtimeout input filter for its connection, and its
-  stream handling (due to problems in long processing fcgi php requests). 
+* mod_h2 removes reqtimeout input filter for its connection. 
   
 
 ##Licensing
