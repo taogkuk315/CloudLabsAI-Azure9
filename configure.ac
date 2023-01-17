@@ -102,7 +102,7 @@ fi
 
 AC_MSG_NOTICE("configuring for $build_mode build")
 
-if test x"$build_mode" == "xsandbox"; then
+if test x"$build_mode" = "xsandbox"; then
     if test x"$request_apxs" != "xcheck"; then
         AC_MSG_ERROR([when sandbox mode is enabled, specifying apxs is not allowed])
     fi
@@ -130,9 +130,9 @@ else
     # production, we need to find where the apxs is. which then
     # can tell us the various directories we need.
     #
-    if test x"$request_apxs" == "xcheck"; then
+    if test x"$request_apxs" = "xcheck"; then
         AC_PATH_PROG([APXS], [apxs])
-        if test "x${APXS}" == "x"; then
+        if test "x${APXS}" = "x"; then
             AC_MSG_ERROR("no APXS installation found")
         fi
     else
