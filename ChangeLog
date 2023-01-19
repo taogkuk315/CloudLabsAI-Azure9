@@ -1,3 +1,17 @@
+v0.6.4
+--------------------------------------------------------------------------------
+ * accepting "h2" on Upgrade: headers and allowing also Upgrade to work on TLS
+   connections that talk HTTP/1.1.
+ * logging WARNING once when mod_h2 is used in a "prefork" mpm configuration.
+   There seem to be issues with mod_proxy/rewrite and dankging I/O.
+ * added test suites for combinations with mod_proxy and mod_rewrite
+ * added test for request with Host: header where h2 is not enabled
+ * sandbox now builds local openssl 1.0.2 if 1.0.1 or older are installed
+   on the system. Prior 1.0.1 was accepted, but NPN support will be disabled
+   soon.
+ * added "Known Problems" section in README
+ * direct mode should also work with TLS connections, untested currently.
+
 v0.6.3
 --------------------------------------------------------------------------------
  * h2c direct mode is now enabled on http: virtual hosts. It can be disabled
