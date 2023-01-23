@@ -238,8 +238,8 @@ nghttp_check_assets 007.html "with assets" <<EOF
 $URL_PATH/007.html 808 200
 EOF
 
-nghttp_check_assets 008.html "with assets" <<EOF
-$URL_PATH/008.html 618 200
+nghttp_check_assets upload.py "with assets" <<EOF
+$URL_PATH/upload.py 219 200
 EOF
 
 #nghttp_check_assets 009.php "with assets" <<EOF
