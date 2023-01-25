@@ -81,8 +81,27 @@ static apr_status_t h2_filter_read_response(ap_filter_t* f,
     return h2_from_h1_read_response(env->output->from_h1, f, bb);
 }
 
+/*******************************************************************************
+ * Register various hooks
+ */
+static const char *const mod_ssl[]        = { "mod_ssl.c", NULL};
+static int h2_task_pre_conn(conn_rec* c, void *arg);
+static int h2_task_process_conn(conn_rec* c);
+
 void h2_task_register_hooks(void)
 {
+    /* This hook runs on new connections before mod_ssl has a say.
+     * Its purpose is to prevent mod_ssl from touching our pseudo-connections
+     * for streams.
+     */
+    ap_hook_pre_connection(h2_task_pre_conn,
+                           NULL, mod_ssl, APR_HOOK_FIRST);
+    /* When the connection processing actually starts, we might to
+     * take over, if the connection is for a task.
+     */
+    ap_hook_process_connection(h2_task_process_conn, 
+                               NULL, NULL, APR_HOOK_FIRST);
+
     ap_register_output_filter("H2_RESPONSE", h2_response_output_filter,
                               NULL, AP_FTYPE_PROTOCOL);
     ap_register_input_filter("H2_TO_H1", h2_filter_stream_input,
@@ -93,22 +112,50 @@ void h2_task_register_hooks(void)
                               NULL, AP_FTYPE_PROTOCOL);
 }
 
-int h2_task_pre_conn(h2_task_env *env, conn_rec *c)
+static int h2_task_pre_conn(conn_rec* c, void *arg)
 {
-    AP_DEBUG_ASSERT(env);
-    /* Add our own, network level in- and output filters.
-     */
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                  "h2_stream(%s): task_pre_conn, installing filters",
-                  env->id);
+    (void)arg;
     
-    ap_add_input_filter("H2_TO_H1", env, NULL, c);
-    ap_add_output_filter("H1_TO_H2", env, NULL, c);
+    h2_ctx *ctx = h2_ctx_get(c, 0);
+    if (ctx && h2_ctx_is_task(c)) {
+        h2_task_env *env = h2_ctx_get_task(ctx);
+        
+        /* This connection is a pseudo-connection used for a h2_task.
+         * Since we read/write directly from it ourselves, we need
+         * to disable a possible ssl connection filter.
+         */
+        h2_tls_disable(c);
+        
+        
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
+                      "h2_h2, pre_connection, found stream task");
+        
+        /* Add our own, network level in- and output filters.
+         */
+        ap_add_input_filter("H2_TO_H1", env, NULL, c);
+        ap_add_output_filter("H1_TO_H2", env, NULL, c);
+        
+        /* prevent processing by anyone else, including httpd core */
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                      "h2_stream(%s): task_pre_conn, taking over", env->id);
+        return DONE;
+    }
+    return OK;
+}
+
+static int h2_task_process_conn(conn_rec* c)
+{
+    h2_ctx *ctx = h2_ctx_get(c, 0);
     
-    /* prevent processing by anyone else, including httpd core */
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                  "h2_stream(%s): task_pre_conn, taking over", env->id);
-    return DONE;
+    if (ctx && h2_ctx_is_task(c)) {
+        if (!ctx->task_env->serialize_headers) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, 
+                          "h2_h2, processing request directly");
+            h2_task_process_request(ctx->task_env);
+            return DONE;
+        }
+    }
+    return DECLINED;
 }
 
 

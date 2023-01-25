@@ -21,6 +21,7 @@
 
 #include "h2_private.h"
 #include "h2_conn_io.h"
+#include "h2_h2.h"
 #include "h2_util.h"
 
 /* If we write directly to our brigade or use a char buffer to collect
@@ -31,12 +32,12 @@
 #define H2_CONN_IO_SSL_WRITE_SIZE  (16 * 1024)
 
 
-apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, int buffer_output)
+apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c)
 {
     io->connection = c;
     io->input = apr_brigade_create(c->pool, c->bucket_alloc);
     io->output = apr_brigade_create(c->pool, c->bucket_alloc);
-    io->buffer_output = buffer_output;
+    io->buffer_output = h2_h2_is_tls(c);
     io->buflen = 0;
     
     if (io->buffer_output) {

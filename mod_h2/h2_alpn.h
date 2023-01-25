@@ -13,16 +13,17 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_h2c__
-#define __mod_h2__h2_h2c__
+#ifndef __mod_h2__h2_alpn__
+#define __mod_h2__h2_alpn__
 
-/* Specific function to handle the "h2c" part of a HTTP2 connection, the
- * one where plain HTTP/1 connections get Upgraded.
+/*
+ * One time, post config intialization.
  */
+apr_status_t h2_alpn_init(apr_pool_t *pool, server_rec *s);
 
-/* Registers apache hooks for h2c protocol
+/* Register apache hooks for ALPN protocol
  */
-void h2_h2c_register_hooks(void);
+void h2_alpn_register_hooks(void);
 
 
-#endif /* defined(__mod_h2__h2_h2c__) */
+#endif /* defined(__mod_h2__h2_h2__) */

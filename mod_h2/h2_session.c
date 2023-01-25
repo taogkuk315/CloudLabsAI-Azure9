@@ -587,7 +587,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->workers = workers;
         session->mplx = h2_mplx_create(c, session->pool, workers);
         
-        h2_conn_io_init(&session->io, c, h2_h2_is_tls(c));
+        h2_conn_io_init(&session->io, c);
         session->bbtmp = apr_brigade_create(session->pool, c->bucket_alloc);
         
         status = init_callbacks(c, &callbacks);

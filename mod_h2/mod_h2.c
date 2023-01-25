@@ -30,7 +30,8 @@
 #include "h2_config.h"
 #include "h2_ctx.h"
 #include "h2_h2.h"
-#include "h2_h2c.h"
+#include "h2_alpn.h"
+#include "h2_upgrade.h"
 #include "h2_version.h"
 
 
@@ -64,6 +65,7 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
 {
     void *data = NULL;
     const char *mod_h2_init_key = "mod_h2_init_counter";
+    apr_status_t status;
     (void)plog;(void)ptemp;
     
     apr_pool_userdata_get(&data, mod_h2_init_key, s->process->pool);
@@ -97,7 +99,12 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
                          "post_config: mpm type unknown");
             break;
     }
-    apr_status_t status = h2_h2_init(p, s);
+    
+    status = h2_h2_init(p, s);
+    if (status == APR_SUCCESS) {
+        status = h2_alpn_init(p, s);
+    }
+    
     return status;
 }
 
@@ -136,7 +143,8 @@ static void h2_hooks(apr_pool_t *pool)
     ap_hook_child_init(h2_child_init, NULL, NULL, APR_HOOK_MIDDLE);
 
     h2_h2_register_hooks();
-    h2_h2c_register_hooks();
+    h2_alpn_register_hooks();
+    h2_upgrade_register_hooks();
     h2_task_register_hooks();
 
     h2_alt_svc_register_hooks();

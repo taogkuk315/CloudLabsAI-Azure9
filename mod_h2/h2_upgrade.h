@@ -13,31 +13,12 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_h2__
-#define __mod_h2__h2_h2__
+#ifndef __mod_h2__h2_upgrade__
+#define __mod_h2__h2_upgrade__
 
-/* Implementation of the "h2" specific parts for enabling HTTP2
- * over a TLS connection.
+/* Specific function to HTTP/1 connection Upgradeds.
  */
-
-/*
- * One time, post config intialization.
- */
-apr_status_t h2_h2_init(apr_pool_t *pool, server_rec *s);
-
-/* Is the connection a TLS connection?
- */
-int h2_h2_is_tls(conn_rec *c);
-
-/* Disable SSL for this connection, can only be invoked in a pre-
- * connection hook before mod_ssl.
- * @return != 0 iff disable worked
- */
-int h2_tls_disable(conn_rec *c);
-
-/* Register apache hooks for h2 protocol
- */
-void h2_h2_register_hooks(void);
+void h2_upgrade_register_hooks(void);
 
 
-#endif /* defined(__mod_h2__h2_h2__) */
+#endif /* defined(__mod_h2__h2_upgrade__) */

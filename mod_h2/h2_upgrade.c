@@ -31,38 +31,39 @@
 #include "h2_config.h"
 #include "h2_ctx.h"
 #include "h2_h2.h"
-#include "h2_h2c.h"
+#include "h2_upgrade.h"
 #include "h2_util.h"
 
-const char *h2c_protos[] = {
+const char *h2_upgrade_protos[] = {
     "h2c", "h2c-16", "h2c-14",
     "h2"                          /* we also upgrade to "h2", seems sane */
 };
-apr_size_t h2c_protos_len = sizeof(h2c_protos)/sizeof(h2c_protos[0]);
+apr_size_t h2_upgrade_protos_len = (sizeof(h2_upgrade_protos)
+                                    / sizeof(h2_upgrade_protos[0]));
 
-static int h2_h2c_request_handler(request_rec *r);
+static int h2_upgrade_request_handler(request_rec *r);
 static const char *h2_get_upgrade_proto(request_rec *r);
-static int h2_h2c_upgrade_to(request_rec *r, const char *proto);
-static int h2_h2c_upgrade_options(request_rec *r);
+static int h2_upgrade_to(request_rec *r, const char *proto);
+static int h2_upgrade_options(request_rec *r);
 
-void h2_h2c_register_hooks(void)
+void h2_upgrade_register_hooks(void)
 {
-    ap_hook_handler(h2_h2c_request_handler, NULL, NULL, APR_HOOK_FIRST - 1);
-    ap_hook_map_to_storage(h2_h2c_upgrade_options, NULL, NULL, APR_HOOK_FIRST);
+    ap_hook_handler(h2_upgrade_request_handler, NULL, NULL, APR_HOOK_FIRST - 1);
+    ap_hook_map_to_storage(h2_upgrade_options, NULL, NULL, APR_HOOK_FIRST);
 }
 
-static int h2_h2c_upgrade_options(request_rec *r)
+static int h2_upgrade_options(request_rec *r)
 {
     if ((r->method_number == M_OPTIONS) && r->uri && (r->uri[0] == '*') &&
         (r->uri[1] == '\0')) {
         ap_log_rerror(APLOG_MARK, APLOG_TRACE1, 0, r,
                       "h2c: request OPTIONS * seen");
-        return h2_h2c_request_handler(r);
+        return h2_upgrade_request_handler(r);
     }
     return DECLINED;
 }
 
-static int h2_h2c_request_handler(request_rec *r)
+static int h2_upgrade_request_handler(request_rec *r)
 {
     h2_ctx *ctx = h2_ctx_rget(r, 0);
     h2_config *cfg = h2_config_rget(r);
@@ -100,7 +101,7 @@ static int h2_h2c_request_handler(request_rec *r)
                               "upgrade with content-length: %s, declined", clen);
                 return DECLINED;
             }
-            return h2_h2c_upgrade_to(r, proto);
+            return h2_upgrade_to(r, proto);
         }
     }
     
@@ -111,7 +112,8 @@ static const char *h2_get_upgrade_proto(request_rec *r)
 {
     const char *upgrade = apr_table_get(r->headers_in, "Upgrade");
     const char *proto = h2_util_first_token_match(r->pool, upgrade, 
-                                                  h2c_protos, h2c_protos_len);
+                                                  h2_upgrade_protos, 
+                                                  h2_upgrade_protos_len);
     if (proto && 
         h2_util_contains_token(
             r->pool, apr_table_get(r->headers_in, "Connection"), "Upgrade")
@@ -127,7 +129,7 @@ static const char *h2_get_upgrade_proto(request_rec *r)
     return NULL;
 }
 
-static int h2_h2c_upgrade_to(request_rec *r, const char *proto)
+static int h2_upgrade_to(request_rec *r, const char *proto)
 {
     h2_ctx *ctx = h2_ctx_rget(r, 1);
     ctx->is_h2 = 1;
