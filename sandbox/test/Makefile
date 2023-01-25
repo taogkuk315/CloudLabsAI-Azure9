@@ -45,7 +45,7 @@ distclean:
 
 distdir:
 	@mkdir -p $(distdir)
-	@tar cf - Makefile conf htdocs clients/Makefile *.txt *.sh | (cd $(distdir) && tar xf - )
+	@tar cf - Makefile bin conf htdocs clients/Makefile *.txt *.sh | (cd $(distdir) && tar xf - )
 	@rm -f $(distdir)/conf/ssl/mod-h2.greebytes.de*
 	@rm -f $(distdir)/conf/sites/mod-h2.greebytes.de.conf
 
@@ -160,7 +160,7 @@ $(INST_DIR)/.testdocs-setup: \
 $(INST_DIR)/.test-setup: \
 		$(INST_DIR)/.httpd-installed \
 		conf/*.conf \
-       		$(wildcard bin/*) \
+        $(wildcard bin/*) \
 		$(wildcard conf/sites/*.conf) \
         $(INST_DIR)/conf/mods-enabled/h2.load \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
