@@ -316,6 +316,12 @@ void h2_task_set_finished(h2_task *task)
     apr_atomic_set32(&task->has_finished, 1);
 }
 
+void h2_task_die(h2_task_env *env, int status, request_rec *r)
+{
+    (void)env;
+    ap_die(status, r);
+}
+
 static request_rec *h2_task_create_request(h2_task_env *env)
 {
     conn_rec *conn = env->conn->c;
@@ -409,7 +415,10 @@ static request_rec *h2_task_create_request(h2_task_env *env)
     
     if (access_status != HTTP_OK
         || (access_status = ap_run_post_read_request(r))) {
-        ap_die(access_status, r);
+        /* Request check post hooks failed. An example of this would be a
+         * request for a vhost where h2 is disabled --> 421.
+         */
+        h2_task_die(env, access_status, r);
         ap_update_child_status(conn->sbh, SERVER_BUSY_LOG, r);
         ap_run_log_transaction(r);
         r = NULL;
@@ -434,6 +443,8 @@ apr_status_t h2_task_process_request(h2_task_env *env)
 
     r = h2_task_create_request(env);
     if (r && (r->status == HTTP_OK)) {
+        ap_update_child_status(c->sbh, SERVER_BUSY_READ, r);
+        
         if (cs)
             cs->state = CONN_STATE_HANDLER;
         ap_process_request(r);
@@ -446,7 +457,9 @@ apr_status_t h2_task_process_request(h2_task_env *env)
          */
         r = NULL;
     }
-    
+    ap_update_child_status(c->sbh, SERVER_BUSY_WRITE, NULL);
+    c->sbh = NULL;
+
     return APR_SUCCESS;
 }
 

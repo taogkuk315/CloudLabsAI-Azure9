@@ -198,6 +198,9 @@ apr_status_t h2_session_process(h2_session *session)
      * TODO: implement graceful GO_AWAY after configurable idle time
      */
     
+    ap_update_child_status_from_conn(session->c->sbh, SERVER_BUSY_READ, 
+                                     session->c);
+
     if (APLOGctrace2(session->c)) {
         ap_filter_t *filter = session->c->input_filters;
         while (filter) {
@@ -303,6 +306,9 @@ apr_status_t h2_session_process(h2_session *session)
     ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
                   "h2_session(%ld): done", session->id);
     
+    ap_update_child_status_from_conn(session->c->sbh, SERVER_CLOSING, 
+                                     session->c);
+
     h2_session_close(session);
     h2_session_destroy(session);
     

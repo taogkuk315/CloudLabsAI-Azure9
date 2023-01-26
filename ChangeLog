@@ -1,3 +1,12 @@
+v0.6.5
+--------------------------------------------------------------------------------
+ * httpd scoreboard fixups: scoreboard handles are still updated on the main
+   connection from all stream request incoming from it, since it is not trivial
+   to get new handles for h2 workers. Updating of scoreboard status has been 
+   improved, no workers remain on "G"raceful shutdown in load tests any longer.
+ * some refacoring to isolate tls/alpn/upgrade code
+ * adding php-wrapper script to distribution, was missing
+
 v0.6.4
 --------------------------------------------------------------------------------
  * accepting "h2" on Upgrade: headers and allowing also Upgrade to work on TLS

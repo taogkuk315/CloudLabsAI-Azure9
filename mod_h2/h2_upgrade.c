@@ -18,6 +18,7 @@
 #include <apr_optional.h>
 #include <apr_optional_hooks.h>
 
+#include <ap_mpm.h>
 #include <httpd.h>
 #include <http_core.h>
 #include <http_config.h>
@@ -131,6 +132,7 @@ static const char *h2_get_upgrade_proto(request_rec *r)
 
 static int h2_upgrade_to(request_rec *r, const char *proto)
 {
+    conn_rec *c = r->connection;
     h2_ctx *ctx = h2_ctx_rget(r, 1);
     ctx->is_h2 = 1;
     h2_ctx_set_protocol(r->connection, proto);
@@ -167,9 +169,13 @@ static int h2_upgrade_to(request_rec *r, const char *proto)
     }
     
     /* make sure httpd closes the connection after this */
-    r->connection->keepalive = AP_CONN_CLOSE;
-    ap_lingering_close(r->connection);
+    c->keepalive = AP_CONN_CLOSE;
+    ap_lingering_close(c);
     
-    return OK;
+    if (c->sbh) {
+        ap_update_child_status_from_conn(c->sbh, SERVER_CLOSING, c);
+    }
+
+    return DONE;
 }
 

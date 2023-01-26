@@ -15,9 +15,12 @@
 
 #include <assert.h>
 
+#include <ap_mpm.h>
+
 #include <httpd.h>
 #include <http_core.h>
 #include <http_log.h>
+#include <http_connection.h>
 
 #include "h2_private.h"
 #include "h2_conn_io.h"
@@ -128,7 +131,22 @@ apr_status_t h2_conn_io_read(h2_conn_io *io,
         }
         apr_brigade_cleanup(io->input);
     }
-    
+
+    /* We only do a blocking read when we have no streams to process. So,
+     * in httpd scoreboard lingo, we are in a KEEPALIVE connection state.
+     * When reading non-blocking, we do have streams to process and update
+     * child with NULL request. That way, any current request information
+     * in the scoreboard is preserved.
+     */
+    if (block == APR_BLOCK_READ) {
+        ap_update_child_status_from_conn(io->connection->sbh, 
+                                         SERVER_BUSY_KEEPALIVE, 
+                                         io->connection);
+    }
+    else {
+        ap_update_child_status(io->connection->sbh, SERVER_BUSY_READ, NULL);
+    }
+
     status = ap_get_brigade(io->connection->input_filters,
                             io->input, AP_MODE_READBYTES,
                             block, 16 * 4096);
@@ -149,6 +167,9 @@ apr_status_t h2_conn_io_read(h2_conn_io *io,
 static apr_status_t flush_out(apr_bucket_brigade *bb, void *ctx) 
 {
     h2_conn_io *io = (h2_conn_io*)ctx;
+    
+    ap_update_child_status(io->connection->sbh, SERVER_BUSY_WRITE, NULL);
+    
     apr_status_t status = ap_pass_brigade(io->connection->output_filters, bb);
     apr_brigade_cleanup(bb);
     return status;

@@ -66,7 +66,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
         apr_time_t start_wait = apr_time_now();
         
         ++workers->idle_worker_count;
-        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+        ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                      "h2_worker(%d): looking for work", h2_worker_get_id(worker));
         while (!h2_worker_is_aborted(worker) && !workers->aborted) {
             h2_mplx *m = pop_next_mplx(workers, worker);
@@ -89,7 +89,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
                     status = APR_TIMEUP;
                 }
                 else {
-                    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+                    ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                                  "h2_worker(%d): waiting signal, worker_count=%d",
                                  h2_worker_get_id(worker), (int)workers->worker_count);
                     status = apr_thread_cond_timedwait(workers->mplx_added,
@@ -106,7 +106,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
                 }
             }
             else {
-                ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+                ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                              "h2_worker(%d): waiting signal (eternal), worker_count=%d",
                              h2_worker_get_id(worker), (int)workers->worker_count);
                 apr_thread_cond_wait(workers->mplx_added, workers->lock);

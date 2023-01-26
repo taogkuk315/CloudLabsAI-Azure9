@@ -68,9 +68,17 @@ static apr_status_t open_if_needed(h2_task_output *output, ap_filter_t *f,
         h2_response *response = h2_from_h1_get_response(output->from_h1);
         if (!response) {
             if (f) {
-                ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, f->c,
-                              "h2_task_output(%s): write without response",
-                              output->id);
+                /* This happens currently when ap_die(status, r) is invoked
+                 * by a read request filter.
+                 */
+                if (f->ctx) {
+                    h2_task_env *env = f->ctx;
+                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c,
+                                  "h2_task_output(%s): write without response "
+                                  "for %s %s %s",
+                                  output->id, env->method, 
+                                  env->authority, env->path);
+                }
                 f->c->aborted = 1;
             }
             if (output->cond) {
@@ -125,3 +133,7 @@ apr_status_t h2_task_output_write(h2_task_output *output,
                              output->cond);
 }
 
+void h2_task_output_die(h2_task_output *output, int status, request_rec *r)
+{
+    h2_from_h1_die(output->from_h1, status, r);
+}

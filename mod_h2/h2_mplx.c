@@ -597,7 +597,7 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
     if (APR_SUCCESS == status) {
         m->added_output = iowait;
         status = apr_thread_cond_timedwait(m->added_output, m->lock, timeout);
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
                       "h2_mplx(%ld): trywait on data for %f ms)",
                       m->id, timeout/1000.0);
         m->added_output = NULL;
