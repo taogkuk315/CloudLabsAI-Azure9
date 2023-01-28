@@ -94,7 +94,6 @@ nghttp_check_assets() {
 nghttp_check_content() {
     DOC="$1"; shift;
     MSG="$1"; shift;
-    ARGS="$@"$ARG_UPGRADE
     rm -rf $TMP
     mkdir -p $TMP
     cat > $TMP/expected
@@ -108,12 +107,11 @@ nghttp_check_content() {
 curl_check_content() {
     DOC="$1"; shift;
     MSG="$1"; shift;
-    ARGS="$@"
     rm -rf $TMP
     mkdir -p $TMP
     cat > $TMP/expected
     echo -n " * curl /$DOC: $MSG..."
-    ${CURL} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${CURL} "$@" $URL_PREFIX/$DOC > $TMP/$DOC || fail
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
 }

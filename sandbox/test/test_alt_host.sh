@@ -25,17 +25,17 @@ echo "alt host access: $@"
 # request filter is no longer strict on SNI name checking. See
 # https://bz.apache.org/bugzilla/show_bug.cgi?id=58007#c9
 #
-#MISDIR_STATUS="421 Misdirected Request"
-MISDIR_STATUS="400 Bad Request"
+MISDIR_STATUS="421 Misdirected Request"
+#MISDIR_STATUS="400 Bad Request"
 
 nghttp_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
 <html><head>
 <title>$MISDIR_STATUS</title>
 </head><body>
-<h1>Bad Request</h1>
-<p>Your browser sent a request that this server could not understand.<br />
-</p>
+<h1>Misdirected Request</h1>
+<p>The client needs to use a new connection for this 
+request as it does not match the SNI name used.</p>
 </body></html>
 EOF
 
@@ -44,9 +44,9 @@ curl_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
 <html><head>
 <title>$MISDIR_STATUS</title>
 </head><body>
-<h1>Bad Request</h1>
-<p>Your browser sent a request that this server could not understand.<br />
-</p>
+<h1>Misdirected Request</h1>
+<p>The client needs to use a new connection for this 
+request as it does not match the SNI name used.</p>
 </body></html>
 EOF
 

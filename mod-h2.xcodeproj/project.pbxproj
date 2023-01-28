@@ -11,6 +11,7 @@
 		B20946CA1B25D4430041992F /* test_alt_host.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_alt_host.sh; sourceTree = "<group>"; };
 		B20946CC1B2865BB0041992F /* h2_alpn.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_alpn.c; sourceTree = "<group>"; };
 		B20946CD1B2865BB0041992F /* h2_alpn.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_alpn.h; sourceTree = "<group>"; };
+		B20946CE1B29D8C30041992F /* sni_misdirect.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = sni_misdirect.patch; sourceTree = "<group>"; };
 		B20E441F1ACC07E8003D21AE /* test_curl_get.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_get.sh; sourceTree = "<group>"; };
 		B20E44201ACC088E003D21AE /* test_curl_post.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_post.sh; sourceTree = "<group>"; };
 		B21BFCF91B023B840031EBCD /* h2_task_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_queue.c; sourceTree = "<group>"; };
@@ -439,8 +440,9 @@
 			isa = PBXGroup;
 			children = (
 				B272F2311B1E13D8007A20A5 /* httpd-2.4.x-alpn-v4.patch */,
-				B227966E1AEE93B000376B40 /* httpd-npn.unified.diff.patch */,
 				B227966D1AEE1A3C00376B40 /* httpd-alpn-unified.diff.patch */,
+				B227966E1AEE93B000376B40 /* httpd-npn.unified.diff.patch */,
+				B20946CE1B29D8C30041992F /* sni_misdirect.patch */,
 			);
 			path = patches;
 			sourceTree = "<group>";
