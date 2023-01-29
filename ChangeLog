@@ -1,3 +1,8 @@
+v0.6.6
+--------------------------------------------------------------------------------
+ * adding sni_misdirect.patch for httpd/mod_ssl that changes status code when 
+   TLS connections are reused for other vhosts. 
+
 v0.6.5
 --------------------------------------------------------------------------------
  * httpd scoreboard fixups: scoreboard handles are still updated on the main
