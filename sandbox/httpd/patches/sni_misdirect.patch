@@ -9,14 +9,6 @@ diff -ru ../httpd-2.4.12.orig/include/httpd.h ./include/httpd.h
  #define HTTP_UNPROCESSABLE_ENTITY            422
  #define HTTP_LOCKED                          423
  #define HTTP_FAILED_DEPENDENCY               424
-@@ -561,6 +562,7 @@
-                                     ((x) == HTTP_REQUEST_URI_TOO_LARGE) || \
-                                     ((x) == HTTP_INTERNAL_SERVER_ERROR) || \
-                                     ((x) == HTTP_SERVICE_UNAVAILABLE) || \
-+                                    ((x) == HTTP_MISDIRECTED_REQUEST) || \
-                                     ((x) == HTTP_NOT_IMPLEMENTED))
- /** @} */
- 
 diff -ru ../httpd-2.4.12.orig/modules/http/http_protocol.c ./modules/http/http_protocol.c
 --- ../httpd-2.4.12.orig/modules/http/http_protocol.c	2014-10-16 23:42:45.000000000 +0200
 +++ ./modules/http/http_protocol.c	2015-06-11 17:04:49.000000000 +0200

@@ -93,7 +93,8 @@ dirs:
 	@mkdir -p $(GEN)/build
 
 clean:
-	@rm -rf $(GEN)/$(PCRE_DIR) $(GEN)/$(OPENSSL_DIR) $(GEN)/$(HTTPD_DIR) $(GEN)/build
+	@rm -rf $(GEN)/$(PCRE_DIR) $(GEN)/$(OPENSSL_DIR) $(GEN)/$(HTTPD_DIR) \
+        $(GEN)/build $(INST_DIR)/.httpd-installed
 
 distclean:
 	@rm -rf $(GEN)
