@@ -157,9 +157,17 @@ static const char *h2_conf_set_engine(cmd_parms *parms,
                                       void *arg, const char *value)
 {
     h2_config *cfg = h2_config_sget(parms->server);
-    cfg->h2_enabled = !apr_strnatcasecmp(value, "On");
+    if (!strcasecmp(value, "On")) {
+        cfg->h2_enabled = 1;
+        return NULL;
+    }
+    else if (!strcasecmp(value, "Off")) {
+        cfg->h2_enabled = 0;
+        return NULL;
+    }
+    
     (void)arg;
-    return NULL;
+    return "value must be On or Off";
 }
 
 static const char *h2_conf_set_max_streams(cmd_parms *parms,
