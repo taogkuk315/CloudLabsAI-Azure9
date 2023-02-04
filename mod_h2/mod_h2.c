@@ -123,7 +123,7 @@ static void h2_child_init(apr_pool_t *pool, server_rec *s)
 
 const char *h2_get_protocol(conn_rec *c)
 {
-    return h2_ctx_get_protocol(c);
+    return h2_ctx_pnego_get(h2_ctx_get(c));
 }
 
 /* Install this module into the apache2 infrastructure.

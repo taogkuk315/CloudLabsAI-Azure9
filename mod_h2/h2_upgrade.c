@@ -66,11 +66,11 @@ static int h2_upgrade_options(request_rec *r)
 
 static int h2_upgrade_request_handler(request_rec *r)
 {
-    h2_ctx *ctx = h2_ctx_rget(r, 0);
+    h2_ctx *ctx = h2_ctx_rget(r);
     h2_config *cfg = h2_config_rget(r);
     int enabled_for_request = h2_config_geti(cfg, H2_CONF_ENABLED);
     
-    if (h2_ctx_is_task(r->connection) || (ctx && ctx->is_h2)) {
+    if (h2_ctx_is_task(ctx) || h2_ctx_is_active(ctx)) {
         /* talking h2 already, either task for main conn */
         if (!enabled_for_request) {
             /* we have a request for a server (vhost) where h2 is
@@ -133,9 +133,9 @@ static const char *h2_get_upgrade_proto(request_rec *r)
 static int h2_upgrade_to(request_rec *r, const char *proto)
 {
     conn_rec *c = r->connection;
-    h2_ctx *ctx = h2_ctx_rget(r, 1);
-    ctx->is_h2 = 1;
-    h2_ctx_set_protocol(r->connection, proto);
+    h2_ctx *ctx = h2_ctx_rget(r);
+    
+    h2_ctx_pnego_set_done(ctx, proto);
     
     /* Let the client know what we are upgrading to. */
     apr_table_clear(r->headers_out);

@@ -34,10 +34,11 @@
 #include "h2_h2.h"
 #include "h2_alpn.h"
 
-const char *h2_protos[] = {
+const char *h2_alpn_protos[] = {
     "h2", "h2-16", "h2-14"
 };
-apr_size_t h2_protos_len = sizeof(h2_protos)/sizeof(h2_protos[0]);
+apr_size_t h2_alpn_protos_len = (sizeof(h2_alpn_protos)
+                                 / sizeof(h2_alpn_protos[0]));
 
 /*******************************************************************************
  * SSL var lookup
@@ -138,29 +139,15 @@ static int h2_util_array_index(apr_array_header_t *array, const char *s)
     return -1;
 }
 
-static void check_sni_host(conn_rec *c) 
-{
-    h2_ctx *ctx = h2_ctx_get(c, 1);
-    if (opt_ssl_var_lookup && !ctx->hostname) {
-        ctx->hostname = opt_ssl_var_lookup(c->pool, c->base_server, c, 
-                                           NULL, (char*)"SSL_TLS_SNI");
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                      "h2_h2, connection, SNI %s",
-                      ctx->hostname? ctx->hostname : "NULL");
-        
-    }
-}
-
 static int h2_npn_advertise(conn_rec *c, apr_array_header_t *protos)
 {
-    check_sni_host(c);
     h2_config *cfg = h2_config_get(c);
     if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
         return DECLINED;
     }
     
-    for (apr_size_t i = 0; i < h2_protos_len; ++i) {
-        const char *proto = h2_protos[i];
+    for (apr_size_t i = 0; i < h2_alpn_protos_len; ++i) {
+        const char *proto = h2_alpn_protos[i];
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "NPN proposing %s from client selection", proto);
         APR_ARRAY_PUSH(protos, const char*) = proto;
@@ -168,55 +155,58 @@ static int h2_npn_advertise(conn_rec *c, apr_array_header_t *protos)
     return OK;
 }
 
-static int h2_npn_negotiated(conn_rec *c,
-                             const char *proto_name,
-                             apr_size_t proto_name_len)
+static int h2_negotiated(conn_rec *c, const char *via, 
+                         const char *proto_name,
+                         apr_size_t proto_name_len)
 {
+    h2_ctx *ctx = h2_ctx_get(c);
+
+    if (h2_ctx_is_task(ctx) ) {
+        return DECLINED;
+    }
+    
+    if (h2_ctx_pnego_is_done(ctx)) {
+        /* called twice? refraing from overriding existing selection.
+         * NPN is fading...
+         */
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                      "protocol negotiated via %s called, but already set", 
+                      via); 
+        return DECLINED;
+    }
+    
     if (APLOGctrace1(c)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                      "NPN negotiated is %s", 
+                      "protocol negotiated via %s is %s", via, 
                       apr_pstrndup(c->pool, proto_name, proto_name_len));
     }
     
-    h2_config *cfg = h2_config_get(c);
-    if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
-        return DECLINED;
-    }
-    
-    if (!h2_ctx_is_session(c) ) {
-        return DECLINED;
-    }
-    
-    if (h2_ctx_is_negotiated(c)) {
-        // called twice? maybe alpn+npn overlap...
-        return DECLINED;
-    }
-    
-    for (apr_size_t i = 0; i < h2_protos_len; ++i) {
-        const char *proto = h2_protos[i];
+    for (apr_size_t i = 0; i < h2_alpn_protos_len; ++i) {
+        const char *proto = h2_alpn_protos[i];
         if (proto_name_len == strlen(proto)
             && strncmp(proto, proto_name, proto_name_len) == 0) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, 
-                          "protocol set va NPN to %s", proto);
-            h2_ctx_set_protocol(c, proto);
+                          "protocol set via %s to %s", via, proto);
+            h2_ctx_pnego_set_done(ctx, proto);
             break;
         }
     }    
     return OK;
 }
 
+static int h2_npn_negotiated(conn_rec *c,
+                             const char *proto_name,
+                             apr_size_t proto_name_len)
+{
+    return h2_negotiated(c, "NPN", proto_name, proto_name_len);
+}
+
 static int h2_alpn_propose(conn_rec *c,
                            apr_array_header_t *client_protos,
                            apr_array_header_t *protos)
 {
-    check_sni_host(c);
-    h2_config *cfg = h2_config_get(c);
-    if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
-        return DECLINED;
-    }
-    
-    for (apr_size_t i = 0; i < h2_protos_len; ++i) {
-        const char *proto = h2_protos[i];
+    for (apr_size_t i = 0; i < h2_alpn_protos_len; ++i) {
+        const char *proto = h2_alpn_protos[i];
         if (h2_util_array_index(client_protos, proto) >= 0) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                           "ALPN proposing %s", proto);
@@ -231,38 +221,10 @@ static int h2_alpn_negotiated(conn_rec *c,
                               const char *proto_name,
                               apr_size_t proto_name_len)
 {
-    if (APLOGctrace1(c)) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                      "ALPN negotiated is %s", 
-                      apr_pstrndup(c->pool, proto_name, proto_name_len));
-    }
-    
-    h2_config *cfg = h2_config_get(c);
-    if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
-        return DECLINED;
-    }
-    
-    if (!h2_ctx_is_session(c) ) {
-        return DECLINED;
-    }
-    
-    if (h2_ctx_is_negotiated(c)) {
-        // called twice? maybe alpn+npn overlap...
-        return DECLINED;
-    }
-    
-    for (apr_size_t i = 0; i < h2_protos_len; ++i) {
-        const char *proto = h2_protos[i];
-        if (proto_name_len == strlen(proto)
-            && strncmp(proto, proto_name, proto_name_len) == 0) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, 
-                          "protocol set va ALPN to %s", proto);
-            h2_ctx_set_protocol(c, proto);
-            break;
-        }
-    }    
-    return OK;
+    return h2_negotiated(c, "ALPN", proto_name, proto_name_len);
 }
+
+
 
 int h2_alpn_pre_conn(conn_rec* c, void *arg)
 {
@@ -270,41 +232,23 @@ int h2_alpn_pre_conn(conn_rec* c, void *arg)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_h2, pre_connection, start");
     
-    h2_ctx *ctx = h2_ctx_get(c, 0);
-    if (!ctx) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                      "h2_alpn, pre_connection, no ctx");
-        /* We have not seen this one yet, are we active? */
-        h2_config *cfg = h2_config_get(c);
-        if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                          "h2_alpn, pre_connection, h2 not enabled");
-            return DECLINED;
-        }
-        
-        /* Are we using TLS on this connection? */
-        if (!h2_h2_is_tls(c)) {
-            if (h2_config_geti(cfg, H2_CONF_DIRECT)) {
-                /* It might be a direct connection, let
-                 * the connection hook figure it out. */
-                h2_ctx_get(c, 1);
-                return DECLINED;
-            }
-            else {
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                              "h2_h2, pre_connection, no TLS");
-                return DECLINED;
-            }
-        }
-        
-        /* Does mod_ssl offer ALPN/NPN support? */
+    h2_ctx *ctx = h2_ctx_get(c);
+    if (h2_ctx_is_task(ctx)) {
+        /* our stream pseudo connection */
+        return DECLINED;
+    }
+    
+    if (h2_h2_is_tls(c)) {
+        /* Brand new TLS connection: Does mod_ssl offer ALPN/NPN support? 
+         * If so, register at all present, clients may use either/or.
+         */
         if (opt_ssl_register_alpn == NULL && opt_ssl_register_npn == NULL) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
-                          "h2_h2, pre_connection, no ALPN/NPN support in mod_ssl");
+                          "h2_h2, pre_connection, no ALPN/NPN "
+                          "support in mod_ssl");
             return DECLINED;
         }
         
-        ctx = h2_ctx_get(c, 1);
         if (opt_ssl_register_alpn) {
             opt_ssl_register_alpn(c, h2_alpn_propose, h2_alpn_negotiated);
         }
@@ -312,6 +256,7 @@ int h2_alpn_pre_conn(conn_rec* c, void *arg)
             opt_ssl_register_npn(c, h2_npn_advertise, h2_npn_negotiated);
         }
         
+        h2_ctx_pnego_set_started(ctx);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_alpn, pre_connection, ALPN callback registered");
     }

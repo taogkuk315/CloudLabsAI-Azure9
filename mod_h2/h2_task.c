@@ -116,8 +116,8 @@ static int h2_task_pre_conn(conn_rec* c, void *arg)
 {
     (void)arg;
     
-    h2_ctx *ctx = h2_ctx_get(c, 0);
-    if (ctx && h2_ctx_is_task(c)) {
+    h2_ctx *ctx = h2_ctx_get(c);
+    if (h2_ctx_is_task(ctx)) {
         h2_task_env *env = h2_ctx_get_task(ctx);
         
         /* This connection is a pseudo-connection used for a h2_task.
@@ -145,9 +145,9 @@ static int h2_task_pre_conn(conn_rec* c, void *arg)
 
 static int h2_task_process_conn(conn_rec* c)
 {
-    h2_ctx *ctx = h2_ctx_get(c, 0);
+    h2_ctx *ctx = h2_ctx_get(c);
     
-    if (ctx && h2_ctx_is_task(c)) {
+    if (h2_ctx_is_task(ctx)) {
         if (!ctx->task_env->serialize_headers) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, 
                           "h2_h2, processing request directly");

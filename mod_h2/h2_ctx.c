@@ -28,6 +28,7 @@ static h2_ctx *h2_ctx_create(conn_rec *c)
 {
     h2_ctx *ctx = apr_pcalloc(c->pool, sizeof(h2_ctx));
     AP_DEBUG_ASSERT(ctx);
+    ctx->pnego_state = H2_PNEGO_NONE;
     ap_set_module_config(c->conn_config, &h2_module, ctx);
     return ctx;
 }
@@ -41,61 +42,56 @@ h2_ctx *h2_ctx_create_for(conn_rec *c, h2_task_env *env)
     return ctx;
 }
 
-h2_ctx *h2_ctx_get(conn_rec *c, int create)
+h2_ctx *h2_ctx_get(conn_rec *c)
 {
     h2_ctx *ctx = (h2_ctx*)ap_get_module_config(c->conn_config, &h2_module);
-    if (ctx == NULL && create) {
+    if (ctx == NULL) {
         ctx = h2_ctx_create(c);
     }
     return ctx;
 }
 
-h2_ctx *h2_ctx_rget(request_rec *r, int create)
+h2_ctx *h2_ctx_rget(request_rec *r)
 {
-    h2_ctx *ctx = h2_ctx_get(r->connection, create);
-    if (!ctx->server) {
-        ctx->server = r->server;
-    }
-    return ctx;
+    return h2_ctx_get(r->connection);
 }
 
-const char *h2_ctx_get_protocol(conn_rec* c)
+const char *h2_ctx_pnego_get(h2_ctx *ctx)
 {
-    h2_ctx *ctx = h2_ctx_get(c, 0);
     return ctx? ctx->protocol : NULL;
 }
 
-h2_ctx *h2_ctx_set_protocol(conn_rec* c, const char *proto)
+void h2_ctx_pnego_set_started(h2_ctx *ctx)
 {
-    h2_ctx *ctx = h2_ctx_get(c, 1);
+    ctx->pnego_state = H2_PNEGO_STARTED;
+}
+
+h2_ctx *h2_ctx_pnego_set_done(h2_ctx *ctx, const char *proto)
+{
     ctx->protocol = proto;
+    ctx->pnego_state = H2_PNEGO_DONE;
     ctx->is_h2 = (proto != NULL);
-    ctx->is_negotiated = 1;
     return ctx;
 }
 
-int h2_ctx_is_session(conn_rec * c)
+int h2_ctx_is_task(h2_ctx *ctx)
 {
-    h2_ctx *ctx = h2_ctx_get(c, 0);
-    return ctx && !ctx->task_env;
-}
-
-int h2_ctx_is_task(conn_rec * c)
-{
-    h2_ctx *ctx = h2_ctx_get(c, 0);
     return ctx && !!ctx->task_env;
 }
 
-int h2_ctx_is_negotiated( conn_rec * c )
+int h2_ctx_pnego_is_ongoing(h2_ctx *ctx)
 {
-    h2_ctx *ctx = h2_ctx_get(c, 0);
-    return ctx && ctx->is_negotiated;
+    return ctx && (ctx->pnego_state == H2_PNEGO_STARTED);
 }
 
-int h2_ctx_is_active(conn_rec * c)
+int h2_ctx_pnego_is_done(h2_ctx *ctx)
 {
-    h2_ctx *ctx = h2_ctx_get(c, 0);
-    return ctx && ctx->protocol != NULL;
+    return ctx && (ctx->pnego_state == H2_PNEGO_DONE);
+}
+
+int h2_ctx_is_active(h2_ctx *ctx)
+{
+    return ctx && ctx->is_h2;
 }
 
 struct h2_task_env *h2_ctx_get_task(h2_ctx *ctx)

@@ -109,25 +109,23 @@ void h2_h2_register_hooks(void)
 
 int h2_h2_remove_timeout(conn_rec* c)
 {
-    h2_ctx *ctx = h2_ctx_get(c, 0);
+    h2_ctx *ctx = h2_ctx_get(c);
     
-    if (ctx) {
-        if (h2_ctx_is_task(c)) {
-            /* cleanup on task connections */
-            /* we once removed the reqtimeout filter on task connections,
-             * but timeouts here might have been a side effect of other things.
-             * Ideally mod_reqtimeout would do its work on task connections
-             * as it basically is a HTTP/1.1 request/response and it's made
-             * for that.
-             * So, let the filter stay for now and see if we ever encounter
-             * unexpected timeouts on tasks again.
-             */
-            //ap_remove_input_filter_byhandle(c->input_filters, "reqtimeout");
-        }
-        else if (h2_ctx_is_negotiated(c)) {
-            /* cleanup on master h2 connections */
-            ap_remove_input_filter_byhandle(c->input_filters, "reqtimeout");
-        }
+    if (h2_ctx_is_task(ctx)) {
+        /* cleanup on task connections */
+        /* we once removed the reqtimeout filter on task connections,
+         * but timeouts here might have been a side effect of other things.
+         * Ideally mod_reqtimeout would do its work on task connections
+         * as it basically is a HTTP/1.1 request/response and it's made
+         * for that.
+         * So, let the filter stay for now and see if we ever encounter
+         * unexpected timeouts on tasks again.
+         */
+        //ap_remove_input_filter_byhandle(c->input_filters, "reqtimeout");
+    }
+    else if (h2_ctx_is_active(ctx)) {
+        /* cleanup on master h2 connections */
+        ap_remove_input_filter_byhandle(c->input_filters, "reqtimeout");
     }
     
     return DECLINED;
@@ -135,19 +133,19 @@ int h2_h2_remove_timeout(conn_rec* c)
 
 int h2_h2_process_conn(conn_rec* c)
 {
-    h2_ctx *ctx = h2_ctx_get(c, 0);
+    h2_ctx *ctx = h2_ctx_get(c);
     h2_config *cfg = h2_config_get(c);
     apr_bucket_brigade* temp;
 
-    if (!ctx || h2_ctx_is_task(c)) {
+    if (h2_ctx_is_task(ctx)) {
+        /* out stream pseudo connection */
         return DECLINED;
     }
 
-    /* If we don't know what protocol to use on this connection and this
-     * is a TLS connection, read a byte speculative to give the TLS
-     * engine opportunity to figure something out. Via ALPN, for example. 
+    /* Protocol negoation, if started, may need some speculative reading
+     * to get triggered.
      */
-    if (!h2_ctx_is_negotiated(c) && h2_h2_is_tls(c)) {
+    if (h2_ctx_pnego_is_ongoing(ctx)) {
         temp = apr_brigade_create(c->pool, c->bucket_alloc);
         ap_get_brigade(c->input_filters, temp,
                        AP_MODE_SPECULATIVE, APR_BLOCK_READ, 1);
@@ -158,7 +156,7 @@ int h2_h2_process_conn(conn_rec* c)
      * if we receive the magic PRIamble. A client sending this on connection
      * start should know what it is doing.
      */
-    if (!h2_ctx_is_negotiated(c) && h2_config_geti(cfg, H2_CONF_DIRECT)) {
+    if (!h2_ctx_pnego_is_done(ctx) && h2_config_geti(cfg, H2_CONF_DIRECT)) {
         apr_status_t status;
         temp = apr_brigade_create(c->pool, c->bucket_alloc);
         status = ap_get_brigade(c->input_filters, temp,
@@ -169,7 +167,7 @@ int h2_h2_process_conn(conn_rec* c)
             
             apr_brigade_pflatten(temp, &s, &slen, c->pool);
             if ((slen == 24) && !memcmp(H2_MAGIC_TOKEN, s, 24)) {
-                h2_ctx_set_protocol(c, "h2c");
+                h2_ctx_pnego_set_done(ctx, "h2c");
             }
         }
         apr_brigade_destroy(temp);
@@ -178,7 +176,7 @@ int h2_h2_process_conn(conn_rec* c)
     /* If "h2" was selected as protocol (by whatever mechanism), take over
      * the connection.
      */
-    if (h2_ctx_is_active(c)) {
+    if (h2_ctx_is_active(ctx)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_h2, connection, h2 active");
         
@@ -190,8 +188,8 @@ int h2_h2_process_conn(conn_rec* c)
 
 static int h2_h2_post_read_req(request_rec *r)
 {
-    h2_ctx *ctx = h2_ctx_rget(r, 0);
-    struct h2_task_env *env = ctx? h2_ctx_get_task(ctx) : NULL;
+    h2_ctx *ctx = h2_ctx_rget(r);
+    struct h2_task_env *env = h2_ctx_get_task(ctx);
     if (env) {
         /* h2_task connection for a stream, not for h2c */
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
