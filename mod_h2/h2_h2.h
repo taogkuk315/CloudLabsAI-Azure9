@@ -16,9 +16,25 @@
 #ifndef __mod_h2__h2_h2__
 #define __mod_h2__h2_h2__
 
-/* Implementation of the "h2" specific parts for enabling HTTP2
- * over a TLS connection.
+/**
+ * List of ALPN protocol identifiers that we support in ALPN/NPN 
+ * negotiations.
  */
+extern const char *h2_alpn_protos[];
+extern apr_size_t h2_alpn_protos_len;
+
+/**
+ * List of ALPN protocol identifiers that we suport in HTTP/1 Upgrade:
+ * negotiations.
+ */
+extern const char *h2_upgrade_protos[];
+extern apr_size_t h2_upgrade_protos_len;
+
+/**
+ * The magic PRIamble of RFC 7540 that is always sent when starting
+ * a h2 communication.
+ */
+extern const char *H2_MAGIC_TOKEN;
 
 /*
  * One time, post config intialization.

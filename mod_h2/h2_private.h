@@ -22,20 +22,6 @@ extern module AP_MODULE_DECLARE_DATA h2_module;
 
 APLOG_USE_MODULE(h2);
 
-/**
- * List of ALPN protocol identifiers that we support in ALPN/NPN 
- * negotiations.
- */
-extern const char *h2_alpn_protos[];
-extern apr_size_t h2_alpn_protos_len;
-
-/**
- * List of ALPN protocol identifiers that we support in HTTP/1 Upgrade
- * negotiations.
- */
-extern const char *h2_upgrade_protos[];
-extern apr_size_t h2c_upgrade_protos_len;
-
 
 #define H2_HEADER_METHOD     ":method"
 #define H2_HEADER_METHOD_LEN 7

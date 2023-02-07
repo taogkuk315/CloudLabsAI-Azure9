@@ -34,12 +34,6 @@
 #include "h2_h2.h"
 #include "h2_alpn.h"
 
-const char *h2_alpn_protos[] = {
-    "h2", "h2-16", "h2-14"
-};
-apr_size_t h2_alpn_protos_len = (sizeof(h2_alpn_protos)
-                                 / sizeof(h2_alpn_protos[0]));
-
 /*******************************************************************************
  * SSL var lookup
  */

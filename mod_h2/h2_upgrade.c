@@ -35,13 +35,6 @@
 #include "h2_upgrade.h"
 #include "h2_util.h"
 
-const char *h2_upgrade_protos[] = {
-    "h2c", "h2c-16", "h2c-14",
-    "h2"                          /* we also upgrade to "h2", seems sane */
-};
-apr_size_t h2_upgrade_protos_len = (sizeof(h2_upgrade_protos)
-                                    / sizeof(h2_upgrade_protos[0]));
-
 static int h2_upgrade_request_handler(request_rec *r);
 static const char *h2_get_upgrade_proto(request_rec *r);
 static int h2_upgrade_to(request_rec *r, const char *proto);
@@ -76,6 +69,8 @@ static int h2_upgrade_request_handler(request_rec *r)
             /* we have a request for a server (vhost) where h2 is
              * not enabled. This happened over a connection on which
              * we talk h2.
+             * Tell the client, she should open a new connection to that
+             * vhost to get fresh protocol negotiations.
              */
             r->status = 421;
             ap_log_rerror(APLOG_MARK, APLOG_DEBUG, r->status, r,
@@ -95,6 +90,9 @@ static int h2_upgrade_request_handler(request_rec *r)
             /* We do not handle upgradeable requests with a body.
              * The reason being that we would need to read the body in full
              * before we ca use HTTP2 frames on the wire.
+             * 
+             * This seems to be consensus among server implemntations and
+             * clients are advised to use an "OPTIONS *" before a POST.
              */
             const char *clen = apr_table_get(r->headers_in, "Content-Length");
             if (clen && strcmp(clen, "0")) {
@@ -111,20 +109,40 @@ static int h2_upgrade_request_handler(request_rec *r)
 
 static const char *h2_get_upgrade_proto(request_rec *r)
 {
+    const char *proto, *conn;
     const char *upgrade = apr_table_get(r->headers_in, "Upgrade");
-    const char *proto = h2_util_first_token_match(r->pool, upgrade, 
+    
+    if (upgrade && *upgrade) {
+        
+        conn = apr_table_get(r->headers_in, "Connection");
+        if (h2_util_contains_token(r->pool, conn, "Upgrade")
+            && apr_table_get(r->headers_in, "HTTP2-Settings")) {
+            
+            /* HTTP/1 Upgrade: is just another mechanism to switch
+             * protocols on a connection, same as ALPN or NPN.
+             * Security desirability aside, the bit protocol spoken
+             * afterwards is the same. Why require different identifier?
+             *
+             * We allow the same tokens as in ALPN negotiation, plus the
+             * special 'c' variants that RFC 7540 defines. We just do not
+             * care about the transport here.
+             */
+            proto = h2_util_first_token_match(r->pool, upgrade, 
+                                              h2_alpn_protos, 
+                                              h2_alpn_protos_len);
+            if (!proto) {
+                proto = h2_util_first_token_match(r->pool, upgrade, 
                                                   h2_upgrade_protos, 
                                                   h2_upgrade_protos_len);
-    if (proto && 
-        h2_util_contains_token(
-            r->pool, apr_table_get(r->headers_in, "Connection"), "Upgrade")
-        && apr_table_get(r->headers_in, "HTTP2-Settings")) {
-        return proto;
-    }
-    if (upgrade) {
-        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                      "no suiteable upgrade detected: %s %s, "
-                      "Upgrade: %s", r->method, r->uri, upgrade);
+            }
+            
+            if (proto) {
+                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                              "suiteable upgrade detected: %s %s, "
+                              "Upgrade: %s", r->method, r->uri, upgrade);
+                return proto;
+            }
+        }
     }
 
     return NULL;

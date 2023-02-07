@@ -36,7 +36,19 @@
 #include "h2_alpn.h"
 #include "h2_h2.h"
 
-static const char *H2_MAGIC_TOKEN = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+const char *h2_alpn_protos[] = {
+    "h2", "h2-16", "h2-14"
+};
+apr_size_t h2_alpn_protos_len = (sizeof(h2_alpn_protos)
+                                 / sizeof(h2_alpn_protos[0]));
+
+const char *h2_upgrade_protos[] = {
+    "h2c", "h2c-16", "h2c-14",
+};
+apr_size_t h2_upgrade_protos_len = (sizeof(h2_upgrade_protos)
+                                    / sizeof(h2_upgrade_protos[0]));
+
+const char *H2_MAGIC_TOKEN = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
 /*******************************************************************************
  * The optional mod_ssl functions we need. 
@@ -167,7 +179,7 @@ int h2_h2_process_conn(conn_rec* c)
             
             apr_brigade_pflatten(temp, &s, &slen, c->pool);
             if ((slen == 24) && !memcmp(H2_MAGIC_TOKEN, s, 24)) {
-                h2_ctx_pnego_set_done(ctx, "h2c");
+                h2_ctx_pnego_set_done(ctx, "h2");
             }
         }
         apr_brigade_destroy(temp);
