@@ -165,6 +165,8 @@ $(INST_DIR)/.test-setup: \
         $(INST_DIR)/conf/mods-enabled/h2.load \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
 		$(INST_DIR)/conf/ssl/test.example.org.pem \
+		$(INST_DIR)/conf/ssl/noh2.example.org.key \
+		$(INST_DIR)/conf/ssl/noh2.example.org.pem \
 		$(INST_DIR)/.testdocs-setup
 	@echo -n setup httpd locally...
 	@mkdir -p $(INST_DIR)/conf/sites
@@ -190,18 +192,38 @@ $(INST_DIR)/conf/ssl/test.example.org.key:
 $(INST_DIR)/conf/ssl/test.example.org.req: \
 		$(INST_DIR)/conf/ssl/test.example.org.key
 	openssl req -new -key $(INST_DIR)/conf/ssl/test.example.org.key \
-		-out $(INST_DIR)/conf/ssl/test.example.org.req < conf/ssl/x509.input
+		-out $(INST_DIR)/conf/ssl/test.example.org.req < conf/ssl/test.example.org.x509.input
 
 $(INST_DIR)/conf/ssl/test.example.org.pem: \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
 		$(INST_DIR)/conf/ssl/test.example.org.req \
 		conf/ssl/extensions.conf \
-		conf/ssl/x509.input
+		conf/ssl/test.example.org.x509.input
 	openssl x509 -req -sha256 -days 1095 \
 		-signkey $(INST_DIR)/conf/ssl/test.example.org.key \
 		-in $(INST_DIR)/conf/ssl/test.example.org.req \
 		-out $(INST_DIR)/conf/ssl/test.example.org.pem \
-		-extfile conf/ssl/extensions.conf -extensions ssl_client < conf/ssl/x509.input
+		-extfile conf/ssl/extensions.conf -extensions ssl_client < conf/ssl/noh2.example.org.x509.input
+
+$(INST_DIR)/conf/ssl/noh2.example.org.key:
+	@mkdir -p $(INST_DIR)/conf/ssl
+	openssl genrsa -out $(INST_DIR)/conf/ssl/noh2.example.org.key 4096
+
+$(INST_DIR)/conf/ssl/noh2.example.org.req: \
+		$(INST_DIR)/conf/ssl/noh2.example.org.key
+	openssl req -new -key $(INST_DIR)/conf/ssl/noh2.example.org.key \
+		-out $(INST_DIR)/conf/ssl/noh2.example.org.req < conf/ssl/noh2.example.org.x509.input
+
+$(INST_DIR)/conf/ssl/noh2.example.org.pem: \
+		$(INST_DIR)/conf/ssl/noh2.example.org.key \
+		$(INST_DIR)/conf/ssl/noh2.example.org.req \
+		conf/ssl/extensions.conf \
+		conf/ssl/test.example.org.x509.input
+	openssl x509 -req -sha256 -days 1095 \
+		-signkey $(INST_DIR)/conf/ssl/noh2.example.org.key \
+		-in $(INST_DIR)/conf/ssl/noh2.example.org.req \
+		-out $(INST_DIR)/conf/ssl/noh2.example.org.pem \
+		-extfile conf/ssl/extensions.conf -extensions ssl_client < conf/ssl/noh2.example.org.x509.input
 
 $(INST_DIR)/conf/mods-available/h2.load:
 	@mkdir -p $(INST_DIR)/conf/mods-available

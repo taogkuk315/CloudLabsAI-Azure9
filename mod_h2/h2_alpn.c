@@ -199,6 +199,18 @@ static int h2_alpn_propose(conn_rec *c,
                            apr_array_header_t *client_protos,
                            apr_array_header_t *protos)
 {
+    /*
+     * TODO: this shows that the SNI host info is not available when
+     * we need to decide about our ALPN advertisement. 
+     *
+    const char *sni_host = opt_ssl_var_lookup(c->pool, c->base_server, c, 
+                                              NULL, (char*)"SSL_TLS_SNI");
+    h2_config *cfg = h2_config_get(c);
+    
+    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, c,
+                  "ALPN propose for %s, config %s", 
+                  sni_host? sni_host : "(null)", cfg->name);
+     */
     for (apr_size_t i = 0; i < h2_alpn_protos_len; ++i) {
         const char *proto = h2_alpn_protos[i];
         if (h2_util_array_index(client_protos, proto) >= 0) {
