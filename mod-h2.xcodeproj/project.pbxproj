@@ -62,10 +62,10 @@
 		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
 		B2A6EF2C1A9F2452005DFC5B /* DISCUSS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = DISCUSS; sourceTree = "<group>"; };
 		B2AABE611AC5A9B400A90B72 /* h2_version.h.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2_version.h.in; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
-		B2B170B21B2EC73400EDC007 /* aaa-noh2.example.org.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "aaa-noh2.example.org.conf"; sourceTree = "<group>"; };
 		B2B170B31B2EC73400EDC007 /* test.example.org.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = test.example.org.conf; sourceTree = "<group>"; };
 		B2B170B41B2F02C100EDC007 /* testrun */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = testrun; sourceTree = "<group>"; };
 		B2B170B61B303B0C00EDC007 /* noh2.example.org.x509.input */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = noh2.example.org.x509.input; sourceTree = "<group>"; };
+		B2B170B81B316FB100EDC007 /* noh2.example.org.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = noh2.example.org.conf; sourceTree = "<group>"; };
 		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
 		B2CB610E1A88BB9F00D270A6 /* h2_conn.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_conn.c; sourceTree = "<group>"; };
@@ -506,7 +506,7 @@
 		B2E6FDFC1AC2EFA200D557D8 /* sites */ = {
 			isa = PBXGroup;
 			children = (
-				B2B170B21B2EC73400EDC007 /* aaa-noh2.example.org.conf */,
+				B2B170B81B316FB100EDC007 /* noh2.example.org.conf */,
 				B2B170B31B2EC73400EDC007 /* test.example.org.conf */,
 				B2E6FDFD1AC2EFA200D557D8 /* mod-h2.greenbytes.de.conf */,
 			);

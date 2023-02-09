@@ -74,7 +74,7 @@ run_iter() {
     done
 }
 
-URL_PATH=/004/gophertiles_070.jpg
+URL_PATH=$1
 
 echo "$URL_PATH, 500k requests, req/s"
 run_iter $URL_PATH 10 "1 2 3 4 5 6 7 8 9 10 15 20 40 100"
