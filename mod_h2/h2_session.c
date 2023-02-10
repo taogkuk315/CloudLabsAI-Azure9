@@ -120,7 +120,7 @@ static ssize_t send_cb(nghttp2_session *ngh2,
 
 static int on_invalid_frame_recv_cb(nghttp2_session *ngh2,
                                     const nghttp2_frame *frame,
-                                    uint32_t error_code, void *userp)
+                                    nghttp2_error error, void *userp)
 {
     h2_session *session = (h2_session *)userp;
     (void)ngh2;
@@ -134,7 +134,7 @@ static int on_invalid_frame_recv_cb(nghttp2_session *ngh2,
         frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                       "h2_session: callback on_invalid_frame_recv error=%d %s",
-                      (int)error_code, buffer);
+                      (int)error, buffer);
     }
     return 0;
 }
@@ -616,11 +616,6 @@ static h2_session *h2_session_create_int(conn_rec *c,
             return NULL;
         }
 
-        /* Nowadays, we handle the preface ourselves. We had problems
-         * with nghttp2 internal state machine when traffic action occured
-         * before the preface was read. 
-         */
-        nghttp2_option_set_recv_client_preface(options, 1);
         nghttp2_option_set_peer_max_concurrent_streams(options, 
                                                        (uint32_t)session->max_stream_count);
 

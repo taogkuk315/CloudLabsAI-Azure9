@@ -115,7 +115,7 @@ copy-mod_ssl:
 $(INST_DIR)/.httpd-installed:  $(GEN)/$(HTTPD_DIR)/.httpd-built
 	@mkdir -p $(INST_DIR)
 	@echo -n installing httpd locally...
-	@cd $(GEN)/$(HTTPD_DIR)/ && make install >> ../build.log
+	@cd $(GEN)/$(HTTPD_DIR)/ && make install
 	@echo done.
 	@touch $(INST_DIR)/.httpd-installed
 
@@ -126,7 +126,7 @@ $(INST_DIR)/.httpd-installed:  $(GEN)/$(HTTPD_DIR)/.httpd-built
 $(GEN)/$(HTTPD_DIR)/.httpd-built: \
 		$(GEN)/$(HTTPD_DIR)/.httpd-configured
 	@echo -n building httpd...
-	@cd $(GEN)/$(HTTPD_DIR)/ && make >> ../build.log
+	@cd $(GEN)/$(HTTPD_DIR)/ && make
 	@echo done.
 	@touch $(GEN)/$(HTTPD_DIR)/.httpd-built
 
@@ -142,7 +142,7 @@ $(GEN)/$(HTTPD_DIR)/.httpd-configured: \
 		$(GEN)/$(HTTPD_DIR)/.httpd-patched
 	@echo -n configuring httpd...
 	cd $(GEN)/$(HTTPD_DIR)/ && \
-	./configure --prefix=$(BLD_PREFIX) $(HTTPD_CONF) >> ../build.log
+	./configure --prefix=$(BLD_PREFIX) $(HTTPD_CONF)
 	@echo done.
 	@touch $(GEN)/$(HTTPD_DIR)/.httpd-configured
 
@@ -152,9 +152,8 @@ $(GEN)/$(HTTPD_DIR)/.httpd-configured: \
 $(GEN)/$(HTTPD_DIR)/.httpd-patched: \
 		$(GEN)/$(HTTPD_DIR)/.httpd-extracted
 	@echo applying patches...
-	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/httpd-alpn-unified.diff.patch
+	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/httpd-2.4.12-alpn-v5.patch
 	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/sni_misdirect.patch
-	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/httpd-npn.unified.diff.patch
 	@echo httpd patched.
 	@touch $(GEN)/$(HTTPD_DIR)/.httpd-patched
 #@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/alpn-2.4.x.unified.diff.patch

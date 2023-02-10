@@ -1,8 +1,8 @@
 diff -ru modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
---- modules/ssl/mod_ssl.c	2015-04-22 10:00:12.000000000 +0200
-+++ modules/ssl/mod_ssl.c	2015-04-27 09:16:02.000000000 +0200
+--- modules/ssl/mod_ssl.c	2015-06-17 15:09:03.000000000 +0200
++++ modules/ssl/mod_ssl.c	2015-06-17 15:52:41.000000000 +0200
 @@ -273,6 +273,12 @@
-                 "OpenSSL configuration command")
+ 		"OpenSSL configuration command")
  #endif
  
 +#ifdef HAVE_TLS_ALPN
@@ -14,7 +14,15 @@ diff -ru modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
      /* Deprecated directives. */
      AP_INIT_RAW_ARGS("SSLLog", ap_set_deprecated, NULL, OR_ALL,
        "SSLLog directive is no longer supported - use ErrorLog."),
-@@ -423,12 +448,44 @@
+@@ -372,6 +378,7 @@
+     sslconn = apr_pcalloc(c->pool, sizeof(*sslconn));
+ 
+     sslconn->server = c->base_server;
++    sslconn->vhost_selected = 0;
+     sslconn->verify_depth = UNSET;
+ 
+     myConnConfigSet(c, sslconn);
+@@ -423,12 +430,44 @@
      return 1;
  }
  
@@ -59,7 +67,7 @@ diff -ru modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
      modssl_ctx_t *mctx;
      server_rec *server;
  
-@@ -585,6 +647,7 @@
+@@ -585,6 +624,7 @@
  
      APR_REGISTER_OPTIONAL_FN(ssl_proxy_enable);
      APR_REGISTER_OPTIONAL_FN(ssl_engine_disable);
@@ -68,9 +76,9 @@ diff -ru modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
      ap_register_auth_provider(p, AUTHZ_PROVIDER_GROUP, "ssl",
                                AUTHZ_PROVIDER_VERSION,
 diff -ru modules/ssl/mod_ssl.h modules/ssl/mod_ssl.h
---- modules/ssl/mod_ssl.h	2015-01-07 17:03:34.000000000 +0100
-+++ modules/ssl/mod_ssl.h	2015-04-27 09:15:37.000000000 +0200
-@@ -63,5 +93,46 @@
+--- modules/ssl/mod_ssl.h	2015-06-17 15:09:03.000000000 +0200
++++ modules/ssl/mod_ssl.h	2015-06-17 15:10:39.000000000 +0200
+@@ -63,5 +63,46 @@
  
  APR_DECLARE_OPTIONAL_FN(int, ssl_engine_disable, (conn_rec *));
  
@@ -118,9 +126,9 @@ diff -ru modules/ssl/mod_ssl.h modules/ssl/mod_ssl.h
  #endif /* __MOD_SSL_H__ */
  /** @} */
 diff -ru modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_config.c
---- modules/ssl/ssl_engine_config.c	2015-04-22 10:00:12.000000000 +0200
-+++ modules/ssl/ssl_engine_config.c	2015-04-27 09:15:37.000000000 +0200
-@@ -159,6 +160,9 @@
+--- modules/ssl/ssl_engine_config.c	2015-06-17 15:09:03.000000000 +0200
++++ modules/ssl/ssl_engine_config.c	2015-06-17 15:10:39.000000000 +0200
+@@ -159,6 +159,9 @@
      SSL_CONF_CTX_set_flags(mctx->ssl_ctx_config, SSL_CONF_FLAG_CERTIFICATE);
      mctx->ssl_ctx_param = apr_array_make(p, 5, sizeof(ssl_ctx_param_t));
  #endif
@@ -130,7 +138,7 @@ diff -ru modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_config.c
  }
  
  static void modssl_ctx_init_proxy(SSLSrvConfigRec *sc,
-@@ -301,6 +307,9 @@
+@@ -298,6 +301,9 @@
  #ifdef HAVE_SSL_CONF_CMD
      cfgMergeArray(ssl_ctx_param);
  #endif
@@ -140,7 +148,7 @@ diff -ru modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_config.c
  }
  
  static void modssl_ctx_cfg_merge_proxy(apr_pool_t *p,
-@@ -1875,6 +1868,16 @@
+@@ -1869,6 +1875,16 @@
  }
  #endif
  
@@ -158,9 +166,9 @@ diff -ru modules/ssl/ssl_engine_config.c modules/ssl/ssl_engine_config.c
  
  const char *ssl_cmd_SSLSRPVerifierFile(cmd_parms *cmd, void *dcfg,
 diff -ru modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_init.c
---- modules/ssl/ssl_engine_init.c	2015-04-22 10:00:12.000000000 +0200
-+++ modules/ssl/ssl_engine_init.c	2015-04-27 09:15:37.000000000 +0200
-@@ -623,6 +646,11 @@
+--- modules/ssl/ssl_engine_init.c	2015-06-17 15:09:03.000000000 +0200
++++ modules/ssl/ssl_engine_init.c	2015-06-17 15:10:39.000000000 +0200
+@@ -623,6 +623,11 @@
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
  
      SSL_CTX_set_info_callback(ctx, ssl_callback_Info);
@@ -173,8 +181,8 @@ diff -ru modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_init.c
  
  static apr_status_t ssl_init_ctx_verify(server_rec *s,
 diff -ru modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
---- modules/ssl/ssl_engine_io.c	2015-01-19 16:52:30.000000000 +0100
-+++ modules/ssl/ssl_engine_io.c	2015-04-27 09:15:37.000000000 +0200
+--- modules/ssl/ssl_engine_io.c	2015-06-17 15:09:03.000000000 +0200
++++ modules/ssl/ssl_engine_io.c	2015-06-17 15:10:39.000000000 +0200
 @@ -28,6 +28,7 @@
                                    core keeps dumping.''
                                              -- Unknown    */
@@ -183,7 +191,7 @@ diff -ru modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
  #include "apr_date.h"
  
  /*  _________________________________________________________________
-@@ -297,6 +315,9 @@
+@@ -297,6 +298,9 @@
      apr_pool_t *pool;
      char buffer[AP_IOBUFSIZE];
      ssl_filter_ctx_t *filter_ctx;
@@ -193,7 +201,7 @@ diff -ru modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
  } bio_filter_in_ctx_t;
  
  /*
-@@ -1412,6 +1485,37 @@
+@@ -1412,6 +1416,37 @@
          APR_BRIGADE_INSERT_TAIL(bb, bucket);
      }
  
@@ -231,7 +239,7 @@ diff -ru modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
      return APR_SUCCESS;
  }
  
-@@ -1893,6 +1996,9 @@
+@@ -1893,6 +1928,9 @@
      inctx->block = APR_BLOCK_READ;
      inctx->pool = c->pool;
      inctx->filter_ctx = filter_ctx;
@@ -242,8 +250,8 @@ diff -ru modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
  
  /* The request_rec pointer is passed in here only to ensure that the
 diff -ru modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_kernel.c
---- modules/ssl/ssl_engine_kernel.c	2015-04-27 09:17:07.000000000 +0200
-+++ modules/ssl/ssl_engine_kernel.c	2015-04-27 09:15:37.000000000 +0200
+--- modules/ssl/ssl_engine_kernel.c	2015-06-17 15:09:03.000000000 +0200
++++ modules/ssl/ssl_engine_kernel.c	2015-06-17 15:53:25.000000000 +0200
 @@ -29,6 +29,7 @@
                                    time I was too famous.''
                                              -- Unknown                */
@@ -252,7 +260,119 @@ diff -ru modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_kernel.c
  #include "util_md5.h"
  
  static void ssl_configure_env(request_rec *r, SSLConnRec *sslconn);
-@@ -2137,6 +2162,153 @@
+@@ -1889,55 +1890,69 @@
+ }
+ 
+ #ifdef HAVE_TLSEXT
++apr_status_t ssl_select_vhost(conn_rec *c)
++{
++    SSLConnRec *sslconn = myConnConfig(c);
++    const char *servername;
++    
++    if (sslconn == NULL || sslconn->ssl == NULL) {
++        return APR_EINVAL;
++    }
++    else if (sslconn->vhost_selected) {
++        return APR_SUCCESS;
++    }
++    
++    servername = SSL_get_servername(sslconn->ssl, TLSEXT_NAMETYPE_host_name);
++    if (servername) {
++        if (ap_vhost_iterate_given_conn(c, ssl_find_vhost,
++                                        (void *)servername)) {
++            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02043)
++                          "SSL virtual host for servername %s found",
++                          servername);
++            sslconn->vhost_selected = 1;
++            return APR_SUCCESS;
++        }
++        else {
++            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02044)
++                          "No matching SSL virtual host for servername "
++                          "%s found (using default/first virtual host)",
++                          servername);
++            /*
++             * RFC 6066 section 3 says "It is NOT RECOMMENDED to send
++             * a warning-level unrecognized_name(112) alert, because
++             * the client's behavior in response to warning-level alerts
++             * is unpredictable."
++             *
++             * To maintain backwards compatibility in mod_ssl, we
++             * no longer send any alert (neither warning- nor fatal-level),
++             * i.e. we take the second action suggested in RFC 6066:
++             * "If the server understood the ClientHello extension but
++             * does not recognize the server name, the server SHOULD take
++             * one of two actions: either abort the handshake by sending
++             * a fatal-level unrecognized_name(112) alert or continue
++             * the handshake."
++             */
++        }
++    }
++    else {
++        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02645)
++                      "Server name not provided via TLS extension "
++                      "(using default/first virtual host)");
++    }
++    
++    return APR_NOTFOUND;
++}
+ /*
+  * This callback function is executed when OpenSSL encounters an extended
+  * client hello with a server name indication extension ("SNI", cf. RFC 6066).
+  */
+ int ssl_callback_ServerNameIndication(SSL *ssl, int *al, modssl_ctx_t *mctx)
+ {
+-    const char *servername =
+-                SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+     conn_rec *c = (conn_rec *)SSL_get_app_data(ssl);
+-
+-    if (c) {
+-        if (servername) {
+-            if (ap_vhost_iterate_given_conn(c, ssl_find_vhost,
+-                                            (void *)servername)) {
+-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02043)
+-                              "SSL virtual host for servername %s found",
+-                              servername);
+-                return SSL_TLSEXT_ERR_OK;
+-            }
+-            else {
+-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02044)
+-                              "No matching SSL virtual host for servername "
+-                              "%s found (using default/first virtual host)",
+-                              servername);
+-                /*
+-                 * RFC 6066 section 3 says "It is NOT RECOMMENDED to send
+-                 * a warning-level unrecognized_name(112) alert, because
+-                 * the client's behavior in response to warning-level alerts
+-                 * is unpredictable."
+-                 *
+-                 * To maintain backwards compatibility in mod_ssl, we
+-                 * no longer send any alert (neither warning- nor fatal-level),
+-                 * i.e. we take the second action suggested in RFC 6066:
+-                 * "If the server understood the ClientHello extension but
+-                 * does not recognize the server name, the server SHOULD take
+-                 * one of two actions: either abort the handshake by sending
+-                 * a fatal-level unrecognized_name(112) alert or continue
+-                 * the handshake."
+-                 */
+-            }
+-        }
+-        else {
+-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02645)
+-                          "Server name not provided via TLS extension "
+-                          "(using default/first virtual host)");
+-        }
+-    }
+-
+-    return SSL_TLSEXT_ERR_NOACK;
++    apr_status_t status;
++    
++    status = ssl_select_vhost(c);
++    return (status == APR_SUCCESS)? SSL_TLSEXT_ERR_OK : SSL_TLSEXT_ERR_NOACK;
+ }
+ 
+ /*
+@@ -2136,6 +2151,159 @@
  }
  #endif /* HAVE_TLS_SESSION_TICKETS */
  
@@ -327,6 +447,12 @@ diff -ru modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_kernel.c
 +    if (c == NULL) {
 +        return SSL_TLSEXT_ERR_OK;
 +    }
++    
++    /* Make sure that we set the correct vhost based on SNI servername
++     * information. This is supposed to be done by the SNI callback, but
++     * currently the ssl libs call the ALPN callback *before* the SNI one.
++     */
++    ssl_select_vhost(c);
 +    
 +    if (inlen == 0) {
 +        // someone tries to trick us?
@@ -407,8 +533,8 @@ diff -ru modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_kernel.c
  
  int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
 diff -ru modules/ssl/ssl_private.h modules/ssl/ssl_private.h
---- modules/ssl/ssl_private.h	2015-04-27 09:17:07.000000000 +0200
-+++ modules/ssl/ssl_private.h	2015-04-27 09:16:05.000000000 +0200
+--- modules/ssl/ssl_private.h	2015-06-17 15:09:03.000000000 +0200
++++ modules/ssl/ssl_private.h	2015-06-17 15:52:15.000000000 +0200
 @@ -182,6 +182,11 @@
  #include <openssl/srp.h>
  #endif
@@ -421,7 +547,7 @@ diff -ru modules/ssl/ssl_private.h modules/ssl/ssl_private.h
  #endif /* !defined(OPENSSL_NO_TLSEXT) && defined(SSL_set_tlsext_host_name) */
  
  /* mod_ssl headers */
-@@ -443,6 +438,12 @@
+@@ -443,6 +448,12 @@
                       * connection */
      } reneg_state;
  
@@ -430,11 +556,11 @@ diff -ru modules/ssl/ssl_private.h modules/ssl/ssl_private.h
 +    apr_array_header_t *alpn_proposefns; /* list of ssl_alpn_propose_protos callbacks */
 +    apr_array_header_t *alpn_negofns; /* list of ssl_alpn_proto_negotiated callbacks. */
 +#endif
-+
++    int vhost_selected;
      server_rec *server;
  } SSLConnRec;
  
-@@ -633,6 +633,10 @@
+@@ -622,6 +633,10 @@
      SSL_CONF_CTX *ssl_ctx_config; /* Configuration context */
      apr_array_header_t *ssl_ctx_param; /* parameters to pass to SSL_CTX */
  #endif
@@ -445,7 +571,7 @@ diff -ru modules/ssl/ssl_private.h modules/ssl/ssl_private.h
  } modssl_ctx_t;
  
  struct SSLSrvConfigRec {
-@@ -763,6 +763,10 @@
+@@ -748,6 +763,10 @@
  const char *ssl_cmd_SSLOpenSSLConfCmd(cmd_parms *cmd, void *dcfg, const char *arg1, const char *arg2);
  #endif
  
@@ -456,7 +582,15 @@ diff -ru modules/ssl/ssl_private.h modules/ssl/ssl_private.h
  #ifdef HAVE_SRP
  const char *ssl_cmd_SSLSRPVerifierFile(cmd_parms *cmd, void *dcfg, const char *arg);
  const char *ssl_cmd_SSLSRPUnknownUserSeed(cmd_parms *cmd, void *dcfg, const char *arg);
-@@ -815,6 +815,12 @@
+@@ -789,6 +808,7 @@
+ void         ssl_callback_DelSessionCacheEntry(SSL_CTX *, SSL_SESSION *);
+ void         ssl_callback_Info(const SSL *, int, int);
+ #ifdef HAVE_TLSEXT
++apr_status_t ssl_select_vhost(conn_rec *c);
+ int          ssl_callback_ServerNameIndication(SSL *, int *, modssl_ctx_t *);
+ #endif
+ #ifdef HAVE_TLS_SESSION_TICKETS
+@@ -796,6 +816,12 @@
                                         EVP_CIPHER_CTX *, HMAC_CTX *, int);
  #endif
  

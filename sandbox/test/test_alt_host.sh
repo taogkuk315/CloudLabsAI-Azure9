@@ -29,14 +29,6 @@ MISDIR_STATUS="421 Misdirected Request"
 #MISDIR_STATUS="400 Bad Request"
 
 nghttp_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
-<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
-<html><head>
-<title>$MISDIR_STATUS</title>
-</head><body>
-<h1>Misdirected Request</h1>
-<p>The client needs to use a new connection for this 
-request as it does not match the SNI name used.</p>
-</body></html>
 EOF
 
 curl_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF

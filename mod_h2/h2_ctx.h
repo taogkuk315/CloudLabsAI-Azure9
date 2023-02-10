@@ -38,6 +38,9 @@ typedef struct h2_ctx {
     h2_pnego_state_t pnego_state; /* protocol negotiation state */
     const char *protocol;         /* the protocol negotiated */
     struct h2_task_env *task_env; /* the h2_task environment or NULL */
+    const char *hostname;         /* hostname negotiated via SNI, optional */
+    server_rec *server;           /* httpd server config selected. */
+    struct h2_config *config;     /* effective config in this context */
 } h2_ctx;
 
 h2_ctx *h2_ctx_get(conn_rec *c);

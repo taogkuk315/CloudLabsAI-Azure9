@@ -338,6 +338,46 @@ h2_config *h2_config_sget(server_rec *s)
 
 h2_config *h2_config_get(conn_rec *c)
 {
+    h2_ctx *ctx = h2_ctx_get(c);
+    if (ctx->config) {
+        return ctx->config;
+    }
+    if (!ctx->server && ctx->hostname) {
+        /* We have a host agreed upon via TLS SNI, but no request yet.
+         * The sni host was accepted and therefore does match a server record
+         * (vhost) for it. But we need to know which one.
+         * Normally, it is enough to be set on the initial request on a
+         * connection, but we need it earlier. Simulate a request and call
+         * the vhost matching stuff.
+         */
+        apr_uri_t uri;
+        memset(&uri, 0, sizeof(uri));
+        uri.scheme = (char*)"https";
+        uri.hostinfo = (char*)ctx->hostname;
+        uri.hostname = (char*)ctx->hostname;
+        uri.port_str = (char*)"";
+        uri.port = c->local_addr->port;
+        uri.path = (char*)"/";
+        
+        request_rec r;
+        memset(&r, 0, sizeof(r));
+        r.uri = (char*)"/";
+        r.connection = c;
+        r.pool = c->pool;
+        r.hostname = ctx->hostname;
+        r.headers_in = apr_table_make(c->pool, 1);
+        r.parsed_uri = uri;
+        r.status = HTTP_OK;
+        r.server = r.connection->base_server;
+        ap_update_vhost_from_headers(&r);
+        ctx->server = r.server;
+    }
+    
+    if (ctx->server) {
+        ctx->config = h2_config_sget(ctx->server);
+        return ctx->config;
+    }
+    
     return h2_config_sget(c->base_server);
 }
 

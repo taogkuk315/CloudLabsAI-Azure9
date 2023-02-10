@@ -111,6 +111,25 @@ apr_status_t h2_alpn_init(apr_pool_t *pool, server_rec *s)
 static const char *const mod_ssl[]        = { "mod_ssl.c", NULL};
 static const char *const mod_core[]       = { "core.c", NULL};
 
+static void check_sni_host(conn_rec *c) 
+{
+    /* If we have not done so already, ask the connection for the
+     * hostname send to us via SNI. This information is later used
+     * to retrieve the correct server settings for this connection.
+     */
+    h2_ctx *ctx = h2_ctx_get(c);
+    if (opt_ssl_var_lookup && !ctx->hostname) {
+        const char *p = opt_ssl_var_lookup(c->pool, c->base_server, c, 
+                                           NULL, (char*)"SSL_TLS_SNI");
+        if (p && *p) {
+            ctx->hostname = apr_pstrdup(c->pool, p);
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
+                          "h2_h2, connection, SNI %s",
+                          ctx->hostname? ctx->hostname : "NULL");
+        }
+    }
+}
+
 void h2_alpn_register_hooks(void)
 {
     /* This hook runs on new connection after mod_ssl, but before the core
@@ -135,7 +154,10 @@ static int h2_util_array_index(apr_array_header_t *array, const char *s)
 
 static int h2_npn_advertise(conn_rec *c, apr_array_header_t *protos)
 {
-    h2_config *cfg = h2_config_get(c);
+    h2_config *cfg;
+    
+    check_sni_host(c);
+    cfg = h2_config_get(c);
     if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
         return DECLINED;
     }
@@ -199,18 +221,19 @@ static int h2_alpn_propose(conn_rec *c,
                            apr_array_header_t *client_protos,
                            apr_array_header_t *protos)
 {
-    /*
-     * TODO: this shows that the SNI host info is not available when
-     * we need to decide about our ALPN advertisement. 
-     *
-    const char *sni_host = opt_ssl_var_lookup(c->pool, c->base_server, c, 
-                                              NULL, (char*)"SSL_TLS_SNI");
-    h2_config *cfg = h2_config_get(c);
+    h2_config *cfg;
     
-    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, c,
-                  "ALPN propose for %s, config %s", 
-                  sni_host? sni_host : "(null)", cfg->name);
-     */
+    check_sni_host(c);
+    cfg = h2_config_get(c);
+    if (!h2_config_geti(cfg, H2_CONF_ENABLED)) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+                      "ALPN propose, h2 disabled for config %s", cfg->name);
+        return DECLINED;
+    }
+    
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+                  "ALPN propose for config %s", cfg->name);
+    /* */
     for (apr_size_t i = 0; i < h2_alpn_protos_len; ++i) {
         const char *proto = h2_alpn_protos[i];
         if (h2_util_array_index(client_protos, proto) >= 0) {

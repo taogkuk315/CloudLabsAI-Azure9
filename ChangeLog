@@ -1,3 +1,22 @@
+v0.7.0
+--------------------------------------------------------------------------------
+ * switching to nghttp2 v1.0.*, compilation + linkage with nghttp2 v0.7.* will
+   not work any more as there have been changes in nghttp2's API. The sandbox
+   builds against v1.0.2 and also pulls curl 7.43.0 which did the same version
+   switch.
+ * keeping support for h2-16/h2-14 ALPN identifiers until a 1.0 release
+ * varying h2 support (on|off) among virtual hosts on the same port is now
+   possible and should work correctly.
+ * improved mod_ssl alpn patch to correctly select the proper virtual host
+   even if the SSL library invokes SNI after ALPN callbacks.
+ * Disabled NPN support in sandbox built. The patch for httpd 2.4.x is still
+   there, but no longer applied.
+ * KNOWN ISSUE: when using mpm_event, the error 
+     "error scoreboard is full, not at MaxRequestWorkers" 
+   sometimes happens. Under investigation. mpm_worker ist stable and recommended
+   for now.
+
+
 v0.6.6
 --------------------------------------------------------------------------------
  * adding sni_misdirect.patch for httpd/mod_ssl that changes status code when 
