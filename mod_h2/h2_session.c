@@ -60,7 +60,6 @@ static int stream_open(h2_session *session, int stream_id)
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     h2_stream * stream = h2_stream_create(stream_id, session->pool,
-                                          session->c->bucket_alloc, 
                                           session->mplx);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,

@@ -39,8 +39,6 @@ struct h2_io {
     struct apr_thread_cond_t *output_drained; /* block on writing */
     
     struct h2_response *response;/* submittable response created */
-   
-    apr_file_t *file;
 };
 
 /*******************************************************************************

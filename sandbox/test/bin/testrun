@@ -12,11 +12,10 @@ URL=$SCHEME://$HOST:$PORT
 
 WRK=../wrk/wrk
 H2LOAD=${H2LOAD:-sandbox/install/bin/h2load}
-MAX_STREAMS=1
 
 run_wrk() {
     path=$1
-    $WRK -c100 -t8 -d30s $URL$path >/tmp/$$.out 2>&1
+    $WRK -c100 -t${THREADS:-8} -d30s $URL$path >/tmp/$$.out 2>&1
 
     stat=$( fgrep 'Requests/sec: ' /tmp/$$.out )
     reqs=${stat##Requests/sec: }
@@ -24,7 +23,7 @@ run_wrk() {
 
 run_load() {
     path=$1
-    $H2LOAD -c 100 -t 8 -m $MAX_STREAMS -n 500000 $URL$path > /tmp/$$.out 2>&1
+    $H2LOAD -c 100 -t ${THREADS:-8} -m ${MAX_STREAMS:-1} -n 500000 $URL$path > /tmp/$$.out 2>&1
 
     fin=$( fgrep 'finished in ' /tmp/$$.out )
     stat=$( fgrep 'requests: ' /tmp/$$.out )

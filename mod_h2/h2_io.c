@@ -30,7 +30,7 @@ h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc)
     h2_io *io = apr_pcalloc(pool, sizeof(*io));
     if (io) {
         io->id = id;
-        io->bbin = apr_brigade_create(pool, bucket_alloc);
+        io->bbin = NULL;
         io->bbout = apr_brigade_create(pool, bucket_alloc);
         io->response = apr_pcalloc(pool, sizeof(h2_response));
     }
@@ -42,12 +42,6 @@ static void h2_io_cleanup(h2_io *io)
     if (io->response) {
         h2_response_cleanup(io->response);
     }
-    if (io->file) {
-        ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, io->bbout->p,
-                      "h2_io(%d): cleanup, closing file", io->id);
-        apr_file_close(io->file);
-        io->file = NULL;
-    }
 }
 
 void h2_io_destroy(h2_io *io)
@@ -57,7 +51,7 @@ void h2_io_destroy(h2_io *io)
 
 int h2_io_in_has_eos_for(h2_io *io)
 {
-    return h2_util_has_eos(io->bbin, 0);
+    return io->eos_in || (io->bbin && h2_util_has_eos(io->bbin, 0));
 }
 
 int h2_io_out_has_data(h2_io *io)
@@ -80,7 +74,7 @@ apr_status_t h2_io_in_read(h2_io *io, apr_bucket_brigade *bb,
 {
     apr_off_t start_len = 0;
 
-    if (APR_BRIGADE_EMPTY(io->bbin)) {
+    if (!io->bbin || APR_BRIGADE_EMPTY(io->bbin)) {
         return io->eos_in? APR_EOF : APR_EAGAIN;
     }
     
@@ -106,13 +100,22 @@ apr_status_t h2_io_in_write(h2_io *io, apr_bucket_brigade *bb)
         return APR_EOF;
     }
     io->eos_in = h2_util_has_eos(bb, 0);
-    return h2_util_move(io->bbin, bb, 0, 0, NULL, "h2_io_in_write");
+    if (!APR_BRIGADE_EMPTY(bb)) {
+        if (!io->bbin) {
+            io->bbin = apr_brigade_create(io->bbout->p, 
+                                          io->bbout->bucket_alloc);
+        }
+        return h2_util_move(io->bbin, bb, 0, 0, NULL, "h2_io_in_write");
+    }
+    return APR_SUCCESS;
 }
 
 apr_status_t h2_io_in_close(h2_io *io)
 {
-    APR_BRIGADE_INSERT_TAIL(io->bbin, 
-                            apr_bucket_eos_create(io->bbin->bucket_alloc));
+    if (io->bbin) {
+        APR_BRIGADE_INSERT_TAIL(io->bbin, 
+                                apr_bucket_eos_create(io->bbin->bucket_alloc));
+    }
     io->eos_in = 1;
     return APR_SUCCESS;
 }
@@ -142,8 +145,7 @@ apr_status_t h2_io_out_readx(h2_io *io,
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen)
 {
-    return h2_util_move(io->bbout, bb, maxlen, 0, &io->file,
-                        "h2_io_out_write");
+    return h2_util_move(io->bbout, bb, maxlen, 0, NULL, "h2_io_out_write");
 }
 
 

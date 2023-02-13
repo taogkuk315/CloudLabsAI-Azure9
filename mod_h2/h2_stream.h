@@ -61,7 +61,6 @@ struct h2_stream {
     int suspended;              /* DATA sending has been suspended */
     
     apr_pool_t *pool;           /* the memory pool for this stream */
-    apr_bucket_alloc_t *bucket_alloc;
     struct h2_request *request; /* the request made in this stream */
     
     struct h2_task *task;       /* task created for this stream */
@@ -71,9 +70,7 @@ struct h2_stream {
 };
 
 
-h2_stream *h2_stream_create(int id, apr_pool_t *master, 
-                            apr_bucket_alloc_t *bucket_alloc, 
-                            struct h2_mplx *m);
+h2_stream *h2_stream_create(int id, apr_pool_t *master, struct h2_mplx *m);
 
 apr_status_t h2_stream_destroy(h2_stream *stream);
 void h2_stream_cleanup(h2_stream *stream);
