@@ -83,6 +83,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
         if (!m->pool) {
             return NULL;
         }
+        apr_allocator_owner_set(allocator, m->pool);
         
         status = apr_thread_mutex_create(&m->lock, APR_THREAD_MUTEX_DEFAULT,
                                          m->pool);
@@ -130,11 +131,7 @@ void h2_mplx_destroy(h2_mplx *m)
     }
     
     if (m->pool) {
-        apr_allocator_t *allocator = apr_pool_allocator_get(m->pool);
         apr_pool_destroy(m->pool);
-        if (allocator) {
-            apr_allocator_destroy(allocator);
-        }
     }
 }
 

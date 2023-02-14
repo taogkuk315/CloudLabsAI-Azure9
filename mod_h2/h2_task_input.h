@@ -26,12 +26,7 @@ struct h2_task_env;
 
 typedef struct h2_task_input h2_task_input;
 struct h2_task_input {
-    const char *id;
-    conn_rec *c;
-    int stream_id;
-    struct h2_mplx *mplx;
-    struct apr_thread_cond_t *cond;
-    int eos;
+    struct h2_task_env *env;
     apr_bucket_brigade *bb;
 };
 

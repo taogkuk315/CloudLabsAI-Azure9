@@ -45,21 +45,15 @@ static void set_state(h2_stream *stream, h2_stream_state_t state)
     }
 }
 
-h2_stream *h2_stream_create(int id, apr_pool_t *master, struct h2_mplx *m)
+h2_stream *h2_stream_create(int id, apr_pool_t *pool, struct h2_mplx *m)
 {
-    apr_pool_t *spool = NULL;
-    apr_status_t status = apr_pool_create(&spool, master);
-    if (status != APR_SUCCESS) {
-        return NULL;
-    }
-    
-    h2_stream *stream = apr_pcalloc(spool, sizeof(h2_stream));
+    h2_stream *stream = apr_pcalloc(pool, sizeof(h2_stream));
     if (stream != NULL) {
         stream->id = id;
         stream->state = H2_STREAM_ST_IDLE;
-        stream->pool = spool;
+        stream->pool = pool;
         stream->m = m;
-        stream->request = h2_request_create(id, spool, m->c->bucket_alloc);
+        stream->request = h2_request_create(id, pool, m->c->bucket_alloc);
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(m),
                       "h2_stream(%ld-%d): created",
                       h2_mplx_get_id(stream->m), stream->id);
@@ -104,6 +98,18 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
         apr_pool_destroy(stream->pool);
     }
     return APR_SUCCESS;
+}
+
+void h2_stream_attach_pool(h2_stream *stream, apr_pool_t *pool)
+{
+    stream->pool = pool;
+}
+
+apr_pool_t *h2_stream_detach_pool(h2_stream *stream)
+{
+    apr_pool_t *pool = stream->pool;
+    stream->pool = NULL;
+    return pool;
 }
 
 void h2_stream_abort(h2_stream *stream)
@@ -156,7 +162,9 @@ apr_status_t h2_stream_rwrite(h2_stream *stream, request_rec *r)
 apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos)
 {
     AP_DEBUG_ASSERT(stream);
-    conn_rec *c = h2_mplx_get_conn(stream->m);
+    /* Seeing the end-of-headers, we have everything we need to 
+     * start processing it.
+     */
     stream->task = h2_task_create(h2_mplx_get_id(stream->m), stream->id, 
                                   stream->pool, stream->m);
     
@@ -168,9 +176,9 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos)
     if (eos) {
         status = h2_stream_write_eos(stream);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, h2_mplx_get_conn(stream->m),
                   "h2_stream(%ld-%d): end header, task %s %s (%s)",
-                  h2_mplx_get_id(stream->m), stream->id,
+                  stream->m->id, stream->id,
                   stream->request->method, stream->request->path,
                   stream->request->authority);
     

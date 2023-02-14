@@ -71,6 +71,7 @@ struct h2_session {
     
     struct h2_stream_set *streams;  /* streams handled by this session */
     struct h2_stream_set *zombies;  /* streams that are done */
+    apr_pool_t *plast;              /* NULL or last stream pool cleared */
     
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
     struct h2_workers *workers;     /* for executing stream tasks */

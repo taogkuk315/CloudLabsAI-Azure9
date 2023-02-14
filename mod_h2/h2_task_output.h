@@ -35,10 +35,7 @@ typedef enum {
 typedef struct h2_task_output h2_task_output;
 
 struct h2_task_output {
-    const char *id;
-    int stream_id;
-    struct h2_mplx *mplx;
-    struct apr_thread_cond_t *cond;
+    struct h2_task_env *env;
     h2_task_output_state_t state;
     struct h2_from_h1 *from_h1;
 };

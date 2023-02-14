@@ -56,11 +56,23 @@ static int h2_session_status_from_apr_status(apr_status_t rv)
 
 static int stream_open(h2_session *session, int stream_id)
 {
+    apr_pool_t *stream_pool;
+    apr_status_t status;
+    
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
-    h2_stream * stream = h2_stream_create(stream_id, session->pool,
+    
+    status = apr_pool_create(&stream_pool, session->pool);
+    h2_stream * stream = h2_stream_create(stream_id, stream_pool,
                                           session->mplx);
+    if (status != APR_SUCCESS) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
+                      "h2_session: stream(%ld-%d): unable to create pool",
+                      session->id, stream_id);
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
                       "h2_session: stream(%ld-%d): unable to create",
@@ -68,7 +80,7 @@ static int stream_open(h2_session *session, int stream_id)
         return NGHTTP2_ERR_INVALID_STREAM_ID;
     }
     
-    apr_status_t status = h2_stream_set_add(session->streams, stream);
+    status = h2_stream_set_add(session->streams, stream);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
                       "h2_session: stream(%ld-%d): unable to add to pool",
@@ -225,6 +237,27 @@ static int on_frame_not_send_cb(nghttp2_session *ngh2,
     return 0;
 }
 
+static apr_status_t stream_destroy(h2_session *session, h2_stream *stream) 
+{
+    apr_status_t status;
+    apr_pool_t *pool;
+    
+    pool = h2_stream_detach_pool(stream);
+    status = h2_stream_destroy(stream);
+    if (status == APR_SUCCESS) {
+        /* If we already had one, throw the old one away and
+         * keep the hot one. */
+        if (session->plast != NULL) {
+            apr_pool_destroy(session->plast);
+        }
+        apr_pool_clear(pool);
+        session->plast = pool;
+        return APR_SUCCESS;
+    }
+    h2_stream_attach_pool(stream, pool);
+    return status;
+}
+
 static apr_status_t close_stream(h2_session *session, h2_stream *stream)
 {
     apr_status_t status = APR_SUCCESS;
@@ -233,7 +266,7 @@ static apr_status_t close_stream(h2_session *session, h2_stream *stream)
                   session->id, (int)stream->id);
     
     h2_stream_set_remove(session->streams, stream);
-    status = h2_stream_destroy(stream);
+    status = stream_destroy(session, stream);
     if (status == APR_EAGAIN) {
         h2_stream_set_add(session->zombies, stream);
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
@@ -260,7 +293,7 @@ static apr_status_t join_stream_task(h2_session *session, h2_stream *stream)
                           session->id, (int)stream->id);
         }
     }
-    h2_stream_destroy(stream);
+    stream_destroy(session, stream);
     return status;
 }
 
@@ -647,8 +680,9 @@ static int stream_close_finished(void *ctx, h2_stream *stream) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                       "h2_session(%ld): reaping zombie stream(%d)",
                       session->id, stream->id);
+        
         h2_stream_set_remove(session->zombies, stream);
-        h2_stream_destroy(stream);
+        stream_destroy(session, stream);
     }
     return 1;
 }
@@ -741,6 +775,10 @@ void h2_session_destroy(h2_session *session)
         session->iowait = NULL;
     }
     
+    if (session->plast) {
+        apr_pool_destroy(session->plast);
+        session->plast = NULL;
+    }
     if (session->pool) {
         apr_pool_destroy(session->pool);
     }

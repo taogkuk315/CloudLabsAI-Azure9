@@ -108,7 +108,8 @@ h2_worker *h2_worker_create(int id,
     if (status != APR_SUCCESS) {
         return NULL;
     }
-    
+    apr_allocator_owner_set(allocator, pool);
+
     h2_worker *w = apr_pcalloc(pool, sizeof(h2_worker));
     if (w) {
         APR_RING_ELEM_INIT(w, link);
@@ -139,12 +140,8 @@ apr_status_t h2_worker_destroy(h2_worker *worker)
         worker->io = NULL;
     }
     if (worker->pool) {
-        apr_allocator_t *allocator = apr_pool_allocator_get(worker->pool);
         apr_pool_destroy(worker->pool);
         /* worker is gone */
-        if (allocator) {
-            apr_allocator_destroy(allocator);
-        }
     }
     return APR_SUCCESS;
 }

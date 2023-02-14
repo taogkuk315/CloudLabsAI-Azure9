@@ -233,42 +233,41 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     env.id = task->id;
     env.stream_id = task->stream_id;
     env.mplx = task->mplx;
-    
-    /* Not cloning these task fields:
-     * If the stream is destroyed before the task is done, this might
-     * be a problem. However that should never happen as stream destruction
-     * explicitly checks if task processing has finished.
-     */
-    env.method = task->method;
-    env.path = task->path;
-    env.authority = task->authority;
-    env.headers = task->headers;
-    
     env.input_eos = task->input_eos;
-    task->io = env.io = h2_worker_get_cond(worker);
-
-    env.conn = task->conn;
-    task->conn = NULL;
     env.serialize_headers = !!h2_config_geti(cfg, H2_CONF_SER_HEADERS);
     
+    /* transfer pseudo connection ownership */
+    env.conn = task->conn;
+    task->conn = NULL;
+    
+    /* Clone fields, so that lifetimes become (more) independent. */
+    env.method    = apr_pstrdup(env.conn->pool, task->method);
+    env.path      = apr_pstrdup(env.conn->pool, task->path);
+    env.authority = apr_pstrdup(env.conn->pool, task->authority);
+    env.headers   = apr_table_clone(env.conn->pool, task->headers);
+    
+    /* Link the env to the worker which provides useful things such
+     * as mutex, a socket etc. */
+    task->io = env.io = h2_worker_get_cond(worker);
     status = h2_conn_prep(env.conn, task->mplx->c, worker);
     
-    /* save in connection that this one is for us, prevents
+    /* save in connection that this one is a pseudo connection, prevents
      * other hooks from messing with it. */
     h2_ctx_create_for(env.conn->c, &env);
 
     if (status == APR_SUCCESS) {
-        apr_pool_t *pool = env.conn->pool;
-        apr_bucket_alloc_t *bucket_alloc = env.conn->bucket_alloc;
-        
-        env.input = h2_task_input_create(&env, pool, bucket_alloc);
-        env.output = h2_task_output_create(&env, pool, bucket_alloc);
-        
+        env.input = h2_task_input_create(&env, env.conn->pool, 
+                                         env.conn->bucket_alloc);
+        env.output = h2_task_output_create(&env, env.conn->pool,
+                                           env.conn->bucket_alloc);
         status = h2_conn_process(env.conn);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, env.conn->c,
+                      "h2_task(%s): processing done", task->id);
     }
-    
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, env.conn->c,
-                  "h2_task(%s):processing done", task->id);
+    else {
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, env.conn->c,
+                      "h2_task(%s): error setting up h2_task_env", task->id);
+    }
     
     if (env.input) {
         h2_task_input_destroy(env.input);
