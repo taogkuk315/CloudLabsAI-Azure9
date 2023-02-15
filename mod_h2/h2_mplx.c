@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <stddef.h>
 
+#include <apr_atomic.h>
 #include <apr_thread_mutex.h>
 #include <apr_thread_cond.h>
 #include <apr_strings.h>
@@ -51,6 +52,34 @@ static int is_aborted(h2_mplx *m, apr_status_t *pstatus) {
 
 static void have_out_data_for(h2_mplx *m, int stream_id);
 
+static void h2_mplx_destroy(h2_mplx *m)
+{
+    AP_DEBUG_ASSERT(m);
+    m->aborted = 1;
+    if (m->q) {
+        h2_workers_unregister(m->workers, m);
+        h2_tq_destroy(m->q);
+        m->q = NULL;
+    }
+    if (m->ready_ios) {
+        h2_io_set_destroy(m->ready_ios);
+        m->ready_ios = NULL;
+    }
+    if (m->stream_ios) {
+        h2_io_set_destroy(m->stream_ios);
+        m->stream_ios = NULL;
+    }
+    
+    if (m->lock) {
+        apr_thread_mutex_destroy(m->lock);
+        m->lock = NULL;
+    }
+    
+    if (m->pool) {
+        apr_pool_destroy(m->pool);
+    }
+}
+
 /**
  * A h2_mplx needs to be thread-safe *and* if will be called by
  * the h2_session thread *and* the h2_worker threads. Therefore:
@@ -78,6 +107,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
     if (m) {
         m->id = c->id;
         APR_RING_ELEM_INIT(m, link);
+        m->refs = 1;
         m->c = c;
         apr_pool_create_ex(&m->pool, parent, NULL, allocator);
         if (!m->pool) {
@@ -103,36 +133,20 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
     return m;
 }
 
-void h2_mplx_destroy(h2_mplx *m)
+void h2_mplx_release(h2_mplx *m)
 {
-    AP_DEBUG_ASSERT(m);
-    m->aborted = 1;
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        if (m->q) {
-            h2_workers_unregister(m->workers, m);
-            h2_tq_destroy(m->q);
-            m->q = NULL;
-        }
-        if (m->ready_ios) {
-            h2_io_set_destroy(m->ready_ios);
-            m->ready_ios = NULL;
-        }
-        if (m->stream_ios) {
-            h2_io_set_destroy(m->stream_ios);
-            m->stream_ios = NULL;
-        }
-        apr_thread_mutex_unlock(m->lock);
-        
-        if (m->lock) {
-            apr_thread_mutex_destroy(m->lock);
-            m->lock = NULL;
-        }
-    }
+    int keep = apr_atomic_dec32(&m->refs);
     
-    if (m->pool) {
-        apr_pool_destroy(m->pool);
+    if (!keep) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c,
+                      "h2_mplx(%ld): last release -> destroying", m->id);
+        h2_mplx_destroy(m);
     }
+}
+
+void h2_mplx_reference(h2_mplx *m)
+{
+    apr_atomic_inc32(&m->refs);
 }
 
 apr_pool_t *h2_mplx_get_pool(h2_mplx *m)

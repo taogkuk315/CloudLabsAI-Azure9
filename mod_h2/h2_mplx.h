@@ -53,6 +53,7 @@ typedef struct h2_mplx h2_mplx;
 struct h2_mplx {
     long id;
     APR_RING_ENTRY(h2_mplx) link;
+    volatile apr_uint32_t refs;
     conn_rec *c;
     apr_pool_t *pool;
     apr_bucket_alloc_t *bucket_alloc;
@@ -80,11 +81,8 @@ struct h2_mplx {
 h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *master, 
                         struct h2_workers *workers);
 
-/**
- * Destroys the multiplexer. Cleans up memory. Should only be called
- * upon session destruction.
- */
-void h2_mplx_destroy(h2_mplx *mplx);
+void h2_mplx_release(h2_mplx *m);
+void h2_mplx_reference(h2_mplx *m);
 
 /**
  * Get the id of the multiplexer, same as the session id it belongs to.
