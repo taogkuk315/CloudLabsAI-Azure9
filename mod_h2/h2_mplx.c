@@ -133,20 +133,42 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
     return m;
 }
 
+void h2_mplx_reference(h2_mplx *m)
+{
+    apr_atomic_inc32(&m->refs);
+}
+
 void h2_mplx_release(h2_mplx *m)
 {
     int keep = apr_atomic_dec32(&m->refs);
     
     if (!keep) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c,
-                      "h2_mplx(%ld): last release -> destroying", m->id);
-        h2_mplx_destroy(m);
+        if (m->join_wait) {
+            apr_thread_cond_broadcast(m->join_wait);
+        }
     }
 }
 
-void h2_mplx_reference(h2_mplx *m)
+apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
 {
-    apr_atomic_inc32(&m->refs);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_mplx_release(m);
+        while (m->refs > 0) {
+            m->join_wait = wait;
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+                          "h2_mplx(%ld): release_join, refs=%d", 
+                          m->id, m->refs);
+            apr_thread_cond_wait(wait, m->lock);
+        }
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+                      "h2_mplx(%ld): release_join -> destroy, refs=%d", 
+                      m->id, m->refs);
+        m->join_wait = NULL;
+        apr_thread_mutex_unlock(m->lock);
+        h2_mplx_destroy(m);
+    }
+    return status;
 }
 
 apr_pool_t *h2_mplx_get_pool(h2_mplx *m)

@@ -64,6 +64,7 @@ struct h2_mplx {
     
     apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *added_output;
+    struct apr_thread_cond_t *join_wait;
     
     int aborted;
     apr_size_t stream_max_mem;
@@ -76,13 +77,30 @@ struct h2_mplx {
  ******************************************************************************/
 
 /**
- * Create the multiplexer for the given HTTP2 session.
+ * Create the multiplexer for the given HTTP2 session. 
+ * Implicitly has reference count 1.
  */
 h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *master, 
                         struct h2_workers *workers);
 
-void h2_mplx_release(h2_mplx *m);
+/**
+ * Increase the reference counter of this mplx.
+ */
 void h2_mplx_reference(h2_mplx *m);
+
+/**
+ * Decreases the reference counter of this mplx.
+ */
+void h2_mplx_release(h2_mplx *m);
+/**
+ * Decreases the reference counter of this mplx and waits for it
+ * to reached 0, destroy the mplx afterwards.
+ * This is to be called from the thread that created the mplx in
+ * the first place.
+ * @param m the mplx to be released and destroyed
+ * @param wait condition var to wait on for ref counter == 0
+ */ 
+apr_status_t h2_mplx_release_and_join(h2_mplx *m, struct apr_thread_cond_t *wait);
 
 /**
  * Get the id of the multiplexer, same as the session id it belongs to.

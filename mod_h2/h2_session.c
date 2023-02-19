@@ -765,7 +765,7 @@ void h2_session_destroy(h2_session *session)
         session->ngh2 = NULL;
     }
     if (session->mplx) {
-        h2_mplx_release(session->mplx);
+        h2_mplx_release_and_join(session->mplx, session->iowait);
         session->mplx = NULL;
     }
     h2_conn_io_destroy(&session->io);
