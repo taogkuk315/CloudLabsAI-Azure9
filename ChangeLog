@@ -1,3 +1,9 @@
+v0.7.1
+--------------------------------------------------------------------------------
+ * h2_mplx now uses reference counting to enable a controlled destruction on
+   session termination. If this fixes all the crashes reported, remains to
+   be seen.
+
 v0.7.0
 --------------------------------------------------------------------------------
  * switching to nghttp2 v1.0.*, compilation + linkage with nghttp2 v0.7.* will
