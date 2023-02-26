@@ -28,14 +28,14 @@ github pull request, she is more than welcome.
 
 
 ##Features
-This module supports the "h2" (HTTP2 over TLS) and "h2c" (HTTP2 over plain
+This module supports the protocols "h2" (HTTP2 over TLS) and "h2c" (HTTP2 over plain
 HTTP connections via Upgrade). You can enable it for the whole server or
 for specific virtual hosts only. More on this below on "Configuration".
 
 Specifically, the protocols "h2", "h2-16", "h2-14" and its "h2c" cousins
 are announced to clients. Support for "h2-14" and "h2-16" is expected to
-disappear silently as these are no standard and are currenlty being used
-for the interop testing phase.
+disappear silently as these are no standard and are currently being used
+for the interop testing phase only.
 
 ##Configuration
 The test setup in test/conf/* that gets installed in gen/install for the
@@ -53,10 +53,10 @@ such as:
 * H2MaxWorkers n             maximum number of worker threads per child, default: mpm configured thread limit/2
 * H2StreamMaxMemSize n       maximum number of bytes buffered in memory for a stream, default: 64k
 * H2AltSvc name=host:port    Announce an "alternate service" to clients (see https://http2.github.io/http2-spec/alt-svc.html for details), default: empty
-* H2AltSvcMaxAge n           number of seconds Alt-Svc information is valid, default: will not be sent, specificatin defaults to 24h
+* H2AltSvcMaxAge n           number of seconds Alt-Svc information is valid, default: will not be sent, specification defaults to 24h
 * H2SerializeHeaders (on/off), "off"   serialize/parse request+response headers for streams, as if they arrived in HTTP/1 format. When off, certain parts of httpd core filters are disabled/replaced to allow for a more efficient handling. 
 * H2HackMpmEvent (on/off), "on"        performs a hack on internal connection in order to make mpm_event working, has no effect on other mpm modules
-* H2Direct (on/off), "on"    to enabled h2c direct mode on a non-TLS host, default: off
+* H2Direct (on/off), "on"    to enable h2c direct mode on a non-TLS host, default: off
 
 All these configuration parameters can be set on servers/virtual hosts and
 are not available on directory level. Note that Worker configuration is
@@ -76,7 +76,7 @@ at least OpenSSL 1.0.1 is needed (OpenSSL 1.0.2 perferred).
 
 
 ##Installation
-mod_h2 is using autoconf/automake for configurtion and build handling. If you
+mod_h2 is using autoconf/automake for configuration and build handling. If you
 have a git checkout, refer to 'Build from git' below. If you have a release
 extracted, you need to:
 ```
@@ -162,7 +162,7 @@ You should make an entry in /etc/hosts like
 for tests to work properly.
 
 Another issue is testing with browsers like Chrome or Firefox. If you point
-them at test.example.org, the will complain about the self-signed certificate,
+them at test.example.org, they will complain about the self-signed certificate,
 offer you to connect anyway and, if you choose that, refuse to work. I think
 they have a much stricter cert checking for HTTP/2 and the UI needs an update
 here.
