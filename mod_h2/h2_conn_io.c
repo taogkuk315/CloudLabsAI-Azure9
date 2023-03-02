@@ -88,8 +88,8 @@ static apr_status_t h2_conn_io_bucket_read(h2_conn_io *io,
                     h2_util_hex_dump(buffer, sizeof(buffer)/sizeof(buffer[0]),
                                      bucket_data, bucket_length);
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->connection,
-                                  "h2_conn_io(%ld): read %ld bytes: %s",
-                                  io->connection->id, bucket_length, buffer);
+                                  "h2_conn_io(%ld): read %d bytes: %s",
+                                  io->connection->id, (int)bucket_length, buffer);
                 }
                 
                 if (bucket_length > 0) {

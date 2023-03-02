@@ -232,7 +232,7 @@ apr_status_t h2_to_h1_add_data(h2_to_h1 *to_h1,
          * content-length header, we need to chunk the input data.
          */
         apr_status_t status = apr_brigade_printf(to_h1->bb, NULL, NULL,
-                                                 "%lx\r\n", len);
+                                                 "%lx\r\n", (unsigned long)len);
         if (status == APR_SUCCESS) {
             status = h2_to_h1_add_data_raw(to_h1, data, len);
             if (status == APR_SUCCESS) {

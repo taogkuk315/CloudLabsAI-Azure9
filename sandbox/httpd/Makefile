@@ -40,7 +40,7 @@ OPENSSL_DIR = openssl-latest
 OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
 OPENSSL_URL = $(OPENSSL_BASE)/source/latest.tar.gz
 OPENSSL_CONF_CMD = CFLAGS=-fPIC ./Configure
-OPENSSL_CONF =  shared linux-x86_64
+OPENSSL_CONF =  shared linux-generic32
 
 FCGI_VERSION = 2.3.9
 FCGI_DIR     = mod_fcgid-$(FCGI_VERSION)
