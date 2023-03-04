@@ -176,8 +176,8 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
     
     apr_status_t status = h2_stream_write_data(stream, (const char *)data, len);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, session->c,
-                  "h2_stream(%ld-%d): written DATA, length %ld",
-                  session->id, stream_id, len);
+                  "h2_stream(%ld-%d): written DATA, length %d",
+                  session->id, stream_id, (int)len);
     if (status != APR_SUCCESS) {
         rv = nghttp2_submit_rst_stream(ngh2, NGHTTP2_FLAG_NONE, stream_id,
                                        NGHTTP2_INTERNAL_ERROR);
@@ -383,7 +383,7 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
     ++session->frames_received;
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                   "h2_session(%ld): on_frame_rcv #%ld, type=%d", session->id,
-                  session->frames_received, frame->hd.type);
+                  (long)session->frames_received, frame->hd.type);
     switch (frame->hd.type) {
         case NGHTTP2_HEADERS: {
             h2_stream * stream = h2_stream_set_get(session->streams,
@@ -735,13 +735,13 @@ void h2_session_destroy(h2_session *session)
     if (session->streams) {
         if (h2_stream_set_size(session->streams)) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                          "h2_session(%ld): destroy, %ld streams open",
-                          session->id, h2_stream_set_size(session->streams));
+                          "h2_session(%ld): destroy, %d streams open",
+                          session->id, (int)h2_stream_set_size(session->streams));
             /* destroy all sessions, join all existing tasks */
             h2_stream_set_iter(session->streams, close_active_iter, session);
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                          "h2_session(%ld): destroy, %ld streams remain",
-                          session->id, h2_stream_set_size(session->streams));
+                          "h2_session(%ld): destroy, %d streams remain",
+                          session->id, (int)h2_stream_set_size(session->streams));
         }
         h2_stream_set_destroy(session->streams);
         session->streams = NULL;
@@ -749,13 +749,13 @@ void h2_session_destroy(h2_session *session)
     if (session->zombies) {
         if (h2_stream_set_size(session->zombies)) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                          "h2_session(%ld): destroy, %ld zombie streams",
-                          session->id, h2_stream_set_size(session->zombies));
+                          "h2_session(%ld): destroy, %d zombie streams",
+                          session->id, (int)h2_stream_set_size(session->zombies));
             /* destroy all zombies, join all existing tasks */
             h2_stream_set_iter(session->zombies, close_zombie_iter, session);
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                          "h2_session(%ld): destroy, %ld zombies remain",
-                          session->id, h2_stream_set_size(session->zombies));
+                          "h2_session(%ld): destroy, %d zombies remain",
+                          session->id, (int)h2_stream_set_size(session->zombies));
         }
         h2_stream_set_destroy(session->zombies);
         session->zombies = NULL;
@@ -1285,8 +1285,8 @@ void h2_session_log_stats(h2_session *session)
 {
     AP_DEBUG_ASSERT(session);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                  "h2_session(%ld): %ld open streams",
-                  session->id, h2_stream_set_size(session->streams));
+                  "h2_session(%ld): %d open streams",
+                  session->id, (int)h2_stream_set_size(session->streams));
     h2_stream_set_iter(session->streams, log_stream, session);
 }
 
