@@ -14,6 +14,9 @@
 #
 
 
+OS           = $(shell uname -s)
+MACHINE      = $(shell uname -m)
+
 
 APR_VERSION  = 1.5.2
 APR_DIR      = apr-$(APR_VERSION)
@@ -40,7 +43,7 @@ OPENSSL_DIR = openssl-latest
 OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
 OPENSSL_URL = $(OPENSSL_BASE)/source/latest.tar.gz
 OPENSSL_CONF_CMD = CFLAGS=-fPIC ./Configure
-OPENSSL_CONF =  shared linux-generic32
+OPENSSL_CONF =  shared linux-$(MACHINE)
 
 FCGI_VERSION = 2.3.9
 FCGI_DIR     = mod_fcgid-$(FCGI_VERSION)
@@ -52,8 +55,6 @@ INST_DIR     = ../install
 BLD_PREFIX   = $(shell dirname $$PWD)/install
 
 CURL_OPTS    = --progress-bar
-
-OS           = $(shell uname -s)
 
 HTTPD_CONF   = --enable-mpms-shared=all --with-included-apr
 HTTPD_DEPS   = $(GEN)/$(HTTPD_DIR)/.apr-extracted
@@ -68,6 +69,9 @@ ifeq ($(OS),Darwin)
 	# we need our own pcre
 	HTTPD_DEPS  += $(INST_DIR)/.pcre-installed
 	HTTPD_CONF  += --with-pcre=$(BLD_PREFIX)
+endif
+ifeq ($(MACHINE),i686)
+    OPENSSL_CONF =  shared linux-generic32
 endif
 
 OPENSSL_VERSION = $(shell openssl version -v | sed -e 's/OpenSSL *//g' -e 's/[a-z]* .*//g')
