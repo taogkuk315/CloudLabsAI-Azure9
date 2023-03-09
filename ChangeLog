@@ -1,3 +1,9 @@
+v0.7.2
+--------------------------------------------------------------------------------
+ * fixes crash with certain modules that (correctly) expected their 
+   pre_connection hooks to work. Solves #28
+ * fixes log statements and Makefile to compile sandbox on 32bit linux
+
 v0.7.1
 --------------------------------------------------------------------------------
  * h2_mplx now uses reference counting to enable a controlled destruction on
