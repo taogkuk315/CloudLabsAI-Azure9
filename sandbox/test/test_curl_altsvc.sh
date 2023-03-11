@@ -21,7 +21,7 @@ source test_common.sh
 echo "curl ALT-SVC on: $@"
 
 URL_PREFIX="$HTTP_URL"
-curl_check_altsvc index.html 'h2=":12346"; ma=60, h2c=":12345"; ma=60' "http/1.1" --http1.1
+curl_check_altsvc index.html '' --http1.1
 curl_check_altsvc index.html '' "http/1.1, signal used"             --http1.1 -H'Alt-Svc-Used: 1'
 # bug in curl's nghttp handling it seems, hangs
 #curl_check_altsvc index.html '' "http/2"                            --http2

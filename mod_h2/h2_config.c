@@ -153,6 +153,15 @@ int h2_config_geti(h2_config *conf, h2_config_var_t var)
     }
 }
 
+h2_config *h2_config_sget(server_rec *s)
+{
+    h2_config *cfg = (h2_config *)ap_get_module_config(s->module_config, 
+                                                       &h2_module);
+    AP_DEBUG_ASSERT(cfg);
+    return cfg;
+}
+
+
 static const char *h2_conf_set_engine(cmd_parms *parms,
                                       void *arg, const char *value)
 {
@@ -326,14 +335,6 @@ h2_config *h2_config_rget(request_rec *r)
     h2_config *cfg = (h2_config *)ap_get_module_config(r->per_dir_config, 
                                                        &h2_module);
     return cfg? cfg : h2_config_sget(r->server); 
-}
-
-h2_config *h2_config_sget(server_rec *s)
-{
-    h2_config *cfg = (h2_config *)ap_get_module_config(s->module_config, 
-                                                       &h2_module);
-    AP_DEBUG_ASSERT(cfg);
-    return cfg;
 }
 
 h2_config *h2_config_get(conn_rec *c)

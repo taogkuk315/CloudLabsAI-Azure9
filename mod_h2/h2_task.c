@@ -148,6 +148,8 @@ static int h2_task_process_conn(conn_rec* c)
             h2_task_process_request(ctx->task_env);
             return DONE;
         }
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, 
+                      "h2_task(%s), serialized handling", ctx->task_env->id);
     }
     return DECLINED;
 }

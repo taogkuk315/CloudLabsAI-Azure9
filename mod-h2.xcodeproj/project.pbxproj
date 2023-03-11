@@ -68,6 +68,7 @@
 		B2B170B91B31BF7000EDC007 /* httpd-2.4.12-alpn-v5.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-2.4.12-alpn-v5.patch"; sourceTree = "<group>"; };
 		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
+		B2C631081B383EA800127D1E /* test-ser.example.org.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "test-ser.example.org.conf"; sourceTree = "<group>"; };
 		B2CB610E1A88BB9F00D270A6 /* h2_conn.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_conn.c; sourceTree = "<group>"; };
 		B2CB610F1A88BB9F00D270A6 /* h2_conn.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_conn.h; sourceTree = "<group>"; };
 		B2CB61101A8A0FB400D270A6 /* h2_response.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_response.c; sourceTree = "<group>"; };
@@ -509,6 +510,7 @@
 				B2B170B81B316FB100EDC007 /* aaa-noh2.example.org.conf */,
 				B2B170B31B2EC73400EDC007 /* test.example.org.conf */,
 				B2E6FDFD1AC2EFA200D557D8 /* mod-h2.greenbytes.de.conf */,
+				B2C631081B383EA800127D1E /* test-ser.example.org.conf */,
 			);
 			path = sites;
 			sourceTree = "<group>";

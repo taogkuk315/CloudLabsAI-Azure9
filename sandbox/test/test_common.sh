@@ -29,7 +29,12 @@ fi
 
 INSTALL_DIR="../install"
 BIN_DIR="${INSTALL_DIR}/bin"
-DOC_ROOT="htdocs/${HOST}"
+if [ "${HOST#*.}" = 'example.org' ]; then
+    DOC_ROOT="htdocs/test.example.org"
+else 
+    DOC_ROOT="htdocs/${HOST}"
+fi
+
 GEN="gen"
 TMP="$GEN/tmp"
 

@@ -14,12 +14,14 @@
 #
 
 HOST_NAME    = test.example.org
+HOST2_NAME   = test-ser.example.org
 
 HTTP_PORT    = 12345
 HTTPS_PORT   = 12346
 
 HTTP_AUTH    = $(HOST_NAME):$(HTTP_PORT)
 HTTPS_AUTH   = $(HOST_NAME):$(HTTPS_PORT)
+HTTPS_AUTH2  = $(HOST2_NAME):$(HTTPS_PORT)
 
 GEN          = gen
 INST_DIR     = ../install
@@ -106,6 +108,10 @@ test: \
 	@bash test_nghttp_post.sh http://$(HTTP_AUTH)/rewrite
 	@bash test_curl_get.sh    http://$(HTTP_AUTH)/rewrite
 	@bash test_curl_post.sh   http://$(HTTP_AUTH)/rewrite
+	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH2)
+	@bash test_nghttp_post.sh https://$(HTTPS_AUTH2)
+	@bash test_curl_get.sh    https://$(HTTPS_AUTH2)
+	@bash test_curl_post.sh   https://$(HTTPS_AUTH2)
 
 ################################################################################
 # Load Test
@@ -165,6 +171,8 @@ $(INST_DIR)/.test-setup: \
         $(INST_DIR)/conf/mods-enabled/h2.load \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
 		$(INST_DIR)/conf/ssl/test.example.org.pem \
+		$(INST_DIR)/conf/ssl/test-ser.example.org.key \
+		$(INST_DIR)/conf/ssl/test-ser.example.org.pem \
 		$(INST_DIR)/conf/ssl/noh2.example.org.key \
 		$(INST_DIR)/conf/ssl/noh2.example.org.pem \
 		$(INST_DIR)/.testdocs-setup
@@ -190,9 +198,14 @@ $(INST_DIR)/conf/ssl/test.example.org.key:
 	openssl genrsa -out $(INST_DIR)/conf/ssl/test.example.org.key 4096
 
 $(INST_DIR)/conf/ssl/test.example.org.req: \
-		$(INST_DIR)/conf/ssl/test.example.org.key
+		$(INST_DIR)/conf/ssl/test.example.org.key \
+        conf/ssl/test.example.org.x509.input
 	openssl req -new -key $(INST_DIR)/conf/ssl/test.example.org.key \
 		-out $(INST_DIR)/conf/ssl/test.example.org.req < conf/ssl/test.example.org.x509.input
+
+$(INST_DIR)/conf/ssl/test.example.org.x509.input: \
+        conf/ssl/test.example.org.x509.input
+	cp conf/ssl/test.example.org.x509.input $(INST_DIR)/conf/ssl
 
 $(INST_DIR)/conf/ssl/test.example.org.pem: \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
@@ -205,9 +218,37 @@ $(INST_DIR)/conf/ssl/test.example.org.pem: \
 		-out $(INST_DIR)/conf/ssl/test.example.org.pem \
 		-extfile conf/ssl/extensions.conf -extensions ssl_client < conf/ssl/noh2.example.org.x509.input
 
+$(INST_DIR)/conf/ssl/test-ser.example.org.key:
+	@mkdir -p $(INST_DIR)/conf/ssl
+	openssl genrsa -out $(INST_DIR)/conf/ssl/test-ser.example.org.key 4096
+
+$(INST_DIR)/conf/ssl/test-ser.example.org.x509.input: \
+        conf/ssl/test-ser.example.org.x509.input
+	cp conf/ssl/test-ser.example.org.x509.input $(INST_DIR)/conf/ssl
+
+$(INST_DIR)/conf/ssl/test-ser.example.org.req: \
+		$(INST_DIR)/conf/ssl/test-ser.example.org.key
+	openssl req -new -key $(INST_DIR)/conf/ssl/test-ser.example.org.key \
+		-out $(INST_DIR)/conf/ssl/test-ser.example.org.req < conf/ssl/test-ser.example.org.x509.input
+
+$(INST_DIR)/conf/ssl/test-ser.example.org.pem: \
+		$(INST_DIR)/conf/ssl/test-ser.example.org.key \
+		$(INST_DIR)/conf/ssl/test-ser.example.org.req \
+		conf/ssl/extensions.conf \
+		conf/ssl/test-ser.example.org.x509.input
+	openssl x509 -req -sha256 -days 1095 \
+		-signkey $(INST_DIR)/conf/ssl/test-ser.example.org.key \
+		-in $(INST_DIR)/conf/ssl/test-ser.example.org.req \
+		-out $(INST_DIR)/conf/ssl/test-ser.example.org.pem \
+		-extfile conf/ssl/extensions.conf -extensions ssl_client < conf/ssl/noh2.example.org.x509.input
+
 $(INST_DIR)/conf/ssl/noh2.example.org.key:
 	@mkdir -p $(INST_DIR)/conf/ssl
 	openssl genrsa -out $(INST_DIR)/conf/ssl/noh2.example.org.key 4096
+
+$(INST_DIR)/conf/ssl/noh2.example.org.x509.input: \
+        conf/ssl/noh2.example.org.x509.input
+	cp conf/ssl/noh2.example.org.x509.input $(INST_DIR)/conf/ssl
 
 $(INST_DIR)/conf/ssl/noh2.example.org.req: \
 		$(INST_DIR)/conf/ssl/noh2.example.org.key
@@ -218,7 +259,7 @@ $(INST_DIR)/conf/ssl/noh2.example.org.pem: \
 		$(INST_DIR)/conf/ssl/noh2.example.org.key \
 		$(INST_DIR)/conf/ssl/noh2.example.org.req \
 		conf/ssl/extensions.conf \
-		conf/ssl/test.example.org.x509.input
+		conf/ssl/noh2.example.org.x509.input
 	openssl x509 -req -sha256 -days 1095 \
 		-signkey $(INST_DIR)/conf/ssl/noh2.example.org.key \
 		-in $(INST_DIR)/conf/ssl/noh2.example.org.req \
