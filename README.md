@@ -154,10 +154,12 @@ need to:
 ```
 The sandbox creates its own httpd and nghttp2 installation in gen/install
 and configures httpd to run on ports 12345+12346 (TLS). It also generates
-a self-signed certificate for the server under the name test.example.org.
-You should make an entry in /etc/hosts like
+a self-signed certificate for the servers under the name test.example.org
+and test-ser.example.org.
+You should make entries in /etc/hosts like
 ```
 127.0.0.1       test.example.org        test
+127.0.0.1       test-ser.example.org    test
 ```
 for tests to work properly.
 
