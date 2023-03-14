@@ -33,6 +33,9 @@ HTTPD_DIR    = httpd-$(HTTPD_VERSION)
 HTTPD_TAR    = httpd-$(HTTPD_VERSION).tar.gz
 HTTPD_URL    = https://archive.apache.org/dist/httpd/$(HTTPD_TAR)
 
+HTTPD_CONF   = --enable-mpms-shared=all --with-included-apr
+HTTPD_DEPS   = $(GEN)/$(HTTPD_DIR)/.apr-extracted
+
 PCRE_VERSION = 8.36
 PCRE_DIR     = pcre-$(PCRE_VERSION)
 PCRE_TAR     = $(PCRE_DIR).tar.gz
@@ -56,9 +59,6 @@ BLD_PREFIX   = $(shell dirname $$PWD)/install
 
 CURL_OPTS    = --progress-bar
 
-HTTPD_CONF   = --enable-mpms-shared=all --with-included-apr
-HTTPD_DEPS   = $(GEN)/$(HTTPD_DIR)/.apr-extracted
-
 # For OS X, we drag our own PCRE lib in as the one installed is not
 # recognized by the httpd configure (and pbly rightly so).
 # On other OS, we expect a proper pcre installation
@@ -79,7 +79,7 @@ OPENSSL_VERSION = $(shell openssl version -v | sed -e 's/OpenSSL *//g' -e 's/[a-
 ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0 1.0.1))
 	# Very old openssl without alpn support installed, need a newer one
 	HTTPD_DEPS  += $(INST_DIR)/.openssl-installed
-HTTPD_CONF  += --with-ssl=$(BLD_PREFIX)  --enable-ssl-staticlib-deps
+    HTTPD_CONF  += --enable-ssl --with-ssl=$(BLD_PREFIX) --enable-ssl-staticlib-deps
 	ifeq ($(OS),Darwin)
         OPENSSL_CONF = darwin64-x86_64-cc
         OPENSSL_CONF_CMD = ./Configure
