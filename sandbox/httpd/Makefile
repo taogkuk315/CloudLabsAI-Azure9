@@ -79,7 +79,7 @@ OPENSSL_VERSION = $(shell openssl version -v | sed -e 's/OpenSSL *//g' -e 's/[a-
 ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0 1.0.1))
 	# Very old openssl without alpn support installed, need a newer one
 	HTTPD_DEPS  += $(INST_DIR)/.openssl-installed
-	HTTPD_CONF  += --with-ssl=$(BLD_PREFIX)
+HTTPD_CONF  += --with-ssl=$(BLD_PREFIX)  --enable-ssl-staticlib-deps
 	ifeq ($(OS),Darwin)
         OPENSSL_CONF = darwin64-x86_64-cc
         OPENSSL_CONF_CMD = ./Configure
