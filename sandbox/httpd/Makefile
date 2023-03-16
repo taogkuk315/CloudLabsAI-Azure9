@@ -276,7 +276,10 @@ $(GEN)/$(OPENSSL_DIR)/.configured: \
 $(GEN)/$(OPENSSL_DIR)/.patched: \
 		$(GEN)/$(OPENSSL_DIR)/.extracted
 	@echo applying patches...
-	@cd gen/$(OPENSSL_DIR) && patch -p1 < ../../patches/openssl-1.0.2-alpn.patch
+	# experimental patch to solve SNI+ALPN callback ordering in openssl
+	# not vital with latest httpd-alpn patch. We leave this out of our sandbox
+	# to have it running against an unpatched ssl for better test coverage.
+	#@cd gen/$(OPENSSL_DIR) && patch -p1 < ../../patches/openssl-1.0.2-alpn.patch
 	@echo openssl patched.
 	@touch $(GEN)/$(OPENSSL_DIR)/.patched
 
