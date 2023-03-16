@@ -252,33 +252,40 @@ $(GEN)/$(FCGI_TAR):
 # Build + install a local opensll library (if needed)
 #
 $(INST_DIR)/.openssl-installed: \
-		$(GEN)/$(OPENSSL_DIR)/.openssl-built
+		$(GEN)/$(OPENSSL_DIR)/.built
 	@mkdir -p $(INST_DIR)
 	@echo -n installing openssl locally, may take some time...
 	@cd $(GEN)/$(OPENSSL_DIR) && make install_sw >> ../build.log
 	@echo done.
 	@touch $(INST_DIR)/.openssl-installed
 
-$(GEN)/$(OPENSSL_DIR)/.openssl-built: \
-		$(GEN)/$(OPENSSL_DIR)/.openssl-configured
+$(GEN)/$(OPENSSL_DIR)/.built: \
+		$(GEN)/$(OPENSSL_DIR)/.configured
 	@echo -n building openssl locally...
 	@cd $(GEN)/$(OPENSSL_DIR) && make
 	@echo done.
-	@touch $(GEN)/$(OPENSSL_DIR)/.openssl-built
+	@touch $(GEN)/$(OPENSSL_DIR)/.built
 
-$(GEN)/$(OPENSSL_DIR)/.openssl-configured: \
-        $(GEN)/$(OPENSSL_DIR)/.openssl-extracted
+$(GEN)/$(OPENSSL_DIR)/.configured: \
+        $(GEN)/$(OPENSSL_DIR)/.patched
 	@echo -n configuring openssl...
 	cd $(GEN)/$(OPENSSL_DIR) && $(OPENSSL_CONF_CMD) --openssldir=$(BLD_PREFIX) $(OPENSSL_CONF)
 	@echo done.
-	@touch $(GEN)/$(OPENSSL_DIR)/.openssl-configured
+	@touch $(GEN)/$(OPENSSL_DIR)/.configured
 
-$(GEN)/$(OPENSSL_DIR)/.openssl-extracted:
+$(GEN)/$(OPENSSL_DIR)/.patched: \
+		$(GEN)/$(OPENSSL_DIR)/.extracted
+	@echo applying patches...
+	@cd gen/$(OPENSSL_DIR) && patch -p1 < ../../patches/openssl-1.0.2-alpn.patch
+	@echo openssl patched.
+	@touch $(GEN)/$(OPENSSL_DIR)/.patched
+
+$(GEN)/$(OPENSSL_DIR)/.extracted:
 	@echo -n downloading and extracting openssl...
 	@mkdir -p $(GEN)
 	@bash get-openssl-latest.sh $(OPENSSL_URL) $(GEN)/$(OPENSSL_DIR)
 	@echo done.
-	@touch $(GEN)/$(OPENSSL_DIR)/.openssl-extracted
+	@touch $(GEN)/$(OPENSSL_DIR)/.extracted
 
 ################################################################################
 # Build + install a local pcre library (if needed)
