@@ -181,11 +181,15 @@ h2_task *h2_task_create(long session_id,
      * stream pool if we shift this to the worker thread.
      * TODO.
      */
-    task->conn = h2_conn_create(mplx->c, stream_pool);
-    if (task->conn == NULL) {
-        return NULL;
+    const int PREPARE_CONN_ON_MAIN_THREAD = 1;
+    
+    if (PREPARE_CONN_ON_MAIN_THREAD) {
+        task->c = h2_conn_create(mplx->c, stream_pool);
+        if (task->c == NULL) {
+            return NULL;
+        }
     }
-
+    
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
                   "h2_task(%s): created", task->id);
     return task;
@@ -211,10 +215,6 @@ apr_status_t h2_task_destroy(h2_task *task)
         h2_mplx_release(task->mplx);
         task->mplx = NULL;
     }
-    if (task->conn) {
-        h2_conn_destroy(task->conn);
-        task->conn = NULL;
-    }
     return APR_SUCCESS;
 }
 
@@ -235,47 +235,52 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     env.input_eos = task->input_eos;
     env.serialize_headers = !!h2_config_geti(cfg, H2_CONF_SER_HEADERS);
     
-    /* transfer pseudo connection ownership */
-    env.conn = task->conn;
-    task->conn = NULL;
-    
-    /* Clone fields, so that lifetimes become (more) independent. */
-    env.method    = apr_pstrdup(env.conn->pool, task->method);
-    env.path      = apr_pstrdup(env.conn->pool, task->path);
-    env.authority = apr_pstrdup(env.conn->pool, task->authority);
-    env.headers   = apr_table_clone(env.conn->pool, task->headers);
-    
+    /* Create a subpool from the worker one to be used for all things
+     * with life-time of this task_env execution.
+     */
+    apr_pool_create(&env.pool, h2_worker_get_pool(worker));
+
     /* Link the env to the worker which provides useful things such
      * as mutex, a socket etc. */
     task->io = env.io = h2_worker_get_cond(worker);
-    status = h2_conn_prep(env.conn, task->mplx->c, worker);
+    
+    /* Clone fields, so that lifetimes become (more) independent. */
+    env.method    = apr_pstrdup(env.pool, task->method);
+    env.path      = apr_pstrdup(env.pool, task->path);
+    env.authority = apr_pstrdup(env.pool, task->authority);
+    env.headers   = apr_table_clone(env.pool, task->headers);
+    
+    /* Setup the pseudo connection to use our own pool and bucket_alloc */
+    if (task->c) {
+        env.c = task->c;
+        task->c = NULL;
+        status = h2_conn_setup(&env, worker);
+    }
+    else {
+        status = h2_conn_init(&env, worker);
+    }
     
     /* save in connection that this one is a pseudo connection, prevents
      * other hooks from messing with it. */
-    h2_ctx_create_for(env.conn->c, &env);
+    h2_ctx_create_for(env.c, &env);
 
     if (status == APR_SUCCESS) {
-        env.input = h2_task_input_create(&env, env.conn->pool, 
-                                         env.conn->bucket_alloc);
-        env.output = h2_task_output_create(&env, env.conn->pool,
-                                           env.conn->bucket_alloc);
-        status = h2_conn_process(env.conn);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, env.conn->c,
+        env.input = h2_task_input_create(&env, env.pool, 
+                                         env.c->bucket_alloc);
+        env.output = h2_task_output_create(&env, env.pool,
+                                           env.c->bucket_alloc);
+        status = h2_conn_process(env.c, h2_worker_get_socket(worker));
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, env.c,
                       "h2_task(%s): processing done", task->id);
     }
     else {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, env.conn->c,
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, env.c,
                       "h2_task(%s): error setting up h2_task_env", task->id);
     }
     
     if (env.input) {
         h2_task_input_destroy(env.input);
         env.input = NULL;
-    }
-    
-    if (env.conn) {
-        h2_conn_post(env.conn, worker);
-        env.conn = NULL;
     }
     
     if (env.output) {
@@ -294,6 +299,10 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         apr_thread_cond_signal(env.io);
     }
     
+    if (env.pool) {
+        apr_pool_destroy(env.pool);
+        env.pool = NULL;
+    }
     return status;
 }
 
@@ -327,7 +336,7 @@ void h2_task_die(h2_task_env *env, int status, request_rec *r)
 
 static request_rec *h2_task_create_request(h2_task_env *env)
 {
-    conn_rec *conn = env->conn->c;
+    conn_rec *conn = env->c;
     request_rec *r;
     apr_pool_t *p;
     int access_status = HTTP_OK;    
@@ -440,7 +449,7 @@ traceout:
 
 apr_status_t h2_task_process_request(h2_task_env *env)
 {
-    conn_rec *c = env->conn->c;
+    conn_rec *c = env->c;
     request_rec *r;
     conn_state_t *cs = c->cs;
 

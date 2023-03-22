@@ -17,6 +17,7 @@
 #define __mod_h2__h2_conn__
 
 struct h2_task;
+struct h2_task_env;
 struct h2_worker;
 
 /* Process the connection that is now starting the HTTP/2
@@ -63,13 +64,15 @@ struct h2_conn {
     apr_socket_t *socket;
 };
 
-h2_conn *h2_conn_create(conn_rec *master, apr_pool_t *parent);
+conn_rec *h2_conn_create(conn_rec *master, apr_pool_t *stream_pool);
+apr_status_t h2_conn_init(struct h2_task_env *env, struct h2_worker *worker);
 void h2_conn_destroy(h2_conn *conn);
 
-apr_status_t h2_conn_prep(h2_conn *conn, conn_rec *master, 
+apr_status_t h2_conn_setup(struct h2_task_env *env, struct h2_worker *worker);
+apr_status_t h2_conn_prep(struct h2_task_env *env, conn_rec *master, 
                           struct h2_worker *worker);
 apr_status_t h2_conn_post(h2_conn *conn, struct h2_worker *worker);
 
-apr_status_t h2_conn_process(h2_conn *conn);
+apr_status_t h2_conn_process(conn_rec *c, apr_socket_t *socket);
 
 #endif /* defined(__mod_h2__h2_conn__) */

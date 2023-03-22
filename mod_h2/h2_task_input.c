@@ -68,14 +68,14 @@ h2_task_input *h2_task_input_create(h2_task_env *env, apr_pool_t *pool,
              * create a bucket brigade. */
         }
         
-        if (APLOGcdebug(env->conn->c)) {
+        if (APLOGcdebug(env->c)) {
             char buffer[1024];
             apr_size_t len = sizeof(buffer)-1;
             if (input->bb) {
                 apr_brigade_flatten(input->bb, buffer, &len);
             }
             buffer[len] = 0;
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, env->conn->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, env->c,
                           "h2_task_input(%s): request is: %s", 
                           env->id, buffer);
         }

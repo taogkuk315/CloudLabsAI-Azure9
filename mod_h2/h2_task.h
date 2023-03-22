@@ -61,7 +61,7 @@ struct h2_task {
     apr_table_t *headers;
     int input_eos;
 
-    struct h2_conn *conn;
+    struct conn_rec *c;
     struct apr_thread_cond_t *io;   /* used to wait for events on */
 };
 
@@ -72,6 +72,9 @@ struct h2_task_env {
     int stream_id;
     struct h2_mplx *mplx;
     
+    apr_pool_t *pool;              /* pool for task lifetime things */
+    apr_bucket_alloc_t *bucket_alloc;
+    
     const char *method;
     const char *path;
     const char *authority;
@@ -80,7 +83,7 @@ struct h2_task_env {
     
     int serialize_headers;
 
-    struct h2_conn *conn;
+    struct conn_rec *c;
     struct h2_task_input *input;
     struct h2_task_output *output;
     
