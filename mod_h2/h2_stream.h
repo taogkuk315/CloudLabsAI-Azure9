@@ -67,6 +67,8 @@ struct h2_stream {
     struct h2_response *response; /* the response, once ready */
     apr_bucket_brigade *bbout;  /* output DATA */
     apr_off_t bytes_sent;
+    
+    conn_rec *c;                /* pseudo connection for stream */
 };
 
 
@@ -77,6 +79,9 @@ void h2_stream_cleanup(h2_stream *stream);
 
 apr_pool_t *h2_stream_detach_pool(h2_stream *stream);
 void h2_stream_attach_pool(h2_stream *stream, apr_pool_t *pool);
+
+conn_rec *h2_stream_detach_conn(h2_stream *stream);
+void h2_stream_attach_conn(h2_stream *stream, conn_rec *c);
 
 void h2_stream_abort(h2_stream *stream);
 

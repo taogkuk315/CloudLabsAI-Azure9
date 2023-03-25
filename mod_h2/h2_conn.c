@@ -351,14 +351,6 @@ conn_rec *h2_conn_create(conn_rec *master, apr_pool_t *pool)
     return c;
 }
 
-void h2_conn_destroy(h2_conn *conn)
-{
-    if (conn->c) {
-        /* more to do? */
-        conn->c = NULL;
-    }
-}
-
 apr_status_t h2_conn_prep(h2_task_env *env, conn_rec *master, h2_worker *worker)
 {
     h2_config *cfg = h2_config_get(master);
@@ -372,11 +364,14 @@ apr_status_t h2_conn_prep(h2_task_env *env, conn_rec *master, h2_worker *worker)
      * sub-resources from it, so that we get a nice reuse of
      * pools.
      */
-    env->c->pool = env->pool;
-    env->c->bucket_alloc = h2_worker_get_bucket_alloc(worker);
-    env->c->current_thread = h2_worker_get_thread(worker);
+    env->c.pool = env->pool;
+    env->c.bucket_alloc = h2_worker_get_bucket_alloc(worker);
+    env->c.current_thread = h2_worker_get_thread(worker);
     
-    ap_set_module_config(env->c->conn_config, &core_module, 
+    env->c.conn_config = ap_create_conn_config(env->pool);
+    env->c.notes = apr_table_make(env->pool, 5);
+
+    ap_set_module_config(env->c.conn_config, &core_module, 
                          h2_worker_get_socket(worker));
     
     if (ssl_module) {
@@ -385,7 +380,7 @@ apr_status_t h2_conn_prep(h2_task_env *env, conn_rec *master, h2_worker *worker)
          */
         void *sslcfg = ap_get_module_config(master->conn_config, ssl_module);
         if (sslcfg) {
-            ap_set_module_config(env->c->conn_config, ssl_module, sslcfg);
+            ap_set_module_config(env->c.conn_config, ssl_module, sslcfg);
         }
     }
     
@@ -399,7 +394,7 @@ apr_status_t h2_conn_prep(h2_task_env *env, conn_rec *master, h2_worker *worker)
             break;
         case H2_MPM_EVENT: 
             if (h2_config_geti(cfg, H2_CONF_HACK_MPM_EVENT)) {
-                fix_event_conn(env->c, master);
+                fix_event_conn(&env->c, master);
             }
             break;
         default:
@@ -422,28 +417,29 @@ apr_status_t h2_conn_init(struct h2_task_env *env, struct h2_worker *worker)
     
     apr_socket_t *socket = ap_get_module_config(master->conn_config, 
                                                 &core_module);
-    env->c = ap_run_create_connection(env->pool, master->base_server,
-                                      socket,
-                                      master->id^((long)env->pool), 
-                                      master->sbh,
-                                      master->bucket_alloc);
-    if (env->c == NULL) {
+    conn_rec *c = ap_run_create_connection(env->pool, master->base_server,
+                                           socket,
+                                           master->id^((long)env->pool), 
+                                           master->sbh,
+                                           master->bucket_alloc);
+    if (c == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, env->pool,
                       "h2_task: creating conn");
         return APR_ENOMEM;
     }
     
-    env->c->bucket_alloc = h2_worker_get_bucket_alloc(worker);
-    env->c->current_thread = h2_worker_get_thread(worker);
+    env->c = *c;
+    env->c.bucket_alloc = h2_worker_get_bucket_alloc(worker);
+    env->c.current_thread = h2_worker_get_thread(worker);
     
-    ap_set_module_config(env->c->conn_config, &core_module, socket);
+    ap_set_module_config(env->c.conn_config, &core_module, socket);
     if (ssl_module) {
         /* See #19, there is a range of SSL variables to be gotten from
          * the main connection that should be available in request handlers
          */
         void *sslcfg = ap_get_module_config(master->conn_config, ssl_module);
         if (sslcfg) {
-            ap_set_module_config(env->c->conn_config, ssl_module, sslcfg);
+            ap_set_module_config(env->c.conn_config, ssl_module, sslcfg);
         }
     }
     
@@ -457,7 +453,7 @@ apr_status_t h2_conn_init(struct h2_task_env *env, struct h2_worker *worker)
             break;
         case H2_MPM_EVENT: 
             if (h2_config_geti(cfg, H2_CONF_HACK_MPM_EVENT)) {
-                fix_event_conn(env->c, master);
+                fix_event_conn(&env->c, master);
             }
             break;
         default:
@@ -468,22 +464,12 @@ apr_status_t h2_conn_init(struct h2_task_env *env, struct h2_worker *worker)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_conn_post(h2_conn *conn, h2_worker *worker)
+apr_status_t h2_conn_post(conn_rec *c, h2_worker *worker)
 {
-    AP_DEBUG_ASSERT(conn);
     (void)worker;
     
-    /* The worker is done with this connection. release all allocated
-     * resource before we leave the worker's domain.
-     */
-    conn->socket = NULL;
-    conn->bucket_alloc = NULL;
-    conn->pool = NULL;
     /* be sure no one messes with this any more */
-    if (conn->c) {
-        memset(conn->c, 0, sizeof(conn_rec)); 
-    }
-    
+    memset(c, 0, sizeof(*c)); 
     return APR_SUCCESS;
 }
 

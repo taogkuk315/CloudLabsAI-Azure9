@@ -158,7 +158,7 @@ static int h2_task_process_conn(conn_rec* c)
 h2_task *h2_task_create(long session_id,
                         int stream_id,
                         apr_pool_t *stream_pool,
-                        h2_mplx *mplx)
+                        h2_mplx *mplx, conn_rec *c)
 {
     h2_task *task = apr_pcalloc(stream_pool, sizeof(h2_task));
     if (task == NULL) {
@@ -176,19 +176,7 @@ h2_task *h2_task_create(long session_id,
     task->mplx = mplx;
     h2_mplx_reference(mplx);
     
-    /* We would like to have this happening when our task is about
-     * to be processed by the worker. But something corrupts our
-     * stream pool if we shift this to the worker thread.
-     * TODO.
-     */
-    const int PREPARE_CONN_ON_MAIN_THREAD = 1;
-    
-    if (PREPARE_CONN_ON_MAIN_THREAD) {
-        task->c = h2_conn_create(mplx->c, stream_pool);
-        if (task->c == NULL) {
-            return NULL;
-        }
-    }
+    task->c = c;
     
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, stream_pool,
                   "h2_task(%s): created", task->id);
@@ -252,8 +240,7 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     
     /* Setup the pseudo connection to use our own pool and bucket_alloc */
     if (task->c) {
-        env.c = task->c;
-        task->c = NULL;
+        env.c = *(task->c);
         status = h2_conn_setup(&env, worker);
     }
     else {
@@ -262,19 +249,19 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     
     /* save in connection that this one is a pseudo connection, prevents
      * other hooks from messing with it. */
-    h2_ctx_create_for(env.c, &env);
+    h2_ctx_create_for(&env.c, &env);
 
     if (status == APR_SUCCESS) {
         env.input = h2_task_input_create(&env, env.pool, 
-                                         env.c->bucket_alloc);
+                                         env.c.bucket_alloc);
         env.output = h2_task_output_create(&env, env.pool,
-                                           env.c->bucket_alloc);
-        status = h2_conn_process(env.c, h2_worker_get_socket(worker));
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, env.c,
+                                           env.c.bucket_alloc);
+        status = h2_conn_process(&env.c, h2_worker_get_socket(worker));
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, &env.c,
                       "h2_task(%s): processing done", task->id);
     }
     else {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, env.c,
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, &env.c,
                       "h2_task(%s): error setting up h2_task_env", task->id);
     }
     
@@ -292,6 +279,10 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     if (env.mplx) {
         h2_mplx_release(env.mplx);
         env.mplx = NULL;
+    }
+    
+    if (env.c.id) {
+        h2_conn_post(&env.c, worker);
     }
     
     h2_task_set_finished(task);
@@ -336,7 +327,7 @@ void h2_task_die(h2_task_env *env, int status, request_rec *r)
 
 static request_rec *h2_task_create_request(h2_task_env *env)
 {
-    conn_rec *conn = env->c;
+    conn_rec *conn = &env->c;
     request_rec *r;
     apr_pool_t *p;
     int access_status = HTTP_OK;    
@@ -449,7 +440,7 @@ traceout:
 
 apr_status_t h2_task_process_request(h2_task_env *env)
 {
-    conn_rec *c = env->c;
+    conn_rec *c = &env->c;
     request_rec *r;
     conn_state_t *cs = c->cs;
 

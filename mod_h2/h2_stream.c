@@ -26,6 +26,7 @@
 #include <nghttp2/nghttp2.h>
 
 #include "h2_private.h"
+#include "h2_conn.h"
 #include "h2_mplx.h"
 #include "h2_request.h"
 #include "h2_response.h"
@@ -112,6 +113,18 @@ apr_pool_t *h2_stream_detach_pool(h2_stream *stream)
     return pool;
 }
 
+conn_rec *h2_stream_detach_conn(h2_stream *stream)
+{
+    conn_rec *c = stream->c;
+    stream->c = NULL;
+    return c;
+}
+
+void h2_stream_attach_conn(h2_stream *stream, conn_rec *c)
+{
+    stream->c = c;
+}
+
 void h2_stream_abort(h2_stream *stream)
 {
     AP_DEBUG_ASSERT(stream);
@@ -165,8 +178,15 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos)
     /* Seeing the end-of-headers, we have everything we need to 
      * start processing it.
      */
+    stream->c = h2_conn_create(stream->m->c, stream->pool);
+    if (stream->c == NULL) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream->m->c,
+                      "h2_stream(%ld-%d): create connection",
+                      stream->m->id, stream->id);
+        return APR_ENOMEM;
+    }
     stream->task = h2_task_create(h2_mplx_get_id(stream->m), stream->id, 
-                                  stream->pool, stream->m);
+                                  stream->pool, stream->m, stream->c);
     
     apr_status_t status = h2_request_end_headers(stream->request, 
                                                  stream->m, stream->task, eos);

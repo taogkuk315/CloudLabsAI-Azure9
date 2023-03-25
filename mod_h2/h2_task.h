@@ -83,7 +83,7 @@ struct h2_task_env {
     
     int serialize_headers;
 
-    struct conn_rec *c;
+    struct conn_rec c;
     struct h2_task_input *input;
     struct h2_task_output *output;
     
@@ -159,7 +159,8 @@ struct h2_task_env {
 
 
 h2_task *h2_task_create(long session_id, int stream_id, 
-                        apr_pool_t *pool, struct h2_mplx *mplx);
+                        apr_pool_t *pool, struct h2_mplx *mplx,
+                        conn_rec *c);
 
 apr_status_t h2_task_destroy(h2_task *task);
 
