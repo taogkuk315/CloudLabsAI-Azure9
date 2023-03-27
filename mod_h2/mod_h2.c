@@ -22,6 +22,7 @@
 
 #include "mod_h2.h"
 
+#include <nghttp2/nghttp2.h>
 #include "h2_stream.h"
 #include "h2_alt_svc.h"
 #include "h2_conn.h"
@@ -65,6 +66,7 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
 {
     void *data = NULL;
     const char *mod_h2_init_key = "mod_h2_init_counter";
+    nghttp2_info *ngh2;
     apr_status_t status;
     (void)plog;(void)ptemp;
     
@@ -76,9 +78,11 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
                               apr_pool_cleanup_null, s->process->pool);
         return APR_SUCCESS;
     }
+    
+    ngh2 = nghttp2_version(0);
     ap_log_error( APLOG_MARK, APLOG_INFO, 0, s,
-                 "mod_h2 (v%s), initializing...",
-                 MOD_H2_VERSION);
+                 "mod_h2 (v%s, nghttp2 %s), initializing...",
+                 MOD_H2_VERSION, ngh2? ngh2->version_str : "unknown");
     
     switch (h2_conn_mpm_type()) {
         case H2_MPM_EVENT:
