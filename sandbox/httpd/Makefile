@@ -45,7 +45,7 @@ OPENSSL_BASE = http://www.openssl.org
 OPENSSL_DIR = openssl-latest
 OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
 OPENSSL_URL = $(OPENSSL_BASE)/source/latest.tar.gz
-OPENSSL_CONF_CMD = CFLAGS=-fPIC ./Configure
+OPENSSL_CONF_CMD = ./Configure
 OPENSSL_CONF =  shared linux-$(MACHINE)
 
 FCGI_VERSION = 2.3.9
@@ -82,7 +82,6 @@ ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0 1.0.1))
     HTTPD_CONF  += --enable-ssl --with-ssl=$(BLD_PREFIX) --enable-ssl-staticlib-deps
 	ifeq ($(OS),Darwin)
         OPENSSL_CONF = darwin64-x86_64-cc
-        OPENSSL_CONF_CMD = ./Configure
 	endif
 endif
 
