@@ -47,6 +47,12 @@ OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
 OPENSSL_URL = $(OPENSSL_BASE)/source/latest.tar.gz
 OPENSSL_CONF_CMD = ./Configure
 OPENSSL_CONF =  shared linux-$(MACHINE)
+ifeq ($(MACHINE),x86_64)
+    OPENSSL_CONF =  shared linux-generic64
+endif
+ifeq ($(MACHINE),i686)
+    OPENSSL_CONF =  shared linux-generic32
+endif
 
 FCGI_VERSION = 2.3.9
 FCGI_DIR     = mod_fcgid-$(FCGI_VERSION)
@@ -70,18 +76,16 @@ ifeq ($(OS),Darwin)
 	HTTPD_DEPS  += $(INST_DIR)/.pcre-installed
 	HTTPD_CONF  += --with-pcre=$(BLD_PREFIX)
 endif
-ifeq ($(MACHINE),i686)
-    OPENSSL_CONF =  shared linux-generic32
-endif
 
 OPENSSL_VERSION = $(shell openssl version -v | sed -e 's/OpenSSL *//g' -e 's/[a-z]* .*//g')
 
 ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0 1.0.1))
 	# Very old openssl without alpn support installed, need a newer one
 	HTTPD_DEPS  += $(INST_DIR)/.openssl-installed
-    HTTPD_CONF  += --enable-ssl --with-ssl=$(BLD_PREFIX) --enable-ssl-staticlib-deps
+    HTTPD_CONF  += --enable-ssl --with-ssl=$(BLD_PREFIX)
 	ifeq ($(OS),Darwin)
         OPENSSL_CONF = darwin64-x86_64-cc
+        HTTPD_CONF  += --enable-ssl-staticlib-deps
 	endif
 endif
 
