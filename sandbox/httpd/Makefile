@@ -47,9 +47,6 @@ OPENSSL_TAR = $(OPENSSL_DIR).tar.gz
 OPENSSL_URL = $(OPENSSL_BASE)/source/latest.tar.gz
 OPENSSL_CONF_CMD = ./Configure
 OPENSSL_CONF =  shared linux-$(MACHINE)
-ifeq ($(MACHINE),x86_64)
-    OPENSSL_CONF =  shared linux-generic64
-endif
 ifeq ($(MACHINE),i686)
     OPENSSL_CONF =  shared linux-generic32
 endif
