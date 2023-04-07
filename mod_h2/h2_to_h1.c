@@ -37,12 +37,12 @@ h2_to_h1 *h2_to_h1_create(int stream_id, apr_pool_t *pool,
                           const char *authority, struct h2_mplx *m)
 {
     if (!method) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_conn(m),
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, m->c,
                       "h2_to_h1: header start but :method missing");
         return NULL;
     }
     if (!path) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, h2_mplx_get_conn(m),
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, m->c,
                       "h2_to_h1: header start but :path missing");
         return NULL;
     }
@@ -75,8 +75,7 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
     if (H2_HD_MATCH_LIT("transfer-encoding", name, nlen)) {
         if (!apr_strnatcasecmp("chunked", value)) {
             /* This should never arrive here in a HTTP/2 request */
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_BADARG, 
-                          h2_mplx_get_conn(to_h1->m),
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_BADARG, to_h1->m->c,
                           "h2_to_h1: 'transfer-encoding: chunked' received");
             return APR_BADARG;
         }
@@ -85,8 +84,7 @@ apr_status_t h2_to_h1_add_header(h2_to_h1 *to_h1,
         char *end;
         to_h1->content_len = apr_strtoi64(value, &end, 10);
         if (value == end) {
-            ap_log_cerror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, 
-                          h2_mplx_get_conn(to_h1->m),
+            ap_log_cerror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, to_h1->m->c,
                           "h2_request(%d): content-length value not parsed: %s",
                           to_h1->stream_id, value);
             return APR_EINVAL;
@@ -148,10 +146,9 @@ apr_status_t h2_to_h1_add_headers(h2_to_h1 *to_h1, apr_table_t *headers)
 
 apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, h2_task *task, int eos)
 {
-    conn_rec *c = h2_mplx_get_conn(to_h1->m);
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, to_h1->m->c,
                   "h2_to_h1(%ld-%d): end headers", 
-                  h2_mplx_get_id(to_h1->m), to_h1->stream_id);
+                  to_h1->m->id, to_h1->stream_id);
     
     if (to_h1->eoh) {
         return APR_EINVAL;
@@ -187,9 +184,9 @@ apr_status_t h2_to_h1_end_headers(h2_to_h1 *to_h1, h2_task *task, int eos)
     if (eos) {
         apr_status_t status = h2_to_h1_close(to_h1);
         if (status != APR_SUCCESS) {
-            ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, c,
+            ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, to_h1->m->c,
                           "h2_to_h1(%ld-%d): end headers, eos=%d", 
-                          h2_mplx_get_id(to_h1->m), to_h1->stream_id, eos);
+                          to_h1->m->id, to_h1->stream_id, eos);
         }
         return status;
     }
@@ -206,7 +203,6 @@ static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
                                           const char *data, size_t len)
 {
     apr_status_t status = APR_SUCCESS;
-    h2_mplx_get_conn(to_h1->m);
 
     if (to_h1->eos || !to_h1->eoh) {
         return APR_EINVAL;
@@ -223,9 +219,9 @@ static apr_status_t h2_to_h1_add_data_raw(h2_to_h1 *to_h1,
 apr_status_t h2_to_h1_add_data(h2_to_h1 *to_h1,
                                const char *data, size_t len)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_conn(to_h1->m),
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, to_h1->m->c,
                   "h2_to_h1(%ld-%d): add %ld data bytes", 
-                  h2_mplx_get_id(to_h1->m), to_h1->stream_id, (long)len);
+                  to_h1->m->id, to_h1->stream_id, (long)len);
     
     if (to_h1->chunked) {
         /* if input may have a body and we have not seen any
@@ -244,13 +240,11 @@ apr_status_t h2_to_h1_add_data(h2_to_h1 *to_h1,
     else {
         to_h1->remain_len -= len;
         if (to_h1->remain_len < 0) {
-            ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, 
-                          h2_mplx_get_conn(to_h1->m),
+            ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, to_h1->m->c,
                           "h2_to_h1(%ld-%d): got %ld more content bytes than announced "
                           "in content-length header: %ld", 
-                          h2_mplx_get_id(to_h1->m),
-                          to_h1->stream_id, (long)to_h1->content_len,
-                          -(long)to_h1->remain_len);
+                          to_h1->m->id, to_h1->stream_id, 
+                          (long)to_h1->content_len, -(long)to_h1->remain_len);
         }
         return h2_to_h1_add_data_raw(to_h1, data, len);
     }
@@ -260,14 +254,13 @@ apr_status_t h2_to_h1_flush(h2_to_h1 *to_h1)
 {
     apr_status_t status = APR_SUCCESS;
     if (!APR_BRIGADE_EMPTY(to_h1->bb)) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, h2_mplx_get_conn(to_h1->m),
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, to_h1->m->c,
                       "h2_to_h1(%ld-%d): flush request bytes", 
-                      h2_mplx_get_id(to_h1->m), to_h1->stream_id);
+                      to_h1->m->id, to_h1->stream_id);
         
         status = h2_mplx_in_write(to_h1->m, to_h1->stream_id, to_h1->bb);
         if (status != APR_SUCCESS) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status,
-                          h2_mplx_get_conn(to_h1->m),
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, to_h1->m->c,
                           "h2_request(%d): pushing request data",
                           to_h1->stream_id);
         }
@@ -284,7 +277,7 @@ apr_status_t h2_to_h1_close(h2_to_h1 *to_h1)
         }
         to_h1->eos = 1;
         status = h2_to_h1_flush(to_h1);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, h2_mplx_get_conn(to_h1->m),
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, to_h1->m->c,
                       "h2_to_h1(%d): close", to_h1->stream_id);
         
         status = h2_mplx_in_close(to_h1->m, to_h1->stream_id);

@@ -63,7 +63,7 @@ curl_check_doc() {
     echo -n " * curl /$DOC: $MSG..."
     rm -rf $TMP
     mkdir -p $TMP
-    ${CURL} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${CURL} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail
     diff  $DOC_ROOT/$DOC $TMP/$DOC || fail
     echo ok.
 }
@@ -75,7 +75,7 @@ nghttp_check_doc() {
     echo -n " * nghttp /$DOC: $MSG..."
     rm -rf $TMP &&
     mkdir -p $TMP &&
-    ${NGHTTP} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${NGHTTP} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail
     diff  $DOC_ROOT/$DOC $TMP/$DOC || fail
     echo ok.
 }
@@ -88,7 +88,7 @@ nghttp_check_assets() {
     rm -rf $TMP &&
     mkdir -p $TMP &&
     sort > $TMP/reference
-    ${NGHTTP} -ans $ARGS $URL_PREFIX/$DOC > $TMP/out || fail
+    ${NGHTTP} -ans $ARGS $URL_PREFIX/$DOC > $TMP/out 2>&1 || fail
     fgrep " /" $TMP/out | while read id begin end dur stat size path; do
         echo "$path $size $stat"
     done | sort > $TMP/output || fail
@@ -103,7 +103,7 @@ nghttp_check_content() {
     mkdir -p $TMP
     cat > $TMP/expected
     echo -n " * nghttp /$DOC: $MSG..."
-    ${NGHTTP} "$@" $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${NGHTTP} "$@" $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
 }
@@ -116,7 +116,7 @@ curl_check_content() {
     mkdir -p $TMP
     cat > $TMP/expected
     echo -n " * curl /$DOC: $MSG..."
-    ${CURL} "$@" $URL_PREFIX/$DOC > $TMP/$DOC || fail
+    ${CURL} "$@" $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
 }
@@ -146,7 +146,7 @@ curl_check_necho() {
     rm -rf $TMP
     mkdir -p $TMP
     echo -n " * curl /necho.py?count=$COUNT&text=$TEXT..."
-    ${CURL} $ARGS -F count="$COUNT" -F text="$TEXT" $URL_PREFIX/necho.py > $TMP/echo || fail
+    ${CURL} $ARGS -F count="$COUNT" -F text="$TEXT" $URL_PREFIX/necho.py > $TMP/echo 2>&1 || fail
     diff  $REF $TMP/echo || fail
     echo ok.
 }
@@ -160,8 +160,8 @@ curl_post_file() {
     rm -rf $TMP
     mkdir -p $TMP
     echo -n " * curl /$DOC: $MSG..."
-    ${CURL} $ARGS --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC || fail "error uploading $fname"
-    ${CURL} $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down || fail "error downloding $fname"
+    ${CURL} $ARGS --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail "error uploading $fname"
+    ${CURL} $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down 2>&1 || fail "error downloding $fname"
     diff  $FILE $TMP/data.down || fail
     echo ok.
 }
@@ -175,8 +175,8 @@ curl_post_data() {
     rm -rf $TMP
     mkdir -p $TMP
     echo -n " * curl /$DOC: $MSG..."
-    ${CURL} $ARGS --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC || fail
-    ${CURL} $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down || fail
+    ${CURL} $ARGS --form file=@"$FILE" $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail
+    ${CURL} $ARGS $URL_PREFIX/files/"$fname" > $TMP/data.down 2>&1 || fail
     diff  $FILE $TMP/data.down || fail
     echo ok.
 }
@@ -240,7 +240,7 @@ curl_check_altsvc() {
     MSG="$1"; shift;
     mkdir -p $TMP
     echo -n " * curl check alt_svc at /$DOC..."
-    ${CURL} "$@" -D $TMP/headers $URL_PREFIX/$DOC > /dev/null || fail
+    ${CURL} "$@" -D $TMP/headers $URL_PREFIX/$DOC > /dev/null 2>&1 || fail
     alt_svc="$( fgrep -i 'Alt-Svc: ' $TMP/headers | tr -d "\r\n" )"
     alt_svc="${alt_svc#*: }"
     test "$EXP_ALT_SVC" = "$alt_svc" || fail "failed. Expected '$EXP_ALT_SVC', got '$alt_svc'"

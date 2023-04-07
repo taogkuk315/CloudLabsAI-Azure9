@@ -197,7 +197,7 @@ void h2_task_set_request(h2_task *task,
 apr_status_t h2_task_destroy(h2_task *task)
 {
     AP_DEBUG_ASSERT(task);
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(task->mplx),
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->mplx->c,
                   "h2_task(%s): destroy started", task->id);
     if (task->mplx) {
         h2_mplx_release(task->mplx);

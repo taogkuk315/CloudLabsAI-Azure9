@@ -29,6 +29,8 @@ MISDIR_STATUS="421 Misdirected Request"
 #MISDIR_STATUS="400 Bad Request"
 
 nghttp_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
+[ERROR] HTTP/2 protocol was not selected. (nghttp2 expects h2)
+Some requests were not processed. total=1, processed=0
 EOF
 
 curl_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF

@@ -171,23 +171,6 @@ apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
     return status;
 }
 
-apr_pool_t *h2_mplx_get_pool(h2_mplx *m)
-{
-    AP_DEBUG_ASSERT(m);
-    return m->pool;
-}
-
-conn_rec *h2_mplx_get_conn(h2_mplx *m)
-{
-    return m->c;
-}
-
-long h2_mplx_get_id(h2_mplx *m)
-{
-    AP_DEBUG_ASSERT(m);
-    return m->id;
-}
-
 void h2_mplx_abort(h2_mplx *m)
 {
     AP_DEBUG_ASSERT(m);

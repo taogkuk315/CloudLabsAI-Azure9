@@ -103,21 +103,6 @@ void h2_mplx_release(h2_mplx *m);
 apr_status_t h2_mplx_release_and_join(h2_mplx *m, struct apr_thread_cond_t *wait);
 
 /**
- * Get the id of the multiplexer, same as the session id it belongs to.
- */
-long h2_mplx_get_id(h2_mplx *mplx);
-
-/**
- * Get the memory pool used by the multiplexer itself.
- */
-apr_pool_t *h2_mplx_get_pool(h2_mplx *mplx);
-
-/**
- * Get the main connection this multiplexer works for.
- */
-conn_rec *h2_mplx_get_conn(h2_mplx *mplx);
-
-/**
  * Aborts the multiplexer. It will answer all future invocation with
  * APR_ECONNABORTED, leading to early termination of ongoing tasks.
  */

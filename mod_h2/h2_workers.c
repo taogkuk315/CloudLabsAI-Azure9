@@ -75,7 +75,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
                 status = APR_SUCCESS;
                 ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                              "h2_worker(%d): start mplx(%ld)",
-                             h2_worker_get_id(worker), h2_mplx_get_id(m));
+                             h2_worker_get_id(worker), m->id);
                 break;
             }
             
@@ -137,8 +137,8 @@ static h2_mplx *mplx_done(h2_worker *worker, h2_mplx *m,
         
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
                      "h2_worker(%d): mplx(%ld) done, next(%ld)",
-                     h2_worker_get_id(worker), h2_mplx_get_id(m),
-                     next_mplx? h2_mplx_get_id(next_mplx) : -1);
+                     h2_worker_get_id(worker), m->id,
+                     next_mplx? next_mplx->id : -1);
         
         apr_thread_mutex_unlock(workers->lock);
     }
@@ -256,8 +256,7 @@ apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m)
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
-                     "h2_workers: register mplx(%ld)",
-                     h2_mplx_get_id(m));
+                     "h2_workers: register mplx(%ld)", m->id);
         if (!in_list(workers, m)) {
             H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
             h2_mplx_reference(m);

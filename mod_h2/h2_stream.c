@@ -55,9 +55,8 @@ h2_stream *h2_stream_create(int id, apr_pool_t *pool, struct h2_mplx *m)
         stream->pool = pool;
         stream->m = m;
         stream->request = h2_request_create(id, pool, m->c->bucket_alloc);
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(m),
-                      "h2_stream(%ld-%d): created",
-                      h2_mplx_get_id(stream->m), stream->id);
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
+                      "h2_stream(%ld-%d): created", m->id, stream->id);
     }
     return stream;
 }
@@ -79,16 +78,14 @@ apr_status_t h2_stream_destroy(h2_stream *stream)
     AP_DEBUG_ASSERT(stream);
     
     if (stream->task && !h2_task_has_finished(stream->task)) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, 
-                      h2_mplx_get_conn(stream->m),
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->m->c,
                       "h2_stream(%ld-%d): refused to be destroyed",
-                      h2_mplx_get_id(stream->m), (int)stream->id);
+                      stream->m->id, (int)stream->id);
         return APR_EAGAIN;
     }
 
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
-                  "h2_stream(%ld-%d): destroy",
-                  h2_mplx_get_id(stream->m), stream->id);
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->m->c,
+                  "h2_stream(%ld-%d): destroy", stream->m->id, stream->id);
     h2_stream_cleanup(stream);
     
     if (stream->task) {
@@ -185,7 +182,7 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos)
                       stream->m->id, stream->id);
         return APR_ENOMEM;
     }
-    stream->task = h2_task_create(h2_mplx_get_id(stream->m), stream->id, 
+    stream->task = h2_task_create(stream->m->id, stream->id, 
                                   stream->pool, stream->m, stream->c);
     
     apr_status_t status = h2_request_end_headers(stream->request, 
@@ -196,7 +193,7 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos)
     if (eos) {
         status = h2_stream_write_eos(stream);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, h2_mplx_get_conn(stream->m),
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, stream->m->c,
                   "h2_stream(%ld-%d): end header, task %s %s (%s)",
                   stream->m->id, stream->id,
                   stream->request->method, stream->request->path,
@@ -208,9 +205,9 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos)
 apr_status_t h2_stream_write_eos(h2_stream *stream)
 {
     AP_DEBUG_ASSERT(stream);
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, h2_mplx_get_conn(stream->m),
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->m->c,
                   "h2_stream(%ld-%d): closing input",
-                  h2_mplx_get_id(stream->m), stream->id);
+                  stream->m->id, stream->id);
     if (set_closed(stream)) {
         return h2_request_close(stream->request);
     }
@@ -271,10 +268,9 @@ apr_status_t h2_stream_prep_read(h2_stream *stream,
     if (status == APR_SUCCESS && !*peos && !*plen) {
         status = APR_EAGAIN;
     }
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, 
-                  h2_mplx_get_conn(stream->m),
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, stream->m->c,
                   "h2_stream(%ld-%d): prep_read %s, len=%ld eos=%d",
-                  h2_mplx_get_id(stream->m), stream->id, 
+                  stream->m->id, stream->id, 
                   src, (long)*plen, *peos);
     return status;
 }
@@ -304,10 +300,9 @@ apr_status_t h2_stream_read(h2_stream *stream, char *buffer,
         src = "mplx";
         status = h2_mplx_out_read(stream->m, stream->id, buffer, plen, peos);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, 
-                  h2_mplx_get_conn(stream->m),
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, stream->m->c,
                   "h2_stream(%ld-%d): read %s, len=%ld eos=%d",
-                  h2_mplx_get_id(stream->m), stream->id, 
+                  stream->m->id, stream->id, 
                   src, (long)*plen, *peos);
     return status;
 }
