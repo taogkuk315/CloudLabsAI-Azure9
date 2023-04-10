@@ -130,9 +130,6 @@ static h2_mplx *mplx_done(h2_worker *worker, h2_mplx *m,
             H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
             apr_thread_cond_signal(workers->mplx_added);
         }
-        else {
-            h2_mplx_release(m);
-        }
         next_mplx = pop_next_mplx(workers, worker);
         
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
@@ -259,7 +256,6 @@ apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m)
                      "h2_workers: register mplx(%ld)", m->id);
         if (!in_list(workers, m)) {
             H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
-            h2_mplx_reference(m);
         }
         apr_thread_cond_signal(workers->mplx_added);
         
@@ -283,7 +279,6 @@ apr_status_t h2_workers_unregister(h2_workers *workers, struct h2_mplx *m)
         status = APR_EAGAIN;
         if (in_list(workers, m)) {
             H2_MPLX_REMOVE(m);
-            h2_mplx_release(m);
             status = APR_SUCCESS;
         }
         apr_thread_mutex_unlock(workers->lock);

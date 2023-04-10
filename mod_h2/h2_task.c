@@ -197,8 +197,6 @@ void h2_task_set_request(h2_task *task,
 apr_status_t h2_task_destroy(h2_task *task)
 {
     AP_DEBUG_ASSERT(task);
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->mplx->c,
-                  "h2_task(%s): destroy started", task->id);
     if (task->mplx) {
         h2_mplx_release(task->mplx);
         task->mplx = NULL;
@@ -219,7 +217,8 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     env.id = task->id;
     env.stream_id = task->stream_id;
     env.mplx = task->mplx;
-    h2_mplx_reference(env.mplx);
+    task->mplx = NULL;
+    
     env.input_eos = task->input_eos;
     env.serialize_headers = !!h2_config_geti(cfg, H2_CONF_SER_HEADERS);
     
@@ -276,14 +275,12 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         env.output = NULL;
     }
 
-    if (env.mplx) {
-        h2_mplx_release(env.mplx);
-        env.mplx = NULL;
-    }
-    
     if (env.c.id) {
         h2_conn_post(&env.c, worker);
     }
+    
+    h2_mplx_release(env.mplx);
+    env.mplx = NULL;
     
     h2_task_set_finished(task);
     if (env.io) {

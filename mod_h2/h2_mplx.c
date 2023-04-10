@@ -16,7 +16,6 @@
 #include <assert.h>
 #include <stddef.h>
 
-#include <apr_atomic.h>
 #include <apr_thread_mutex.h>
 #include <apr_thread_cond.h>
 #include <apr_strings.h>
@@ -135,17 +134,29 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
 
 void h2_mplx_reference(h2_mplx *m)
 {
-    apr_atomic_inc32(&m->refs);
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        ++m->refs;
+        apr_thread_mutex_unlock(m->lock);
+    }
+}
+
+static void release(h2_mplx *m)
+{
+    --m->refs;
+    if (m->refs <= 0) {
+        if (m->join_wait) {
+            apr_thread_cond_signal(m->join_wait);
+        }
+    }
 }
 
 void h2_mplx_release(h2_mplx *m)
 {
-    int keep = apr_atomic_dec32(&m->refs);
-    
-    if (!keep) {
-        if (m->join_wait) {
-            apr_thread_cond_broadcast(m->join_wait);
-        }
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        release(m);
+        apr_thread_mutex_unlock(m->lock);
     }
 }
 
@@ -153,17 +164,18 @@ apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        h2_mplx_release(m);
+        release(m);
         while (m->refs > 0) {
             m->join_wait = wait;
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
-                          "h2_mplx(%ld): release_join, refs=%d", 
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
+                          "h2_mplx(%ld): release_join, refs=%d, waiting...", 
                           m->id, m->refs);
-            apr_thread_cond_wait(wait, m->lock);
+            apr_thread_cond_timedwait(wait, m->lock, 60 * 1000 * 1000);
         }
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
-                      "h2_mplx(%ld): release_join -> destroy, refs=%d", 
-                      m->id, m->refs);
+        if (m->join_wait) {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
+                          "h2_mplx(%ld): release_join -> destroy", m->id);
+        }
         m->join_wait = NULL;
         apr_thread_mutex_unlock(m->lock);
         h2_mplx_destroy(m);
@@ -447,6 +459,7 @@ static apr_status_t out_write(h2_mplx *m, h2_io *io,
             io->output_drained = NULL;
         }
     }
+    apr_brigade_cleanup(bb);
     return status;
 }
 
@@ -674,12 +687,14 @@ static apr_status_t join(h2_mplx *m, h2_task *task)
     while (!h2_task_has_finished(task)) {
         apr_thread_cond_t *io = task->io;
         if (io) {
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, m->c,
+                          "h2_mplx(%s): join task, waiting...", task->id);
             apr_thread_cond_wait(io, m->lock);
         }
         else {
             if (!h2_task_has_finished(task)) {
                 ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, m->c,
-                             "h2_workers: join task(%s) started, but "
+                             "h2_mplx(%s): join task started, but "
                              "not finished, no cond set",
                              task->id);
                 return APR_EINVAL;
@@ -687,6 +702,8 @@ static apr_status_t join(h2_mplx *m, h2_task *task)
             break;
         }
     }
+    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, m->c,
+                  "h2_mplx(%s): join task, done.", task->id);
     return APR_SUCCESS;
 }
 
