@@ -696,7 +696,7 @@ static apr_status_t join(h2_mplx *m, h2_task *task)
     while (!h2_task_has_finished(task)) {
         apr_thread_cond_t *io = task->io;
         if (io) {
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, m->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
                           "h2_mplx(%s): join task, waiting...", task->id);
             apr_thread_cond_wait(io, m->lock);
         }
@@ -711,7 +711,7 @@ static apr_status_t join(h2_mplx *m, h2_task *task)
             break;
         }
     }
-    ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, m->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
                   "h2_mplx(%s): join task, done.", task->id);
     return APR_SUCCESS;
 }
