@@ -19,6 +19,7 @@
 #include <apr_thread_mutex.h>
 #include <apr_thread_cond.h>
 #include <apr_strings.h>
+#include <apr_time.h>
 
 #include <httpd.h>
 #include <http_core.h>
@@ -164,13 +165,21 @@ apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
+        int attempts = 0;
+        
         release(m);
         while (m->refs > 0) {
             m->join_wait = wait;
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
                           "h2_mplx(%ld): release_join, refs=%d, waiting...", 
                           m->id, m->refs);
-            apr_thread_cond_timedwait(wait, m->lock, 60 * 1000 * 1000);
+            apr_thread_cond_timedwait(wait, m->lock, apr_time_from_sec(60));
+            if (++attempts >= 5) {
+                ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c,
+                              "h2_mplx(%ld): join attempts exhausted, refs=%d", 
+                              m->id, m->refs);
+                break;
+            }
         }
         if (m->join_wait) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
