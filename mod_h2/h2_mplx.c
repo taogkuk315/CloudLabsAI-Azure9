@@ -140,10 +140,14 @@ static void reference(h2_mplx *m)
 static void release(h2_mplx *m)
 {
     --m->refs;
-    if (m->refs <= 0) {
+    if (!m->refs) {
         if (m->join_wait) {
             apr_thread_cond_signal(m->join_wait);
         }
+    }
+    else if (m->refs < 0) {
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c,
+                      "h2_mplx(%ld): ref count %d", m->id, m->refs);
     }
 }
 

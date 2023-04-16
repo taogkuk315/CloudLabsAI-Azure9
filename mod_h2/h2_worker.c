@@ -49,9 +49,12 @@ static void *execute(apr_thread_t *thread, void *wctx)
     worker->task = NULL;
     m = NULL;
     while (!worker->aborted) {
+        status = worker->get_next(worker, &m, worker->ctx);
         
         if (m) {
             status = APR_SUCCESS;
+            
+            h2_mplx_reference(m);
             worker->task = h2_mplx_pop_task(m);
             for (int i = 0; !worker->aborted && worker->task; ++i) {
                 
@@ -70,14 +73,16 @@ static void *execute(apr_thread_t *thread, void *wctx)
             }
             
             worker->task = NULL;
+            h2_mplx_release(m);
             m = worker->mplx_done(worker, m, status, worker->ctx);
-        }
-        
-        if (!m) {
-            status = worker->get_next(worker, &m, worker->ctx);
         }
     }
 
+    if (m) {
+        h2_mplx_release(m);
+        m = NULL;
+    }
+    
     if (worker->socket) {
         apr_socket_close(worker->socket);
         worker->socket = NULL;

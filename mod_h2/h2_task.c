@@ -174,7 +174,6 @@ h2_task *h2_task_create(long session_id,
     task->id = apr_psprintf(stream_pool, "%ld-%d", session_id, stream_id);
     task->stream_id = stream_id;
     task->mplx = mplx;
-    h2_mplx_reference(mplx);
     
     task->c = c;
     
@@ -197,10 +196,7 @@ void h2_task_set_request(h2_task *task,
 apr_status_t h2_task_destroy(h2_task *task)
 {
     AP_DEBUG_ASSERT(task);
-    if (task->mplx) {
-        h2_mplx_release(task->mplx);
-        task->mplx = NULL;
-    }
+    (void)task;
     return APR_SUCCESS;
 }
 
@@ -275,7 +271,6 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         env.output = NULL;
     }
 
-    h2_mplx_release(env.mplx);
     env.mplx = NULL;
     
     h2_task_set_finished(task);

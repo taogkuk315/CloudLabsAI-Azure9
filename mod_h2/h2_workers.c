@@ -57,9 +57,11 @@ static h2_mplx* pop_next_mplx(h2_workers *workers, h2_worker *worker)
 
 static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
 {
+    apr_status_t status;
     h2_workers *workers = (h2_workers *)ctx;
+    
     *pmplx = NULL;
-    apr_status_t status = apr_thread_mutex_lock(workers->lock);
+    status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         status = APR_EOF;
         apr_time_t max_wait = apr_time_from_sec(apr_atomic_read32(&workers->max_idle_secs));
@@ -69,6 +71,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
         ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                      "h2_worker(%d): looking for work", h2_worker_get_id(worker));
         while (!h2_worker_is_aborted(worker) && !workers->aborted) {
+            
             h2_mplx *m = pop_next_mplx(workers, worker);
             if (m) {
                 *pmplx = m;
@@ -112,17 +115,11 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
                 apr_thread_cond_wait(workers->mplx_added, workers->lock);
             }
         }
+        
         --workers->idle_worker_count;
         apr_thread_mutex_unlock(workers->lock);
     }
     
-    if (*pmplx) {
-        /* "I have a bad feeling about this...."
-         * h2_mplx calls h2_workers with its mutex locked, if we
-         * call back with h2_workers mutex locked, we have a deadlock.
-         */
-        h2_mplx_reference(*pmplx);
-    }
     return status;
 }
 
@@ -132,7 +129,6 @@ static h2_mplx *mplx_done(h2_worker *worker, h2_mplx *m,
     h2_workers *workers = (h2_workers *)ctx;
     h2_mplx *next_mplx = NULL;
 
-    h2_mplx_release(m);
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         /* If EAGAIN and not empty, place into list again */
