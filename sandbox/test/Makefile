@@ -150,9 +150,34 @@ xtest: \
 	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)
 
 ################################################################################
+# Switch mpm modules
+#
+mpm_worker: $(INST_DIR)/.testdocs-setup
+	@test -L $(INST_DIR)/conf/mods-enabled/mpm_worker.load || \
+        (rm -f $(INST_DIR)/conf/mods-enabled/mpm_*; \
+        ln -s ../mods-available/mpm_worker.load $(INST_DIR)/conf/mods-enabled/ && \
+        echo "mpm_worker configured, please restart.")
+
+mpm_event: $(INST_DIR)/.testdocs-setup
+	@test -L $(INST_DIR)/conf/mods-enabled/mpm_event.load || \
+	    (rm -f $(INST_DIR)/conf/mods-enabled/mpm_*; \
+	    ln -s ../mods-available/mpm_event.load $(INST_DIR)/conf/mods-enabled/ && \
+	    echo "mpm_event configured, please restart.")
+
+mpm_prefork: $(INST_DIR)/.testdocs-setup
+	@test -L $(INST_DIR)/conf/mods-enabled/mpm_prefork.load || \
+	    (rm -f $(INST_DIR)/conf/mods-enabled/mpm_*; \
+	    ln -s ../mods-available/mpm_prefork.load $(INST_DIR)/conf/mods-enabled/ && \
+	    echo "mpm_prefork configured, please restart.")
+
+
+################################################################################
 # Setup the local httpd for our tests
 #
-SETUP_FILES = $(wildcard conf/*.conf) $(wildcard conf/sites/*.conf) $(wildcard bin/*)
+SETUP_FILES = $(wildcard conf/*.conf) \
+    $(wildcard conf/mods-available/*.*) \
+    $(wildcard conf/sites/*.conf) \
+    $(wildcard bin/*)
 
 $(INST_DIR)/.testdocs-setup: \
 	$(wildcard conf/*) \
@@ -164,9 +189,11 @@ $(INST_DIR)/.testdocs-setup: \
 	@touch $(INST_DIR)/.testdocs-setup
 
 $(INST_DIR)/.test-setup: \
+        Makefile \
 		$(INST_DIR)/.httpd-installed \
 		conf/*.conf \
         $(wildcard bin/*) \
+        $(wildcard conf/mods-available/*.*) \
 		$(wildcard conf/sites/*.conf) \
         $(INST_DIR)/conf/mods-enabled/h2.load \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
@@ -178,7 +205,7 @@ $(INST_DIR)/.test-setup: \
 		$(INST_DIR)/.testdocs-setup
 	@echo -n setup httpd locally...
 	@mkdir -p $(INST_DIR)/conf/sites
-	@mkdir -p $(INST_DIR)/conf/mods
+	@mkdir -p $(INST_DIR)/conf/mods-enabled
 	@mkdir -p $(INST_DIR)/conf/ssl
 	@for file in $(SETUP_FILES); do \
 		sed -e "s,SUBST_SERVER_ROOT_SUBST,$(BLD_PREFIX),g" \
@@ -190,6 +217,7 @@ $(INST_DIR)/.test-setup: \
 	done
 	@for i in bin/*; do chmod +x $(INST_DIR)/$$i; done
 	@cp conf/ssl/*.* $(INST_DIR)/conf/ssl
+	@test -L $(INST_DIR)/conf/mods-enabled/mpm*load || ln -s ../mods-available/mpm_worker.load $(INST_DIR)/conf/mods-enabled/
 	@echo done.
 	@touch $(INST_DIR)/.test-setup
 

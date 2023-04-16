@@ -71,6 +71,9 @@
 		B2C631081B383EA800127D1E /* test-ser.example.org.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "test-ser.example.org.conf"; sourceTree = "<group>"; };
 		B2C6310C1B393CA100127D1E /* httpd-alpn-v4-v5.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-alpn-v4-v5.patch"; sourceTree = "<group>"; };
 		B2C63B0E1B39421B00127D1E /* openssl-1.0.2-alpn.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "openssl-1.0.2-alpn.patch"; sourceTree = "<group>"; };
+		B2C63B101B3BF78C00127D1E /* mpm_worker.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mpm_worker.load; sourceTree = "<group>"; };
+		B2C63B121B3BF7CC00127D1E /* mpm_event.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mpm_event.load; sourceTree = "<group>"; };
+		B2C63B131B3BF7CC00127D1E /* mpm_prefork.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mpm_prefork.load; sourceTree = "<group>"; };
 		B2CB610E1A88BB9F00D270A6 /* h2_conn.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_conn.c; sourceTree = "<group>"; };
 		B2CB610F1A88BB9F00D270A6 /* h2_conn.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_conn.h; sourceTree = "<group>"; };
 		B2CB61101A8A0FB400D270A6 /* h2_response.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_response.c; sourceTree = "<group>"; };
@@ -398,6 +401,16 @@
 			);
 			sourceTree = "<group>";
 		};
+		B2C63B0F1B3BF76B00127D1E /* mods-available */ = {
+			isa = PBXGroup;
+			children = (
+				B2C63B121B3BF7CC00127D1E /* mpm_event.load */,
+				B2C63B131B3BF7CC00127D1E /* mpm_prefork.load */,
+				B2C63B101B3BF78C00127D1E /* mpm_worker.load */,
+			);
+			path = "mods-available";
+			sourceTree = "<group>";
+		};
 		B2E6DF761AC2E55700D557D8 /* setup */ = {
 			isa = PBXGroup;
 			children = (
@@ -501,6 +514,7 @@
 			isa = PBXGroup;
 			children = (
 				B2E6FDFA1AC2EFA200D557D8 /* httpd.conf */,
+				B2C63B0F1B3BF76B00127D1E /* mods-available */,
 				B2E6FDFB1AC2EFA200D557D8 /* modules.conf */,
 				B2E6FDFC1AC2EFA200D557D8 /* sites */,
 				B2E6FDFF1AC2EFA200D557D8 /* ssl */,

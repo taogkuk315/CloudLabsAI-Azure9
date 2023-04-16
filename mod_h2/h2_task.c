@@ -275,10 +275,6 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         env.output = NULL;
     }
 
-    if (env.c.id) {
-        h2_conn_post(&env.c, worker);
-    }
-    
     h2_mplx_release(env.mplx);
     env.mplx = NULL;
     
@@ -291,6 +287,11 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         apr_pool_destroy(env.pool);
         env.pool = NULL;
     }
+    
+    if (env.c.id) {
+        h2_conn_post(&env.c, worker);
+    }
+    
     return status;
 }
 

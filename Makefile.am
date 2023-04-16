@@ -38,3 +38,11 @@ test:
 loadtest:
 	make -C sandbox loadtest
 
+mpm_worker:
+	make -C sandbox mpm_worker
+
+mpm_event:
+	make -C sandbox mpm_event
+
+mpm_prefork:
+	make -C sandbox mpm_prefork

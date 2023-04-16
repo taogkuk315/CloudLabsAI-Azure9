@@ -47,3 +47,12 @@ test:
 
 loadtest:
 	make -C test loadtest
+
+mpm_worker:
+	make -C test mpm_worker
+
+mpm_event:
+	make -C test mpm_event
+
+mpm_prefork:
+	make -C test mpm_prefork
