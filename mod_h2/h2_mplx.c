@@ -57,7 +57,6 @@ static void h2_mplx_destroy(h2_mplx *m)
     AP_DEBUG_ASSERT(m);
     m->aborted = 1;
     if (m->q) {
-        h2_workers_unregister(m->workers, m);
         h2_tq_destroy(m->q);
         m->q = NULL;
     }
@@ -133,13 +132,9 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
     return m;
 }
 
-void h2_mplx_reference(h2_mplx *m)
+static void reference(h2_mplx *m)
 {
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        ++m->refs;
-        apr_thread_mutex_unlock(m->lock);
-    }
+    ++m->refs;
 }
 
 static void release(h2_mplx *m)
@@ -152,6 +147,14 @@ static void release(h2_mplx *m)
     }
 }
 
+void h2_mplx_reference(h2_mplx *m)
+{
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        reference(m);
+        apr_thread_mutex_unlock(m->lock);
+    }
+}
 void h2_mplx_release(h2_mplx *m)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
@@ -161,6 +164,25 @@ void h2_mplx_release(h2_mplx *m)
     }
 }
 
+static void workers_register(h2_mplx *m) {
+    /* Initially, there was ref count increase for this as well, but
+     * this is not needed, even harmful.
+     * h2_workers is only a hub for all the h2_worker instances.
+     * At the end-of-life of this h2_mplx, we always unregister at
+     * the workers. The thing to manage are all the h2_worker instances
+     * out there. Those may hold a reference to this h2_mplx and we cannot
+     * call them to unregister.
+     * 
+     * Therefore: ref counting for h2_workers in not needed, ref counting
+     * for h2_worker using this is critical.
+     */
+    h2_workers_register(m->workers, m);
+}
+
+static void workers_unregister(h2_mplx *m) {
+    h2_workers_unregister(m->workers, m);
+}
+
 apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
@@ -168,13 +190,16 @@ apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
         int attempts = 0;
         
         release(m);
+        workers_unregister(m);
+        
         while (m->refs > 0) {
             m->join_wait = wait;
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
+            ap_log_cerror(APLOG_MARK, (attempts? APLOG_INFO : APLOG_DEBUG), 
+                          0, m->c,
                           "h2_mplx(%ld): release_join, refs=%d, waiting...", 
                           m->id, m->refs);
-            apr_thread_cond_timedwait(wait, m->lock, apr_time_from_sec(60));
-            if (++attempts >= 5) {
+            apr_thread_cond_timedwait(wait, m->lock, apr_time_from_sec(10));
+            if (++attempts >= 6) {
                 ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c,
                               "h2_mplx(%ld): join attempts exhausted, refs=%d", 
                               m->id, m->refs);
@@ -198,9 +223,7 @@ void h2_mplx_abort(h2_mplx *m)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         m->aborted = 1;
-        if (m->workers) {
-            h2_workers_unregister(m->workers, m);
-        }
+        workers_unregister(m);
         h2_io_set_destroy_all(m->stream_ios);
         apr_thread_mutex_unlock(m->lock);
     }
@@ -661,12 +684,9 @@ apr_status_t h2_mplx_do_task(h2_mplx *m, struct h2_task *task)
     }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        int was_empty = h2_tq_empty(m->q);
         /* TODO: needs to sort queue by priority */
         h2_tq_append(m->q, task);
-        if (was_empty) {
-            h2_workers_register(m->workers, m);
-        }
+        workers_register(m);
         apr_thread_mutex_unlock(m->lock);
     }
     return status;

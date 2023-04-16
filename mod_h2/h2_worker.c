@@ -30,7 +30,7 @@ static void *execute(apr_thread_t *thread, void *wctx)
 {
     h2_worker *worker = (h2_worker *)wctx;
     apr_status_t status = APR_SUCCESS;
-    const int n = 1000000;
+    h2_mplx *m;
     (void)thread;
     
     /* Furthermore, other code might want to see the socket for
@@ -47,35 +47,34 @@ static void *execute(apr_thread_t *thread, void *wctx)
     }
     
     worker->task = NULL;
-    worker->current = NULL;
+    m = NULL;
     while (!worker->aborted) {
         
-        if (worker->current) {
+        if (m) {
             status = APR_SUCCESS;
-            worker->task = h2_mplx_pop_task(worker->current);
+            worker->task = h2_mplx_pop_task(m);
             for (int i = 0; !worker->aborted && worker->task; ++i) {
                 
                 h2_task_do(worker->task, worker);
                 
                 apr_thread_cond_signal(h2_worker_get_cond(worker));
                 
-                if (i >= n) {
+                if (i >= 100000) {
                     /* Do a maximum of n tasks per given mplx before giving
                      * other connections a chance. */
                     worker->task = NULL;
                     status = APR_EAGAIN;
                     break;
                 }
-                worker->task = h2_mplx_pop_task(worker->current);
+                worker->task = h2_mplx_pop_task(m);
             }
             
             worker->task = NULL;
-            worker->current = worker->mplx_done(worker, worker->current,
-                                                status, worker->ctx);
+            m = worker->mplx_done(worker, m, status, worker->ctx);
         }
         
-        if (!worker->current) {
-            status = worker->get_next(worker, &worker->current, worker->ctx);
+        if (!m) {
+            status = worker->get_next(worker, &m, worker->ctx);
         }
     }
 

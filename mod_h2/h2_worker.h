@@ -60,7 +60,6 @@ struct h2_worker {
     void *ctx;
     
     int aborted;
-    struct h2_mplx *current;
     struct h2_task *task;
 };
 

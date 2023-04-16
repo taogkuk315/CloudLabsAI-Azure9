@@ -115,6 +115,14 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
         --workers->idle_worker_count;
         apr_thread_mutex_unlock(workers->lock);
     }
+    
+    if (*pmplx) {
+        /* "I have a bad feeling about this...."
+         * h2_mplx calls h2_workers with its mutex locked, if we
+         * call back with h2_workers mutex locked, we have a deadlock.
+         */
+        h2_mplx_reference(*pmplx);
+    }
     return status;
 }
 
@@ -123,6 +131,8 @@ static h2_mplx *mplx_done(h2_worker *worker, h2_mplx *m,
 {
     h2_workers *workers = (h2_workers *)ctx;
     h2_mplx *next_mplx = NULL;
+
+    h2_mplx_release(m);
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         /* If EAGAIN and not empty, place into list again */
@@ -130,6 +140,7 @@ static h2_mplx *mplx_done(h2_worker *worker, h2_mplx *m,
             H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
             apr_thread_cond_signal(workers->mplx_added);
         }
+        
         next_mplx = pop_next_mplx(workers, worker);
         
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
@@ -254,13 +265,18 @@ apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m)
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
                      "h2_workers: register mplx(%ld)", m->id);
-        if (!in_list(workers, m)) {
-            H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
+        if (in_list(workers, m)) {
+            status = APR_EAGAIN;
         }
-        apr_thread_cond_signal(workers->mplx_added);
+        else {
+            H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
+            status = APR_SUCCESS;
+        }
         
-        if (workers->idle_worker_count <= 0 
-            && workers->worker_count < workers->max_size) {
+        if (workers->idle_worker_count > 0) { 
+            apr_thread_cond_signal(workers->mplx_added);
+        }
+        else if (workers->worker_count < workers->max_size) {
             ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                          "h2_workers: got %d worker, adding 1", 
                          workers->worker_count);
