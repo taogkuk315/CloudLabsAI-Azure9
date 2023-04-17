@@ -43,77 +43,127 @@ static int in_list(h2_workers *workers, h2_mplx *m)
 }
 
 
-static h2_mplx* pop_next_mplx(h2_workers *workers, h2_worker *worker)
-{
-    (void)worker;
-    if (!H2_MPLX_LIST_EMPTY(&workers->mplxs)) {
-        h2_mplx *m = H2_MPLX_LIST_FIRST(&workers->mplxs);
-        H2_MPLX_REMOVE(m);
-        return m;
-    }
-    return NULL;
-}
-
-
-static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
+static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm, 
+                                  h2_task **ptask, void *ctx)
 {
     apr_status_t status;
+    h2_mplx *m = NULL;
+    h2_task *task = NULL;
+    apr_time_t max_wait, start_wait;
     h2_workers *workers = (h2_workers *)ctx;
     
-    *pmplx = NULL;
+    if (*pm && ptask != NULL) {
+        /* We have a h2_mplx instance and the worker wants the next task. 
+         * Try to get one from the given mplx. */
+        *ptask = h2_mplx_pop_task(*pm);
+        if (*ptask) {
+            return APR_SUCCESS;
+        }
+    }
+    
+    if (*pm) {
+        /* Got a mplx handed in, but did not get or want a task from it. 
+         * Release it, as the workers reference will be wiped.
+         */
+        h2_mplx_release(*pm);
+        *pm = NULL;
+    }
+    
+    if (!ptask) {
+        /* of the worker does not want a next task, we're done.
+         */
+        return APR_SUCCESS;
+    }
+    
+    max_wait = apr_time_from_sec(apr_atomic_read32(&workers->max_idle_secs));
+    start_wait = apr_time_now();
+    
     status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        status = APR_EOF;
-        apr_time_t max_wait = apr_time_from_sec(apr_atomic_read32(&workers->max_idle_secs));
-        apr_time_t start_wait = apr_time_now();
-        
         ++workers->idle_worker_count;
+        
         ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                      "h2_worker(%d): looking for work", h2_worker_get_id(worker));
-        while (!h2_worker_is_aborted(worker) && !workers->aborted) {
+        
+        while (!task && !h2_worker_is_aborted(worker) && !workers->aborted) {
             
-            h2_mplx *m = pop_next_mplx(workers, worker);
-            if (m) {
-                *pmplx = m;
-                status = APR_SUCCESS;
-                ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
-                             "h2_worker(%d): start mplx(%ld)",
-                             h2_worker_get_id(worker), m->id);
-                break;
+            /* Get the next h2_mplx to process that has a task to hand out.
+             * If it does, place it at the end of the queu and return the
+             * task to the worker.
+             * If it (currently) has no tasks, remove it so that it needs
+             * to register again for scheduling.
+             * If we run out of h2_mplx in the queue, we need to wait for
+             * new mplx to arrive. Depending on how many workers do exist,
+             * we do a timed wait or block indefinitely.
+             */
+            m = NULL;
+            while (!task && !H2_MPLX_LIST_EMPTY(&workers->mplxs)) {
+                m = H2_MPLX_LIST_FIRST(&workers->mplxs);
+                H2_MPLX_REMOVE(m);
+                
+                task = h2_mplx_pop_task(m);
+                if (task) {
+                    H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
+                    break;
+                }
             }
             
-            /* Need to wait for either a new mplx to arrive or, if we
-             * are not at the minimum workers count, wait our max idle
-             * time until we reduce the number of workers */
-            if (workers->worker_count > workers->min_size) {
-                apr_time_t now = apr_time_now();
-                if (now >= (start_wait + max_wait)) {
-                    /* waited long enough without getting a task. */
-                    status = APR_TIMEUP;
+            if (!task) {
+                /* Need to wait for either a new mplx to arrive.
+                 */
+                if (workers->worker_count > workers->min_size) {
+                    apr_time_t now = apr_time_now();
+                    if (now >= (start_wait + max_wait)) {
+                        /* waited long enough without getting a task. */
+                        status = APR_TIMEUP;
+                    }
+                    else {
+                        ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
+                                     "h2_worker(%d): waiting signal, "
+                                     "worker_count=%d", worker->id, 
+                                     (int)workers->worker_count);
+                        status = apr_thread_cond_timedwait(workers->mplx_added,
+                                                           workers->lock, max_wait);
+                    }
+                    
+                    if (status == APR_TIMEUP) {
+                        /* waited long enough */
+                        if (workers->worker_count > workers->min_size) {
+                            ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, 
+                                         workers->s,
+                                         "h2_workers: aborting idle worker");
+                            h2_worker_abort(worker);
+                            break;
+                        }
+                    }
                 }
                 else {
                     ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
-                                 "h2_worker(%d): waiting signal, worker_count=%d",
-                                 h2_worker_get_id(worker), (int)workers->worker_count);
-                    status = apr_thread_cond_timedwait(workers->mplx_added,
-                                                       workers->lock, max_wait);
-                }
-                if (status == APR_TIMEUP) {
-                    /* waited long enough */
-                    if (workers->worker_count > workers->min_size) {
-                        ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
-                                     "h2_workers: aborting idle worker");
-                        h2_worker_abort(worker);
-                        break;
-                    }
+                                 "h2_worker(%d): waiting signal (eternal), "
+                                 "worker_count=%d", worker->id, 
+                                 (int)workers->worker_count);
+                    apr_thread_cond_wait(workers->mplx_added, workers->lock);
                 }
             }
-            else {
-                ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
-                             "h2_worker(%d): waiting signal (eternal), worker_count=%d",
-                             h2_worker_get_id(worker), (int)workers->worker_count);
-                apr_thread_cond_wait(workers->mplx_added, workers->lock);
-            }
+        }
+        
+        /* Here, we either have gotten task and mplx for the worker or
+         * needed to give up with more than enough workers.
+         */
+        if (task) {
+            ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+                         "h2_worker(%d): start task(%s)",
+                         h2_worker_get_id(worker), task->id);
+            /* Since we hand out a reference to the worker, we increase
+             * its ref count.
+             */
+            h2_mplx_reference(m);
+            *pm = m;
+            *ptask = task;
+            status = APR_SUCCESS;
+        }
+        else {
+            status = APR_EOF;
         }
         
         --workers->idle_worker_count;
@@ -121,32 +171,6 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pmplx, void *ctx)
     }
     
     return status;
-}
-
-static h2_mplx *mplx_done(h2_worker *worker, h2_mplx *m,
-                          apr_status_t mplx_status, void *ctx)
-{
-    h2_workers *workers = (h2_workers *)ctx;
-    h2_mplx *next_mplx = NULL;
-
-    apr_status_t status = apr_thread_mutex_lock(workers->lock);
-    if (status == APR_SUCCESS) {
-        /* If EAGAIN and not empty, place into list again */
-        if (mplx_status == APR_EAGAIN && !in_list(workers, m)) {
-            H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
-            apr_thread_cond_signal(workers->mplx_added);
-        }
-        
-        next_mplx = pop_next_mplx(workers, worker);
-        
-        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
-                     "h2_worker(%d): mplx(%ld) done, next(%ld)",
-                     h2_worker_get_id(worker), m->id,
-                     next_mplx? next_mplx->id : -1);
-        
-        apr_thread_mutex_unlock(workers->lock);
-    }
-    return next_mplx;
 }
 
 static void worker_done(h2_worker *worker, void *ctx)
@@ -169,8 +193,7 @@ static apr_status_t add_worker(h2_workers *workers)
 {
     h2_worker *w = h2_worker_create(workers->next_worker_id++,
                                     workers->pool, workers->thread_attr,
-                                    get_mplx_next, mplx_done, worker_done,
-                                    workers);
+                                    get_mplx_next, worker_done, workers);
     if (!w) {
         return APR_ENOMEM;
     }

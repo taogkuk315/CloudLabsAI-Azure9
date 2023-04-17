@@ -189,13 +189,13 @@ static void workers_unregister(h2_mplx *m) {
 
 apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
 {
+    workers_unregister(m);
+
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         int attempts = 0;
         
         release(m);
-        workers_unregister(m);
-        
         while (m->refs > 0) {
             m->join_wait = wait;
             ap_log_cerror(APLOG_MARK, (attempts? APLOG_INFO : APLOG_DEBUG), 
@@ -227,10 +227,10 @@ void h2_mplx_abort(h2_mplx *m)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         m->aborted = 1;
-        workers_unregister(m);
         h2_io_set_destroy_all(m->stream_ios);
         apr_thread_mutex_unlock(m->lock);
     }
+    workers_unregister(m);
 }
 
 
@@ -689,10 +689,12 @@ apr_status_t h2_mplx_do_task(h2_mplx *m, struct h2_task *task)
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         /* TODO: needs to sort queue by priority */
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+                      "h2_mplx: do task(%s)", task->id);
         h2_tq_append(m->q, task);
-        workers_register(m);
         apr_thread_mutex_unlock(m->lock);
     }
+    workers_register(m);
     return status;
 }
 

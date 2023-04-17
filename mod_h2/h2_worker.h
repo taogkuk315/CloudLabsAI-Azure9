@@ -25,19 +25,13 @@ struct h2_task;
  */
 typedef struct h2_worker h2_worker;
 
-/* Invoked when the worker wants new work. Will block
+/* Invoked when the worker wants a new task to process. Will block
  * until a h2_mplx becomes available or the worker itself
  * gets aborted (idle timeout, for example). */
 typedef apr_status_t h2_worker_mplx_next_fn(h2_worker *worker,
-                                            struct h2_mplx **m,
+                                            struct h2_mplx **pm,
+                                            struct h2_task **ptask,
                                             void *ctx);
-
-/* Invoked when the worker has finished a mplx. May return the 
- * next mplx to work on or NULL. Will not block. */
-typedef struct h2_mplx *h2_worker_mplx_done_fn(h2_worker *worker,
-                                               struct h2_mplx *m,
-                                               apr_status_t status,
-                                               void *ctx);
 
 /* Invoked just before the worker thread exits. */
 typedef void h2_worker_done_fn(h2_worker *worker, void *ctx);
@@ -55,7 +49,6 @@ struct h2_worker {
     apr_socket_t *socket;
     
     h2_worker_mplx_next_fn *get_next;
-    h2_worker_mplx_done_fn *mplx_done;
     h2_worker_done_fn *worker_done;
     void *ctx;
     
@@ -138,7 +131,6 @@ h2_worker *h2_worker_create(int id,
                             apr_pool_t *pool,
                             apr_threadattr_t *attr,
                             h2_worker_mplx_next_fn *get_next,
-                            h2_worker_mplx_done_fn *mplx_done,
                             h2_worker_done_fn *worker_done,
                             void *ctx);
 

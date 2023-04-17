@@ -49,39 +49,17 @@ static void *execute(apr_thread_t *thread, void *wctx)
     worker->task = NULL;
     m = NULL;
     while (!worker->aborted) {
-        status = worker->get_next(worker, &m, worker->ctx);
+        status = worker->get_next(worker, &m, &worker->task, worker->ctx);
         
-        if (m) {
-            status = APR_SUCCESS;
-            
-            h2_mplx_reference(m);
-            worker->task = h2_mplx_pop_task(m);
-            for (int i = 0; !worker->aborted && worker->task; ++i) {
-                
-                h2_task_do(worker->task, worker);
-                
-                apr_thread_cond_signal(h2_worker_get_cond(worker));
-                
-                if (i >= 100000) {
-                    /* Do a maximum of n tasks per given mplx before giving
-                     * other connections a chance. */
-                    worker->task = NULL;
-                    status = APR_EAGAIN;
-                    break;
-                }
-                worker->task = h2_mplx_pop_task(m);
-            }
-            
+        if (worker->task) {            
+            h2_task_do(worker->task, worker);
             worker->task = NULL;
-            h2_mplx_release(m);
-            m = worker->mplx_done(worker, m, status, worker->ctx);
+            apr_thread_cond_signal(h2_worker_get_cond(worker));
         }
     }
 
-    if (m) {
-        h2_mplx_release(m);
-        m = NULL;
-    }
+    status = worker->get_next(worker, &m, NULL, worker->ctx);
+    m = NULL;
     
     if (worker->socket) {
         apr_socket_close(worker->socket);
@@ -96,7 +74,6 @@ h2_worker *h2_worker_create(int id,
                             apr_pool_t *parent_pool,
                             apr_threadattr_t *attr,
                             h2_worker_mplx_next_fn *get_next,
-                            h2_worker_mplx_done_fn *mplx_done,
                             h2_worker_done_fn *worker_done,
                             void *ctx)
 {
@@ -123,7 +100,6 @@ h2_worker *h2_worker_create(int id,
         w->bucket_alloc = apr_bucket_alloc_create(pool);
 
         w->get_next = get_next;
-        w->mplx_done = mplx_done;
         w->worker_done = worker_done;
         w->ctx = ctx;
         
