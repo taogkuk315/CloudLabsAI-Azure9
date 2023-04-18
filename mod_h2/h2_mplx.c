@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <stddef.h>
 
+#include <apr_atomic.h>
 #include <apr_thread_mutex.h>
 #include <apr_thread_cond.h>
 #include <apr_strings.h>
@@ -106,7 +107,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
     if (m) {
         m->id = c->id;
         APR_RING_ELEM_INIT(m, link);
-        m->refs = 1;
+        apr_atomic_set32(&m->refs, 1);
         m->c = c;
         apr_pool_create_ex(&m->pool, parent, NULL, allocator);
         if (!m->pool) {
@@ -132,39 +133,46 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
     return m;
 }
 
+#define REF_COUNT_ATOMIC    1
+
 static void reference(h2_mplx *m)
 {
-    ++m->refs;
+    apr_atomic_inc32(&m->refs);
 }
 
 static void release(h2_mplx *m)
 {
-    --m->refs;
-    if (!m->refs) {
+    if (!apr_atomic_dec32(&m->refs)) {
         if (m->join_wait) {
             apr_thread_cond_signal(m->join_wait);
         }
-    }
-    else if (m->refs < 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c,
-                      "h2_mplx(%ld): ref count %d", m->id, m->refs);
     }
 }
 
 void h2_mplx_reference(h2_mplx *m)
 {
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
+    if (REF_COUNT_ATOMIC) {
         reference(m);
-        apr_thread_mutex_unlock(m->lock);
+    }
+    else {
+        apr_status_t status = apr_thread_mutex_lock(m->lock);
+        if (APR_SUCCESS == status) {
+            reference(m);
+            apr_thread_mutex_unlock(m->lock);
+        }
     }
 }
 void h2_mplx_release(h2_mplx *m)
 {
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
+    if (REF_COUNT_ATOMIC) {
         release(m);
-        apr_thread_mutex_unlock(m->lock);
+    }
+    else {
+        apr_status_t status = apr_thread_mutex_lock(m->lock);
+        if (APR_SUCCESS == status) {
+            release(m);
+            apr_thread_mutex_unlock(m->lock);
+        }
     }
 }
 
@@ -196,7 +204,7 @@ apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
         int attempts = 0;
         
         release(m);
-        while (m->refs > 0) {
+        while (apr_atomic_read32(&m->refs) > 0) {
             m->join_wait = wait;
             ap_log_cerror(APLOG_MARK, (attempts? APLOG_INFO : APLOG_DEBUG), 
                           0, m->c,
