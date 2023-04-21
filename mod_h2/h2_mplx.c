@@ -706,11 +706,12 @@ apr_status_t h2_mplx_do_task(h2_mplx *m, struct h2_task *task)
     return status;
 }
 
-h2_task *h2_mplx_pop_task(h2_mplx *m)
+h2_task *h2_mplx_pop_task(h2_mplx *m, int *has_more)
 {
     h2_task *task = NULL;
     AP_DEBUG_ASSERT(m);
     if (m->aborted) {
+        *has_more = 0;
         return NULL;
     }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
@@ -719,6 +720,7 @@ h2_task *h2_mplx_pop_task(h2_mplx *m)
         if (task) {
             h2_task_set_started(task);
         }
+        *has_more = !h2_tq_empty(m->q);
         apr_thread_mutex_unlock(m->lock);
     }
     return task;

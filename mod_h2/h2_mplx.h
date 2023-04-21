@@ -143,7 +143,7 @@ apr_status_t h2_mplx_join_task(h2_mplx *m, struct h2_task *task, int wait);
  */
 apr_status_t h2_mplx_do_task(h2_mplx *mplx, struct h2_task *task);
 
-struct h2_task *h2_mplx_pop_task(h2_mplx *mplx);
+struct h2_task *h2_mplx_pop_task(h2_mplx *mplx, int *has_more);
 
 /*******************************************************************************
  * Input handling of streams.

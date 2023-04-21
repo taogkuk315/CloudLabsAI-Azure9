@@ -50,12 +50,13 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
     h2_mplx *m = NULL;
     h2_task *task = NULL;
     apr_time_t max_wait, start_wait;
+    int has_more = 0;
     h2_workers *workers = (h2_workers *)ctx;
     
     if (*pm && ptask != NULL) {
         /* We have a h2_mplx instance and the worker wants the next task. 
          * Try to get one from the given mplx. */
-        *ptask = h2_mplx_pop_task(*pm);
+        *ptask = h2_mplx_pop_task(*pm, &has_more);
         if (*ptask) {
             return APR_SUCCESS;
         }
@@ -101,7 +102,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
                 m = H2_MPLX_LIST_FIRST(&workers->mplxs);
                 H2_MPLX_REMOVE(m);
                 
-                task = h2_mplx_pop_task(m);
+                task = h2_mplx_pop_task(m, &has_more);
                 if (task) {
                     H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
                     break;
@@ -160,6 +161,10 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
             h2_mplx_reference(m);
             *pm = m;
             *ptask = task;
+            
+            if (has_more && workers->idle_worker_count > 1) {
+                apr_thread_cond_signal(workers->mplx_added);
+            }
             status = APR_SUCCESS;
         }
         else {
