@@ -104,7 +104,12 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
                 
                 task = h2_mplx_pop_task(m, &has_more);
                 if (task) {
-                    H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
+                    if (has_more) {
+                        H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
+                    }
+                    else {
+                        has_more = !H2_MPLX_LIST_EMPTY(&workers->mplxs);
+                    }
                     break;
                 }
             }
