@@ -31,7 +31,7 @@
  * out data.
  */
 
-#define H2_CONN_IO_BUF_SIZE        (16 * 1024)
+#define H2_CONN_IO_BUF_SIZE        (64 * 1024)
 #define H2_CONN_IO_SSL_WRITE_SIZE  (16 * 1024)
 
 

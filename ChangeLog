@@ -1,6 +1,8 @@
 v0.7.3
 --------------------------------------------------------------------------------
- * 
+ * sandbox update to nghttp2 1.0.4
+ * rework of stream scheduling and thread sync
+ * test suite runs with mpm_prefork on OS X and Ubuntu (feedback welcome)
 
 v0.7.2
 --------------------------------------------------------------------------------
