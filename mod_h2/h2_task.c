@@ -195,7 +195,6 @@ void h2_task_set_request(h2_task *task,
 
 apr_status_t h2_task_destroy(h2_task *task)
 {
-    AP_DEBUG_ASSERT(task);
     (void)task;
     return APR_SUCCESS;
 }

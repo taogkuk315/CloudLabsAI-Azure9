@@ -260,41 +260,12 @@ static apr_status_t stream_destroy(h2_session *session, h2_stream *stream)
 
 static apr_status_t close_stream(h2_session *session, h2_stream *stream)
 {
-    apr_status_t status = APR_SUCCESS;
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                   "h2_stream(%ld-%d): closing",
                   session->id, (int)stream->id);
     
     h2_stream_set_remove(session->streams, stream);
-    status = stream_destroy(session, stream);
-    if (status == APR_EAGAIN) {
-        h2_stream_set_add(session->zombies, stream);
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
-                      "h2_stream(%ld-%d): is zombie now",
-                      session->id, (int)stream->id);
-    }
-
-    return status;
-}
-
-static apr_status_t join_stream_task(h2_session *session, h2_stream *stream)
-{
-    apr_status_t status = APR_SUCCESS;
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                  "h2_stream(%ld-%d): join zombie",
-                  session->id, (int)stream->id);
-    
-    h2_stream_set_remove(session->zombies, stream);
-    if (stream->task) {
-        status = h2_mplx_join_task(stream->m, stream->task, 1);
-        if (status != APR_SUCCESS) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
-                          "h2_stream(%ld-%d): join zombie",
-                          session->id, (int)stream->id);
-        }
-    }
-    stream_destroy(session, stream);
-    return status;
+    return stream_destroy(session, stream);
 }
 
 static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
@@ -624,7 +595,6 @@ static h2_session *h2_session_create_int(conn_rec *c,
         }
         
         session->streams = h2_stream_set_create(session->pool);
-        session->zombies = h2_stream_set_create(session->pool);
         
         session->workers = workers;
         session->mplx = h2_mplx_create(c, session->pool, workers);
@@ -672,39 +642,6 @@ static h2_session *h2_session_create_int(conn_rec *c,
     return session;
 }
 
-static int stream_close_finished(void *ctx, h2_stream *stream) {
-    AP_DEBUG_ASSERT(ctx);
-    h2_session *session = (h2_session *)ctx;
-    h2_task *task = stream->task;
-    if (!task || h2_task_has_finished(task)) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                      "h2_session(%ld): reaping zombie stream(%d)",
-                      session->id, stream->id);
-        
-        h2_stream_set_remove(session->zombies, stream);
-        stream_destroy(session, stream);
-    }
-    return 1;
-}
-
-static void reap_zombies(h2_session *session, int take_your_time) {
-    if (session->zombies) {
-        apr_size_t count = h2_stream_set_size(session->zombies);
-        /* If we have time, or if the number of accumulated zombie streams
-         * have reached a certain threshold, check all zombies and
-         * cleanup those whose task has finished 
-         */
-        if (count && (take_your_time || count > (session->max_stream_count / 2))) {
-            h2_stream_set_iter(session->zombies, stream_close_finished, session);
-            apr_size_t ncount = h2_stream_set_size(session->zombies);
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
-                          "h2_session(%ld): zombies reaped (mode=%d): %d -> %d",
-                          session->id, take_your_time, 
-                          (int)count, (int)ncount);
-        }
-    }
-}
-
 h2_session *h2_session_create(conn_rec *c, h2_config *config, 
                               h2_workers *workers)
 {
@@ -720,12 +657,6 @@ h2_session *h2_session_rcreate(request_rec *r, h2_config *config,
 static int close_active_iter(void *ctx, h2_stream *stream) {
     AP_DEBUG_ASSERT(ctx);
     close_stream((h2_session *)ctx, stream);
-    return 1;
-}
-
-static int close_zombie_iter(void *ctx, h2_stream *stream) {
-    AP_DEBUG_ASSERT(ctx);
-    join_stream_task((h2_session *)ctx, stream);
     return 1;
 }
 
@@ -745,20 +676,6 @@ void h2_session_destroy(h2_session *session)
         }
         h2_stream_set_destroy(session->streams);
         session->streams = NULL;
-    }
-    if (session->zombies) {
-        if (h2_stream_set_size(session->zombies)) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                          "h2_session(%ld): destroy, %d zombie streams",
-                          session->id, (int)h2_stream_set_size(session->zombies));
-            /* destroy all zombies, join all existing tasks */
-            h2_stream_set_iter(session->zombies, close_zombie_iter, session);
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                          "h2_session(%ld): destroy, %d zombies remain",
-                          session->id, (int)h2_stream_set_size(session->zombies));
-        }
-        h2_stream_set_destroy(session->zombies);
-        session->zombies = NULL;
     }
     if (session->ngh2) {
         nghttp2_session_del(session->ngh2);
@@ -1047,7 +964,6 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         }
         else {
             /* nothing happened to ongoing streams, do some house-keeping */
-            reap_zombies(session, 1);
         }
     }
     
@@ -1069,8 +985,6 @@ apr_status_t h2_session_write(h2_session *session, apr_interval_time_t timeout)
         h2_conn_io_flush(&session->io);
     }
     
-    reap_zombies(session, 0);
-
     return status;
 }
 

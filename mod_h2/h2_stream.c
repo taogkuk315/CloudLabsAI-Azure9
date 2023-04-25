@@ -76,14 +76,6 @@ void h2_stream_cleanup(h2_stream *stream)
 apr_status_t h2_stream_destroy(h2_stream *stream)
 {
     AP_DEBUG_ASSERT(stream);
-    
-    if (stream->task && !h2_task_has_finished(stream->task)) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->m->c,
-                      "h2_stream(%ld-%d): refused to be destroyed",
-                      stream->m->id, (int)stream->id);
-        return APR_EAGAIN;
-    }
-
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, stream->m->c,
                   "h2_stream(%ld-%d): destroy", stream->m->id, stream->id);
     h2_stream_cleanup(stream);
