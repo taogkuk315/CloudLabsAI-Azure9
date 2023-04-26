@@ -40,6 +40,7 @@ struct apr_thread_cond_t;
 struct h2_config;
 struct h2_response;
 struct h2_task;
+struct h2_stream;
 struct h2_io_set;
 struct apr_thread_cond_t;
 struct h2_workers;
@@ -69,6 +70,7 @@ struct h2_mplx {
     int aborted;
     apr_size_t stream_max_mem;
     
+    struct h2_stream_set *zombies;  /* streams finshed, but not destroyed */
     struct h2_workers *workers;
 };
 
@@ -108,6 +110,8 @@ apr_status_t h2_mplx_release_and_join(h2_mplx *m, struct apr_thread_cond_t *wait
  */
 void h2_mplx_abort(h2_mplx *mplx);
 
+void h2_mplx_task_done(h2_mplx *m, int stream_id);
+
 /*******************************************************************************
  * IO lifetime of streams.
  ******************************************************************************/
@@ -117,9 +121,9 @@ void h2_mplx_abort(h2_mplx *mplx);
 apr_status_t h2_mplx_open_io(h2_mplx *mplx, int stream_id);
 
 /**
- * Ends handling of in-/ouput on the given stream id.
+ * Ends cleanup of a stream in sync with execution thread.
  */
-void h2_mplx_close_io(h2_mplx *mplx, int stream_id);
+apr_status_t h2_mplx_cleanup_stream(h2_mplx *m, struct h2_stream *stream);
 
 /* Return != 0 iff the multiplexer has data for the given stream. 
  */
@@ -131,8 +135,6 @@ int h2_mplx_out_has_data_for(h2_mplx *m, int stream_id);
  */
 apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
                                  struct apr_thread_cond_t *iowait);
-
-apr_status_t h2_mplx_join_task(h2_mplx *m, struct h2_task *task, int wait);
 
 /*******************************************************************************
  * Stream processing.

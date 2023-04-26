@@ -239,33 +239,10 @@ static int on_frame_not_send_cb(nghttp2_session *ngh2,
 
 static apr_status_t stream_destroy(h2_session *session, h2_stream *stream) 
 {
-    apr_status_t status;
-    apr_pool_t *pool;
-    
-    pool = h2_stream_detach_pool(stream);
-    status = h2_stream_destroy(stream);
-    if (status == APR_SUCCESS) {
-        /* If we already had one, throw the old one away and
-         * keep the hot one. */
-        if (session->plast != NULL) {
-            apr_pool_destroy(session->plast);
-        }
-        apr_pool_clear(pool);
-        session->plast = pool;
-        return APR_SUCCESS;
-    }
-    h2_stream_attach_pool(stream, pool);
-    return status;
-}
-
-static apr_status_t close_stream(h2_session *session, h2_stream *stream)
-{
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                  "h2_stream(%ld-%d): closing",
-                  session->id, (int)stream->id);
-    
+                  "h2_stream(%ld-%d): closing", session->id, (int)stream->id);
     h2_stream_set_remove(session->streams, stream);
-    return stream_destroy(session, stream);
+    return h2_mplx_cleanup_stream(session->mplx, stream);
 }
 
 static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
@@ -279,7 +256,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
     }
     h2_stream *stream = h2_stream_set_get(session->streams, stream_id);
     if (stream) {
-        close_stream(session, stream);
+        stream_destroy(session, stream);
     }
     
     if (error_code) {
@@ -656,13 +633,17 @@ h2_session *h2_session_rcreate(request_rec *r, h2_config *config,
 
 static int close_active_iter(void *ctx, h2_stream *stream) {
     AP_DEBUG_ASSERT(ctx);
-    close_stream((h2_session *)ctx, stream);
+    stream_destroy((h2_session *)ctx, stream);
     return 1;
 }
 
 void h2_session_destroy(h2_session *session)
 {
     AP_DEBUG_ASSERT(session);
+    if (session->mplx) {
+        h2_mplx_release_and_join(session->mplx, session->iowait);
+        session->mplx = NULL;
+    }
     if (session->streams) {
         if (h2_stream_set_size(session->streams)) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
@@ -680,10 +661,6 @@ void h2_session_destroy(h2_session *session)
     if (session->ngh2) {
         nghttp2_session_del(session->ngh2);
         session->ngh2 = NULL;
-    }
-    if (session->mplx) {
-        h2_mplx_release_and_join(session->mplx, session->iowait);
-        session->mplx = NULL;
     }
     h2_conn_io_destroy(&session->io);
     

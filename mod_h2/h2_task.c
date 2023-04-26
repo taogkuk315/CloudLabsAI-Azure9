@@ -224,7 +224,7 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
 
     /* Link the env to the worker which provides useful things such
      * as mutex, a socket etc. */
-    task->io = env.io = h2_worker_get_cond(worker);
+    env.io = h2_worker_get_cond(worker);
     
     /* Clone fields, so that lifetimes become (more) independent. */
     env.method    = apr_pstrdup(env.pool, task->method);
@@ -234,7 +234,8 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     
     /* Setup the pseudo connection to use our own pool and bucket_alloc */
     if (task->c) {
-        env.c = *(task->c);
+        env.c = *task->c;
+        task->c = NULL;
         status = h2_conn_setup(&env, worker);
     }
     else {
@@ -252,11 +253,11 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
                                            env.c.bucket_alloc);
         status = h2_conn_process(&env.c, h2_worker_get_socket(worker));
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, &env.c,
-                      "h2_task(%s): processing done", task->id);
+                      "h2_task(%s): processing done", env.id);
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, &env.c,
-                      "h2_task(%s): error setting up h2_task_env", task->id);
+                      "h2_task(%s): error setting up h2_task_env", env.id);
     }
     
     if (env.input) {
@@ -270,8 +271,6 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
         env.output = NULL;
     }
 
-    env.mplx = NULL;
-    
     h2_task_set_finished(task);
     if (env.io) {
         apr_thread_cond_signal(env.io);
@@ -285,6 +284,8 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     if (env.c.id) {
         h2_conn_post(&env.c, worker);
     }
+    
+    h2_mplx_task_done(env.mplx, env.stream_id);
     
     return status;
 }

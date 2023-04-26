@@ -67,10 +67,6 @@ void h2_stream_cleanup(h2_stream *stream)
         h2_request_destroy(stream->request);
         stream->request = NULL;
     }
-    if (stream->m) {
-        h2_mplx_close_io(stream->m, stream->id);
-        stream->m = NULL;
-    }
 }
 
 apr_status_t h2_stream_destroy(h2_stream *stream)
@@ -100,18 +96,6 @@ apr_pool_t *h2_stream_detach_pool(h2_stream *stream)
     apr_pool_t *pool = stream->pool;
     stream->pool = NULL;
     return pool;
-}
-
-conn_rec *h2_stream_detach_conn(h2_stream *stream)
-{
-    conn_rec *c = stream->c;
-    stream->c = NULL;
-    return c;
-}
-
-void h2_stream_attach_conn(h2_stream *stream, conn_rec *c)
-{
-    stream->c = c;
 }
 
 void h2_stream_abort(h2_stream *stream)
@@ -167,15 +151,15 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos)
     /* Seeing the end-of-headers, we have everything we need to 
      * start processing it.
      */
-    stream->c = h2_conn_create(stream->m->c, stream->pool);
-    if (stream->c == NULL) {
+    conn_rec *c = h2_conn_create(stream->m->c, stream->pool);
+    if (c == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream->m->c,
                       "h2_stream(%ld-%d): create connection",
                       stream->m->id, stream->id);
         return APR_ENOMEM;
     }
     stream->task = h2_task_create(stream->m->id, stream->id, 
-                                  stream->pool, stream->m, stream->c);
+                                  stream->pool, stream->m, c);
     
     apr_status_t status = h2_request_end_headers(stream->request, 
                                                  stream->m, stream->task, eos);

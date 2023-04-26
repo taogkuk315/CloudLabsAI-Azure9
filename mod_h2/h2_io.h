@@ -31,6 +31,7 @@ struct h2_io {
     int id;                      /* stream identifier */
     apr_bucket_brigade *bbin;    /* input data for stream */
     int eos_in;
+    int task_done;
     
     apr_size_t input_consumed;   /* how many bytes have been read */
     struct apr_thread_cond_t *input_arrived; /* block on reading */

@@ -127,6 +127,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
         m->q = h2_tq_create(m->id, m->pool);
         m->stream_ios = h2_io_set_create(m->pool);
         m->ready_ios = h2_io_set_create(m->pool);
+        m->zombies = h2_stream_set_create(m->pool);
         m->stream_max_mem = h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM);
         m->workers = workers;
     }
@@ -261,15 +262,53 @@ apr_status_t h2_mplx_open_io(h2_mplx *m, int stream_id)
     return status;
 }
 
-void h2_mplx_close_io(h2_mplx *m, int stream_id)
+apr_status_t h2_mplx_cleanup_stream(h2_mplx *m, h2_stream *stream)
 {
     AP_DEBUG_ASSERT(m);
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
+        h2_io *io = h2_io_set_get(m->stream_ios, stream->id);
+        if (!io || io->task_done) {
+            /* No more io or task already done -> cleanup immediately */
+            h2_stream_destroy(stream);
+            if (io) {
+                h2_io_set_remove(m->stream_ios, io);
+                h2_io_destroy(io);
+            }
+        }
+        else {
+            /* Add stream to zombies for cleanup when task is done */
+            h2_stream_set_add(m->zombies, stream);
+        }
+        apr_thread_mutex_unlock(m->lock);
+    }
+    return status;
+}
+
+void h2_mplx_task_done(h2_mplx *m, int stream_id)
+{
+    apr_status_t status = apr_thread_mutex_lock(m->lock);
+    if (APR_SUCCESS == status) {
+        h2_stream *stream = h2_stream_set_get(m->zombies, stream_id);
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
-        if (io) {
-            h2_io_set_remove(m->stream_ios, io);
-            h2_io_destroy(io);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                      "h2_mplx(%ld): task(%d) done", m->id, stream_id);
+        if (stream) {
+            /* stream was already closed by main connection and is in 
+             * zombie state. Now that the task is done with it, we
+             * can free its resources. */
+            h2_stream_set_remove(m->zombies, stream);
+            // TODO: seems to have to happen in main thread
+            h2_stream_destroy(stream);
+            if (io) {
+                h2_io_set_remove(m->stream_ios, io);
+                h2_io_destroy(io);
+            }
+        }
+        else if (io) {
+            /* main connection has not finished stream. Mark task as done
+             * so that eventual cleanup can start immediately. */
+            io->task_done = 1;
         }
         apr_thread_mutex_unlock(m->lock);
     }
@@ -726,56 +765,3 @@ h2_task *h2_mplx_pop_task(h2_mplx *m, int *has_more)
     return task;
 }
 
-static apr_status_t join(h2_mplx *m, h2_task *task)
-{
-    AP_DEBUG_ASSERT(h2_task_has_started(task));
-    while (!h2_task_has_finished(task)) {
-        apr_thread_cond_t *io = task->io;
-        if (io) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
-                          "h2_mplx(%s): join task, waiting...", task->id);
-            apr_thread_cond_wait(io, m->lock);
-        }
-        else {
-            if (!h2_task_has_finished(task)) {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, m->c,
-                             "h2_mplx(%s): join task started, but "
-                             "not finished, no cond set",
-                             task->id);
-                return APR_EINVAL;
-            }
-            break;
-        }
-    }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
-                  "h2_mplx(%s): join task, done.", task->id);
-    return APR_SUCCESS;
-}
-
-
-apr_status_t h2_mplx_join_task(h2_mplx *m, h2_task *task, int wait)
-{
-    AP_DEBUG_ASSERT(m);
-    apr_status_t status = apr_thread_mutex_lock(m->lock);
-    if (APR_SUCCESS == status) {
-        status = APR_EAGAIN;
-        
-        if (h2_task_has_finished(task)) {
-            status = APR_SUCCESS;
-        }
-        else if (!h2_task_has_started(task)) {
-            status = h2_tq_remove(m->q, task);
-            if (status != APR_SUCCESS && !h2_task_has_started(task)) {
-                /* hmm, not on our list and not started, assume
-                 * it never will. */
-                status = APR_SUCCESS;
-            }
-        }
-        
-        if (wait && status != APR_SUCCESS && h2_task_has_started(task)) {
-            status = join(m, task);
-        }
-        apr_thread_mutex_unlock(m->lock);
-    }
-    return status;
-}

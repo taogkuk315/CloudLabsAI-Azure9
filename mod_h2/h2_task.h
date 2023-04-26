@@ -62,7 +62,6 @@ struct h2_task {
     int input_eos;
 
     struct conn_rec *c;
-    struct apr_thread_cond_t *io;   /* used to wait for events on */
 };
 
 typedef struct h2_task_env h2_task_env;
