@@ -93,10 +93,6 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
         }
     }
     
-    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
-                 "h2_workers: min=%d max=%d, mthrpchild=%d, thr_limit=%d", 
-                 minw, maxw, max_threads_per_child, threads_limit);
-    
     for (int i = 0; ap_loaded_modules[i]; ++i) {
         module *m = ap_loaded_modules[i];
         if (!strcmp("event.c", m->name)) {
@@ -110,11 +106,19 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
         else if (!strcmp("prefork.c", m->name)) {
             mpm_type = H2_MPM_PREFORK;
             mpm_module = m;
+            /* prefork reports 1 thread per child, also as max */
+            if (maxw == 1) {
+                maxw = 8; /* number of cores maybe? */
+            }
         }
         else if (!strcmp("mod_ssl.c", m->name)) {
             ssl_module = m;
         }
     }
+    
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
+                 "h2_workers: min=%d max=%d, mthrpchild=%d, thr_limit=%d", 
+                 minw, maxw, max_threads_per_child, threads_limit);
     
     workers = h2_workers_create(s, pool, minw, maxw);
     int idle_secs = h2_config_geti(config, H2_CONF_MAX_WORKER_IDLE_SECS);
