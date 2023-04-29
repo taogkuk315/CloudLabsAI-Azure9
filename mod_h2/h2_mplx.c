@@ -127,7 +127,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
         m->q = h2_tq_create(m->id, m->pool);
         m->stream_ios = h2_io_set_create(m->pool);
         m->ready_ios = h2_io_set_create(m->pool);
-        m->zombies = h2_stream_set_create(m->pool);
+        m->closed = h2_stream_set_create(m->pool);
         m->stream_max_mem = h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM);
         m->workers = workers;
     }
@@ -243,23 +243,53 @@ void h2_mplx_abort(h2_mplx *m)
 }
 
 
-apr_status_t h2_mplx_open_io(h2_mplx *m, int stream_id)
+h2_stream *h2_mplx_open_io(h2_mplx *m, int stream_id)
 {
-    AP_DEBUG_ASSERT(m);
+    h2_stream *stream = NULL;
+
     if (m->aborted) {
-        return APR_ECONNABORTED;
+        return NULL;
     }
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
+        apr_pool_t *stream_pool = m->spare_pool;
+        
+        if (!stream_pool) {
+            apr_pool_create(&stream_pool, m->pool);
+        }
+        else {
+            m->spare_pool = NULL;
+        }
+        
+        stream = h2_stream_create(stream_id, stream_pool, m);
+        stream->state = H2_STREAM_ST_OPEN;
+        
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         if (!io) {
-            io = h2_io_create(stream_id, m->pool, m->bucket_alloc);
+            io = h2_io_create(stream_id, stream_pool, m->bucket_alloc);
             h2_io_set_add(m->stream_ios, io);
         }
         status = io? APR_SUCCESS : APR_ENOMEM;
         apr_thread_mutex_unlock(m->lock);
     }
-    return status;
+    return stream;
+}
+
+static void stream_destroy(h2_mplx *m, h2_stream *stream, h2_io *io)
+{
+    apr_pool_t *pool = h2_stream_detach_pool(stream);
+    if (pool) {
+        apr_pool_clear(pool);
+        if (m->spare_pool) {
+            apr_pool_destroy(m->spare_pool);
+        }
+        m->spare_pool = pool;
+    }
+    h2_stream_destroy(stream);
+    if (io) {
+        h2_io_set_remove(m->stream_ios, io);
+        h2_io_destroy(io);
+    }
 }
 
 apr_status_t h2_mplx_cleanup_stream(h2_mplx *m, h2_stream *stream)
@@ -270,15 +300,11 @@ apr_status_t h2_mplx_cleanup_stream(h2_mplx *m, h2_stream *stream)
         h2_io *io = h2_io_set_get(m->stream_ios, stream->id);
         if (!io || io->task_done) {
             /* No more io or task already done -> cleanup immediately */
-            h2_stream_destroy(stream);
-            if (io) {
-                h2_io_set_remove(m->stream_ios, io);
-                h2_io_destroy(io);
-            }
+            stream_destroy(m, stream, io);
         }
         else {
-            /* Add stream to zombies for cleanup when task is done */
-            h2_stream_set_add(m->zombies, stream);
+            /* Add stream to closed set for cleanup when task is done */
+            h2_stream_set_add(m->closed, stream);
         }
         apr_thread_mutex_unlock(m->lock);
     }
@@ -289,7 +315,7 @@ void h2_mplx_task_done(h2_mplx *m, int stream_id)
 {
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        h2_stream *stream = h2_stream_set_get(m->zombies, stream_id);
+        h2_stream *stream = h2_stream_set_get(m->closed, stream_id);
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
                       "h2_mplx(%ld): task(%d) done", m->id, stream_id);
@@ -297,13 +323,8 @@ void h2_mplx_task_done(h2_mplx *m, int stream_id)
             /* stream was already closed by main connection and is in 
              * zombie state. Now that the task is done with it, we
              * can free its resources. */
-            h2_stream_set_remove(m->zombies, stream);
-            // TODO: seems to have to happen in main thread
-            h2_stream_destroy(stream);
-            if (io) {
-                h2_io_set_remove(m->stream_ios, io);
-                h2_io_destroy(io);
-            }
+            h2_stream_set_remove(m->closed, stream);
+            stream_destroy(m, stream, io);
         }
         else if (io) {
             /* main connection has not finished stream. Mark task as done

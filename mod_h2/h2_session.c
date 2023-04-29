@@ -56,45 +56,25 @@ static int h2_session_status_from_apr_status(apr_status_t rv)
 
 static int stream_open(h2_session *session, int stream_id)
 {
-    apr_pool_t *stream_pool;
-    apr_status_t status;
-    
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
-    status = apr_pool_create(&stream_pool, session->pool);
-    h2_stream * stream = h2_stream_create(stream_id, stream_pool,
-                                          session->mplx);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
-                      "h2_session: stream(%ld-%d): unable to create pool",
+    h2_stream * stream = h2_mplx_open_io(session->mplx, stream_id);
+    if (stream) {
+        h2_stream_set_add(session->streams, stream);
+        
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                      "h2_session: stream(%ld-%d): opened",
                       session->id, stream_id);
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
+        
+        return 0;
     }
     
-    if (!stream) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
-                      "h2_session: stream(%ld-%d): unable to create",
-                      session->id, stream_id);
-        return NGHTTP2_ERR_INVALID_STREAM_ID;
-    }
-    
-    status = h2_stream_set_add(session->streams, stream);
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
-                      "h2_session: stream(%ld-%d): unable to add to pool",
-                      session->id, stream->id);
-        return NGHTTP2_ERR_INVALID_STREAM_ID;
-    }
-    
-    stream->state = H2_STREAM_ST_OPEN;
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
-                  "h2_session: stream(%ld-%d): opened",
+    ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, session->c,
+                  "h2_session: stream(%ld-%d): unable to create",
                   session->id, stream_id);
-    
-    h2_mplx_open_io(session->mplx, stream_id);
-    return 0;
+    return NGHTTP2_ERR_INVALID_STREAM_ID;
 }
 
 static apr_status_t stream_end_headers(h2_session *session,
@@ -631,12 +611,6 @@ h2_session *h2_session_rcreate(request_rec *r, h2_config *config,
     return h2_session_create_int(r->connection, r, config, workers);
 }
 
-static int close_active_iter(void *ctx, h2_stream *stream) {
-    AP_DEBUG_ASSERT(ctx);
-    stream_destroy((h2_session *)ctx, stream);
-    return 1;
-}
-
 void h2_session_destroy(h2_session *session)
 {
     AP_DEBUG_ASSERT(session);
@@ -648,11 +622,6 @@ void h2_session_destroy(h2_session *session)
         if (h2_stream_set_size(session->streams)) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                           "h2_session(%ld): destroy, %d streams open",
-                          session->id, (int)h2_stream_set_size(session->streams));
-            /* destroy all sessions, join all existing tasks */
-            h2_stream_set_iter(session->streams, close_active_iter, session);
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                          "h2_session(%ld): destroy, %d streams remain",
                           session->id, (int)h2_stream_set_size(session->streams));
         }
         h2_stream_set_destroy(session->streams);
@@ -669,10 +638,6 @@ void h2_session_destroy(h2_session *session)
         session->iowait = NULL;
     }
     
-    if (session->plast) {
-        apr_pool_destroy(session->plast);
-        session->plast = NULL;
-    }
     if (session->pool) {
         apr_pool_destroy(session->pool);
     }

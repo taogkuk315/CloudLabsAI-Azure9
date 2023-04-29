@@ -70,7 +70,8 @@ struct h2_mplx {
     int aborted;
     apr_size_t stream_max_mem;
     
-    struct h2_stream_set *zombies;  /* streams finshed, but not destroyed */
+    apr_pool_t *spare_pool;           /* spare pool, ready for next stream */
+    struct h2_stream_set *closed;     /* streams closed, but task ongoing */
     struct h2_workers *workers;
 };
 
@@ -118,7 +119,7 @@ void h2_mplx_task_done(h2_mplx *m, int stream_id);
 /**
  * Prepares the multiplexer to handle in-/output on the given stream id.
  */
-apr_status_t h2_mplx_open_io(h2_mplx *mplx, int stream_id);
+struct h2_stream *h2_mplx_open_io(h2_mplx *mplx, int stream_id);
 
 /**
  * Ends cleanup of a stream in sync with execution thread.
