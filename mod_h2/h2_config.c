@@ -185,6 +185,9 @@ static const char *h2_conf_set_max_streams(cmd_parms *parms,
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->h2_max_streams = (int)apr_atoi64(value);
     (void)arg;
+    if (cfg->h2_max_streams < 1) {
+        return "value must be > 0";
+    }
     return NULL;
 }
 
@@ -194,6 +197,9 @@ static const char *h2_conf_set_window_size(cmd_parms *parms,
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->h2_window_size = (int)apr_atoi64(value);
     (void)arg;
+    if (cfg->h2_window_size < 1024) {
+        return "value must be > 1k";
+    }
     return NULL;
 }
 
@@ -203,6 +209,9 @@ static const char *h2_conf_set_max_hl_size(cmd_parms *parms,
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->h2_max_hl_size = (int)apr_atoi64(value);
     (void)arg;
+    if (cfg->h2_max_hl_size < 1024) {
+        return "value must be > 1k";
+    }
     return NULL;
 }
 
@@ -212,6 +221,9 @@ static const char *h2_conf_set_min_workers(cmd_parms *parms,
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->min_workers = (int)apr_atoi64(value);
     (void)arg;
+    if (cfg->min_workers < 1) {
+        return "value must be > 1";
+    }
     return NULL;
 }
 
@@ -221,6 +233,9 @@ static const char *h2_conf_set_max_workers(cmd_parms *parms,
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->max_workers = (int)apr_atoi64(value);
     (void)arg;
+    if (cfg->max_workers < 1) {
+        return "value must be > 1";
+    }
     return NULL;
 }
 
@@ -230,6 +245,9 @@ static const char *h2_conf_set_max_worker_idle_secs(cmd_parms *parms,
     h2_config *cfg = h2_config_sget(parms->server);
     cfg->max_worker_idle_secs = (int)apr_atoi64(value);
     (void)arg;
+    if (cfg->max_worker_idle_secs < 1) {
+        return "value must be > 1";
+    }
     return NULL;
 }
 
@@ -241,6 +259,9 @@ static const char *h2_conf_set_stream_max_mem_size(cmd_parms *parms,
     
     cfg->stream_max_mem_size = (int)apr_atoi64(value);
     (void)arg;
+    if (cfg->stream_max_mem_size < 1024) {
+        return "value must be > 1k";
+    }
     return NULL;
 }
 
@@ -275,27 +296,51 @@ static const char *h2_conf_set_serialize_headers(cmd_parms *parms,
                                                  void *arg, const char *value)
 {
     h2_config *cfg = h2_config_sget(parms->server);
-    cfg->serialize_headers = !apr_strnatcasecmp(value, "On");
+    if (!strcasecmp(value, "On")) {
+        cfg->serialize_headers = 1;
+        return NULL;
+    }
+    else if (!strcasecmp(value, "Off")) {
+        cfg->serialize_headers = 0;
+        return NULL;
+    }
+    
     (void)arg;
-    return NULL;
+    return "value must be On or Off";
 }
 
 static const char *h2_conf_set_hack_mpm_event(cmd_parms *parms,
                                               void *arg, const char *value)
 {
     h2_config *cfg = h2_config_sget(parms->server);
-    cfg->hack_mpm_event = !apr_strnatcasecmp(value, "On");
+    if (!strcasecmp(value, "On")) {
+        cfg->hack_mpm_event = 1;
+        return NULL;
+    }
+    else if (!strcasecmp(value, "Off")) {
+        cfg->hack_mpm_event = 0;
+        return NULL;
+    }
+    
     (void)arg;
-    return NULL;
+    return "value must be On or Off";
 }
 
 static const char *h2_conf_set_direct(cmd_parms *parms,
                                       void *arg, const char *value)
 {
     h2_config *cfg = h2_config_sget(parms->server);
-    cfg->h2_direct = !apr_strnatcasecmp(value, "On");
+    if (!strcasecmp(value, "On")) {
+        cfg->h2_direct = 1;
+        return NULL;
+    }
+    else if (!strcasecmp(value, "Off")) {
+        cfg->h2_direct = 0;
+        return NULL;
+    }
+    
     (void)arg;
-    return NULL;
+    return "value must be On or Off";
 }
 
 #pragma GCC diagnostic ignored "-Wmissing-braces"
