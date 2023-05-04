@@ -43,6 +43,13 @@ static int in_list(h2_workers *workers, h2_mplx *m)
 }
 
 
+/**
+ * Get the next task for the given worker. Will block until a task arrives
+ * or the max_wait timer expires and more than min workers exist.
+ * The previous h2_mplx instance might be passed in and will be served
+ * with preference, since we can ask it for the next task without aquiring
+ * the h2_workers lock.
+ */
 static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm, 
                                   h2_task **ptask, void *ctx)
 {
@@ -53,13 +60,14 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
     int has_more = 0;
     h2_workers *workers = (h2_workers *)ctx;
     
-    if (*pm && ptask != NULL) {
+    if (*pm && ptask != NULL && worker == (*pm)->prime_worker) {
         /* We have a h2_mplx instance and the worker wants the next task. 
          * Try to get one from the given mplx. */
         *ptask = h2_mplx_pop_task(*pm, &has_more);
         if (*ptask) {
             return APR_SUCCESS;
         }
+        (*pm)->prime_worker = NULL;
     }
     
     if (*pm) {
@@ -71,7 +79,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
     }
     
     if (!ptask) {
-        /* of the worker does not want a next task, we're done.
+        /* the worker does not want a next task, we're done.
          */
         return APR_SUCCESS;
     }
@@ -82,7 +90,6 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
     status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ++workers->idle_worker_count;
-        
         ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                      "h2_worker(%d): looking for work", h2_worker_get_id(worker));
         
@@ -164,6 +171,9 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
              * its ref count.
              */
             h2_mplx_reference(m);
+            if (!m->prime_worker) {
+                m->prime_worker = worker;
+            }
             *pm = m;
             *ptask = task;
             

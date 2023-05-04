@@ -134,8 +134,6 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, h2_workers *workers)
     return m;
 }
 
-#define REF_COUNT_ATOMIC    1
-
 static void reference(h2_mplx *m)
 {
     apr_atomic_inc32(&m->refs);
@@ -152,29 +150,11 @@ static void release(h2_mplx *m)
 
 void h2_mplx_reference(h2_mplx *m)
 {
-    if (REF_COUNT_ATOMIC) {
-        reference(m);
-    }
-    else {
-        apr_status_t status = apr_thread_mutex_lock(m->lock);
-        if (APR_SUCCESS == status) {
-            reference(m);
-            apr_thread_mutex_unlock(m->lock);
-        }
-    }
+    reference(m);
 }
 void h2_mplx_release(h2_mplx *m)
 {
-    if (REF_COUNT_ATOMIC) {
-        release(m);
-    }
-    else {
-        apr_status_t status = apr_thread_mutex_lock(m->lock);
-        if (APR_SUCCESS == status) {
-            release(m);
-            apr_thread_mutex_unlock(m->lock);
-        }
-    }
+    release(m);
 }
 
 static void workers_register(h2_mplx *m) {
