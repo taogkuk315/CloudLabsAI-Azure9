@@ -4,8 +4,8 @@
 #
 
 
-SCHEME=http
-PORT=12345
+SCHEME=https
+PORT=12346
 HOST=test.example.org
 
 URL=$SCHEME://$HOST:$PORT

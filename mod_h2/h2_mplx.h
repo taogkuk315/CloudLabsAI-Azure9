@@ -43,7 +43,6 @@ struct h2_task;
 struct h2_stream;
 struct h2_io_set;
 struct apr_thread_cond_t;
-struct h2_worker;
 struct h2_workers;
 struct h2_stream_set;
 struct h2_task_queue;
@@ -74,7 +73,6 @@ struct h2_mplx {
     apr_pool_t *spare_pool;           /* spare pool, ready for next stream */
     struct h2_stream_set *closed;     /* streams closed, but task ongoing */
     struct h2_workers *workers;
-    struct h2_worker *prime_worker;   /* the primary worker assigned */
 };
 
 /*******************************************************************************
