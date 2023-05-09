@@ -13,9 +13,13 @@ URL=$SCHEME://$HOST:$PORT
 WRK=../wrk/wrk
 H2LOAD=${H2LOAD:-sandbox/install/bin/h2load}
 
+RUNS=${RUNS:-200000}
+CONNECTIONS=${CONNECTIONS:-100}
+THREADS=${THREADS:-8}
+
 run_wrk() {
     path=$1
-    $WRK -c100 -t${THREADS:-8} -d15s $URL$path >/tmp/$$.out 2>&1
+    $WRK -c${CONNECTIONS} -t${THREADS} -d15s $URL$path >/tmp/$$.out 2>&1
 
     stat=$( fgrep 'Requests/sec: ' /tmp/$$.out )
     reqs=${stat##Requests/sec: }
@@ -23,7 +27,7 @@ run_wrk() {
 
 run_load() {
     path=$1
-    $H2LOAD -c 100 -t ${THREADS:-8} -m ${MAX_STREAMS:-1} -n 200000 $URL$path > /tmp/$$.out 2>&1
+    $H2LOAD -c ${CONNECTIONS} -t ${THREADS} -m ${MAX_STREAMS:-1} -n ${RUNS} $URL$path > /tmp/$$.out 2>&1
 
     fin=$( fgrep 'finished in ' /tmp/$$.out )
     stat=$( fgrep 'requests: ' /tmp/$$.out )
@@ -75,7 +79,7 @@ run_iter() {
 
 for i in "$@"; do
     URL_PATH=$i
-    echo "$URL_PATH, 500k requests, req/s"
+    echo "$URL_PATH, $RUNS requests, ${THREADS} threads, ${CONNECTIONS} connections, req/s"
     run_iter $URL_PATH 5 "1 2 3 4 5 6 7 8 9 10 15 20 40 100"
     echo
 done
