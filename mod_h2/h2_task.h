@@ -51,6 +51,7 @@ struct h2_task {
     const char *id;
     int stream_id;
     struct h2_mplx *mplx;
+    apr_pool_t *stream_pool;
     
     volatile apr_uint32_t has_started;
     volatile apr_uint32_t has_finished;
