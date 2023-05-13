@@ -204,7 +204,7 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
  * still needed.
  */
 static const int DEEP_COPY = 1;
-static const int FILE_MOVE = 0;
+static const int FILE_MOVE = 1;
 
 static apr_status_t last_not_included(apr_bucket_brigade *bb, 
                                       apr_size_t maxlen, int count_virtual,
@@ -260,14 +260,14 @@ static apr_status_t last_not_included(apr_bucket_brigade *bb,
 
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
                           apr_size_t maxlen, int count_virtual, 
-                          apr_file_t **pfile, const char *msg)
+                          const char *msg)
 {
     apr_status_t status = APR_SUCCESS;
     
     AP_DEBUG_ASSERT(to);
     AP_DEBUG_ASSERT(from);
     int same_alloc = (to->bucket_alloc == from->bucket_alloc);
-    
+
     if (!APR_BRIGADE_EMPTY(from)) {
         apr_bucket *b, *end;
         
@@ -318,7 +318,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                         /* ignore */
                     }
                 }
-                else if (pfile && FILE_MOVE && APR_BUCKET_IS_FILE(b)) {
+                else if (FILE_MOVE && APR_BUCKET_IS_FILE(b)) {
                     /* We do not want to read files when passing buckets, if
                      * we can avoid it. However, what we've come up so far
                      * is not working corrently, resulting either in crashes or
@@ -335,7 +335,6 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                                   (long)to, (long)to->p, setaside);
                     if (setaside) {
                         status = apr_file_setaside(&fd, fd, to->p);
-                        *pfile = fd;
                         if (status != APR_SUCCESS) {
                             ap_log_perror(APLOG_MARK, APLOG_ERR, status, to->p,
                                           "h2_util: %s, setaside FILE", msg);

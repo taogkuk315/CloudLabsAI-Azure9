@@ -79,7 +79,7 @@ apr_size_t h2_util_base64url_decode(unsigned char **decoded,
  */
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
                           apr_size_t maxlen, int count_virtual, 
-                          apr_file_t **pfile, const char *msg);
+                          const char *msg);
 
 /**
  * Copies buckets from one brigade into another. If maxlen > 0, it only
