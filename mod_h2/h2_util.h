@@ -74,11 +74,11 @@ apr_size_t h2_util_base64url_decode(unsigned char **decoded,
  * @param to the brigade to move the data to
  * @param from the brigade to get the data from
  * @param maxlen of bytes to move, 0 for all
- * @param count_virtual if virtual buckets like FILE do count against maxlen
+ * @param move_files move file handles across pools
  * @param msg message for use in logging
  */
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, int count_virtual, 
+                          apr_size_t maxlen, int move_files, 
                           const char *msg);
 
 /**

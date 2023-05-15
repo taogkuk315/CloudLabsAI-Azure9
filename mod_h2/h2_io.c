@@ -145,7 +145,7 @@ apr_status_t h2_io_out_readx(h2_io *io,
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
                              apr_size_t maxlen)
 {
-    return h2_util_move(io->bbout, bb, maxlen, 0, "h2_io_out_write");
+    return h2_util_move(io->bbout, bb, maxlen, 1, "h2_io_out_write");
 }
 
 

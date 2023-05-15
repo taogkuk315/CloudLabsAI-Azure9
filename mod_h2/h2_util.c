@@ -259,7 +259,7 @@ static apr_status_t last_not_included(apr_bucket_brigade *bb,
 #define LOG_LEVEL APLOG_TRACE2
 
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, int count_virtual, 
+                          apr_size_t maxlen, int move_files, 
                           const char *msg)
 {
     apr_status_t status = APR_SUCCESS;
@@ -272,7 +272,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
         apr_bucket *b, *end;
         
         status = last_not_included(from, maxlen, 
-                                   (count_virtual || !FILE_MOVE), &end);
+                                   (!move_files || !FILE_MOVE), &end);
         if (status != APR_SUCCESS) {
             return status;
         }
@@ -318,7 +318,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                         /* ignore */
                     }
                 }
-                else if (FILE_MOVE && APR_BUCKET_IS_FILE(b)) {
+                else if (FILE_MOVE && move_files && APR_BUCKET_IS_FILE(b)) {
                     /* We do not want to read files when passing buckets, if
                      * we can avoid it. However, what we've come up so far
                      * is not working corrently, resulting either in crashes or
