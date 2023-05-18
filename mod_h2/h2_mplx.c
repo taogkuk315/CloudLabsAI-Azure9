@@ -758,13 +758,6 @@ h2_task *h2_mplx_pop_task(h2_mplx *m, int *has_more)
     if (APR_SUCCESS == status) {
         task = h2_tq_pop_first(m->q);
         if (task) {
-            task->c = h2_conn_create(m->c, task->stream_pool);
-            if (task->c == NULL) {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, m->c,
-                              "h2_stream(%s): create connection",
-                              task->id);
-            }
-            
             h2_task_set_started(task);
         }
         *has_more = !h2_tq_empty(m->q);

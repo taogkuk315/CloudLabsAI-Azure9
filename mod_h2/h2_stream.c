@@ -151,8 +151,15 @@ apr_status_t h2_stream_write_eoh(h2_stream *stream, int eos)
     /* Seeing the end-of-headers, we have everything we need to 
      * start processing it.
      */
+    conn_rec *c = h2_conn_create(stream->m->c, stream->pool);
+    if (c == NULL) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream->m->c,
+                      "h2_stream(%ld-%d): create connection",
+                      stream->m->id, stream->id);
+        return APR_ENOMEM;
+    }
     stream->task = h2_task_create(stream->m->id, stream->id, 
-                                  stream->pool, stream->m, NULL);
+                                  stream->pool, stream->m, c);
     
     apr_status_t status = h2_request_end_headers(stream->request, 
                                                  stream->m, stream->task, eos);
