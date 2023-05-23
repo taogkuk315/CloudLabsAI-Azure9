@@ -16,6 +16,7 @@ H2LOAD=${H2LOAD:-sandbox/install/bin/h2load}
 RUNS=${RUNS:-200000}
 CONNECTIONS=${CONNECTIONS:-100}
 THREADS=${THREADS:-8}
+RUNWRK=0
 
 run_wrk() {
     path=$1
@@ -61,7 +62,8 @@ run_iter() {
     path=$1
     max=$2
     iterations=$3
-    echo -n "m, wrk"
+    echo -n "m"
+    test "$RUNWRK" != 0 && echo -n ", wrk"
     for i in $iterations; do
         echo -n ", $i"
     done
@@ -69,8 +71,10 @@ run_iter() {
     i=1
     while [ $i -le $max ]; do
         echo -n "$i"
-        run_wrk $path
-        echo -n ", $reqs"
+        if test "$RUNWRK" != 0; then
+            run_wrk $path
+            echo -n ", $reqs"
+        fi
         run_m $path "$iterations"
         echo ""
         i=$[ i + 1 ]

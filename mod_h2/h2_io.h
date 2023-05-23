@@ -101,9 +101,6 @@ apr_status_t h2_io_in_close(h2_io *io);
  * @param plen the requested max len, set to amount of data on return
  * @param peos != 0 iff the end of stream has been reached
  */
-apr_status_t h2_io_out_read(h2_io *io, char *buffer, 
-                            apr_size_t *plen, int *peos);
-
 apr_status_t h2_io_out_readx(h2_io *io,  
                              h2_io_data_cb *cb, void *ctx, 
                              apr_size_t *plen, int *peos);

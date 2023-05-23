@@ -120,17 +120,6 @@ apr_status_t h2_io_in_close(h2_io *io)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_io_out_read(h2_io *io, char *buffer, 
-                            apr_size_t *plen, int *peos)
-{
-    if (buffer == NULL) {
-        /* just checking length available */
-        return h2_util_bb_avail(io->bbout, plen, peos);
-    }
-    
-    return h2_util_bb_read(io->bbout, buffer, plen, peos);
-}
-
 apr_status_t h2_io_out_readx(h2_io *io,  
                              h2_io_data_cb *cb, void *ctx, 
                              apr_size_t *plen, int *peos)

@@ -94,20 +94,6 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
                           apr_size_t maxlen, const char *msg);
 
 /**
- * Pass the buckets from one brigade into another, without any setaside. 
- * Only recommended if both brigades use the same bucket alloc or if
- * you really know what you are doing.
- * @param to the brigade to pass the buckets to
- * @param from the brigade to get the buckets from
- * @param maxlen of bucket bytes to copy, 0 for all
- * @param count_virtual if virtual buckets like FILE do count against maxlen
- * @param msg message for use in logging
- */
-apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, int count_virtual, 
-                          const char *msg);
-
-/**
  * Return != 0 iff there is a FLUSH or EOS bucket in the brigade.
  * @param bb the brigade to check on
  * @return != 0 iff brigade holds FLUSH or EOS bucket (or both)
@@ -126,9 +112,6 @@ int h2_util_bb_has_data_or_eos(apr_bucket_brigade *bb);
  */
 apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb, 
                               apr_size_t *plen, int *peos);
-
-apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer, 
-                             apr_size_t *plen, int *peos);
 
 typedef apr_status_t h2_util_pass_cb(void *ctx, 
                                        const char *data, apr_size_t len);

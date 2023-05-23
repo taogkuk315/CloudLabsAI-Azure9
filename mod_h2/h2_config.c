@@ -49,6 +49,9 @@ static h2_config defconf = {
     0,                /* serialize headers */
     1,                /* hack mpm event */
     1,                /* h2 direct mode */
+    -1,               /* buffer output, by default only for TLS */
+    64*1024,          /* buffer size */
+    16*1024,          /* ssl write max */
 };
 
 static void *h2_config_create(apr_pool_t *pool,
@@ -63,19 +66,23 @@ static void *h2_config_create(apr_pool_t *pool,
     strcat(name, s);
     strcat(name, "]");
     
-    conf->name           = name;
-    conf->h2_enabled     = DEF_VAL;
-    conf->h2_max_streams = DEF_VAL;
-    conf->h2_max_hl_size = DEF_VAL;
-    conf->h2_window_size = DEF_VAL;
-    conf->min_workers    = DEF_VAL;
-    conf->max_workers    = DEF_VAL;
+    conf->name                 = name;
+    conf->h2_enabled           = DEF_VAL;
+    conf->h2_max_streams       = DEF_VAL;
+    conf->h2_max_hl_size       = DEF_VAL;
+    conf->h2_window_size       = DEF_VAL;
+    conf->min_workers          = DEF_VAL;
+    conf->max_workers          = DEF_VAL;
     conf->max_worker_idle_secs = DEF_VAL;
-    conf->stream_max_mem_size = DEF_VAL;
-    conf->alt_svc_max_age = DEF_VAL;
-    conf->serialize_headers = DEF_VAL;
-    conf->hack_mpm_event = DEF_VAL;
-    conf->h2_direct      = DEF_VAL;
+    conf->stream_max_mem_size  = DEF_VAL;
+    conf->alt_svc_max_age      = DEF_VAL;
+    conf->serialize_headers    = DEF_VAL;
+    conf->hack_mpm_event       = DEF_VAL;
+    conf->h2_direct            = DEF_VAL;
+    conf->buffer_output        = DEF_VAL;
+    conf->buffer_output        = DEF_VAL;
+    conf->buffer_size          = DEF_VAL;
+    conf->write_max            = DEF_VAL;
     return conf;
 }
 
@@ -117,6 +124,9 @@ void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     n->serialize_headers = H2_CONFIG_GET(add, base, serialize_headers);
     n->hack_mpm_event = H2_CONFIG_GET(add, base, hack_mpm_event);
     n->h2_direct      = H2_CONFIG_GET(add, base, h2_direct);
+    n->buffer_output  = H2_CONFIG_GET(add, base, buffer_output);
+    n->buffer_size    = H2_CONFIG_GET(add, base, buffer_size);
+    n->write_max      = H2_CONFIG_GET(add, base, write_max);
     
     return n;
 }
@@ -148,6 +158,12 @@ int h2_config_geti(h2_config *conf, h2_config_var_t var)
             return H2_CONFIG_GET(conf, &defconf, hack_mpm_event);
         case H2_CONF_DIRECT:
             return H2_CONFIG_GET(conf, &defconf, h2_direct);
+        case H2_CONF_BUFFER_OUTPUT:
+            return H2_CONFIG_GET(conf, &defconf, buffer_output);
+        case H2_CONF_BUFFER_SIZE:
+            return H2_CONFIG_GET(conf, &defconf, buffer_size);
+        case H2_CONF_WRITE_MAX:
+            return H2_CONFIG_GET(conf, &defconf, write_max);
         default:
             return DEF_VAL;
     }
@@ -292,6 +308,35 @@ static const char *h2_conf_set_alt_svc_max_age(cmd_parms *parms,
     return NULL;
 }
 
+static const char *h2_conf_set_buffer_size(cmd_parms *parms,
+                                           void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    apr_int64_t len = (int)apr_atoi64(value);
+    if (len < (16*1024)) {
+        return "value must be a positive number, at least 16k";
+    }
+    cfg->buffer_size = (int)len;
+    (void)arg;
+    return NULL;
+}
+
+static const char *h2_conf_set_write_max(cmd_parms *parms,
+                                             void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    apr_int64_t max = (int)apr_atoi64(value);
+    if (max <= 0) {
+        return "value must be a positive number";
+    }
+    else if (max > cfg->buffer_size) {
+        return "value must be less than H2BufferSize";
+    }
+    cfg->write_max = (int)max;
+    (void)arg;
+    return NULL;
+}
+
 static const char *h2_conf_set_serialize_headers(cmd_parms *parms,
                                                  void *arg, const char *value)
 {
@@ -343,6 +388,23 @@ static const char *h2_conf_set_direct(cmd_parms *parms,
     return "value must be On or Off";
 }
 
+static const char *h2_conf_set_buffer_output(cmd_parms *parms,
+                                             void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    if (!strcasecmp(value, "On")) {
+        cfg->buffer_output = 1;
+        return NULL;
+    }
+    else if (!strcasecmp(value, "Off")) {
+        cfg->buffer_output = 0;
+        return NULL;
+    }
+    
+    (void)arg;
+    return "value must be On or Off";
+}
+
 #pragma GCC diagnostic ignored "-Wmissing-braces"
 const command_rec h2_cmds[] = {
     AP_INIT_TAKE1("H2Engine", h2_conf_set_engine, NULL,
@@ -370,7 +432,13 @@ const command_rec h2_cmds[] = {
     AP_INIT_TAKE1("H2HackMpmEvent", h2_conf_set_hack_mpm_event, NULL,
                   RSRC_CONF, "on to enable a hack that makes mpm_event working with mod_h2"),
     AP_INIT_TAKE1("H2Direct", h2_conf_set_direct, NULL,
-                  RSRC_CONF, "on to enable direct HTTP/2 mode on non-TLS"),
+                  RSRC_CONF, "on to enable direct HTTP/2 mode"),
+    AP_INIT_TAKE1("H2BufferOutput", h2_conf_set_buffer_output, NULL,
+                  RSRC_CONF, "on to enable output buffering, default for TLS"),
+    AP_INIT_TAKE1("H2BufferSize", h2_conf_set_buffer_size, NULL,
+                  RSRC_CONF, "size of outgoing buffer in bytes"),
+    AP_INIT_TAKE1("H2BufferWriteMax", h2_conf_set_write_max, NULL,
+                  RSRC_CONF, "maximum number of bytes in a outgoing write"),
     { NULL, NULL, NULL, 0, 0, NULL }
 };
 

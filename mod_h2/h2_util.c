@@ -256,7 +256,8 @@ static apr_status_t last_not_included(apr_bucket_brigade *bb,
     return status;
 }
 
-#define LOG_LEVEL APLOG_TRACE2
+#define LOG_BUCKETS     0
+#define LOG_LEVEL APLOG_INFO
 
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
                           apr_size_t maxlen, int move_files, 
@@ -289,6 +290,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                  * directly. */
                 APR_BUCKET_REMOVE(b);
                 APR_BRIGADE_INSERT_TAIL(to, b);
+#if LOG_BUCKETS
                 ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
                               "h2_util_move: %s, passed bucket(same bucket_alloc) "
                               "%ld-%ld, type=%s",
@@ -297,6 +299,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                               (APR_BUCKET_IS_EOS(b)? "EOS": 
                                (APR_BUCKET_IS_FLUSH(b)? "FLUSH" : "META")) : 
                               (APR_BUCKET_IS_FILE(b)? "FILE" : "DATA"));
+#endif
             }
             else if (DEEP_COPY) {
                 /* we have not managed the magic of passing buckets from
@@ -306,13 +309,9 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                 if (APR_BUCKET_IS_METADATA(b)) {
                     if (APR_BUCKET_IS_EOS(b)) {
                         APR_BRIGADE_INSERT_TAIL(to, apr_bucket_eos_create(to->bucket_alloc));
-                        ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
-                                      "h2_util_move: %s, copied EOS bucket", msg);
                     }
                     else if (APR_BUCKET_IS_FLUSH(b)) {
                         APR_BRIGADE_INSERT_TAIL(to, apr_bucket_flush_create(to->bucket_alloc));
-                        ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
-                                      "h2_util_move: %s, copied FLUSH bucket", msg);
                     }
                     else {
                         /* ignore */
@@ -327,12 +326,14 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     apr_bucket_file *f = (apr_bucket_file *)b->data;
                     apr_file_t *fd = f->fd;
                     int setaside = (f->readpool != to->p);
+#if LOG_BUCKETS
                     ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
                                   "h2_util_move: %s, moving FILE bucket %ld-%ld "
                                   "from=%lx(p=%lx) to=%lx(p=%lx), setaside=%d",
                                   msg, (long)b->start, (long)b->length, 
                                   (long)from, (long)from->p, 
                                   (long)to, (long)to->p, setaside);
+#endif
                     if (setaside) {
                         status = apr_file_setaside(&fd, fd, to->p);
                         if (status != APR_SUCCESS) {
@@ -350,12 +351,14 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     status = apr_bucket_read(b, &data, &len, APR_BLOCK_READ);
                     if (status == APR_SUCCESS && len > 0) {
                         status = apr_brigade_write(to, NULL, NULL, data, len);
+#if LOG_BUCKETS
                         ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
                                       "h2_util_move: %s, copied bucket %ld-%ld "
                                       "from=%lx(p=%lx) to=%lx(p=%lx)",
                                       msg, (long)b->start, (long)b->length, 
                                       (long)from, (long)from->p, 
                                       (long)to, (long)to->p);
+#endif
                     }
                 }
                 apr_bucket_delete(b);
@@ -364,62 +367,15 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                 apr_bucket_setaside(b, to->p);
                 APR_BUCKET_REMOVE(b);
                 APR_BRIGADE_INSERT_TAIL(to, b);
+#if LOG_BUCKETS
                 ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
                               "h2_util_move: %s, passed setaside bucket %ld-%ld "
                               "from=%lx(p=%lx) to=%lx(p=%lx)",
                               msg, (long)b->start, (long)b->length, 
                               (long)from, (long)from->p, 
                               (long)to, (long)to->p);
+#endif
             }
-        }
-    }
-    
-    return status;
-}
-
-apr_status_t h2_util_pass(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, int count_virtual, 
-                          const char *msg)
-{
-    apr_status_t status = APR_SUCCESS;
-    
-    AP_DEBUG_ASSERT(to);
-    AP_DEBUG_ASSERT(from);
-    
-    if (!APR_BRIGADE_EMPTY(from)) {
-        apr_bucket *b, *end;
-        
-        status = last_not_included(from, maxlen, count_virtual, &end);
-        if (status != APR_SUCCESS) {
-            return status;
-        }
-
-        while (!APR_BRIGADE_EMPTY(from) && status == APR_SUCCESS) {
-            b = APR_BRIGADE_FIRST(from);
-            if (b == end) {
-                break;
-            }
-            
-            APR_BUCKET_REMOVE(b);
-            if (APR_BUCKET_IS_METADATA(b)) {
-                if (!APR_BUCKET_IS_EOS(b) && !APR_BUCKET_IS_FLUSH(b)) {
-                    apr_bucket_delete(b);
-                    continue;
-                }
-            }
-            else if (b->length == 0) {
-                apr_bucket_delete(b);
-                continue;
-            }
-            
-            APR_BRIGADE_INSERT_TAIL(to, b);
-            ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
-                          "h2_util_pass: %s, passed bucket %ld-%ld, type=%s",
-                          msg, (long)b->start, (long)b->length, 
-                          APR_BUCKET_IS_METADATA(b)? 
-                          (APR_BUCKET_IS_EOS(b)? "EOS": 
-                           (APR_BUCKET_IS_FLUSH(b)? "FLUSH" : "META")) : 
-                          (APR_BUCKET_IS_FILE(b)? "FILE" : "DATA"));
         }
     }
     
@@ -430,6 +386,7 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
                           apr_size_t maxlen, const char *msg)
 {
     apr_status_t status = APR_SUCCESS;
+    (void)msg;
     
     AP_DEBUG_ASSERT(to);
     AP_DEBUG_ASSERT(from);
@@ -458,13 +415,9 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
                 if (APR_BUCKET_IS_METADATA(b)) {
                     if (APR_BUCKET_IS_EOS(b)) {
                         APR_BRIGADE_INSERT_TAIL(to, apr_bucket_eos_create(to->bucket_alloc));
-                        ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
-                                      "h2_util_copy: %s, copied EOS bucket", msg);
                     }
                     else if (APR_BUCKET_IS_FLUSH(b)) {
                         APR_BRIGADE_INSERT_TAIL(to, apr_bucket_flush_create(to->bucket_alloc));
-                        ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
-                                      "h2_util_copy: %s, copied FLUSH bucket", msg);
                     }
                     else {
                         /* ignore */
@@ -476,12 +429,14 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     status = apr_bucket_read(b, &data, &len, APR_BLOCK_READ);
                     if (status == APR_SUCCESS && len > 0) {
                         status = apr_brigade_write(to, NULL, NULL, data, len);
+#if LOG_BUCKETS                        
                         ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
                                       "h2_util_copy: %s, copied bucket %ld-%ld "
                                       "from=%lx(p=%lx) to=%lx(p=%lx)",
                                       msg, (long)b->start, (long)b->length, 
                                       (long)from, (long)from->p, 
                                       (long)to, (long)to->p);
+#endif
                     }
                 }
             }
@@ -570,70 +525,15 @@ apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb,
     return status;
 }
 
-apr_status_t h2_util_bb_read(apr_bucket_brigade *bb, char *buffer, 
-                             apr_size_t *plen, int *peos)
-{
-    apr_status_t status = APR_SUCCESS;
-    apr_size_t avail = *plen;
-    apr_size_t written = 0;
-
-    /* Copy data in our brigade into the buffer until it is filled or
-     * we encounter an EOS.
-     */
-    *peos = 0;
-    while ((status == APR_SUCCESS) && !APR_BRIGADE_EMPTY(bb)) {
-        
-        apr_bucket *b = APR_BRIGADE_FIRST(bb);
-        if (APR_BUCKET_IS_METADATA(b)) {
-            if (APR_BUCKET_IS_EOS(b)) {
-                *peos = 1;
-            }
-            else {
-                /* ignore */
-            }
-        }
-        else if (avail <= 0) {
-            break;
-        } 
-        else {
-            const char *data;
-            apr_size_t data_len;
-            
-            if (b->length != ((apr_size_t)-1) && b->length > avail) {
-                apr_bucket_split(b, avail);
-            }
-            status = apr_bucket_read(b, &data, &data_len, 
-                                     APR_NONBLOCK_READ);
-            if (status == APR_SUCCESS && data_len > 0) {
-                if (data_len > avail) {
-                    apr_bucket_split(b, avail);
-                    data_len = avail;
-                }
-                memcpy(buffer, data, data_len);
-                avail -= data_len;
-                buffer += data_len;
-                written += data_len;
-            }
-        }
-        apr_bucket_delete(b);
-    }
-    
-    *plen = written;
-    if (status == APR_SUCCESS && !*peos && !*plen) {
-        return APR_EAGAIN;
-    }
-    return status;
-}
-
 apr_status_t h2_util_bb_readx(apr_bucket_brigade *bb, 
                               h2_util_pass_cb *cb, void *ctx, 
                               apr_size_t *plen, int *peos)
 {
     apr_status_t status = APR_SUCCESS;
-    apr_size_t avail = *plen;
-    apr_size_t written = 0;
-    apr_bucket *next, *b = APR_BRIGADE_FIRST(bb);
     int consume = (cb != NULL);
+    apr_size_t written = 0;
+    apr_size_t avail = *plen;
+    apr_bucket *next, *b;
     
     /* Pass data in our brigade through the callback until the length
      * is satisfied or we encounter an EOS.
@@ -658,7 +558,8 @@ apr_status_t h2_util_bb_readx(apr_bucket_brigade *bb,
             const char *data = NULL;
             apr_size_t data_len;
             
-            if (b->length != ((apr_size_t)-1)) {
+            if (b->length == ((apr_size_t)-1)) {
+                /* read to determine length */
                 status = apr_bucket_read(b, &data, &data_len, 
                                          APR_NONBLOCK_READ);
             }
