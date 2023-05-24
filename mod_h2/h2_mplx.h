@@ -73,6 +73,7 @@ struct h2_mplx {
     apr_pool_t *spare_pool;           /* spare pool, ready for next stream */
     struct h2_stream_set *closed;     /* streams closed, but task ongoing */
     struct h2_workers *workers;
+    int file_handles_allowed;
 };
 
 /*******************************************************************************

@@ -74,11 +74,12 @@ apr_size_t h2_util_base64url_decode(unsigned char **decoded,
  * @param to the brigade to move the data to
  * @param from the brigade to get the data from
  * @param maxlen of bytes to move, 0 for all
- * @param move_files move file handles across pools
+ * @param pfile_buckets_allowed how many file buckets may be moved, 
+ *        may be 0 or NULL
  * @param msg message for use in logging
  */
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, int move_files, 
+                          apr_size_t maxlen, int *pfile_buckets_allowed, 
                           const char *msg);
 
 /**

@@ -51,7 +51,8 @@ static h2_config defconf = {
     1,                /* h2 direct mode */
     -1,               /* buffer output, by default only for TLS */
     64*1024,          /* buffer size */
-    16*1024,          /* ssl write max */
+    16*1024,          /* out write max */
+    5,                /* # session extra files */
 };
 
 static void *h2_config_create(apr_pool_t *pool,
@@ -83,6 +84,7 @@ static void *h2_config_create(apr_pool_t *pool,
     conf->buffer_output        = DEF_VAL;
     conf->buffer_size          = DEF_VAL;
     conf->write_max            = DEF_VAL;
+    conf->session_extra_files  = DEF_VAL;
     return conf;
 }
 
@@ -127,6 +129,7 @@ void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     n->buffer_output  = H2_CONFIG_GET(add, base, buffer_output);
     n->buffer_size    = H2_CONFIG_GET(add, base, buffer_size);
     n->write_max      = H2_CONFIG_GET(add, base, write_max);
+    n->session_extra_files = H2_CONFIG_GET(add, base, session_extra_files);
     
     return n;
 }
@@ -164,6 +167,8 @@ int h2_config_geti(h2_config *conf, h2_config_var_t var)
             return H2_CONFIG_GET(conf, &defconf, buffer_size);
         case H2_CONF_WRITE_MAX:
             return H2_CONFIG_GET(conf, &defconf, write_max);
+        case H2_CONF_SESSION_FILES:
+            return H2_CONFIG_GET(conf, &defconf, session_extra_files);
         default:
             return DEF_VAL;
     }
@@ -337,6 +342,19 @@ static const char *h2_conf_set_write_max(cmd_parms *parms,
     return NULL;
 }
 
+static const char *h2_conf_set_session_extra_files(cmd_parms *parms,
+                                                   void *arg, const char *value)
+{
+    h2_config *cfg = h2_config_sget(parms->server);
+    apr_int64_t max = (int)apr_atoi64(value);
+    if (max <= 0) {
+        return "value must be a positive number";
+    }
+    cfg->session_extra_files = (int)max;
+    (void)arg;
+    return NULL;
+}
+
 static const char *h2_conf_set_serialize_headers(cmd_parms *parms,
                                                  void *arg, const char *value)
 {
@@ -439,6 +457,8 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "size of outgoing buffer in bytes"),
     AP_INIT_TAKE1("H2BufferWriteMax", h2_conf_set_write_max, NULL,
                   RSRC_CONF, "maximum number of bytes in a outgoing write"),
+    AP_INIT_TAKE1("H2SessionExtraFiles", h2_conf_set_session_extra_files, NULL,
+                  RSRC_CONF, "number of extra file a session might keep open"),
     { NULL, NULL, NULL, 0, 0, NULL }
 };
 

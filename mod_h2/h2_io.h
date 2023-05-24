@@ -40,6 +40,7 @@ struct h2_io {
     struct apr_thread_cond_t *output_drained; /* block on writing */
     
     struct h2_response *response;/* submittable response created */
+    int files_handles_owned;
 };
 
 /*******************************************************************************
@@ -106,7 +107,7 @@ apr_status_t h2_io_out_readx(h2_io *io,
                              apr_size_t *plen, int *peos);
 
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
-                             apr_size_t maxlen);
+                             apr_size_t maxlen, int *pfile_buckets_allowed);
 
 /**
  * Closes the input. After existing data has been read, APR_EOF will

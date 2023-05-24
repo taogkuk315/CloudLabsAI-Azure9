@@ -207,11 +207,14 @@ static const int DEEP_COPY = 1;
 static const int FILE_MOVE = 1;
 
 static apr_status_t last_not_included(apr_bucket_brigade *bb, 
-                                      apr_size_t maxlen, int count_virtual,
+                                      apr_size_t maxlen, 
+                                      int same_alloc,
+                                      int *pfile_buckets_allowed,
                                       apr_bucket **pend)
 {
     apr_bucket *b;
     apr_status_t status = APR_SUCCESS;
+    int files_allowed = pfile_buckets_allowed? *pfile_buckets_allowed : 0;
     
     if (maxlen > 0) {
         /* Find the bucket, up to which we reach maxlen/mem bytes */
@@ -237,10 +240,14 @@ static apr_status_t last_not_included(apr_bucket_brigade *bb,
                     }
                 }
                 
-                if (!count_virtual && FILE_MOVE && APR_BUCKET_IS_FILE(b)) {
+                if (same_alloc && APR_BUCKET_IS_FILE(b)) {
+                    /* we like it move it, always */
+                }
+                else if (files_allowed > 0 && APR_BUCKET_IS_FILE(b)) {
                     /* this has no memory footprint really unless
                      * it is read, disregard it in length count,
-                     * unless we count the virtual buckets */
+                     * unless we do not move the file buckets */
+                    --files_allowed;
                 }
                 else if (maxlen < b->length) {
                     apr_bucket_split(b, maxlen);
@@ -260,7 +267,7 @@ static apr_status_t last_not_included(apr_bucket_brigade *bb,
 #define LOG_LEVEL APLOG_INFO
 
 apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from, 
-                          apr_size_t maxlen, int move_files, 
+                          apr_size_t maxlen, int *pfile_handles_allowed, 
                           const char *msg)
 {
     apr_status_t status = APR_SUCCESS;
@@ -269,11 +276,15 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
     AP_DEBUG_ASSERT(from);
     int same_alloc = (to->bucket_alloc == from->bucket_alloc);
 
+    if (!FILE_MOVE) {
+        pfile_handles_allowed = NULL;
+    }
+    
     if (!APR_BRIGADE_EMPTY(from)) {
         apr_bucket *b, *end;
         
-        status = last_not_included(from, maxlen, 
-                                   (!move_files || !FILE_MOVE), &end);
+        status = last_not_included(from, maxlen, same_alloc,
+                                   pfile_handles_allowed, &end);
         if (status != APR_SUCCESS) {
             return status;
         }
@@ -317,7 +328,9 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                         /* ignore */
                     }
                 }
-                else if (FILE_MOVE && move_files && APR_BUCKET_IS_FILE(b)) {
+                else if (pfile_handles_allowed 
+                         && *pfile_handles_allowed > 0 
+                         && APR_BUCKET_IS_FILE(b)) {
                     /* We do not want to read files when passing buckets, if
                      * we can avoid it. However, what we've come up so far
                      * is not working corrently, resulting either in crashes or
@@ -344,6 +357,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     }
                     apr_brigade_insert_file(to, fd, b->start, b->length, 
                                             to->p);
+                    --(*pfile_handles_allowed);
                 }
                 else {
                     const char *data;
@@ -395,7 +409,7 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
     if (!APR_BRIGADE_EMPTY(from)) {
         apr_bucket *b, *end, *cpy;
         
-        status = last_not_included(from, maxlen, 1, &end);
+        status = last_not_included(from, maxlen, 0, 0, &end);
         if (status != APR_SUCCESS) {
             return status;
         }
@@ -462,7 +476,7 @@ int h2_util_has_eos(apr_bucket_brigade *bb, apr_size_t len)
 {
     apr_bucket *b, *end;
     
-    apr_status_t status = last_not_included(bb, len, 1, &end);
+    apr_status_t status = last_not_included(bb, len, 0, 0, &end);
     if (status != APR_SUCCESS) {
         return status;
     }

@@ -60,6 +60,7 @@ such as:
 * H2BufferOutput (on/off),   if output data shall be buffered. "on" for TLS connections, "off" otherwise
 * H2BufferSize n             size of output buffer (if enabled), defaults to 64k
 * H2BufferWriteMax n         max. number of bytes in a single write when buffering output, defaults to 16k
+* H2SessionExtraFiles n      number of extra file handles a session might keep open to improve performance, depends on mpm module used and ulimit of processes, defaults to 5
 
 All these configuration parameters can be set on servers/virtual hosts and
 are not available on directory level. Note that Worker configuration is

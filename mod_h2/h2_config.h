@@ -40,6 +40,7 @@ typedef enum {
     H2_CONF_BUFFER_OUTPUT,
     H2_CONF_BUFFER_SIZE,
     H2_CONF_WRITE_MAX,
+    H2_CONF_SESSION_FILES,
 } h2_config_var_t;
 
 /* Apache httpd module configuration for h2. */
@@ -63,6 +64,7 @@ typedef struct h2_config {
     int buffer_output;            /* if output buffering shall be used */  
     int buffer_size;              /* size of buffer for outgoing data */  
     int write_max;                /* max number of bytes for a write op */  
+    int session_extra_files;      /* # of extra files a session may keep open */  
 } h2_config;
 
 
