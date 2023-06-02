@@ -293,8 +293,9 @@ apr_status_t h2_session_process(h2_session *session)
                 break;
         }
         
-        if (!have_read && !have_written) {
-            /* Nothing to read or write, we may have sessions, but
+        if (!have_read && !have_written 
+            && !h2_stream_set_is_empty(session->streams)) {
+            /* Nothing to read or write, we have streams, but
              * the have no data yet ready to be delivered. Slowly
              * back off to give others a chance to do their work.
              */
