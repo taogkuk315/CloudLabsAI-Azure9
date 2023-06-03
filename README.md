@@ -15,8 +15,11 @@ it with the Apache infrastructure.
 
 
 ##Status
-In development. Use at your own risk. See [Known Problems](#known-problems) below for a list
-of things you might encounter.
+**MOVING.** `mod_h2` has been donated into the Apache `httpd` project and will become a standard Apache modules in upcoming releases. I think this is the best possible outcome for all Apache people interested in http/2.
+
+Until the module appears in a official 2.4.x release of `httpd`, I will still accept bug reports here at github on this repository and might do minor releases for fixes.
+
+So, it's not dead, Jim!
 
 ##Tested Platforms
 * OS: Ubuntu 14.04, OS X 10.10

@@ -33,14 +33,16 @@ nghttp_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
 Some requests were not processed. total=1, processed=0
 EOF
 
-curl_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
+curl_check_content index.html "noh2 host" --http2 -H'Host: noh2.example.org' <<EOF
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
 <html><head>
 <title>$MISDIR_STATUS</title>
 </head><body>
 <h1>Misdirected Request</h1>
-<p>The client needs to use a new connection for this 
-request as it does not match the SNI name used.</p>
+<p>The client needs a new connection for this
+request as the requested host name does not match
+the Server Name Indication (SNI) in use for this
+connection.</p>
 </body></html>
 EOF
 
