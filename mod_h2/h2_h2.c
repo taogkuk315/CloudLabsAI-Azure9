@@ -160,7 +160,7 @@ int h2_h2_process_conn(conn_rec* c)
     if (h2_ctx_pnego_is_ongoing(ctx)) {
         temp = apr_brigade_create(c->pool, c->bucket_alloc);
         ap_get_brigade(c->input_filters, temp,
-                       AP_MODE_SPECULATIVE, APR_BLOCK_READ, 1);
+                       AP_MODE_SPECULATIVE, APR_BLOCK_READ, 24);
         apr_brigade_destroy(temp);
     }
 
@@ -178,8 +178,15 @@ int h2_h2_process_conn(conn_rec* c)
             apr_size_t slen;
             
             apr_brigade_pflatten(temp, &s, &slen, c->pool);
-            if ((slen == 24) && !memcmp(H2_MAGIC_TOKEN, s, 24)) {
+            if ((slen >= 24) && !memcmp(H2_MAGIC_TOKEN, s, 24)) {
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                              "h2_h2, direct mode detected");
                 h2_ctx_pnego_set_done(ctx, "h2");
+            }
+            else {
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                              "h2_h2, not detected, seeing %d bytes: %s", 
+                              (int)slen, s);
             }
         }
         apr_brigade_destroy(temp);
@@ -207,12 +214,14 @@ static int h2_h2_post_read_req(request_rec *r)
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                       "adding h1_to_h2_resp output filter");
         if (env->serialize_headers) {
+            ap_remove_output_filter_byhandle(r->output_filters, "H1_TO_H2_RESP");
             ap_add_output_filter("H1_TO_H2_RESP", env, r, r->connection);
         }
         else {
             /* replace the core http filter that formats response headers
              * in HTTP/1 with our own that collects status and headers */
             ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
+            ap_remove_output_filter_byhandle(r->output_filters, "H2_RESPONSE");
             ap_add_output_filter("H2_RESPONSE", env, r, r->connection);
         }
     }

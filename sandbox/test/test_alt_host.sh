@@ -39,10 +39,8 @@ curl_check_content index.html "noh2 host" --http2 -H'Host: noh2.example.org' <<E
 <title>$MISDIR_STATUS</title>
 </head><body>
 <h1>Misdirected Request</h1>
-<p>The client needs a new connection for this
-request as the requested host name does not match
-the Server Name Indication (SNI) in use for this
-connection.</p>
+<p>The client needs to use a new connection for this 
+request as it does not match the SNI name used.</p>
 </body></html>
 EOF
 

@@ -28,7 +28,7 @@ APR-UTIL_DIR = apr-util-$(APR-UTIL_VERSION)
 APR-UTIL_TAR = $(APR-UTIL_DIR).tar.gz
 APR-UTIL_URL = http://archive.apache.org/dist/apr/$(APR-UTIL_TAR)
 
-HTTPD_VERSION = 2.4.12
+HTTPD_VERSION = 2.4.16
 HTTPD_DIR    = httpd-$(HTTPD_VERSION)
 HTTPD_TAR    = httpd-$(HTTPD_VERSION).tar.gz
 HTTPD_URL    = https://archive.apache.org/dist/httpd/$(HTTPD_TAR)
