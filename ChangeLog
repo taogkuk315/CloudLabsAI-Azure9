@@ -1,3 +1,9 @@
+v0.8.1
+-------------------------------------------------------------------------------- 
+ * added some defensive code for configurations at user that produced duplicate
+   response headers
+ * added httpd/trunk fix to allocate task memory pools under mplx locking
+
 v0.8.0
 -------------------------------------------------------------------------------- 
  * when serving static files, these are kept open longer (and buffer copied
