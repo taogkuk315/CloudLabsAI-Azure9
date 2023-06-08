@@ -72,14 +72,15 @@ on any virtual hosts.
 
 
 ##Dependencies
-1. The module is written in plain C and links to libnghttp2 and the
-apache runtime. Currently, only nghttp2 version 0.7.x are supported. nghttp2 v1.0.0 introduced a incompatible API change. mod_h2 will change once there is a curl release working with 1.0.0. That release of mod_h2 will then stop support for nghttp2 0.7.x. Heads up.
+1. The module is written in plain C and links to libnghttp2 (version 1.0.0 and up) 
+and the Apache runtime.
 1. For "h2" support - the part of HTTP2 that uses TLS - a patched mod_ssl
 needs to be present in the server. The patch is available in httpd/patches
 and automatically applied in sandbox mode.
 1. For ALPN/NPN protocol negotiation (the basic TLS HELLO part) to work,
-at least OpenSSL 1.0.1 is needed (OpenSSL 1.0.2 perferred).
-1. mod_h2 is tested with the `mpm_worker` module. The `mpm_event` module is supported by a hack at the moment, handle with care.
+at least a current OpenSSL 1.0.1 is needed.
+1. mod_h2 is tested with the `mpm_worker`, `mpm_event` and `mpm_prefork` module, with 
+worker being the preferred multiprocessing module in my setups. Ymmv.
 
 
 ##Installation
