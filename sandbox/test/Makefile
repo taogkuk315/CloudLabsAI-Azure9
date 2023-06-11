@@ -82,6 +82,7 @@ test: \
 	#@$(INST_DIR)/bin/apachectl restart
 	@bash test_curl_altsvc.sh http://$(HTTP_AUTH) https://$(HTTPS_AUTH)
 	@bash test_alt_host.sh https://$(HTTPS_AUTH)
+	@bash test_alt_host.sh https://$(HTTPS_AUTH2)
 	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH)
 	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)
 	@bash test_curl_get.sh    https://$(HTTPS_AUTH)
