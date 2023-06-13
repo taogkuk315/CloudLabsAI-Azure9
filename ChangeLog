@@ -1,3 +1,8 @@
+v0.8.2
+-------------------------------------------------------------------------------- 
+* In case "H2SerializeHeaders On" is configured, errorneous requests led to
+  500 responses. Fixed by installing post_read hooks really early now.
+
 v0.8.1
 -------------------------------------------------------------------------------- 
  * added some defensive code for configurations at user that produced duplicate
