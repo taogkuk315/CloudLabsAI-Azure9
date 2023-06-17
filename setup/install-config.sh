@@ -32,7 +32,7 @@ if [ -d "$SYSCONF/mods-available" ]; then
     echo "done."
     if [ -x "$A2ENMOD" ] && [ ! -d "$DESTDIR" ]; then
         echo -n "enabling mod_h2..."
-        "$A2ENMOD" mod_h2
+        "$A2ENMOD" h2
         echo "done."
     fi
 elif [ -d "$SYSCONF/../conf.d" ] && [ -d "$SYSCONF/../conf.modules.d" ]; then
