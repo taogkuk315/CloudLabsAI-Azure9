@@ -22,7 +22,6 @@ mod_h2_la_CPPFLAGS = -std=c99 -D_GNU_SOURCE -Werror
 mod_h2_la_LDFLAGS  = -module
 
 OBJECTS = \
-    h2_alpn.c \
     h2_alt_svc.c \
     h2_config.c \
     h2_conn.c \
@@ -38,19 +37,18 @@ OBJECTS = \
     h2_session.c \
     h2_stream.c \
     h2_stream_set.c \
+    h2_switch.c \
     h2_task.c \
     h2_task_input.c \
     h2_task_output.c \
     h2_task_queue.c \
     h2_to_h1.c \
-    h2_upgrade.c \
     h2_util.c \
     h2_worker.c \
     h2_workers.c \
     mod_h2.c
 
 HFILES = \
-    h2_alpn.h \
     h2_alt_svc.h \
     h2_config.h \
     h2_conn.h \
@@ -67,12 +65,12 @@ HFILES = \
     h2_session.h \
     h2_stream.h \
     h2_stream_set.h \
+    h2_switch.h \
     h2_task.h \
     h2_task_input.h \
     h2_task_output.h \
     h2_task_queue.h \
     h2_to_h1.h \
-    h2_upgrade.h \
     h2_util.h \
     h2_version.h \
     h2_worker.h \

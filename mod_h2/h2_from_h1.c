@@ -83,6 +83,7 @@ static apr_status_t make_h2_headers(h2_from_h1 *from_h1, request_rec *r)
                                        from_h1->pool);
     if (from_h1->response == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EINVAL, r->connection,
+                      APLOGNO(02915) 
                       "h2_from_h1(%d): unable to create resp_head",
                       from_h1->stream_id);
         return APR_EINVAL;
@@ -107,12 +108,13 @@ static apr_status_t parse_header(h2_from_h1 *from_h1, ap_filter_t* f,
     (void)f;
     
     if (line[0] == ' ' || line[0] == '\t') {
+        char **plast;
         /* continuation line from the header before this */
         while (line[0] == ' ' || line[0] == '\t') {
             ++line;
         }
         
-        char **plast = apr_array_pop(from_h1->hlines);
+        plast = apr_array_pop(from_h1->hlines);
         if (plast == NULL) {
             /* not well formed */
             return APR_EINVAL;
@@ -129,13 +131,14 @@ static apr_status_t parse_header(h2_from_h1 *from_h1, ap_filter_t* f,
 static apr_status_t get_line(h2_from_h1 *from_h1, apr_bucket_brigade *bb,
                              ap_filter_t* f, char *line, apr_size_t len)
 {
+    apr_status_t status;
     if (!from_h1->bb) {
         from_h1->bb = apr_brigade_create(from_h1->pool, f->c->bucket_alloc);
     }
     else {
         apr_brigade_cleanup(from_h1->bb);                
     }
-    apr_status_t status = apr_brigade_split_line(from_h1->bb, bb, 
+    status = apr_brigade_split_line(from_h1->bb, bb, 
                                                  APR_BLOCK_READ, 
                                                  HUGE_STRING_LEN);
     if (status == APR_SUCCESS) {
@@ -310,37 +313,6 @@ static void fix_vary(request_rec *r)
     }
 }
 
-/* Confirm that the status line is well-formed and matches r->status.
- * If they don't match, a filter may have negated the status line set by a
- * handler.
- * Zap r->status_line if bad.
- */
-static apr_status_t validate_status_line(request_rec *r)
-{
-    char *end;
-    
-    if (r->status_line) {
-        apr_size_t len = strlen(r->status_line);
-        if (len < 3
-            || apr_strtoi64(r->status_line, &end, 10) != r->status
-            || (end - 3) != r->status_line
-            || (len >= 4 && ! apr_isspace(r->status_line[3]))) {
-            r->status_line = NULL;
-            return APR_EGENERAL;
-        }
-        /* Since we passed the above check, we know that length three
-         * is equivalent to only a 3 digit numeric http status.
-         * RFC2616 mandates a trailing space, let's add it.
-         */
-        if (len == 3) {
-            r->status_line = apr_pstrcat(r->pool, r->status_line, " ", NULL);
-            return APR_EGENERAL;
-        }
-        return APR_SUCCESS;
-    }
-    return APR_EGENERAL;
-}
-
 static void set_basic_http_header(request_rec *r, apr_table_t *headers)
 {
     char *date = NULL;
@@ -392,9 +364,9 @@ static int copy_header(void *ctx, const char *name, const char *value)
 
 static h2_response *create_response(h2_from_h1 *from_h1, request_rec *r)
 {
-    apr_status_t status = APR_SUCCESS;
     const char *clheader;
     const char *ctype;
+    apr_table_t *headers;
     /*
      * Now that we are ready to send a response, we need to combine the two
      * header field tables into a single table.  If we don't do this, our
@@ -428,19 +400,7 @@ static h2_response *create_response(h2_from_h1 *from_h1, request_rec *r)
     }
     
     /* determine the protocol and whether we should use keepalives. */
-    status = validate_status_line(r);
-    if (!r->status_line) {
-        r->status_line = ap_get_status_line(r->status);
-    } 
-    else if (status != APR_SUCCESS) {
-        /* Status line is OK but our own reason phrase
-         * would be preferred if defined
-         */
-        const char *tmp = ap_get_status_line(r->status);
-        if (!strncmp(tmp, r->status_line, 3)) {
-            r->status_line = tmp;
-        }
-    }
+    ap_set_keepalive(r);
     
     if (r->chunked) {
         apr_table_unset(r->headers_out, "Content-Length");
@@ -504,7 +464,7 @@ static h2_response *create_response(h2_from_h1 *from_h1, request_rec *r)
         apr_table_unset(r->headers_out, "Content-Length");
     }
     
-    apr_table_t *headers = apr_table_make(r->pool, 10);
+    headers = apr_table_make(r->pool, 10);
     
     set_basic_http_header(r, headers);
     if (r->status == HTTP_NOT_MODIFIED) {
@@ -608,4 +568,3 @@ apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb)
     }
     return ap_pass_brigade(f->next, bb);
 }
-

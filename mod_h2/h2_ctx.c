@@ -24,16 +24,15 @@
 #include "h2_ctx.h"
 #include "h2_private.h"
 
-static h2_ctx *h2_ctx_create(conn_rec *c)
+static h2_ctx *h2_ctx_create(const conn_rec *c)
 {
     h2_ctx *ctx = apr_pcalloc(c->pool, sizeof(h2_ctx));
     AP_DEBUG_ASSERT(ctx);
-    ctx->pnego_state = H2_PNEGO_NONE;
     ap_set_module_config(c->conn_config, &h2_module, ctx);
     return ctx;
 }
 
-h2_ctx *h2_ctx_create_for(conn_rec *c, h2_task_env *env)
+h2_ctx *h2_ctx_create_for(const conn_rec *c, h2_task_env *env)
 {
     h2_ctx *ctx = h2_ctx_create(c);
     if (ctx) {
@@ -42,7 +41,7 @@ h2_ctx *h2_ctx_create_for(conn_rec *c, h2_task_env *env)
     return ctx;
 }
 
-h2_ctx *h2_ctx_get(conn_rec *c)
+h2_ctx *h2_ctx_get(const conn_rec *c)
 {
     h2_ctx *ctx = (h2_ctx*)ap_get_module_config(c->conn_config, &h2_module);
     if (ctx == NULL) {
@@ -51,25 +50,20 @@ h2_ctx *h2_ctx_get(conn_rec *c)
     return ctx;
 }
 
-h2_ctx *h2_ctx_rget(request_rec *r)
+h2_ctx *h2_ctx_rget(const request_rec *r)
 {
     return h2_ctx_get(r->connection);
 }
 
-const char *h2_ctx_pnego_get(h2_ctx *ctx)
+const char *h2_ctx_protocol_get(const conn_rec *c)
 {
+    h2_ctx *ctx = (h2_ctx*)ap_get_module_config(c->conn_config, &h2_module);
     return ctx? ctx->protocol : NULL;
 }
 
-void h2_ctx_pnego_set_started(h2_ctx *ctx)
-{
-    ctx->pnego_state = H2_PNEGO_STARTED;
-}
-
-h2_ctx *h2_ctx_pnego_set_done(h2_ctx *ctx, const char *proto)
+h2_ctx *h2_ctx_protocol_set(h2_ctx *ctx, const char *proto)
 {
     ctx->protocol = proto;
-    ctx->pnego_state = H2_PNEGO_DONE;
     ctx->is_h2 = (proto != NULL);
     return ctx;
 }
@@ -77,16 +71,6 @@ h2_ctx *h2_ctx_pnego_set_done(h2_ctx *ctx, const char *proto)
 int h2_ctx_is_task(h2_ctx *ctx)
 {
     return ctx && !!ctx->task_env;
-}
-
-int h2_ctx_pnego_is_ongoing(h2_ctx *ctx)
-{
-    return ctx && (ctx->pnego_state == H2_PNEGO_STARTED);
-}
-
-int h2_ctx_pnego_is_done(h2_ctx *ctx)
-{
-    return ctx && (ctx->pnego_state == H2_PNEGO_DONE);
 }
 
 int h2_ctx_is_active(h2_ctx *ctx)

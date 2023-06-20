@@ -53,7 +53,7 @@ static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
                                            apr_read_type_e block,
                                            apr_off_t readbytes) {
     h2_task_env *env = filter->ctx;
-    AP_DEBUG_ASSERT(task);
+    AP_DEBUG_ASSERT(env);
     if (!env->input) {
         return APR_ECONNABORTED;
     }
@@ -64,7 +64,7 @@ static apr_status_t h2_filter_stream_input(ap_filter_t* filter,
 static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
                                             apr_bucket_brigade* brigade) {
     h2_task_env *env = filter->ctx;
-    AP_DEBUG_ASSERT(task);
+    AP_DEBUG_ASSERT(env);
     if (!env->output) {
         return APR_ECONNABORTED;
     }
@@ -74,7 +74,7 @@ static apr_status_t h2_filter_stream_output(ap_filter_t* filter,
 static apr_status_t h2_filter_read_response(ap_filter_t* f,
                                             apr_bucket_brigade* bb) {
     h2_task_env *env = f->ctx;
-    AP_DEBUG_ASSERT(task);
+    AP_DEBUG_ASSERT(env);
     if (!env->output || !env->output->from_h1) {
         return APR_ECONNABORTED;
     }
@@ -114,9 +114,10 @@ void h2_task_register_hooks(void)
 
 static int h2_task_pre_conn(conn_rec* c, void *arg)
 {
-    (void)arg;
     
     h2_ctx *ctx = h2_ctx_get(c);
+    
+    (void)arg;
     if (h2_ctx_is_task(ctx)) {
         h2_task_env *env = h2_ctx_get_task(ctx);
         
@@ -163,7 +164,7 @@ h2_task *h2_task_create(long session_id,
     h2_task *task = apr_pcalloc(stream_pool, sizeof(h2_task));
     if (task == NULL) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, stream_pool,
-                      "h2_task(%ld-%d): create stream task", 
+                      APLOGNO(02941) "h2_task(%ld-%d): create stream task", 
                       session_id, stream_id);
         h2_mplx_out_close(mplx, stream_id);
         return NULL;
@@ -183,12 +184,16 @@ h2_task *h2_task_create(long session_id,
 }
 
 void h2_task_set_request(h2_task *task, 
-                         const char *method, const char *path, 
-                         const char *authority, apr_table_t *headers, int eos)
+                         const char *method, 
+                         const char *scheme, 
+                         const char *authority, 
+                         const char *path, 
+                         apr_table_t *headers, int eos)
 {
     task->method = method;
-    task->path = path;
+    task->scheme = scheme;
     task->authority = authority;
+    task->path = path;
     task->headers = headers;
     task->input_eos = eos;
 }
@@ -228,19 +233,15 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     
     /* Clone fields, so that lifetimes become (more) independent. */
     env.method    = apr_pstrdup(env.pool, task->method);
-    env.path      = apr_pstrdup(env.pool, task->path);
+    env.scheme    = apr_pstrdup(env.pool, task->scheme);
     env.authority = apr_pstrdup(env.pool, task->authority);
+    env.path      = apr_pstrdup(env.pool, task->path);
     env.headers   = apr_table_clone(env.pool, task->headers);
     
     /* Setup the pseudo connection to use our own pool and bucket_alloc */
-    if (task->c) {
-        env.c = *task->c;
-        task->c = NULL;
-        status = h2_conn_setup(&env, worker);
-    }
-    else {
-        status = h2_conn_init(&env, worker);
-    }
+    env.c = *task->c;
+    task->c = NULL;
+    status = h2_conn_setup(&env, worker);
     
     /* save in connection that this one is a pseudo connection, prevents
      * other hooks from messing with it. */
@@ -257,7 +258,8 @@ apr_status_t h2_task_do(h2_task *task, h2_worker *worker)
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, &env.c,
-                      "h2_task(%s): error setting up h2_task_env", env.id);
+                      APLOGNO(02957) "h2_task(%s): error setting up h2_task_env", 
+                      env.id);
     }
     
     if (env.input) {
@@ -390,11 +392,12 @@ static request_rec *h2_task_create_request(h2_task_env *env)
     r->protocol = (char*)"HTTP/1.1";
     r->proto_num = HTTP_VERSION(1, 1);
     
-    r->hostname = env->authority;
-    
     /* update what we think the virtual host is based on the headers we've
      * now read. may update status.
+     * Leave r->hostname empty, vhost will parse if form our Host: header,
+     * otherwise we get complains about port numbers.
      */
+    r->hostname = NULL;
     ap_update_vhost_from_headers(r);
     
     /* we may have switched to another server */

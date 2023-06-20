@@ -26,7 +26,7 @@
 #include "h2_task.h"
 #include "h2_worker.h"
 
-static void *execute(apr_thread_t *thread, void *wctx)
+static void* APR_THREAD_FUNC execute(apr_thread_t *thread, void *wctx)
 {
     h2_worker *worker = (h2_worker *)wctx;
     apr_status_t status = APR_SUCCESS;
@@ -41,7 +41,8 @@ static void *execute(apr_thread_t *thread, void *wctx)
                                APR_PROTO_TCP, worker->pool);
     if (status != APR_SUCCESS) {
         ap_log_perror(APLOG_MARK, APLOG_ERR, status, worker->pool,
-                      "h2_worker(%d): alloc socket", worker->id);
+                      APLOGNO(02948) "h2_worker(%d): alloc socket", 
+                      worker->id);
         worker->worker_done(worker, worker->ctx);
         return NULL;
     }
@@ -79,6 +80,7 @@ h2_worker *h2_worker_create(int id,
 {
     apr_allocator_t *allocator = NULL;
     apr_pool_t *pool = NULL;
+    h2_worker *w;
     
     apr_status_t status = apr_allocator_create(&allocator);
     if (status != APR_SUCCESS) {
@@ -91,7 +93,7 @@ h2_worker *h2_worker_create(int id,
     }
     apr_allocator_owner_set(allocator, pool);
 
-    h2_worker *w = apr_pcalloc(pool, sizeof(h2_worker));
+    w = apr_pcalloc(pool, sizeof(h2_worker));
     if (w) {
         APR_RING_ELEM_INIT(w, link);
         

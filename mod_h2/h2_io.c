@@ -30,6 +30,7 @@ h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc)
     h2_io *io = apr_pcalloc(pool, sizeof(*io));
     if (io) {
         io->id = id;
+        io->pool = pool;
         io->bbin = NULL;
         io->bbout = apr_brigade_create(pool, bucket_alloc);
         io->response = apr_pcalloc(pool, sizeof(h2_response));
@@ -39,9 +40,7 @@ h2_io *h2_io_create(int id, apr_pool_t *pool, apr_bucket_alloc_t *bucket_alloc)
 
 static void h2_io_cleanup(h2_io *io)
 {
-    if (io->response) {
-        h2_response_cleanup(io->response);
-    }
+    (void)io;
 }
 
 void h2_io_destroy(h2_io *io)
@@ -73,14 +72,16 @@ apr_status_t h2_io_in_read(h2_io *io, apr_bucket_brigade *bb,
                            apr_size_t maxlen)
 {
     apr_off_t start_len = 0;
+    apr_bucket *last;
+    apr_status_t status;
 
     if (!io->bbin || APR_BRIGADE_EMPTY(io->bbin)) {
         return io->eos_in? APR_EOF : APR_EAGAIN;
     }
     
     apr_brigade_length(bb, 1, &start_len);
-    apr_bucket *last = APR_BRIGADE_LAST(bb);
-    apr_status_t status = h2_util_move(bb, io->bbin, maxlen, 0, 
+    last = APR_BRIGADE_LAST(bb);
+    status = h2_util_move(bb, io->bbin, maxlen, 0, 
                                        "h2_io_in_read");
     if (status == APR_SUCCESS) {
         apr_bucket *nlast = APR_BRIGADE_LAST(bb);

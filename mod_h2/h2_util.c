@@ -64,7 +64,8 @@ size_t h2_util_header_print(char *buffer, size_t maxlen,
 
 char *h2_strlwr(char *s)
 {
-    for (char *p = s; *p; ++p) {
+    char *p;
+    for (p = s; *p; ++p) {
         if (*p >= 'A' && *p <= 'Z') {
             *p += 'a' - 'A';
         }
@@ -75,7 +76,8 @@ char *h2_strlwr(char *s)
 void h2_util_camel_case_header(char *s, size_t len)
 {
     size_t start = 1;
-    for (size_t i = 0; i < len; ++i) {
+    size_t i;
+    for (i = 0; i < len; ++i) {
         if (start) {
             if (s[i] >= 'a' && s[i] <= 'z') {
                 s[i] -= 'a' - 'A';
@@ -107,22 +109,24 @@ static const int BASE64URL_TABLE[] = {
     -1, -1, -1, -1
 };
 
-apr_size_t h2_util_base64url_decode(unsigned char **decoded, const char *encoded, 
+apr_size_t h2_util_base64url_decode(const char **decoded, const char *encoded, 
                                     apr_pool_t *pool)
 {
     const unsigned char *e = (const unsigned char *)encoded;
     const unsigned char *p = e;
+    unsigned char *d;
     int n;
+    apr_size_t len, mlen, remain, i;
     
     while (*p && BASE64URL_TABLE[ *p ] == -1) {
         ++p;
     }
-    apr_size_t len = p - e;
-    apr_size_t mlen = (len/4)*4;
+    len = p - e;
+    mlen = (len/4)*4;
     *decoded = apr_pcalloc(pool, len+1);
     
-    apr_size_t i = 0;
-    unsigned char *d = *decoded;
+    i = 0;
+    d = (unsigned char*)*decoded;
     for (; i < mlen; i += 4) {
         n = ((BASE64URL_TABLE[ e[i+0] ] << 18) +
              (BASE64URL_TABLE[ e[i+1] ] << 12) +
@@ -132,7 +136,7 @@ apr_size_t h2_util_base64url_decode(unsigned char **decoded, const char *encoded
         *d++ = n >> 8 & 0xffu;
         *d++ = n & 0xffu;
     }
-    apr_size_t remain = len - mlen;
+    remain = len - mlen;
     switch (remain) {
         case 2:
             n = ((BASE64URL_TABLE[ e[mlen+0] ] << 18) +
@@ -154,12 +158,13 @@ apr_size_t h2_util_base64url_decode(unsigned char **decoded, const char *encoded
 
 int h2_util_contains_token(apr_pool_t *pool, const char *s, const char *token)
 {
+    char *c;
     if (s) {
         if (!apr_strnatcasecmp(s, token)) {   /* the simple life */
             return 1;
         }
         
-        for (char *c = ap_get_token(pool, &s, 0); c && *c;
+        for (c = ap_get_token(pool, &s, 0); c && *c;
              c = *s? ap_get_token(pool, &s, 0) : NULL) {
             if (!apr_strnatcasecmp(c, token)) { /* seeing the token? */
                 return 1;
@@ -178,10 +183,12 @@ int h2_util_contains_token(apr_pool_t *pool, const char *s, const char *token)
 const char *h2_util_first_token_match(apr_pool_t *pool, const char *s, 
                                       const char *tokens[], apr_size_t len)
 {
+    char *c;
+    apr_size_t i;
     if (s && *s) {
-        for (char *c = ap_get_token(pool, &s, 0); c && *c;
+        for (c = ap_get_token(pool, &s, 0); c && *c;
              c = *s? ap_get_token(pool, &s, 0) : NULL) {
-            for (apr_size_t i = 0; i < len; ++i) {
+            for (i = 0; i < len; ++i) {
                 if (!apr_strnatcasecmp(c, tokens[i])) {
                     return tokens[i];
                 }
@@ -271,10 +278,11 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                           const char *msg)
 {
     apr_status_t status = APR_SUCCESS;
+    int same_alloc;
     
     AP_DEBUG_ASSERT(to);
     AP_DEBUG_ASSERT(from);
-    int same_alloc = (to->bucket_alloc == from->bucket_alloc);
+    same_alloc = (to->bucket_alloc == from->bucket_alloc);
 
     if (!FILE_MOVE) {
         pfile_handles_allowed = NULL;
@@ -351,7 +359,8 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                         status = apr_file_setaside(&fd, fd, to->p);
                         if (status != APR_SUCCESS) {
                             ap_log_perror(APLOG_MARK, APLOG_ERR, status, to->p,
-                                          "h2_util: %s, setaside FILE", msg);
+                                          APLOGNO(02947) "h2_util: %s, setaside FILE", 
+                                          msg);
                             return status;
                         }
                     }
@@ -400,11 +409,12 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
                           apr_size_t maxlen, const char *msg)
 {
     apr_status_t status = APR_SUCCESS;
+    int same_alloc;
+
     (void)msg;
-    
     AP_DEBUG_ASSERT(to);
     AP_DEBUG_ASSERT(from);
-    int same_alloc = (to->bucket_alloc == from->bucket_alloc);
+    same_alloc = (to->bucket_alloc == from->bucket_alloc);
 
     if (!APR_BRIGADE_EMPTY(from)) {
         apr_bucket *b, *end, *cpy;

@@ -54,17 +54,18 @@ static apr_status_t insert_request_line(h2_request *req, h2_mplx *m);
 
 apr_status_t h2_request_rwrite(h2_request *req, request_rec *r, h2_mplx *m)
 {
+    apr_status_t status;
     req->method = r->method;
-    req->path = r->uri;
     req->authority = r->hostname;
-    if (!strchr(req->authority, ':') && r->parsed_uri.port_str) {
+    req->path = r->uri;
+    if (!ap_strchr_c(req->authority, ':') && r->parsed_uri.port_str) {
         req->authority = apr_psprintf(req->pool, "%s:%s", req->authority,
                                       r->parsed_uri.port_str);
     }
     req->scheme = NULL;
     
     
-    apr_status_t status = insert_request_line(req, m);
+    status = insert_request_line(req, m);
     if (status == APR_SUCCESS) {
         status = h2_to_h1_add_headers(req->to_h1, r->headers_in);
     }
@@ -91,6 +92,7 @@ apr_status_t h2_request_write_header(h2_request *req,
         /* pseudo header, see ch. 8.1.2.3, always should come first */
         if (req->to_h1) {
             ap_log_perror(APLOG_MARK, APLOG_ERR, 0, req->pool,
+                          APLOGNO(02917) 
                           "h2_request(%d): pseudo header after request start",
                           req->id);
             return APR_EGENERAL;
@@ -117,6 +119,7 @@ apr_status_t h2_request_write_header(h2_request *req,
             memset(buffer, 0, 32);
             strncpy(buffer, name, (nlen > 31)? 31 : nlen);
             ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, req->pool,
+                          APLOGNO(02954) 
                           "h2_request(%d): ignoring unknown pseudo header %s",
                           req->id, buffer);
         }
@@ -165,7 +168,10 @@ apr_status_t h2_request_close(h2_request *req)
 static apr_status_t insert_request_line(h2_request *req, h2_mplx *m)
 {
     req->to_h1 = h2_to_h1_create(req->id, req->pool, req->bucket_alloc, 
-                                 req->method, req->path, req->authority, m);
+                                 req->method, 
+                                 req->scheme, 
+                                 req->authority, 
+                                 req->path, m);
     return req->to_h1? APR_SUCCESS : APR_ENOMEM;
 }
 

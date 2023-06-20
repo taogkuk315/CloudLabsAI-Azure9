@@ -8,9 +8,6 @@
 
 /* Begin PBXFileReference section */
 		B20946CA1B25D4430041992F /* test_alt_host.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_alt_host.sh; sourceTree = "<group>"; };
-		B20946CC1B2865BB0041992F /* h2_alpn.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_alpn.c; sourceTree = "<group>"; };
-		B20946CD1B2865BB0041992F /* h2_alpn.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_alpn.h; sourceTree = "<group>"; };
-		B20946CE1B29D8C30041992F /* sni_misdirect.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = sni_misdirect.patch; sourceTree = "<group>"; };
 		B20E441F1ACC07E8003D21AE /* test_curl_get.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_get.sh; sourceTree = "<group>"; };
 		B20E44201ACC088E003D21AE /* test_curl_post.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_post.sh; sourceTree = "<group>"; };
 		B21BFCF91B023B840031EBCD /* h2_task_queue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_queue.c; sourceTree = "<group>"; };
@@ -30,7 +27,6 @@
 		B225493B1A711985004BDEC9 /* h2_conn_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_conn_io.h; sourceTree = "<group>"; };
 		B225493C1A713D18004BDEC9 /* h2_util.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_util.c; sourceTree = "<group>"; };
 		B225493D1A713D18004BDEC9 /* h2_util.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_util.h; sourceTree = "<group>"; };
-		B227966E1AEE93B000376B40 /* httpd-npn.unified.diff.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-npn.unified.diff.patch"; sourceTree = "<group>"; };
 		B22D25281AA89A0B0041D8E5 /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		B24C597F1B8C66930003DF74 /* ax_check_compile_flag.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ax_check_compile_flag.m4; sourceTree = "<group>"; };
 		B24C59801B8C66930003DF74 /* h2.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.m4; sourceTree = "<group>"; };
@@ -39,6 +35,10 @@
 		B24C59831B8C66930003DF74 /* ltsugar.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ltsugar.m4; sourceTree = "<group>"; };
 		B24C59841B8C66930003DF74 /* ltversion.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ltversion.m4; sourceTree = "<group>"; };
 		B24C59851B8C66930003DF74 /* lt~obsolete.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "lt~obsolete.m4"; sourceTree = "<group>"; };
+		B24C59861B8CB7260003DF74 /* core-protocols.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols.patch"; sourceTree = "<group>"; };
+		B24C59871B8CB9180003DF74 /* core-protocols-release.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-release.patch"; sourceTree = "<group>"; };
+		B24C59881B8CBAE50003DF74 /* h2_switch.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_switch.c; sourceTree = "<group>"; };
+		B24C59891B8CBAE50003DF74 /* h2_switch.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_switch.h; sourceTree = "<group>"; };
 		B24CB1221AC94D6A0057413B /* h2_alt_svc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_alt_svc.c; sourceTree = "<group>"; };
 		B24CB1231AC94D6A0057413B /* h2_alt_svc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_alt_svc.h; sourceTree = "<group>"; };
 		B24CB1241AC96BFE0057413B /* test_curl_altsvc.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = test_curl_altsvc.sh; sourceTree = "<group>"; };
@@ -55,7 +55,6 @@
 		B271425F1AB9DD59004EF82E /* h2_io_set.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_io_set.h; sourceTree = "<group>"; };
 		B27142601AB9DD76004EF82E /* h2_io.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_io.c; sourceTree = "<group>"; };
 		B27142611AB9DD76004EF82E /* h2_io.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_io.h; sourceTree = "<group>"; };
-		B272F2311B1E13D8007A20A5 /* httpd-2.4.x-alpn-v4.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-2.4.x-alpn-v4.patch"; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27D32E81A9487B4003DBAF4 /* h2_mplx.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_mplx.c; sourceTree = "<group>"; };
 		B27D32E91A9487B4003DBAF4 /* h2_mplx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_mplx.h; sourceTree = "<group>"; };
@@ -63,8 +62,6 @@
 		B284ACCA1A7B9DF900C35863 /* h2_task_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_input.h; sourceTree = "<group>"; };
 		B2A6EF171A9B598B005DFC5B /* h2_request.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_request.c; sourceTree = "<group>"; };
 		B2A6EF181A9B598B005DFC5B /* h2_request.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_request.h; sourceTree = "<group>"; };
-		B2A6EF281A9C79A6005DFC5B /* h2_upgrade.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_upgrade.c; sourceTree = "<group>"; };
-		B2A6EF291A9C79A6005DFC5B /* h2_upgrade.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_upgrade.h; sourceTree = "<group>"; };
 		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
 		B2A6EF2C1A9F2452005DFC5B /* DISCUSS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = DISCUSS; sourceTree = "<group>"; };
 		B2AABE611AC5A9B400A90B72 /* h2_version.h.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2_version.h.in; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
@@ -72,12 +69,9 @@
 		B2B170B41B2F02C100EDC007 /* testrun */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = testrun; sourceTree = "<group>"; };
 		B2B170B61B303B0C00EDC007 /* noh2.example.org.x509.input */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = noh2.example.org.x509.input; sourceTree = "<group>"; };
 		B2B170B81B316FB100EDC007 /* aaa-noh2.example.org.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "aaa-noh2.example.org.conf"; sourceTree = "<group>"; };
-		B2B170B91B31BF7000EDC007 /* httpd-2.4.12-alpn-v5.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-2.4.12-alpn-v5.patch"; sourceTree = "<group>"; };
 		B2C16D251A779C55000B2297 /* h2_stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
 		B2C16D261A779C55000B2297 /* h2_stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
 		B2C631081B383EA800127D1E /* test-ser.example.org.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "test-ser.example.org.conf"; sourceTree = "<group>"; };
-		B2C6310C1B393CA100127D1E /* httpd-alpn-v4-v5.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "httpd-alpn-v4-v5.patch"; sourceTree = "<group>"; };
-		B2C63B0E1B39421B00127D1E /* openssl-1.0.2-alpn.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "openssl-1.0.2-alpn.patch"; sourceTree = "<group>"; };
 		B2C63B101B3BF78C00127D1E /* mpm_worker.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mpm_worker.load; sourceTree = "<group>"; };
 		B2C63B121B3BF7CC00127D1E /* mpm_event.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mpm_event.load; sourceTree = "<group>"; };
 		B2C63B131B3BF7CC00127D1E /* mpm_prefork.load */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mpm_prefork.load; sourceTree = "<group>"; };
@@ -329,8 +323,6 @@
 		B225490A1A6EAAA3004BDEC9 /* mod_h2 */ = {
 			isa = PBXGroup;
 			children = (
-				B20946CC1B2865BB0041992F /* h2_alpn.c */,
-				B20946CD1B2865BB0041992F /* h2_alpn.h */,
 				B24CB1221AC94D6A0057413B /* h2_alt_svc.c */,
 				B24CB1231AC94D6A0057413B /* h2_alt_svc.h */,
 				B225490D1A6EAE9F004BDEC9 /* h2_config.c */,
@@ -362,6 +354,8 @@
 				B2546D9A1A81079D0033A875 /* h2_stream_set.h */,
 				B2C16D251A779C55000B2297 /* h2_stream.c */,
 				B2C16D261A779C55000B2297 /* h2_stream.h */,
+				B24C59881B8CBAE50003DF74 /* h2_switch.c */,
+				B24C59891B8CBAE50003DF74 /* h2_switch.h */,
 				B284ACC91A7B9DF900C35863 /* h2_task_input.c */,
 				B284ACCA1A7B9DF900C35863 /* h2_task_input.h */,
 				B2546D8E1A7FA7D70033A875 /* h2_task_output.c */,
@@ -372,8 +366,6 @@
 				B2546D891A7F71F80033A875 /* h2_task.h */,
 				B2FE998E1AA7496B00A5CE5A /* h2_to_h1.c */,
 				B2FE998F1AA7496B00A5CE5A /* h2_to_h1.h */,
-				B2A6EF281A9C79A6005DFC5B /* h2_upgrade.c */,
-				B2A6EF291A9C79A6005DFC5B /* h2_upgrade.h */,
 				B225493C1A713D18004BDEC9 /* h2_util.c */,
 				B225493D1A713D18004BDEC9 /* h2_util.h */,
 				B2AABE611AC5A9B400A90B72 /* h2_version.h.in */,
@@ -478,12 +470,8 @@
 		B2E6DF9F1AC2EF6E00D557D8 /* patches */ = {
 			isa = PBXGroup;
 			children = (
-				B2B170B91B31BF7000EDC007 /* httpd-2.4.12-alpn-v5.patch */,
-				B272F2311B1E13D8007A20A5 /* httpd-2.4.x-alpn-v4.patch */,
-				B2C6310C1B393CA100127D1E /* httpd-alpn-v4-v5.patch */,
-				B227966E1AEE93B000376B40 /* httpd-npn.unified.diff.patch */,
-				B2C63B0E1B39421B00127D1E /* openssl-1.0.2-alpn.patch */,
-				B20946CE1B29D8C30041992F /* sni_misdirect.patch */,
+				B24C59871B8CB9180003DF74 /* core-protocols-release.patch */,
+				B24C59861B8CB7260003DF74 /* core-protocols.patch */,
 			);
 			path = patches;
 			sourceTree = "<group>";

@@ -238,11 +238,13 @@ static apr_status_t h2_workers_start(h2_workers *workers) {
 h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
                               int min_size, int max_size)
 {
+    apr_status_t status;
+    h2_workers *workers;
     AP_DEBUG_ASSERT(s);
     AP_DEBUG_ASSERT(pool);
-    apr_status_t status = APR_SUCCESS;
+    status = APR_SUCCESS;
 
-    h2_workers *workers = apr_pcalloc(pool, sizeof(h2_workers));
+    workers = apr_pcalloc(pool, sizeof(h2_workers));
     if (workers) {
         workers->s = s;
         workers->pool = pool;
@@ -341,7 +343,7 @@ void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs)
 {
     if (idle_secs <= 0) {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, workers->s,
-                     "h2_workers: max_worker_idle_sec value of %d"
+                     APLOGNO(02962) "h2_workers: max_worker_idle_sec value of %d"
                      " is not valid, ignored.", idle_secs);
         return;
     }

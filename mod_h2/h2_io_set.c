@@ -47,7 +47,8 @@ h2_io_set *h2_io_set_create(apr_pool_t *pool)
 
 void h2_io_set_destroy(h2_io_set *sp)
 {
-    for (int i = 0; i < sp->list->nelts; ++i) {
+    int i;
+    for (i = 0; i < sp->list->nelts; ++i) {
         h2_io *io = h2_io_IDX(sp->list, i);
         h2_io_destroy(io);
     }
@@ -66,9 +67,13 @@ h2_io *h2_io_set_get(h2_io_set *sp, int stream_id)
     /* we keep the array sorted by id, so lookup can be done
      * by bsearch.
      */
-    h2_io key = { stream_id, NULL, 0, 0, 0, NULL, NULL, NULL, NULL, 0 };
+    h2_io **ps;
+    h2_io key;
     h2_io *pkey = &key;
-    h2_io **ps = bsearch(&pkey, sp->list->elts, sp->list->nelts, 
+
+    memset(&key, 0, sizeof(key));
+    key.id = stream_id;
+    ps = bsearch(&pkey, sp->list->elts, sp->list->nelts, 
                          sp->list->elt_size, h2_stream_id_cmp);
     return ps? *ps : NULL;
 }
@@ -76,7 +81,8 @@ h2_io *h2_io_set_get(h2_io_set *sp, int stream_id)
 h2_io *h2_io_set_get_highest_prio(h2_io_set *set)
 {
     h2_io *highest = NULL;
-    for (int i = 0; i < set->list->nelts; ++i) {
+    int i;
+    for (i = 0; i < set->list->nelts; ++i) {
         h2_io *io = h2_io_IDX(set->list, i);
         if (!highest /*|| io-prio even higher */ ) {
             highest = io;
@@ -95,13 +101,14 @@ apr_status_t h2_io_set_add(h2_io_set *sp, h2_io *io)
 {
     h2_io *existing = h2_io_set_get(sp, io->id);
     if (!existing) {
+        int last;
         APR_ARRAY_PUSH(sp->list, h2_io*) = io;
         /* Normally, streams get added in ascending order if id. We
          * keep the array sorted, so we just need to check of the newly
          * appended stream has a lower id than the last one. if not,
          * sorting is not necessary.
          */
-        int last = sp->list->nelts - 1;
+        last = sp->list->nelts - 1;
         if (last > 0 
             && (h2_io_IDX(sp->list, last)->id 
                 < h2_io_IDX(sp->list, last-1)->id)) {
@@ -113,11 +120,13 @@ apr_status_t h2_io_set_add(h2_io_set *sp, h2_io *io)
 
 h2_io *h2_io_set_remove(h2_io_set *sp, h2_io *io)
 {
-    for (int i = 0; i < sp->list->nelts; ++i) {
+    int i;
+    for (i = 0; i < sp->list->nelts; ++i) {
         h2_io *e = h2_io_IDX(sp->list, i);
         if (e == io) {
+            int n;
             --sp->list->nelts;
-            int n = sp->list->nelts - i;
+            n = sp->list->nelts - i;
             if (n > 0) {
                 /* Close the hole in the array by moving the upper
                  * parts down one step.
@@ -133,7 +142,8 @@ h2_io *h2_io_set_remove(h2_io_set *sp, h2_io *io)
 
 void h2_io_set_destroy_all(h2_io_set *sp)
 {
-    for (int i = 0; i < sp->list->nelts; ++i) {
+    int i;
+    for (i = 0; i < sp->list->nelts; ++i) {
         h2_io *io = h2_io_IDX(sp->list, i);
         h2_io_destroy(io);
     }
@@ -154,7 +164,8 @@ int h2_io_set_is_empty(h2_io_set *sp)
 void h2_io_set_iter(h2_io_set *sp,
                         h2_io_set_iter_fn *iter, void *ctx)
 {
-    for (int i = 0; i < sp->list->nelts; ++i) {
+    int i;
+    for (i = 0; i < sp->list->nelts; ++i) {
         h2_io *s = h2_io_IDX(sp->list, i);
         if (!iter(ctx, s)) {
             break;

@@ -154,11 +154,9 @@ $(GEN)/$(HTTPD_DIR)/.httpd-configured: \
 $(GEN)/$(HTTPD_DIR)/.httpd-patched: \
 		$(GEN)/$(HTTPD_DIR)/.httpd-extracted
 	@echo applying patches...
-	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/httpd-2.4.12-alpn-v5.patch
-	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/sni_misdirect.patch
+	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/core-protocols-release.patch
 	@echo httpd patched.
 	@touch $(GEN)/$(HTTPD_DIR)/.httpd-patched
-#@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/alpn-2.4.x.unified.diff.patch
 
 ################################################################################
 # Extract apache source tree
