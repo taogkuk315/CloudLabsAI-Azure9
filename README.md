@@ -33,6 +33,9 @@ Specifically, the protocols "h2" and its "h2c" cousins are supported. Also the `
 
 ##Sandbox
 
+##Building
+If you have a sandbox built from pre-0.9.x, you want to do a `make clean` before building the new version. At least throw away the header files in `sandbox/install/include/http*` and the httpd built in `sandbox/httpd/gen/httpd*`.
+
 ##Configuration
 The test setup in test/conf/* that gets installed in gen/install for the
 local httpd build contains some simple examples of how this module can
