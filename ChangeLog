@@ -1,3 +1,13 @@
+v0.9.4
+-------------------------------------------------------------------------------- 
+ * mod_h2 is a copy of the module in Apache httpd trunk
+ * requires a patched httpd for new Protocols feature. Patch applied in sandbox,
+   available for own use in sandbox/httpd/patches/core_protocols_release.patch.
+ * See README.me about changes, especially the chapter about Migration
+ * Several H2* directives have disappeared, also see Migration in README.md
+ * This version should be close to the release candidate. Report any issues
+   here at github or on the apache httpd dev mailing list
+
 v0.8.3
 -------------------------------------------------------------------------------- 
  * Fixed typo in module setup during installation that broke enabling the module
