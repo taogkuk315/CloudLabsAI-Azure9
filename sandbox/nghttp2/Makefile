@@ -27,7 +27,7 @@ ZLIB_DIR        = zlib-$(ZLIB_VERSION)
 ZLIB_TAR        = $(ZLIB_DIR).tar.gz
 ZLIB_URL        = http://zlib.net/$(ZLIB_TAR)
 
-LIBEV_VERSION    = 4.19
+LIBEV_VERSION    = 4.20
 LIBEV_DIR        = libev-$(LIBEV_VERSION)
 LIBEV_TAR        = $(LIBEV_DIR).tar.gz
 LIBEV_URL        = http://dist.schmorp.de/libev/$(LIBEV_TAR)
