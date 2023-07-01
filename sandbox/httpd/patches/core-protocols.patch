@@ -1,6 +1,6 @@
 Index: docs/manual/mod/core.xml
 ===================================================================
---- docs/manual/mod/core.xml	(revision 1698116)
+--- docs/manual/mod/core.xml	(revision 1698133)
 +++ docs/manual/mod/core.xml	(working copy)
 @@ -3590,6 +3590,71 @@
  
@@ -76,7 +76,7 @@ Index: docs/manual/mod/core.xml
  by Apache httpd children</description>
 Index: include/http_core.h
 ===================================================================
---- include/http_core.h	(revision 1698116)
+--- include/http_core.h	(revision 1698133)
 +++ include/http_core.h	(working copy)
 @@ -681,6 +681,10 @@
  #define AP_MERGE_TRAILERS_DISABLE  2
@@ -91,7 +91,7 @@ Index: include/http_core.h
  /* for AddOutputFiltersByType in core.c */
 Index: include/http_protocol.h
 ===================================================================
---- include/http_protocol.h	(revision 1698116)
+--- include/http_protocol.h	(revision 1698133)
 +++ include/http_protocol.h	(working copy)
 @@ -700,6 +700,135 @@
   */
@@ -231,7 +231,7 @@ Index: include/http_protocol.h
  
 Index: include/httpd.h
 ===================================================================
---- include/httpd.h	(revision 1698116)
+--- include/httpd.h	(revision 1698133)
 +++ include/httpd.h	(working copy)
 @@ -518,6 +518,7 @@
  #define HTTP_UNSUPPORTED_MEDIA_TYPE          415
@@ -265,24 +265,38 @@ Index: include/httpd.h
   * Retrieve a token, spacing over it and adjusting the pointer to
   * the first non-white byte afterwards.  Note that these tokens
   * are delimited by semis and commas and can also be delimited
-@@ -2265,6 +2283,14 @@
+@@ -2265,6 +2283,28 @@
  
  #define AP_NORESTART APR_OS_START_USEERR + 1
  
 +/**
-+ * Get the index of the string in the array or -1 if not found.
-+ * @param array the array the check
-+ * @param s the string to find
++ * Get the first index of the string in the array or -1 if not found. Start
++ * searching a start. 
++ * @param array The array the check
++ * @param s The string to find
++ * @param start Start index for search. If start is greater or 
++                equal to array length, -1 will be returned.
 + * @return index of string in array or -1
 + */
-+AP_DECLARE(int) ap_array_index(const apr_array_header_t *array, const char *s);
++AP_DECLARE(int) ap_array_index(const apr_array_header_t *array, 
++                               const char *s,
++                               apr_size_t start);
++
++/**
++ * Check if the string is member of the given array by strcmp.
++ * @param array The array the check
++ * @param s The string to find
++ * @return !=0 iff string is member of array
++ */
++AP_DECLARE(int) ap_array_contains(const apr_array_header_t *array, 
++                                  const char *s);
 +
  #ifdef __cplusplus
  }
  #endif
 Index: modules/http/http_protocol.c
 ===================================================================
---- modules/http/http_protocol.c	(revision 1698116)
+--- modules/http/http_protocol.c	(revision 1698133)
 +++ modules/http/http_protocol.c	(working copy)
 @@ -135,7 +135,7 @@
      NULL, /* 418 */
@@ -307,7 +321,7 @@ Index: modules/http/http_protocol.c
           * This comparison to expose error-notes could be modified to
 Index: modules/ssl/ssl_engine_init.c
 ===================================================================
---- modules/ssl/ssl_engine_init.c	(revision 1698116)
+--- modules/ssl/ssl_engine_init.c	(revision 1698133)
 +++ modules/ssl/ssl_engine_init.c	(working copy)
 @@ -625,6 +625,10 @@
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
@@ -322,7 +336,7 @@ Index: modules/ssl/ssl_engine_init.c
  static apr_status_t ssl_init_ctx_verify(server_rec *s,
 Index: modules/ssl/ssl_engine_io.c
 ===================================================================
---- modules/ssl/ssl_engine_io.c	(revision 1698116)
+--- modules/ssl/ssl_engine_io.c	(revision 1698133)
 +++ modules/ssl/ssl_engine_io.c	(working copy)
 @@ -28,6 +28,7 @@
                                    core keeps dumping.''
@@ -397,7 +411,7 @@ Index: modules/ssl/ssl_engine_io.c
  /* The request_rec pointer is passed in here only to ensure that the
 Index: modules/ssl/ssl_engine_kernel.c
 ===================================================================
---- modules/ssl/ssl_engine_kernel.c	(revision 1698116)
+--- modules/ssl/ssl_engine_kernel.c	(revision 1698133)
 +++ modules/ssl/ssl_engine_kernel.c	(working copy)
 @@ -29,6 +29,7 @@
                                    time I was too famous.''
@@ -559,7 +573,7 @@ Index: modules/ssl/ssl_engine_kernel.c
  int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
 Index: modules/ssl/ssl_private.h
 ===================================================================
---- modules/ssl/ssl_private.h	(revision 1698116)
+--- modules/ssl/ssl_private.h	(revision 1698133)
 +++ modules/ssl/ssl_private.h	(working copy)
 @@ -148,6 +148,11 @@
  #define HAVE_ECC
@@ -600,7 +614,7 @@ Index: modules/ssl/ssl_private.h
  void         ssl_scache_status_register(apr_pool_t *p);
 Index: server/core.c
 ===================================================================
---- server/core.c	(revision 1698116)
+--- server/core.c	(revision 1698133)
 +++ server/core.c	(working copy)
 @@ -468,6 +468,9 @@
  
@@ -763,7 +777,7 @@ Index: server/core.c
      ap_hook_type_checker(do_nothing,NULL,NULL,APR_HOOK_REALLY_LAST);
 Index: server/protocol.c
 ===================================================================
---- server/protocol.c	(revision 1698116)
+--- server/protocol.c	(revision 1698133)
 +++ server/protocol.c	(working copy)
 @@ -67,6 +67,9 @@
      APR_HOOK_LINK(http_scheme)
@@ -788,8 +802,8 @@ Index: server/protocol.c
 +                        const char *proto2)
 +{
 +    if (preferences && preferences->nelts > 0) {
-+        int index1 = ap_array_index(preferences, proto1);
-+        int index2 = ap_array_index(preferences, proto2);
++        int index1 = ap_array_index(preferences, proto1, 0);
++        int index2 = ap_array_index(preferences, proto2, 0);
 +        if (index2 > index1) {
 +            return (index1 >= 0) ? 1 : -1;
 +        }
@@ -838,8 +852,8 @@ Index: server/protocol.c
 +        /* If the existing protocol has not been proposed, but is a choice,
 +         * add it to the proposals implicitly.
 +         */
-+        if (ap_array_index(proposals, existing) < 0 
-+            && ap_array_index(choices, existing) >= 0) {
++        if (!ap_array_contains(proposals, existing) 
++            && ap_array_contains(choices, existing)) {
 +            APR_ARRAY_PUSH(proposals, const char*) = existing;
 +        }
 +        
@@ -853,7 +867,7 @@ Index: server/protocol.c
 +        for (i = 0; i < proposals->nelts; ++i) {
 +            const char *p = APR_ARRAY_IDX(proposals, i, const char *);
 +            if (conf->protocols->nelts > 0 
-+                && ap_array_index(conf->protocols, p) < 0) {
++                && !ap_array_contains(conf->protocols, p)) {
 +                /* not a permitted protocol here */
 +                continue;
 +            }
@@ -925,7 +939,7 @@ Index: server/protocol.c
 +                            (const conn_rec *c), (c), NULL)
 Index: server/util.c
 ===================================================================
---- server/util.c	(revision 1698116)
+--- server/util.c	(revision 1698133)
 +++ server/util.c	(working copy)
 @@ -1451,6 +1451,95 @@
      return find_list_item(p, line, tok, AP_ETAG_WEAK);
@@ -1023,20 +1037,28 @@ Index: server/util.c
  /* Retrieve a token, spacing over it and returning a pointer to
   * the first non-white byte afterwards.  Note that these tokens
   * are delimited by semis and commas; and can also be delimited
-@@ -3005,3 +3094,16 @@
+@@ -3005,3 +3094,24 @@
  
      return apr_pstrndup(p, buf, k);
  }
 +
-+AP_DECLARE(int) ap_array_index(const apr_array_header_t *array, const char *s)
++AP_DECLARE(int) ap_array_index(const apr_array_header_t *array, 
++                               const char *s,
++                               apr_size_t start)
 +{
-+    int i;
-+    for (i = 0; i < array->nelts; i++) {
++    apr_size_t i;
++    for (i = start; i < array->nelts; i++) {
 +        const char *p = APR_ARRAY_IDX(array, i, const char *);
 +        if (!strcmp(p, s)) {
-+            return i;
++            return (int)i;
 +        }
 +    }
 +    return -1;
++}
++
++AP_DECLARE(int) ap_array_contains(const apr_array_header_t *array, 
++                                  const char *s)
++{
++    return (ap_array_index(array, s, 0) >= 0);
 +}
 +
