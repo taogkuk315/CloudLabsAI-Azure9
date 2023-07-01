@@ -1,34 +1,6 @@
-Index: STATUS
-===================================================================
---- STATUS	(revision 1697672)
-+++ STATUS	(working copy)
-@@ -297,7 +297,23 @@
-         Trunk version of patch works
-      +1: rpluem,
- 
-+  *) core/mod_ssl: add Protocols/ProtocolsHonorOrder directives and new 
-+     protocols hooks to control Upgrade: and ALPN protocol switching.
-+     trunk patch: http://svn.apache.org/r1697855
-+                  http://svn.apache.org/r1697339
-+                  http://svn.apache.org/r1696428
-+                  http://svn.apache.org/r1696266
-+                  http://svn.apache.org/r1696264
-+                  http://svn.apache.org/r1695874
-+                  http://svn.apache.org/r1695727
-+                  http://svn.apache.org/r1692516
-+                  http://svn.apache.org/r1692486
-+                  http://svn.apache.org/r1610674 (partial)
-+2.4.x patch: 
-++1: 
- 
-+
-+
- PATCHES/ISSUES THAT ARE BEING WORKED
- 
-   *) mod_ssl: add ALPN support by allowing other modules to register callbacks
 Index: docs/manual/mod/core.xml
 ===================================================================
---- docs/manual/mod/core.xml	(revision 1697672)
+--- docs/manual/mod/core.xml	(revision 1698089)
 +++ docs/manual/mod/core.xml	(working copy)
 @@ -3590,6 +3590,71 @@
  
@@ -104,7 +76,7 @@ Index: docs/manual/mod/core.xml
  by Apache httpd children</description>
 Index: include/http_core.h
 ===================================================================
---- include/http_core.h	(revision 1697672)
+--- include/http_core.h	(revision 1698089)
 +++ include/http_core.h	(working copy)
 @@ -681,6 +681,10 @@
  #define AP_MERGE_TRAILERS_DISABLE  2
@@ -119,7 +91,7 @@ Index: include/http_core.h
  /* for AddOutputFiltersByType in core.c */
 Index: include/http_protocol.h
 ===================================================================
---- include/http_protocol.h	(revision 1697672)
+--- include/http_protocol.h	(revision 1698089)
 +++ include/http_protocol.h	(working copy)
 @@ -700,6 +700,125 @@
   */
@@ -249,7 +221,7 @@ Index: include/http_protocol.h
  
 Index: include/httpd.h
 ===================================================================
---- include/httpd.h	(revision 1697672)
+--- include/httpd.h	(revision 1698089)
 +++ include/httpd.h	(working copy)
 @@ -518,6 +518,7 @@
  #define HTTP_UNSUPPORTED_MEDIA_TYPE          415
@@ -300,7 +272,7 @@ Index: include/httpd.h
  #endif
 Index: modules/http/http_protocol.c
 ===================================================================
---- modules/http/http_protocol.c	(revision 1697672)
+--- modules/http/http_protocol.c	(revision 1698089)
 +++ modules/http/http_protocol.c	(working copy)
 @@ -135,7 +135,7 @@
      NULL, /* 418 */
@@ -325,7 +297,7 @@ Index: modules/http/http_protocol.c
           * This comparison to expose error-notes could be modified to
 Index: modules/ssl/ssl_engine_init.c
 ===================================================================
---- modules/ssl/ssl_engine_init.c	(revision 1697672)
+--- modules/ssl/ssl_engine_init.c	(revision 1698089)
 +++ modules/ssl/ssl_engine_init.c	(working copy)
 @@ -625,6 +625,10 @@
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
@@ -340,7 +312,7 @@ Index: modules/ssl/ssl_engine_init.c
  static apr_status_t ssl_init_ctx_verify(server_rec *s,
 Index: modules/ssl/ssl_engine_io.c
 ===================================================================
---- modules/ssl/ssl_engine_io.c	(revision 1697672)
+--- modules/ssl/ssl_engine_io.c	(revision 1698089)
 +++ modules/ssl/ssl_engine_io.c	(working copy)
 @@ -28,6 +28,7 @@
                                    core keeps dumping.''
@@ -415,7 +387,7 @@ Index: modules/ssl/ssl_engine_io.c
  /* The request_rec pointer is passed in here only to ensure that the
 Index: modules/ssl/ssl_engine_kernel.c
 ===================================================================
---- modules/ssl/ssl_engine_kernel.c	(revision 1697672)
+--- modules/ssl/ssl_engine_kernel.c	(revision 1698089)
 +++ modules/ssl/ssl_engine_kernel.c	(working copy)
 @@ -29,6 +29,7 @@
                                    time I was too famous.''
@@ -577,7 +549,7 @@ Index: modules/ssl/ssl_engine_kernel.c
  int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
 Index: modules/ssl/ssl_private.h
 ===================================================================
---- modules/ssl/ssl_private.h	(revision 1697672)
+--- modules/ssl/ssl_private.h	(revision 1698089)
 +++ modules/ssl/ssl_private.h	(working copy)
 @@ -148,6 +148,11 @@
  #define HAVE_ECC
@@ -618,7 +590,7 @@ Index: modules/ssl/ssl_private.h
  void         ssl_scache_status_register(apr_pool_t *p);
 Index: server/core.c
 ===================================================================
---- server/core.c	(revision 1697672)
+--- server/core.c	(revision 1698089)
 +++ server/core.c	(working copy)
 @@ -468,6 +468,9 @@
  
@@ -643,7 +615,7 @@ Index: server/core.c
      return conf;
  }
  
-@@ -3692,6 +3701,47 @@
+@@ -3692,6 +3701,48 @@
      return NULL;
  }
  
@@ -652,13 +624,14 @@ Index: server/core.c
 +{
 +    core_server_config *conf =
 +    ap_get_core_module_config(cmd->server->module_config);
++    const char **np;
 +    const char *err = ap_check_cmd_context(cmd, NOT_IN_DIR_LOC_FILE);
 +
 +    if (err) {
 +        return err;
 +    }
 +    
-+    const char **np = (const char **)apr_array_push(conf->protocols);
++    np = (const char **)apr_array_push(conf->protocols);
 +    *np = arg;
 +
 +    return NULL;
@@ -691,7 +664,7 @@ Index: server/core.c
  static apr_hash_t *errorlog_hash;
  
  static int log_constant_item(const ap_errorlog_info *info, const char *arg,
-@@ -4205,6 +4255,11 @@
+@@ -4205,6 +4256,11 @@
                "'on' (default), 'off' or 'extended' to trace request body content"),
  AP_INIT_FLAG("MergeTrailers", set_merge_trailers, NULL, RSRC_CONF,
                "merge request trailers into request headers or not"),
@@ -703,7 +676,7 @@ Index: server/core.c
  { NULL }
  };
  
-@@ -4936,6 +4991,61 @@
+@@ -4936,6 +4992,61 @@
      }
  }
  
@@ -765,7 +738,7 @@ Index: server/core.c
  static void register_hooks(apr_pool_t *p)
  {
      errorlog_hash = apr_hash_make(p);
-@@ -4958,10 +5068,12 @@
+@@ -4958,10 +5069,12 @@
      ap_hook_check_config(core_check_config,NULL,NULL,APR_HOOK_FIRST);
      ap_hook_test_config(core_dump_config,NULL,NULL,APR_HOOK_FIRST);
      ap_hook_translate_name(ap_core_translate,NULL,NULL,APR_HOOK_REALLY_LAST);
@@ -780,7 +753,7 @@ Index: server/core.c
      ap_hook_type_checker(do_nothing,NULL,NULL,APR_HOOK_REALLY_LAST);
 Index: server/protocol.c
 ===================================================================
---- server/protocol.c	(revision 1697672)
+--- server/protocol.c	(revision 1698089)
 +++ server/protocol.c	(working copy)
 @@ -67,6 +67,9 @@
      APR_HOOK_LINK(http_scheme)
@@ -942,7 +915,7 @@ Index: server/protocol.c
 +                            (const conn_rec *c), (c), NULL)
 Index: server/util.c
 ===================================================================
---- server/util.c	(revision 1697672)
+--- server/util.c	(revision 1698089)
 +++ server/util.c	(working copy)
 @@ -1451,6 +1451,95 @@
      return find_list_item(p, line, tok, AP_ETAG_WEAK);
@@ -1057,12 +1030,3 @@ Index: server/util.c
 +    return -1;
 +}
 +
-Index: .
-===================================================================
---- .	(revision 1697672)
-+++ .	(working copy)
-
-Property changes on: .
-___________________________________________________________________
-Modified: svn:mergeinfo
-   Merged /httpd/httpd/trunk:r1332643,1487772,1670397,1670434,1670436,1670578,1675459,1676004,1676709,1685069,1692486,1692516,1695727,1695874,1696264,1696266,1696428,1697339,1697855
