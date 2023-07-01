@@ -1,6 +1,6 @@
 Index: docs/manual/mod/core.xml
 ===================================================================
---- docs/manual/mod/core.xml	(revision 1698089)
+--- docs/manual/mod/core.xml	(revision 1698116)
 +++ docs/manual/mod/core.xml	(working copy)
 @@ -3590,6 +3590,71 @@
  
@@ -76,7 +76,7 @@ Index: docs/manual/mod/core.xml
  by Apache httpd children</description>
 Index: include/http_core.h
 ===================================================================
---- include/http_core.h	(revision 1698089)
+--- include/http_core.h	(revision 1698116)
 +++ include/http_core.h	(working copy)
 @@ -681,6 +681,10 @@
  #define AP_MERGE_TRAILERS_DISABLE  2
@@ -91,9 +91,9 @@ Index: include/http_core.h
  /* for AddOutputFiltersByType in core.c */
 Index: include/http_protocol.h
 ===================================================================
---- include/http_protocol.h	(revision 1698089)
+--- include/http_protocol.h	(revision 1698116)
 +++ include/http_protocol.h	(working copy)
-@@ -700,6 +700,125 @@
+@@ -700,6 +700,135 @@
   */
  AP_DECLARE_HOOK(apr_port_t,default_port,(const request_rec *r))
  
@@ -101,18 +101,27 @@ Index: include/http_protocol.h
 +#define AP_PROTOCOL_HTTP1		"http/1.1"
 +
 +/**
-+ * Negotiate a possible protocol switch on the connection. The negotiation
-+ * may start without any request sent, in which case the request is NULL. Or
-+ * it may be triggered by the request received, e.g. through the "Upgrade"
-+ * header.
++ * Determine the list of protocols available for a connection/request. This may
++ * be collected with or without any request sent, in which case the request is 
++ * NULL. Or it may be triggered by the request received, e.g. through the 
++ * "Upgrade" header.
++ *
++ * This hook will be run whenever protocols are being negotiated (ALPN as
++ * one example). It may also be invoked at other times, e.g. when the server
++ * wants to advertise protocols it is capable of switching to.
 + * 
 + * The identifiers for protocols are taken from the TLS extension type ALPN:
 + * https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xml
 + *
-+ * If no protocols are added to the proposals, the server will always fallback
-+ * to "http/1.1" which is the default protocol for connections that Apache
-+ * handles. If the protocol selected from the proposals is the protocol
-+ * already in place, no "protocol_switch" will be invoked.
++ * If no protocols are added to the proposals, the server not perform any
++ * switch. If the protocol selected from the proposals is the protocol
++ * already in place, also no protocol switch will be invoked.
++ *
++ * The client may already have announced the protocols it is willing to
++ * accept. These will then be listed as offers. This parameter may also
++ * be NULL, indicating that offers from the client are not known and
++ * the hooks should propose all protocols that are valid for the
++ * current connection/request.
 + *
 + * All hooks are run, unless one returns an error. Proposals may contain
 + * duplicates. The order in which proposals are added is usually ignored.
@@ -120,7 +129,8 @@ Index: include/http_protocol.h
 + * @param c The current connection
 + * @param r The current request or NULL
 + * @param s The server/virtual host selected
-+ * @param offers A list of protocol identifiers offered by the client
++ * @param offers A list of protocol identifiers offered by the client or
++ *               NULL to indicated that the hooks are free to propose 
 + * @param proposals The list of protocol identifiers proposed by the hooks
 + * @return OK or DECLINED
 + */
@@ -221,7 +231,7 @@ Index: include/http_protocol.h
  
 Index: include/httpd.h
 ===================================================================
---- include/httpd.h	(revision 1698089)
+--- include/httpd.h	(revision 1698116)
 +++ include/httpd.h	(working copy)
 @@ -518,6 +518,7 @@
  #define HTTP_UNSUPPORTED_MEDIA_TYPE          415
@@ -272,7 +282,7 @@ Index: include/httpd.h
  #endif
 Index: modules/http/http_protocol.c
 ===================================================================
---- modules/http/http_protocol.c	(revision 1698089)
+--- modules/http/http_protocol.c	(revision 1698116)
 +++ modules/http/http_protocol.c	(working copy)
 @@ -135,7 +135,7 @@
      NULL, /* 418 */
@@ -297,7 +307,7 @@ Index: modules/http/http_protocol.c
           * This comparison to expose error-notes could be modified to
 Index: modules/ssl/ssl_engine_init.c
 ===================================================================
---- modules/ssl/ssl_engine_init.c	(revision 1698089)
+--- modules/ssl/ssl_engine_init.c	(revision 1698116)
 +++ modules/ssl/ssl_engine_init.c	(working copy)
 @@ -625,6 +625,10 @@
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
@@ -312,7 +322,7 @@ Index: modules/ssl/ssl_engine_init.c
  static apr_status_t ssl_init_ctx_verify(server_rec *s,
 Index: modules/ssl/ssl_engine_io.c
 ===================================================================
---- modules/ssl/ssl_engine_io.c	(revision 1698089)
+--- modules/ssl/ssl_engine_io.c	(revision 1698116)
 +++ modules/ssl/ssl_engine_io.c	(working copy)
 @@ -28,6 +28,7 @@
                                    core keeps dumping.''
@@ -387,7 +397,7 @@ Index: modules/ssl/ssl_engine_io.c
  /* The request_rec pointer is passed in here only to ensure that the
 Index: modules/ssl/ssl_engine_kernel.c
 ===================================================================
---- modules/ssl/ssl_engine_kernel.c	(revision 1698089)
+--- modules/ssl/ssl_engine_kernel.c	(revision 1698116)
 +++ modules/ssl/ssl_engine_kernel.c	(working copy)
 @@ -29,6 +29,7 @@
                                    time I was too famous.''
@@ -549,7 +559,7 @@ Index: modules/ssl/ssl_engine_kernel.c
  int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
 Index: modules/ssl/ssl_private.h
 ===================================================================
---- modules/ssl/ssl_private.h	(revision 1698089)
+--- modules/ssl/ssl_private.h	(revision 1698116)
 +++ modules/ssl/ssl_private.h	(working copy)
 @@ -148,6 +148,11 @@
  #define HAVE_ECC
@@ -590,7 +600,7 @@ Index: modules/ssl/ssl_private.h
  void         ssl_scache_status_register(apr_pool_t *p);
 Index: server/core.c
 ===================================================================
---- server/core.c	(revision 1698089)
+--- server/core.c	(revision 1698116)
 +++ server/core.c	(working copy)
 @@ -468,6 +468,9 @@
  
@@ -753,7 +763,7 @@ Index: server/core.c
      ap_hook_type_checker(do_nothing,NULL,NULL,APR_HOOK_REALLY_LAST);
 Index: server/protocol.c
 ===================================================================
---- server/protocol.c	(revision 1698089)
+--- server/protocol.c	(revision 1698116)
 +++ server/protocol.c	(working copy)
 @@ -67,6 +67,9 @@
      APR_HOOK_LINK(http_scheme)
@@ -915,7 +925,7 @@ Index: server/protocol.c
 +                            (const conn_rec *c), (c), NULL)
 Index: server/util.c
 ===================================================================
---- server/util.c	(revision 1698089)
+--- server/util.c	(revision 1698116)
 +++ server/util.c	(working copy)
 @@ -1451,6 +1451,95 @@
      return find_list_item(p, line, tok, AP_ETAG_WEAK);
