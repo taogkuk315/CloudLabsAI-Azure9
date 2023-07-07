@@ -91,6 +91,7 @@ install:  $(INST_DIR)/.nghttp2-installed
 #
 $(INST_DIR)/.nghttp2-installed:  $(GEN)/$(NGHTTP2_DIR)/.nghttp2-built
 	@echo -n installing nghttp2 locally...
+	@mkdir -p $(PYTHONPATH)
 	@cd $(GEN)/$(NGHTTP2_DIR)/ && PYTHONPATH=$(PYTHONPATH) make install >> ../build.log
 	@echo done.
 	@touch $(INST_DIR)/.nghttp2-installed
