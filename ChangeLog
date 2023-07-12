@@ -1,3 +1,7 @@
+v0.9.5
+-------------------------------------------------------------------------------- 
+ * fix for resource management when running with mpm_event
+
 v0.9.4
 -------------------------------------------------------------------------------- 
  * mod_h2 is a copy of the module in Apache httpd trunk
