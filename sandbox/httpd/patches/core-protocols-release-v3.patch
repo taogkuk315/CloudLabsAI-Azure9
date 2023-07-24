@@ -1,82 +1,6 @@
-Index: docs/manual/mod/core.xml
-===================================================================
---- docs/manual/mod/core.xml	(revision 1698133)
-+++ docs/manual/mod/core.xml	(working copy)
-@@ -3590,6 +3590,71 @@
- 
- 
- <directivesynopsis>
-+    <name>Protocols</name>
-+    <description>Protocols available for a server/virtual host</description>
-+    <syntax>Protocols <var>protocol</var> ...</syntax>
-+    <contextlist><context>server config</context><context>virtual host</context></contextlist>
-+    <compatibility>Only available from Apache 2.4.17 and later.</compatibility>
-+    
-+    <usage>
-+        <p>This directive specifies the list of protocols supported for a
-+            server/virtual host. The list determines the allowed protocols
-+            a client may negotiate for this server/host.</p>
-+        
-+        <p>You only need to set protocols if you want to limit the available
-+            protocols for a server/host. By default, all supported protocols
-+            are available to a client.</p>
-+        
-+        <p>For example, if you want to support only HTTP/1.1 for a server, even
-+            though HTTP/2 is available, just specify this protocol only:</p>
-+        
-+        <highlight language="config">
-+            Protocols http/1.1
-+        </highlight>
-+
-+        <p>Valid protocols are <code>http/1.1</code> for http and https connections,
-+            <code>h2</code> on https connections and <code>h2c</code> for http
-+            connections. Modules may enable more protocols.</p>
-+        
-+        <p>It is safe to specify protocols that are unavailable/disabled. Such
-+        protocol names will simply be ignored.</p>
-+        
-+        <p>Protocols specified in base servers are inherited for virtual hosts 
-+            only if the virtual host has no own Protocols directive. Or, the other
-+            way around, Protocols directives in virtual hosts replace any
-+            such directive in the base server.
-+        </p>
-+
-+    </usage>
-+    <seealso><directive module="core">ProtocolsHonorOrder</directive></seealso>
-+</directivesynopsis>
-+
-+
-+<directivesynopsis>
-+    <name>ProtocolsHonorOrder</name>
-+    <description>Protocols available for a server/virtual host</description>
-+    <syntax>ProtocolsHonorOrder On|Off</syntax>
-+    <default>ProtocolsHonorOrder Off</default>
-+    <contextlist><context>server config</context><context>virtual host</context></contextlist>
-+    <compatibility>Only available from Apache 2.4.17 and later.</compatibility>
-+    
-+    <usage>
-+        <p>This directive specifies if the server should honor the order in which
-+        the <directive>Protocols</directive> directive lists protocols.</p>
-+        
-+        <p>By default, a client supplies a list of supported protocols and the server
-+            selects an available one from that list in the given order.</p>
-+        
-+        <p>With <directive>ProtocolsHonorOrder</directive> set to <code>on</code>, the
-+            client ordering does not matter and only the ordering in the server
-+        settings influences the outcome of the protocol negotiation.</p>
-+        
-+    </usage>
-+    <seealso><directive module="core">Protocols</directive></seealso>
-+</directivesynopsis>
-+
-+
-+<directivesynopsis>
- <name>RLimitCPU</name>
- <description>Limits the CPU consumption of processes launched
- by Apache httpd children</description>
 Index: include/http_core.h
 ===================================================================
---- include/http_core.h	(revision 1698133)
+--- include/http_core.h	(revision 1700543)
 +++ include/http_core.h	(working copy)
 @@ -681,6 +681,10 @@
  #define AP_MERGE_TRAILERS_DISABLE  2
@@ -91,7 +15,7 @@ Index: include/http_core.h
  /* for AddOutputFiltersByType in core.c */
 Index: include/http_protocol.h
 ===================================================================
---- include/http_protocol.h	(revision 1698133)
+--- include/http_protocol.h	(revision 1700543)
 +++ include/http_protocol.h	(working copy)
 @@ -700,6 +700,135 @@
   */
@@ -231,7 +155,7 @@ Index: include/http_protocol.h
  
 Index: include/httpd.h
 ===================================================================
---- include/httpd.h	(revision 1698133)
+--- include/httpd.h	(revision 1700543)
 +++ include/httpd.h	(working copy)
 @@ -518,6 +518,7 @@
  #define HTTP_UNSUPPORTED_MEDIA_TYPE          415
@@ -296,7 +220,7 @@ Index: include/httpd.h
  #endif
 Index: modules/http/http_protocol.c
 ===================================================================
---- modules/http/http_protocol.c	(revision 1698133)
+--- modules/http/http_protocol.c	(revision 1700543)
 +++ modules/http/http_protocol.c	(working copy)
 @@ -135,7 +135,7 @@
      NULL, /* 418 */
@@ -321,7 +245,7 @@ Index: modules/http/http_protocol.c
           * This comparison to expose error-notes could be modified to
 Index: modules/ssl/ssl_engine_init.c
 ===================================================================
---- modules/ssl/ssl_engine_init.c	(revision 1698133)
+--- modules/ssl/ssl_engine_init.c	(revision 1700543)
 +++ modules/ssl/ssl_engine_init.c	(working copy)
 @@ -625,6 +625,10 @@
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
@@ -336,7 +260,7 @@ Index: modules/ssl/ssl_engine_init.c
  static apr_status_t ssl_init_ctx_verify(server_rec *s,
 Index: modules/ssl/ssl_engine_io.c
 ===================================================================
---- modules/ssl/ssl_engine_io.c	(revision 1698133)
+--- modules/ssl/ssl_engine_io.c	(revision 1700543)
 +++ modules/ssl/ssl_engine_io.c	(working copy)
 @@ -28,6 +28,7 @@
                                    core keeps dumping.''
@@ -411,7 +335,7 @@ Index: modules/ssl/ssl_engine_io.c
  /* The request_rec pointer is passed in here only to ensure that the
 Index: modules/ssl/ssl_engine_kernel.c
 ===================================================================
---- modules/ssl/ssl_engine_kernel.c	(revision 1698133)
+--- modules/ssl/ssl_engine_kernel.c	(revision 1700543)
 +++ modules/ssl/ssl_engine_kernel.c	(working copy)
 @@ -29,6 +29,7 @@
                                    time I was too famous.''
@@ -573,21 +497,9 @@ Index: modules/ssl/ssl_engine_kernel.c
  int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
 Index: modules/ssl/ssl_private.h
 ===================================================================
---- modules/ssl/ssl_private.h	(revision 1698133)
+--- modules/ssl/ssl_private.h	(revision 1700543)
 +++ modules/ssl/ssl_private.h	(working copy)
-@@ -148,6 +148,11 @@
- #define HAVE_ECC
- #endif
- 
-+#if OPENSSL_VERSION_NUMBER >= 0x10001000L && !defined(OPENSSL_NO_NEXTPROTONEG) \
-+    && !defined(OPENSSL_NO_TLSEXT)
-+#define HAVE_TLS_NPN
-+#endif
-+
- /* OCSP stapling */
- #if !defined(OPENSSL_NO_OCSP) && defined(SSL_CTX_set_tlsext_status_cb)
- #define HAVE_OCSP_STAPLING
-@@ -182,6 +187,11 @@
+@@ -182,6 +182,11 @@
  #include <openssl/srp.h>
  #endif
  
@@ -599,7 +511,7 @@ Index: modules/ssl/ssl_private.h
  #endif /* !defined(OPENSSL_NO_TLSEXT) && defined(SSL_set_tlsext_host_name) */
  
  /* mod_ssl headers */
-@@ -798,6 +808,12 @@
+@@ -798,6 +803,12 @@
                                         EVP_CIPHER_CTX *, HMAC_CTX *, int);
  #endif
  
@@ -614,7 +526,7 @@ Index: modules/ssl/ssl_private.h
  void         ssl_scache_status_register(apr_pool_t *p);
 Index: server/core.c
 ===================================================================
---- server/core.c	(revision 1698133)
+--- server/core.c	(revision 1700543)
 +++ server/core.c	(working copy)
 @@ -468,6 +468,9 @@
  
@@ -777,7 +689,7 @@ Index: server/core.c
      ap_hook_type_checker(do_nothing,NULL,NULL,APR_HOOK_REALLY_LAST);
 Index: server/protocol.c
 ===================================================================
---- server/protocol.c	(revision 1698133)
+--- server/protocol.c	(revision 1700543)
 +++ server/protocol.c	(working copy)
 @@ -67,6 +67,9 @@
      APR_HOOK_LINK(http_scheme)
@@ -939,7 +851,7 @@ Index: server/protocol.c
 +                            (const conn_rec *c), (c), NULL)
 Index: server/util.c
 ===================================================================
---- server/util.c	(revision 1698133)
+--- server/util.c	(revision 1700543)
 +++ server/util.c	(working copy)
 @@ -1451,6 +1451,95 @@
      return find_list_item(p, line, tok, AP_ETAG_WEAK);

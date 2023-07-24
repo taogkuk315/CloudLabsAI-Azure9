@@ -35,8 +35,6 @@
 		B24C59831B8C66930003DF74 /* ltsugar.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ltsugar.m4; sourceTree = "<group>"; };
 		B24C59841B8C66930003DF74 /* ltversion.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ltversion.m4; sourceTree = "<group>"; };
 		B24C59851B8C66930003DF74 /* lt~obsolete.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "lt~obsolete.m4"; sourceTree = "<group>"; };
-		B24C59861B8CB7260003DF74 /* core-protocols.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols.patch"; sourceTree = "<group>"; };
-		B24C59871B8CB9180003DF74 /* core-protocols-release.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-release.patch"; sourceTree = "<group>"; };
 		B24C59881B8CBAE50003DF74 /* h2_switch.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_switch.c; sourceTree = "<group>"; };
 		B24C59891B8CBAE50003DF74 /* h2_switch.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_switch.h; sourceTree = "<group>"; };
 		B24CB1221AC94D6A0057413B /* h2_alt_svc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_alt_svc.c; sourceTree = "<group>"; };
@@ -83,6 +81,8 @@
 		B2CB61151A8B698A00D270A6 /* h2_worker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_worker.h; sourceTree = "<group>"; };
 		B2CB61161A8B699E00D270A6 /* h2_workers.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_workers.c; sourceTree = "<group>"; };
 		B2CB61171A8B699E00D270A6 /* h2_workers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_workers.h; sourceTree = "<group>"; };
+		B2E17FBE1B96EFB100F352BA /* core-protocols-release-v3.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-release-v3.patch"; sourceTree = "<group>"; };
+		B2E17FBF1B96EFB100F352BA /* core-protocols-v3.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-v3.patch"; sourceTree = "<group>"; };
 		B2E5D5081AADAD28001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
@@ -470,8 +470,8 @@
 		B2E6DF9F1AC2EF6E00D557D8 /* patches */ = {
 			isa = PBXGroup;
 			children = (
-				B24C59871B8CB9180003DF74 /* core-protocols-release.patch */,
-				B24C59861B8CB7260003DF74 /* core-protocols.patch */,
+				B2E17FBE1B96EFB100F352BA /* core-protocols-release-v3.patch */,
+				B2E17FBF1B96EFB100F352BA /* core-protocols-v3.patch */,
 			);
 			path = patches;
 			sourceTree = "<group>";

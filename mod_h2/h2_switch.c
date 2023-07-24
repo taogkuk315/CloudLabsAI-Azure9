@@ -64,7 +64,7 @@ static int h2_protocol_propose(conn_rec *c, request_rec *r,
 {
     int proposed = 0;
     const char **protos = h2_h2_is_tls(c)? h2_tls_protos : h2_clear_protos;
-
+    
     (void)s;
     if (strcmp(AP_PROTOCOL_HTTP1, ap_get_protocol(c))) {
         /* We do not know how to switch from anything else but http/1.1.
@@ -106,9 +106,9 @@ static int h2_protocol_propose(conn_rec *c, request_rec *r,
     
     while (*protos) {
         /* Add all protocols we know (tls or clear) and that
-         * were offered as options for the switch. 
+         * are part of the offerings (if there have been any). 
          */
-        if (ap_array_index(offers, *protos) >= 0) {
+        if (!offers || ap_array_contains(offers, *protos)) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                           "proposing protocol '%s'", *protos);
             APR_ARRAY_PUSH(proposals, const char*) = *protos;
@@ -125,7 +125,7 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
     int found = 0;
     const char **protos = h2_h2_is_tls(c)? h2_tls_protos : h2_clear_protos;
     const char **p = protos;
-
+    
     (void)s;
     while (*p) {
         if (!strcmp(*p, protocol)) {

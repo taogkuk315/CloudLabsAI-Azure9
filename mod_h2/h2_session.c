@@ -236,7 +236,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
 {
     h2_session *session = (h2_session *)userp;
     h2_stream *stream;
- 
+    
     (void)ngh2;
     if (session->aborted) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -258,8 +258,8 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
 static int on_begin_headers_cb(nghttp2_session *ngh2,
                                const nghttp2_frame *frame, void *userp)
 {
-    (void)ngh2;
     /* This starts a new stream. */
+    (void)ngh2;
     int rv = stream_open((h2_session *)userp, frame->hd.stream_id);
     if (rv != NGHTTP2_ERR_CALLBACK_FAILURE) {
       /* on_header_cb or on_frame_recv_cb will dectect that stream
@@ -859,7 +859,11 @@ static int h2_session_resume_streams_with_data(h2_session *session) {
     AP_DEBUG_ASSERT(session);
     if (!h2_stream_set_is_empty(session->streams)
         && session->mplx && !session->aborted) {
-        resume_ctx ctx = { session, 0 };
+        resume_ctx ctx;
+        
+        ctx.session      = session;
+        ctx.resume_count = 0;
+
         /* Resume all streams where we have data in the out queue and
          * which had been suspended before. */
         h2_stream_set_iter(session->streams, resume_on_data, &ctx);
