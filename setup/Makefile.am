@@ -26,4 +26,4 @@ SYSCONF_DIR = @SYSCONF_DIR@
 
 # overwrite install target
 install:
-	@bash install-config.sh $(SYSCONF_DIR) $(DESTDIR)
+	@sh install-config.sh $(SYSCONF_DIR) $(DESTDIR)
