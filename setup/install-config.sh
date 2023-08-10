@@ -50,10 +50,7 @@ else
   If you want to have the h2 module enabled in your apache installtion, you
   need to add
      LoadModule h2_module modules/mod_h2.so
-  somewhere in your config files and add a line like
-     H2Engine on
-  whereever you want the module to be active (general server of specific
-  virtual hosts).
+  somewhere in your config files.
 
 EOF
 fi
