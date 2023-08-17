@@ -13,15 +13,17 @@
 # limitations under the License.
 #
 
-HOST_NAME    = test.example.org
-HOST2_NAME   = test-ser.example.org
+HOST_NAME      = test.example.org
+HOST_NAME_2    = test2.example.org
+HOST_SER_NAME  = test-ser.example.org
 
-HTTP_PORT    = 12345
-HTTPS_PORT   = 12346
+HTTP_PORT      = 12345
+HTTPS_PORT     = 12346
 
-HTTP_AUTH    = $(HOST_NAME):$(HTTP_PORT)
-HTTPS_AUTH   = $(HOST_NAME):$(HTTPS_PORT)
-HTTPS_AUTH2  = $(HOST2_NAME):$(HTTPS_PORT)
+HTTP_AUTH      = $(HOST_NAME):$(HTTP_PORT)
+HTTPS_AUTH     = $(HOST_NAME):$(HTTPS_PORT)
+HTTPS_AUTH_2   = $(HOST_NAME_2):$(HTTPS_PORT)
+HTTPS_AUTH_SER = $(HOST_SER_NAME):$(HTTPS_PORT)
 
 GEN          = gen
 INST_DIR     = ../install
@@ -74,45 +76,47 @@ install:
 ################################################################################
 # Test the local httpd
 #
+
+TESTRUN = PREFIX=$(prefix) NGHTTP=$(NGHTTP) CURL=$(CURL) bash
+
 test: \
 		$(INST_DIR)/.test-setup \
 		$(INST_DIR)/.curl-installed
 	@rm -rf $(GEN)/tmp
 	@mkdir -p $(GEN)/tmp
-	#@$(INST_DIR)/bin/apachectl restart
-	@bash test_curl_altsvc.sh http://$(HTTP_AUTH) https://$(HTTPS_AUTH)
-	@bash test_alt_host.sh https://$(HTTPS_AUTH)
-	@bash test_alt_host.sh https://$(HTTPS_AUTH2)
-	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH)
-	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)
-	@bash test_curl_get.sh    https://$(HTTPS_AUTH)
-	@bash test_curl_post.sh   https://$(HTTPS_AUTH)
-	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH)/proxy
-	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)/proxy
-	@bash test_curl_get.sh    https://$(HTTPS_AUTH)/proxy
-	@bash test_curl_post.sh   https://$(HTTPS_AUTH)/proxy
-	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH)/rewrite
-	@bash test_nghttp_post.sh https://$(HTTPS_AUTH)/rewrite
-	@bash test_curl_get.sh    https://$(HTTPS_AUTH)/rewrite
-	@bash test_curl_post.sh   https://$(HTTPS_AUTH)/rewrite
-	@bash test_nghttp_get.sh  http://$(HTTP_AUTH)
-	@bash test_nghttp_post.sh http://$(HTTP_AUTH)
-	@bash test_curl_get.sh    http://$(HTTP_AUTH)
-	@bash test_curl_post.sh   http://$(HTTP_AUTH)
-	@bash test_nghttp_get.sh  http://$(HTTP_AUTH) direct
-	@bash test_nghttp_post.sh http://$(HTTP_AUTH) direct
-	@bash test_nghttp_get.sh  http://$(HTTP_AUTH)/proxy
-	@bash test_nghttp_post.sh http://$(HTTP_AUTH)/proxy
-	@bash test_curl_get.sh    http://$(HTTP_AUTH)/proxy
-	@bash test_curl_post.sh   http://$(HTTP_AUTH)/proxy
-	@bash test_nghttp_get.sh  http://$(HTTP_AUTH)/rewrite
-	@bash test_nghttp_post.sh http://$(HTTP_AUTH)/rewrite
-	@bash test_curl_get.sh    http://$(HTTP_AUTH)/rewrite
-	@bash test_curl_post.sh   http://$(HTTP_AUTH)/rewrite
-	@bash test_nghttp_get.sh  https://$(HTTPS_AUTH2)
-	@bash test_nghttp_post.sh https://$(HTTPS_AUTH2)
-	@bash test_curl_get.sh    https://$(HTTPS_AUTH2)
-	@bash test_curl_post.sh   https://$(HTTPS_AUTH2)
+	@$(TESTRUN) test_curl_altsvc.sh http://$(HTTP_AUTH) https://$(HTTPS_AUTH)
+	@$(TESTRUN) test_proto_order.sh https://$(HTTPS_AUTH) https://$(HTTPS_AUTH_2)
+	@$(TESTRUN) test_alt_host.sh https://$(HTTPS_AUTH)
+	@$(TESTRUN) test_nghttp_get.sh  https://$(HTTPS_AUTH)
+	@$(TESTRUN) test_nghttp_post.sh https://$(HTTPS_AUTH)
+	@$(TESTRUN) test_curl_get.sh    https://$(HTTPS_AUTH)
+	@$(TESTRUN) test_curl_post.sh   https://$(HTTPS_AUTH)
+	@$(TESTRUN) test_nghttp_get.sh  https://$(HTTPS_AUTH)/proxy
+	@$(TESTRUN) test_nghttp_post.sh https://$(HTTPS_AUTH)/proxy
+	@$(TESTRUN) test_curl_get.sh    https://$(HTTPS_AUTH)/proxy
+	@$(TESTRUN) test_curl_post.sh   https://$(HTTPS_AUTH)/proxy
+	@$(TESTRUN) test_nghttp_get.sh  https://$(HTTPS_AUTH)/rewrite
+	@$(TESTRUN) test_nghttp_post.sh https://$(HTTPS_AUTH)/rewrite
+	@$(TESTRUN) test_curl_get.sh    https://$(HTTPS_AUTH)/rewrite
+	@$(TESTRUN) test_curl_post.sh   https://$(HTTPS_AUTH)/rewrite
+	@$(TESTRUN) test_nghttp_get.sh  http://$(HTTP_AUTH)
+	@$(TESTRUN) test_nghttp_post.sh http://$(HTTP_AUTH)
+	@$(TESTRUN) test_curl_get.sh    http://$(HTTP_AUTH)
+	@$(TESTRUN) test_curl_post.sh   http://$(HTTP_AUTH)
+	@$(TESTRUN) test_nghttp_get.sh  http://$(HTTP_AUTH) direct
+	@$(TESTRUN) test_nghttp_post.sh http://$(HTTP_AUTH) direct
+	@$(TESTRUN) test_nghttp_get.sh  http://$(HTTP_AUTH)/proxy
+	@$(TESTRUN) test_nghttp_post.sh http://$(HTTP_AUTH)/proxy
+	@$(TESTRUN) test_curl_get.sh    http://$(HTTP_AUTH)/proxy
+	@$(TESTRUN) test_curl_post.sh   http://$(HTTP_AUTH)/proxy
+	@$(TESTRUN) test_nghttp_get.sh  http://$(HTTP_AUTH)/rewrite
+	@$(TESTRUN) test_nghttp_post.sh http://$(HTTP_AUTH)/rewrite
+	@$(TESTRUN) test_curl_get.sh    http://$(HTTP_AUTH)/rewrite
+	@$(TESTRUN) test_curl_post.sh   http://$(HTTP_AUTH)/rewrite
+	@$(TESTRUN) test_nghttp_get.sh  https://$(HTTPS_AUTH_SER)
+	@$(TESTRUN) test_nghttp_post.sh https://$(HTTPS_AUTH_SER)
+	@$(TESTRUN) test_curl_get.sh    https://$(HTTPS_AUTH_SER)
+	@$(TESTRUN) test_curl_post.sh   https://$(HTTPS_AUTH_SER)
 
 ################################################################################
 # Load Test

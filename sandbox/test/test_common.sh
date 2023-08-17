@@ -68,6 +68,19 @@ curl_check_doc() {
     echo ok.
 }
 
+curl_check_alpn() {
+    PROTOCOL="$1"; shift;
+    MSG="$1"; shift;
+    ARGS="$@ -v"
+    echo -n " * curl /: $MSG..."
+    rm -rf $TMP
+    mkdir -p $TMP
+    ${CURL} $ARGS $URL_PREFIX > $TMP/out 2>&1 || fail "XXX$(cat $TMP/out)"
+    fgrep "* ALPN, server accepted to use $PROTOCOL" $TMP/out >/dev/null || 
+    fail "XXX$(cat $TMP/out)"
+    echo ok.
+}
+
 nghttp_check_doc() {
     DOC="$1"; shift;
     MSG="$1"; shift;
@@ -240,7 +253,7 @@ curl_check_altsvc() {
     MSG="$1"; shift;
     mkdir -p $TMP
     echo -n " * curl check alt_svc at /$DOC..."
-    ${CURL} "$@" -D $TMP/headers $URL_PREFIX/$DOC > /dev/null 2>&1 || fail
+    ${CURL} "$@" -D $TMP/headers $URL_PREFIX/$DOC > /dev/null 2>&1 || fail "curl failed with $?"
     alt_svc="$( fgrep -i 'Alt-Svc: ' $TMP/headers | tr -d "\r\n" )"
     alt_svc="${alt_svc#*: }"
     test "$EXP_ALT_SVC" = "$alt_svc" || fail "failed. Expected '$EXP_ALT_SVC', got '$alt_svc'"

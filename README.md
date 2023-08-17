@@ -195,7 +195,8 @@ You should make entries in /etc/hosts like
 
 ```
 127.0.0.1       test.example.org        test
-127.0.0.1       test-ser.example.org    test
+127.0.0.1       test2.example.org       test2
+127.0.0.1       test-ser.example.org    test-ser
 ```
 
 for tests to work properly.

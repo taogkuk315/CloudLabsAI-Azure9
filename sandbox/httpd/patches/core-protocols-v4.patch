@@ -1,6 +1,85 @@
+Index: docs/manual/mod/core.xml
+===================================================================
+--- docs/manual/mod/core.xml	(revision 1700959)
++++ docs/manual/mod/core.xml	(working copy)
+@@ -3590,6 +3590,74 @@
+ 
+ 
+ <directivesynopsis>
++    <name>Protocols</name>
++    <description>Protocols available for a server/virtual host</description>
++    <syntax>Protocols <var>protocol</var> ...</syntax>
++    <default>Protocols http/1.1</default>
++    <contextlist><context>server config</context><context>virtual host</context></contextlist>
++    <compatibility>Only available from Apache 2.4.17 and later.</compatibility>
++    
++    <usage>
++        <p>This directive specifies the list of protocols supported for a
++            server/virtual host. The list determines the allowed protocols
++            a client may negotiate for this server/host.</p>
++        
++        <p>You need to set protocols if you want to extend the available
++            protocols for a server/host. By default, only the http/1.1 protocol
++            (which includes the compatibility with 1.0 and 0.9 clients) is
++            allowed.</p>
++        
++        <p>For example, if you want to support HTTP/2 for a server with TLS, 
++            specify:</p>
++        
++        <highlight language="config">
++            Protocols h2 http/1.1
++        </highlight>
++
++        <p>Valid protocols are <code>http/1.1</code> for http and https connections,
++            <code>h2</code> on https connections and <code>h2c</code> for http
++            connections. Modules may enable more protocols.</p>
++        
++        <p>It is safe to specify protocols that are unavailable/disabled. Such
++        protocol names will simply be ignored.</p>
++        
++        <p>Protocols specified in base servers are inherited for virtual hosts 
++            only if the virtual host has no own Protocols directive. Or, the other
++            way around, Protocols directives in virtual hosts replace any
++            such directive in the base server.
++        </p>
++
++    </usage>
++    <seealso><directive module="core">ProtocolsHonorOrder</directive></seealso>
++</directivesynopsis>
++
++
++<directivesynopsis>
++    <name>ProtocolsHonorOrder</name>
++    <description>Protocols available for a server/virtual host</description>
++    <syntax>ProtocolsHonorOrder On|Off</syntax>
++    <default>ProtocolsHonorOrder On</default>
++    <contextlist><context>server config</context><context>virtual host</context></contextlist>
++    <compatibility>Only available from Apache 2.4.17 and later.</compatibility>
++    
++    <usage>
++        <p>This directive specifies if the server should honor the order in which
++        the <directive>Protocols</directive> directive lists protocols.</p>
++        
++        <p>If configured Off, the client supplied list order of protocols has 
++            precedence over the order in the server configuration.</p>
++        
++        <p>With <directive>ProtocolsHonorOrder</directive> set to <code>on</code> 
++            (default), the client ordering does not matter and only the ordering 
++            in the server settings influences the outcome of the protocol 
++            negotiation.</p>
++        
++    </usage>
++    <seealso><directive module="core">Protocols</directive></seealso>
++</directivesynopsis>
++
++
++<directivesynopsis>
+ <name>RLimitCPU</name>
+ <description>Limits the CPU consumption of processes launched
+ by Apache httpd children</description>
 Index: include/http_core.h
 ===================================================================
---- include/http_core.h	(revision 1700543)
+--- include/http_core.h	(revision 1700959)
 +++ include/http_core.h	(working copy)
 @@ -681,6 +681,10 @@
  #define AP_MERGE_TRAILERS_DISABLE  2
@@ -15,9 +94,9 @@ Index: include/http_core.h
  /* for AddOutputFiltersByType in core.c */
 Index: include/http_protocol.h
 ===================================================================
---- include/http_protocol.h	(revision 1700543)
+--- include/http_protocol.h	(revision 1700959)
 +++ include/http_protocol.h	(working copy)
-@@ -700,6 +700,135 @@
+@@ -700,6 +700,139 @@
   */
  AP_DECLARE_HOOK(apr_port_t,default_port,(const request_rec *r))
  
@@ -107,17 +186,21 @@ Index: include/http_protocol.h
 +/**
 + * Select a protocol for the given connection and optional request. Will return
 + * the protocol identifier selected which may be the protocol already in place
-+ * on the connection. The server may ignore the choices given.
++ * on the connection. The selected protocol will be NULL if non of the given
++ * choices could be agreed upon (e.g. no proposal as made).
++ *
++ * A special case is where the choices itself is NULL (instead of empty). In
++ * this case there are no restrictions imposed on protocol selection.
 + *
 + * @param c The current connection
 + * @param r The current request or NULL
 + * @param s The server/virtual host selected
 + * @param choices A list of protocol identifiers, normally the clients whishes
-+ * @return The selected protocol
++ * @return The selected protocol or NULL if no protocol could be agreed upon
 + */
 +AP_DECLARE(const char *) ap_select_protocol(conn_rec *c, request_rec *r, 
 +                                            server_rec *s,
-+                                            apr_array_header_t *choices);
++                                            const apr_array_header_t *choices);
 +
 +/**
 + * Perform the actual protocol switch. The protocol given must have been
@@ -153,9 +236,22 @@ Index: include/http_protocol.h
  /** @see ap_bucket_type_error */
  typedef struct ap_bucket_error ap_bucket_error;
  
+Index: include/http_request.h
+===================================================================
+--- include/http_request.h	(revision 1700959)
++++ include/http_request.h	(working copy)
+@@ -315,7 +315,7 @@
+  * the response to the client
+  * @param r The current request
+  */
+-void ap_process_request(request_rec *r);
++AP_DECLARE(void) ap_process_request(request_rec *r);
+ 
+ /* For post-processing after a handler has finished with a request.
+  * (Commonly used after it was suspended)
 Index: include/httpd.h
 ===================================================================
---- include/httpd.h	(revision 1700543)
+--- include/httpd.h	(revision 1700959)
 +++ include/httpd.h	(working copy)
 @@ -518,6 +518,7 @@
  #define HTTP_UNSUPPORTED_MEDIA_TYPE          415
@@ -198,29 +294,29 @@ Index: include/httpd.h
 + * searching a start. 
 + * @param array The array the check
 + * @param s The string to find
-+ * @param start Start index for search. If start is greater or 
-+                equal to array length, -1 will be returned.
++ * @param start Start index for search. If start is out of bounds (negative or  
++                equal to array length or greater), -1 will be returned.
 + * @return index of string in array or -1
 + */
-+AP_DECLARE(int) ap_array_index(const apr_array_header_t *array, 
-+                               const char *s,
-+                               apr_size_t start);
++AP_DECLARE(int) ap_array_str_index(const apr_array_header_t *array, 
++                                   const char *s,
++                                   int start);
 +
 +/**
 + * Check if the string is member of the given array by strcmp.
 + * @param array The array the check
 + * @param s The string to find
-+ * @return !=0 iff string is member of array
++ * @return !=0 iff string is member of array (via strcmp)
 + */
-+AP_DECLARE(int) ap_array_contains(const apr_array_header_t *array, 
-+                                  const char *s);
++AP_DECLARE(int) ap_array_str_contains(const apr_array_header_t *array, 
++                                      const char *s);
 +
  #ifdef __cplusplus
  }
  #endif
 Index: modules/http/http_protocol.c
 ===================================================================
---- modules/http/http_protocol.c	(revision 1700543)
+--- modules/http/http_protocol.c	(revision 1700959)
 +++ modules/http/http_protocol.c	(working copy)
 @@ -135,7 +135,7 @@
      NULL, /* 418 */
@@ -243,9 +339,22 @@ Index: modules/http/http_protocol.c
      default:                    /* HTTP_INTERNAL_SERVER_ERROR */
          /*
           * This comparison to expose error-notes could be modified to
+Index: modules/http/http_request.c
+===================================================================
+--- modules/http/http_request.c	(revision 1700959)
++++ modules/http/http_request.c	(working copy)
+@@ -363,7 +363,7 @@
+     ap_process_request_after_handler(r);
+ }
+ 
+-void ap_process_request(request_rec *r)
++AP_DECLARE(void) ap_process_request(request_rec *r)
+ {
+     apr_bucket_brigade *bb;
+     apr_bucket *b;
 Index: modules/ssl/ssl_engine_init.c
 ===================================================================
---- modules/ssl/ssl_engine_init.c	(revision 1700543)
+--- modules/ssl/ssl_engine_init.c	(revision 1700959)
 +++ modules/ssl/ssl_engine_init.c	(working copy)
 @@ -625,6 +625,10 @@
      SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
@@ -260,7 +369,7 @@ Index: modules/ssl/ssl_engine_init.c
  static apr_status_t ssl_init_ctx_verify(server_rec *s,
 Index: modules/ssl/ssl_engine_io.c
 ===================================================================
---- modules/ssl/ssl_engine_io.c	(revision 1700543)
+--- modules/ssl/ssl_engine_io.c	(revision 1700959)
 +++ modules/ssl/ssl_engine_io.c	(working copy)
 @@ -28,6 +28,7 @@
                                    core keeps dumping.''
@@ -335,7 +444,7 @@ Index: modules/ssl/ssl_engine_io.c
  /* The request_rec pointer is passed in here only to ensure that the
 Index: modules/ssl/ssl_engine_kernel.c
 ===================================================================
---- modules/ssl/ssl_engine_kernel.c	(revision 1700543)
+--- modules/ssl/ssl_engine_kernel.c	(revision 1700959)
 +++ modules/ssl/ssl_engine_kernel.c	(working copy)
 @@ -29,6 +29,7 @@
                                    time I was too famous.''
@@ -415,7 +524,7 @@ Index: modules/ssl/ssl_engine_kernel.c
  }
  
  /*
-@@ -2149,6 +2171,79 @@
+@@ -2149,6 +2171,80 @@
  }
  #endif /* HAVE_TLS_SESSION_TICKETS */
  
@@ -441,6 +550,7 @@ Index: modules/ssl/ssl_engine_kernel.c
 +    conn_rec *c = (conn_rec*)SSL_get_app_data(ssl);
 +    SSLConnRec *sslconn = myConnConfig(c);
 +    apr_array_header_t *client_protos;
++    const char *proposed;
 +    size_t len;
 +    int i;
 +
@@ -478,8 +588,8 @@ Index: modules/ssl/ssl_engine_kernel.c
 +     */
 +    init_vhost(c, ssl);
 +    
-+    *out = (const unsigned char *)ap_select_protocol(c, NULL, sslconn->server, 
-+                                                     client_protos);
++    proposed = ap_select_protocol(c, NULL, sslconn->server, client_protos);
++    *out = (const unsigned char *)(proposed? proposed : ap_get_protocol(c));
 +    len = strlen((const char*)*out);
 +    if (len > 255) {
 +        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02840)
@@ -497,7 +607,7 @@ Index: modules/ssl/ssl_engine_kernel.c
  int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
 Index: modules/ssl/ssl_private.h
 ===================================================================
---- modules/ssl/ssl_private.h	(revision 1700543)
+--- modules/ssl/ssl_private.h	(revision 1700959)
 +++ modules/ssl/ssl_private.h	(working copy)
 @@ -182,6 +182,11 @@
  #include <openssl/srp.h>
@@ -526,9 +636,17 @@ Index: modules/ssl/ssl_private.h
  void         ssl_scache_status_register(apr_pool_t *p);
 Index: server/core.c
 ===================================================================
---- server/core.c	(revision 1700543)
+--- server/core.c	(revision 1700959)
 +++ server/core.c	(working copy)
-@@ -468,6 +468,9 @@
+@@ -423,6 +423,7 @@
+ static void *create_core_server_config(apr_pool_t *a, server_rec *s)
+ {
+     core_server_config *conf;
++    const char **np;
+     int is_virtual = s->is_virtual;
+ 
+     conf = (core_server_config *)apr_pcalloc(a, sizeof(core_server_config));
+@@ -468,6 +469,9 @@
  
      conf->trace_enable = AP_TRACE_UNSET;
  
@@ -538,7 +656,7 @@ Index: server/core.c
      return (void *)conf;
  }
  
-@@ -518,6 +521,12 @@
+@@ -518,6 +522,12 @@
                             ? virt->merge_trailers
                             : base->merge_trailers;
  
@@ -551,7 +669,7 @@ Index: server/core.c
      return conf;
  }
  
-@@ -3692,6 +3701,48 @@
+@@ -3692,6 +3702,48 @@
      return NULL;
  }
  
@@ -600,7 +718,7 @@ Index: server/core.c
  static apr_hash_t *errorlog_hash;
  
  static int log_constant_item(const ap_errorlog_info *info, const char *arg,
-@@ -4205,6 +4256,11 @@
+@@ -4205,6 +4257,11 @@
                "'on' (default), 'off' or 'extended' to trace request body content"),
  AP_INIT_FLAG("MergeTrailers", set_merge_trailers, NULL, RSRC_CONF,
                "merge request trailers into request headers or not"),
@@ -612,7 +730,7 @@ Index: server/core.c
  { NULL }
  };
  
-@@ -4936,6 +4992,61 @@
+@@ -4936,6 +4993,61 @@
      }
  }
  
@@ -637,7 +755,7 @@ Index: server/core.c
 +            if (offers && offers->nelts > 0) {
 +                const char *protocol = ap_select_protocol(c, r, r->server,
 +                                                          offers);
-+                if (strcmp(protocol, ap_get_protocol(c))) {
++                if (protocol && strcmp(protocol, ap_get_protocol(c))) {
 +                    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(02909)
 +                                  "Upgrade selects '%s'", protocol);
 +                    /* Let the client know what we are upgrading to. */
@@ -674,7 +792,7 @@ Index: server/core.c
  static void register_hooks(apr_pool_t *p)
  {
      errorlog_hash = apr_hash_make(p);
-@@ -4958,10 +5069,12 @@
+@@ -4958,10 +5070,12 @@
      ap_hook_check_config(core_check_config,NULL,NULL,APR_HOOK_FIRST);
      ap_hook_test_config(core_dump_config,NULL,NULL,APR_HOOK_FIRST);
      ap_hook_translate_name(ap_core_translate,NULL,NULL,APR_HOOK_REALLY_LAST);
@@ -689,7 +807,7 @@ Index: server/core.c
      ap_hook_type_checker(do_nothing,NULL,NULL,APR_HOOK_REALLY_LAST);
 Index: server/protocol.c
 ===================================================================
---- server/protocol.c	(revision 1700543)
+--- server/protocol.c	(revision 1700959)
 +++ server/protocol.c	(working copy)
 @@ -67,6 +67,9 @@
      APR_HOOK_LINK(http_scheme)
@@ -701,7 +819,7 @@ Index: server/protocol.c
  )
  
  AP_DECLARE_DATA ap_filter_rec_t *ap_old_write_func = NULL;
-@@ -1790,7 +1793,132 @@
+@@ -1790,7 +1793,151 @@
      apr_brigade_destroy(x.bb);
  }
  
@@ -709,13 +827,13 @@ Index: server/protocol.c
 + * Compare two protocol identifier. Result is similar to strcmp():
 + * 0 gives same precedence, >0 means proto1 is preferred.
 + */
-+static int protocol_cmp(apr_array_header_t *preferences,
++static int protocol_cmp(const apr_array_header_t *preferences,
 +                        const char *proto1,
 +                        const char *proto2)
 +{
 +    if (preferences && preferences->nelts > 0) {
-+        int index1 = ap_array_index(preferences, proto1, 0);
-+        int index2 = ap_array_index(preferences, proto2, 0);
++        int index1 = ap_array_str_index(preferences, proto1, 0);
++        int index2 = ap_array_str_index(preferences, proto2, 0);
 +        if (index2 > index1) {
 +            return (index1 >= 0) ? 1 : -1;
 +        }
@@ -737,12 +855,12 @@ Index: server/protocol.c
 +
 +AP_DECLARE(const char *) ap_select_protocol(conn_rec *c, request_rec *r, 
 +                                            server_rec *s,
-+                                            apr_array_header_t *choices)
++                                            const apr_array_header_t *choices)
 +{
 +    apr_pool_t *pool = r? r->pool : c->pool;
-+    apr_array_header_t *proposals;
-+    const char *protocol = NULL, *existing = ap_get_protocol(c);
 +    core_server_config *conf = ap_get_core_module_config(s->module_config);
++    const char *protocol = NULL, *existing;
++    apr_array_header_t *proposals;
 +
 +    if (APLOGcdebug(c)) {
 +        const char *p = apr_array_pstrcat(pool, conf->protocols, ',');
@@ -751,41 +869,60 @@ Index: server/protocol.c
 +                      p, apr_array_pstrcat(pool, choices, ','),
 +                      s->server_hostname);
 +    }
-+    
-+    proposals = apr_array_make(pool, choices->nelts+1, sizeof(char *));
++
++    if (conf->protocols->nelts <= 0) {
++        /* nothing configured, by default, we only allow http/1.1 here.
++         * For now...
++         */
++        if (ap_array_str_contains(choices, AP_PROTOCOL_HTTP1)) {
++            return AP_PROTOCOL_HTTP1;
++        }
++        else {
++            return NULL;
++        }
++    }
++
++    proposals = apr_array_make(pool, choices->nelts + 1, sizeof(char *));
 +    ap_run_protocol_propose(c, r, s, choices, proposals);
-+    
++
++    /* If the existing protocol has not been proposed, but is a choice,
++     * add it to the proposals implicitly.
++     */
++    existing = ap_get_protocol(c);
++    if (!ap_array_str_contains(proposals, existing)
++        && ap_array_str_contains(choices, existing)) {
++        APR_ARRAY_PUSH(proposals, const char*) = existing;
++    }
++
 +    if (proposals->nelts > 0) {
 +        int i;
-+        apr_array_header_t *prefs = ((conf->protocols_honor_order > 0
-+                                      && conf->protocols->nelts > 0)? 
-+                                     conf->protocols : choices);
++        const apr_array_header_t *prefs = NULL;
 +
-+        /* If the existing protocol has not been proposed, but is a choice,
-+         * add it to the proposals implicitly.
-+         */
-+        if (!ap_array_contains(proposals, existing) 
-+            && ap_array_contains(choices, existing)) {
-+            APR_ARRAY_PUSH(proposals, const char*) = existing;
++        /* Default for protocols_honor_order is 'on' or != 0 */
++        if (conf->protocols_honor_order == 0 && choices->nelts > 0) {
++            prefs = choices;
 +        }
-+        
++        else {
++            prefs = conf->protocols;
++        }
++
 +        /* Select the most preferred protocol */
 +        if (APLOGcdebug(c)) {
 +            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, 
-+                          "select protocol, proposals=%s preferences=%s", 
++                          "select protocol, proposals=%s preferences=%s configured=%s", 
 +                          apr_array_pstrcat(pool, proposals, ','),
-+                          apr_array_pstrcat(pool, prefs, ','));
++                          apr_array_pstrcat(pool, prefs, ','),
++                          apr_array_pstrcat(pool, conf->protocols, ','));
 +        }
 +        for (i = 0; i < proposals->nelts; ++i) {
 +            const char *p = APR_ARRAY_IDX(proposals, i, const char *);
-+            if (conf->protocols->nelts > 0 
-+                && !ap_array_contains(conf->protocols, p)) {
-+                /* not a permitted protocol here */
++            if (!ap_array_str_contains(conf->protocols, p)) {
++                /* not a configured protocol here */
 +                continue;
 +            }
 +            else if (!protocol 
 +                     || (protocol_cmp(prefs, protocol, p) < 0)) {
-+                /* none selected yet or this on has preference */
++                /* none selected yet or this one has preference */
 +                protocol = p;
 +            }
 +        }
@@ -795,7 +932,7 @@ Index: server/protocol.c
 +                      protocol? protocol : "(none)");
 +    }
 +
-+    return protocol? protocol : existing;
++    return protocol;
 +}
 +
 +AP_DECLARE(apr_status_t) ap_switch_protocol(conn_rec *c, request_rec *r, 
@@ -834,7 +971,7 @@ Index: server/protocol.c
  AP_IMPLEMENT_HOOK_VOID(pre_read_request,
                         (request_rec *r, conn_rec *c),
                         (r, c))
-@@ -1805,3 +1933,14 @@
+@@ -1805,3 +1952,14 @@
  AP_IMPLEMENT_HOOK_RUN_FIRST(int, note_auth_failure,
                              (request_rec *r, const char *auth_type),
                              (r, auth_type), DECLINED)
@@ -851,7 +988,7 @@ Index: server/protocol.c
 +                            (const conn_rec *c), (c), NULL)
 Index: server/util.c
 ===================================================================
---- server/util.c	(revision 1700543)
+--- server/util.c	(revision 1700959)
 +++ server/util.c	(working copy)
 @@ -1451,6 +1451,95 @@
      return find_list_item(p, line, tok, AP_ETAG_WEAK);
@@ -949,28 +1086,41 @@ Index: server/util.c
  /* Retrieve a token, spacing over it and returning a pointer to
   * the first non-white byte afterwards.  Note that these tokens
   * are delimited by semis and commas; and can also be delimited
-@@ -3005,3 +3094,24 @@
+@@ -3005,3 +3094,28 @@
  
      return apr_pstrndup(p, buf, k);
  }
 +
-+AP_DECLARE(int) ap_array_index(const apr_array_header_t *array, 
-+                               const char *s,
-+                               apr_size_t start)
++AP_DECLARE(int) ap_array_str_index(const apr_array_header_t *array, 
++                                   const char *s,
++                                   int start)
 +{
-+    apr_size_t i;
-+    for (i = start; i < array->nelts; i++) {
-+        const char *p = APR_ARRAY_IDX(array, i, const char *);
-+        if (!strcmp(p, s)) {
-+            return (int)i;
++    if (start >= 0) {
++        int i;
++        
++        for (i = start; i < array->nelts; i++) {
++            const char *p = APR_ARRAY_IDX(array, i, const char *);
++            if (!strcmp(p, s)) {
++                return i;
++            }
 +        }
 +    }
++    
 +    return -1;
 +}
 +
-+AP_DECLARE(int) ap_array_contains(const apr_array_header_t *array, 
-+                                  const char *s)
++AP_DECLARE(int) ap_array_str_contains(const apr_array_header_t *array, 
++                                      const char *s)
 +{
-+    return (ap_array_index(array, s, 0) >= 0);
++    return (ap_array_str_index(array, s, 0) >= 0);
 +}
 +
+Index: .
+===================================================================
+--- .	(revision 1700959)
++++ .	(working copy)
+
+Property changes on: .
+___________________________________________________________________
+Modified: svn:mergeinfo
+   Merged /httpd/httpd/trunk:r1694950,1700968,1701005,1701145,1701178
