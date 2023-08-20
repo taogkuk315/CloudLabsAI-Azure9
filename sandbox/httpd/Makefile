@@ -154,7 +154,7 @@ $(GEN)/$(HTTPD_DIR)/.httpd-configured: \
 $(GEN)/$(HTTPD_DIR)/.httpd-patched: \
 		$(GEN)/$(HTTPD_DIR)/.httpd-extracted
 	@echo applying patches...
-	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/core-protocols-release-v3.patch
+	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/core-protocols-release-v4.patch
 	@echo httpd patched.
 	@touch $(GEN)/$(HTTPD_DIR)/.httpd-patched
 

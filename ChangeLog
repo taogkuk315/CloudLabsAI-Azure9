@@ -1,3 +1,12 @@
+v0.9.7
+-------------------------------------------------------------------------------- 
+ * update of core-protocols.patch to v4
+ * "Protocols" default changed. servers/vhosts need to explicitly enable h2/h2c 
+   now. For example with `Protocols h2 http/1.1`
+ * adding test cases for "Protocols" ordering
+ * configuration option -enable-werror now sets compiler flags to go for Apache
+   httpd standard code restrictions.
+
 v0.9.6
 -------------------------------------------------------------------------------- 
  * for closed h2 connections proper state is set. Fixes resource/worker handling
