@@ -1,14 +1,83 @@
+Index: build/NWGNUenvironment.inc
+===================================================================
+--- build/NWGNUenvironment.inc	(revision 1700959)
++++ build/NWGNUenvironment.inc	(working copy)
+@@ -49,6 +49,12 @@
+ $(error LDAPSDK does not point to a valid Novell CLDAP SDK) 
+ endif
+ 
++ifdef WITH_HTTP2
++ifneq "$(wildcard $(NGH2SRC)/lib/nghttp2_hd.h)" "$(NGH2SRC)/lib/nghttp2_hd.h"
++$(error NGH2SRC does not point to a valid NGHTTP2 source tree)
++endif
++endif
++
+ ifndef PCRESRC
+ PCRESRC = $(AP_WORK)/srclib/pcre
+ endif
+Index: build/installwinconf.awk
+===================================================================
+--- build/installwinconf.awk	(revision 1700959)
++++ build/installwinconf.awk	(working copy)
+@@ -59,6 +59,7 @@
+     filelist["httpd-dav.conf"] = "httpd-dav.conf.in";
+     filelist["httpd-default.conf"] = "httpd-default.conf.in";
+     filelist["httpd-info.conf"] = "httpd-info.conf.in";
++    filelist["httpd-h2.conf"] = "httpd-h2.conf.in";
+     filelist["httpd-languages.conf"] = "httpd-languages.conf.in";
+     filelist["httpd-manual.conf"] = "httpd-manual.conf.in";
+     filelist["httpd-mpm.conf"] = "httpd-mpm.conf.in";
+Index: docs/conf/extra/httpd-h2.conf.in
+===================================================================
+--- docs/conf/extra/httpd-h2.conf.in	(revision 0)
++++ docs/conf/extra/httpd-h2.conf.in	(working copy)
+@@ -0,0 +1,11 @@
++#
++# This is the Apache server configuration file providing HTTP/2 support.
++# It contains the configuration directives to instruct the server how to
++# serve pages via the http/2 protocol. For detailed information about these 
++# directives see <URL:http://httpd.apache.org/docs/trunk/mod/mod_h2.html>
++# 
++# Required modules: mod_h2
++
++<IfModule h2_module>
++  # h2 is enabled by loading, for site specific control see 'Protocols'
++</IfModule>
+Index: docs/conf/httpd.conf.in
+===================================================================
+--- docs/conf/httpd.conf.in	(revision 1700959)
++++ docs/conf/httpd.conf.in	(working copy)
+@@ -418,3 +418,6 @@
+ #RequestHeader unset DNT env=bad_DNT
+ #</IfModule>
+ 
++# h2/h2c (HTTP/2) connections
++#Include @rel_sysconfdir@/extra/httpd-h2.conf
++
+Index: docs/manual/mod/allmodules.xml
+===================================================================
+--- docs/manual/mod/allmodules.xml	(revision 1700959)
++++ docs/manual/mod/allmodules.xml	(working copy)
+@@ -51,6 +51,7 @@
+   <modulefile>mod_ext_filter.xml</modulefile>
+   <modulefile>mod_file_cache.xml</modulefile>
+   <modulefile>mod_filter.xml</modulefile>
++  <modulefile>mod_h2.xml</modulefile>
+   <modulefile>mod_headers.xml</modulefile>
+   <modulefile>mod_heartbeat.xml</modulefile>
+   <modulefile>mod_heartmonitor.xml</modulefile>
 Index: docs/manual/mod/core.xml
 ===================================================================
---- docs/manual/mod/core.xml	(revision 1700543)
+--- docs/manual/mod/core.xml	(revision 1700959)
 +++ docs/manual/mod/core.xml	(working copy)
-@@ -3590,6 +3590,71 @@
+@@ -3590,6 +3590,74 @@
  
  
  <directivesynopsis>
 +    <name>Protocols</name>
 +    <description>Protocols available for a server/virtual host</description>
 +    <syntax>Protocols <var>protocol</var> ...</syntax>
++    <default>Protocols http/1.1</default>
 +    <contextlist><context>server config</context><context>virtual host</context></contextlist>
 +    <compatibility>Only available from Apache 2.4.17 and later.</compatibility>
 +    
@@ -17,15 +86,16 @@ Index: docs/manual/mod/core.xml
 +            server/virtual host. The list determines the allowed protocols
 +            a client may negotiate for this server/host.</p>
 +        
-+        <p>You only need to set protocols if you want to limit the available
-+            protocols for a server/host. By default, all supported protocols
-+            are available to a client.</p>
++        <p>You need to set protocols if you want to extend the available
++            protocols for a server/host. By default, only the http/1.1 protocol
++            (which includes the compatibility with 1.0 and 0.9 clients) is
++            allowed.</p>
 +        
-+        <p>For example, if you want to support only HTTP/1.1 for a server, even
-+            though HTTP/2 is available, just specify this protocol only:</p>
++        <p>For example, if you want to support HTTP/2 for a server with TLS, 
++            specify:</p>
 +        
 +        <highlight language="config">
-+            Protocols http/1.1
++            Protocols h2 http/1.1
 +        </highlight>
 +
 +        <p>Valid protocols are <code>http/1.1</code> for http and https connections,
@@ -50,7 +120,7 @@ Index: docs/manual/mod/core.xml
 +    <name>ProtocolsHonorOrder</name>
 +    <description>Protocols available for a server/virtual host</description>
 +    <syntax>ProtocolsHonorOrder On|Off</syntax>
-+    <default>ProtocolsHonorOrder Off</default>
++    <default>ProtocolsHonorOrder On</default>
 +    <contextlist><context>server config</context><context>virtual host</context></contextlist>
 +    <compatibility>Only available from Apache 2.4.17 and later.</compatibility>
 +    
@@ -58,12 +128,13 @@ Index: docs/manual/mod/core.xml
 +        <p>This directive specifies if the server should honor the order in which
 +        the <directive>Protocols</directive> directive lists protocols.</p>
 +        
-+        <p>By default, a client supplies a list of supported protocols and the server
-+            selects an available one from that list in the given order.</p>
++        <p>If configured Off, the client supplied list order of protocols has 
++            precedence over the order in the server configuration.</p>
 +        
-+        <p>With <directive>ProtocolsHonorOrder</directive> set to <code>on</code>, the
-+            client ordering does not matter and only the ordering in the server
-+        settings influences the outcome of the protocol negotiation.</p>
++        <p>With <directive>ProtocolsHonorOrder</directive> set to <code>on</code> 
++            (default), the client ordering does not matter and only the ordering 
++            in the server settings influences the outcome of the protocol 
++            negotiation.</p>
 +        
 +    </usage>
 +    <seealso><directive module="core">Protocols</directive></seealso>
@@ -74,1037 +145,10 @@ Index: docs/manual/mod/core.xml
  <name>RLimitCPU</name>
  <description>Limits the CPU consumption of processes launched
  by Apache httpd children</description>
-Index: include/http_core.h
+Index: docs/manual/mod/mod_h2.xml
 ===================================================================
---- include/http_core.h	(revision 1700543)
-+++ include/http_core.h	(working copy)
-@@ -681,6 +681,10 @@
- #define AP_MERGE_TRAILERS_DISABLE  2
-     int merge_trailers;
- 
-+
-+
-+    apr_array_header_t *protocols;
-+    int protocols_honor_order;
- } core_server_config;
- 
- /* for AddOutputFiltersByType in core.c */
-Index: include/http_protocol.h
-===================================================================
---- include/http_protocol.h	(revision 1700543)
-+++ include/http_protocol.h	(working copy)
-@@ -700,6 +700,135 @@
-  */
- AP_DECLARE_HOOK(apr_port_t,default_port,(const request_rec *r))
- 
-+
-+#define AP_PROTOCOL_HTTP1		"http/1.1"
-+
-+/**
-+ * Determine the list of protocols available for a connection/request. This may
-+ * be collected with or without any request sent, in which case the request is 
-+ * NULL. Or it may be triggered by the request received, e.g. through the 
-+ * "Upgrade" header.
-+ *
-+ * This hook will be run whenever protocols are being negotiated (ALPN as
-+ * one example). It may also be invoked at other times, e.g. when the server
-+ * wants to advertise protocols it is capable of switching to.
-+ * 
-+ * The identifiers for protocols are taken from the TLS extension type ALPN:
-+ * https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xml
-+ *
-+ * If no protocols are added to the proposals, the server not perform any
-+ * switch. If the protocol selected from the proposals is the protocol
-+ * already in place, also no protocol switch will be invoked.
-+ *
-+ * The client may already have announced the protocols it is willing to
-+ * accept. These will then be listed as offers. This parameter may also
-+ * be NULL, indicating that offers from the client are not known and
-+ * the hooks should propose all protocols that are valid for the
-+ * current connection/request.
-+ *
-+ * All hooks are run, unless one returns an error. Proposals may contain
-+ * duplicates. The order in which proposals are added is usually ignored.
-+ * 
-+ * @param c The current connection
-+ * @param r The current request or NULL
-+ * @param s The server/virtual host selected
-+ * @param offers A list of protocol identifiers offered by the client or
-+ *               NULL to indicated that the hooks are free to propose 
-+ * @param proposals The list of protocol identifiers proposed by the hooks
-+ * @return OK or DECLINED
-+ */
-+AP_DECLARE_HOOK(int,protocol_propose,(conn_rec *c, request_rec *r,
-+                                      server_rec *s,
-+                                      const apr_array_header_t *offers,
-+                                      apr_array_header_t *proposals))
-+
-+/**
-+ * Perform a protocol switch on the connection. The exact requirements for
-+ * that depend on the protocol in place and the one switched to. The first 
-+ * protocol module to handle the switch is the last module run.
-+ * 
-+ * For a connection level switch (r == NULL), the handler must on return
-+ * leave the conn_rec in a state suitable for processing the switched
-+ * protocol, e.g. correct filters in place.
-+ *
-+ * For a request triggered switch (r != NULL), the protocol switch is done
-+ * before the response is sent out. When switching from "http/1.1" via Upgrade
-+ * header, the 101 intermediate response will have been sent. The
-+ * hook needs then to process the connection until it can be closed. Which
-+ * the server will enforce on hook return.
-+ * Any error the hook might encounter must already be sent by the hook itself
-+ * to the client in whatever form the new protocol requires.
-+ *
-+ * @param c The current connection
-+ * @param r The current request or NULL
-+ * @param s The server/virtual host selected
-+ * @param choices A list of protocol identifiers, normally the clients whishes
-+ * @param proposals the list of protocol identifiers proposed by the hooks
-+ * @return OK or DECLINED
-+ */
-+AP_DECLARE_HOOK(int,protocol_switch,(conn_rec *c, request_rec *r,
-+                                     server_rec *s,
-+                                     const char *protocol))
-+
-+/**
-+ * Return the protocol used on the connection. Modules implementing
-+ * protocol switching must register here and return the correct protocol
-+ * identifier for connections they switched.
-+ *
-+ * To find out the protocol for the current connection, better call
-+ * @see ap_get_protocol which internally uses this hook.
-+ *
-+ * @param c The current connection
-+ * @return The identifier of the protocol in place or NULL
-+ */
-+AP_DECLARE_HOOK(const char *,protocol_get,(const conn_rec *c))
-+    
-+/**
-+ * Select a protocol for the given connection and optional request. Will return
-+ * the protocol identifier selected which may be the protocol already in place
-+ * on the connection. The server may ignore the choices given.
-+ *
-+ * @param c The current connection
-+ * @param r The current request or NULL
-+ * @param s The server/virtual host selected
-+ * @param choices A list of protocol identifiers, normally the clients whishes
-+ * @return The selected protocol
-+ */
-+AP_DECLARE(const char *) ap_select_protocol(conn_rec *c, request_rec *r, 
-+                                            server_rec *s,
-+                                            apr_array_header_t *choices);
-+
-+/**
-+ * Perform the actual protocol switch. The protocol given must have been
-+ * selected before on the very same connection and request pair.
-+ *
-+ * @param c The current connection
-+ * @param r The current request or NULL
-+ * @param s The server/virtual host selected
-+ * @param protocol the protocol to switch to
-+ * @return APR_SUCCESS, if caller may continue processing as usual
-+ *         APR_EOF,     if caller needs to stop processing the connection
-+ *         APR_EINVAL,  if the protocol is already in place
-+ *         APR_NOTIMPL, if no module performed the switch
-+ *         Other errors where appropriate
-+ */
-+AP_DECLARE(apr_status_t) ap_switch_protocol(conn_rec *c, request_rec *r, 
-+                                            server_rec *s,
-+                                            const char *protocol);
-+
-+/**
-+ * Call the protocol_get hook to determine the protocol currently in use
-+ * for the given connection.
-+ *
-+ * Unless another protocol has been switch to, will default to
-+ * @see AP_PROTOCOL_HTTP1 and modules implementing a  new protocol must
-+ * report a switched connection via the protocol_get hook.
-+ *
-+ * @param c The connection to determine the protocol for
-+ * @return the protocol in use, never NULL
-+ */
-+AP_DECLARE(const char *) ap_get_protocol(conn_rec *c);
-+
- /** @see ap_bucket_type_error */
- typedef struct ap_bucket_error ap_bucket_error;
- 
-Index: include/httpd.h
-===================================================================
---- include/httpd.h	(revision 1700543)
-+++ include/httpd.h	(working copy)
-@@ -518,6 +518,7 @@
- #define HTTP_UNSUPPORTED_MEDIA_TYPE          415
- #define HTTP_RANGE_NOT_SATISFIABLE           416
- #define HTTP_EXPECTATION_FAILED              417
-+#define HTTP_MISDIRECTED_REQUEST             421
- #define HTTP_UNPROCESSABLE_ENTITY            422
- #define HTTP_LOCKED                          423
- #define HTTP_FAILED_DEPENDENCY               424
-@@ -1549,6 +1550,23 @@
- AP_DECLARE(int) ap_find_etag_strong(apr_pool_t *p, const char *line, const char *tok);
- 
- /**
-+ * Retrieve an array of tokens in the format "1#token" defined in RFC2616. Only
-+ * accepts ',' as a delimiter, does not accept quoted strings, and errors on
-+ * any separator.
-+ * @param p The pool to allocate from
-+ * @param tok The line to read tokens from
-+ * @param tokens Pointer to an array of tokens. If not NULL, must be an array
-+ *    of char*, otherwise it will be allocated on @a p when a token is found
-+ * @param skip_invalid If true, when an invalid separator is encountered, it
-+ *    will be ignored.
-+ * @return NULL on success, an error string otherwise.
-+ * @remark *tokens may be NULL on output if NULL in input and no token is found
-+ */
-+AP_DECLARE(const char *) ap_parse_token_list_strict(apr_pool_t *p, const char *tok,
-+                                                    apr_array_header_t **tokens,
-+                                                    int skip_invalid);
-+    
-+/**
-  * Retrieve a token, spacing over it and adjusting the pointer to
-  * the first non-white byte afterwards.  Note that these tokens
-  * are delimited by semis and commas and can also be delimited
-@@ -2265,6 +2283,28 @@
- 
- #define AP_NORESTART APR_OS_START_USEERR + 1
- 
-+/**
-+ * Get the first index of the string in the array or -1 if not found. Start
-+ * searching a start. 
-+ * @param array The array the check
-+ * @param s The string to find
-+ * @param start Start index for search. If start is greater or 
-+                equal to array length, -1 will be returned.
-+ * @return index of string in array or -1
-+ */
-+AP_DECLARE(int) ap_array_index(const apr_array_header_t *array, 
-+                               const char *s,
-+                               apr_size_t start);
-+
-+/**
-+ * Check if the string is member of the given array by strcmp.
-+ * @param array The array the check
-+ * @param s The string to find
-+ * @return !=0 iff string is member of array
-+ */
-+AP_DECLARE(int) ap_array_contains(const apr_array_header_t *array, 
-+                                  const char *s);
-+
- #ifdef __cplusplus
- }
- #endif
-Index: modules/http/http_protocol.c
-===================================================================
---- modules/http/http_protocol.c	(revision 1700543)
-+++ modules/http/http_protocol.c	(working copy)
-@@ -135,7 +135,7 @@
-     NULL, /* 418 */
-     NULL, /* 419 */
-     NULL, /* 420 */
--    NULL, /* 421 */
-+    "421 Misdirected Request",
-     "422 Unprocessable Entity",
-     "423 Locked",
-     "424 Failed Dependency",
-@@ -1293,6 +1293,11 @@
-     case HTTP_NETWORK_AUTHENTICATION_REQUIRED:
-         return("<p>The client needs to authenticate to gain\n"
-                "network access.</p>\n");
-+    case HTTP_MISDIRECTED_REQUEST:
-+        return("<p>The client needs a new connection for this\n"
-+               "request as the requested host name does not match\n"
-+               "the Server Name Indication (SNI) in use for this\n"
-+               "connection.</p>\n");
-     default:                    /* HTTP_INTERNAL_SERVER_ERROR */
-         /*
-          * This comparison to expose error-notes could be modified to
-Index: modules/ssl/ssl_engine_init.c
-===================================================================
---- modules/ssl/ssl_engine_init.c	(revision 1700543)
-+++ modules/ssl/ssl_engine_init.c	(working copy)
-@@ -625,6 +625,10 @@
-     SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
- 
-     SSL_CTX_set_info_callback(ctx, ssl_callback_Info);
-+
-+#ifdef HAVE_TLS_ALPN
-+    SSL_CTX_set_alpn_select_cb(ctx, ssl_callback_alpn_select, NULL);
-+#endif
- }
- 
- static apr_status_t ssl_init_ctx_verify(server_rec *s,
-Index: modules/ssl/ssl_engine_io.c
-===================================================================
---- modules/ssl/ssl_engine_io.c	(revision 1700543)
-+++ modules/ssl/ssl_engine_io.c	(working copy)
-@@ -28,6 +28,7 @@
-                                   core keeps dumping.''
-                                             -- Unknown    */
- #include "ssl_private.h"
-+#include "mod_ssl.h"
- #include "apr_date.h"
- 
- /*  _________________________________________________________________
-@@ -297,6 +298,9 @@
-     apr_pool_t *pool;
-     char buffer[AP_IOBUFSIZE];
-     ssl_filter_ctx_t *filter_ctx;
-+#ifdef HAVE_TLS_ALPN
-+    int alpn_finished;  /* 1 if ALPN has finished, 0 otherwise */
-+#endif
- } bio_filter_in_ctx_t;
- 
- /*
-@@ -1412,6 +1416,42 @@
-         APR_BRIGADE_INSERT_TAIL(bb, bucket);
-     }
- 
-+#ifdef HAVE_TLS_ALPN
-+    /* By this point, Application-Layer Protocol Negotiation (ALPN) should be 
-+     * completed (if our version of OpenSSL supports it). If we haven't already, 
-+     * find out which protocol was decided upon and inform other modules 
-+     * by calling alpn_proto_negotiated_hook. 
-+     */
-+    if (!inctx->alpn_finished) {
-+        SSLConnRec *sslconn = myConnConfig(f->c);
-+        const unsigned char *next_proto = NULL;
-+        unsigned next_proto_len = 0;
-+        const char *protocol;
-+        int n;
-+
-+        SSL_get0_alpn_selected(inctx->ssl, &next_proto, &next_proto_len);
-+        if (next_proto && next_proto_len) {
-+            protocol = apr_pstrmemdup(f->c->pool, (const char *)next_proto,
-+                                       next_proto_len);
-+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, f->c,
-+                          APLOGNO(02836) "ALPN selected protocol: '%s'",
-+                          protocol);
-+            
-+            if (strcmp(protocol, ap_get_protocol(f->c))) {
-+                status = ap_switch_protocol(f->c, NULL, sslconn->server,
-+                                            protocol);
-+                if (status != APR_SUCCESS) {
-+                    ap_log_cerror(APLOG_MARK, APLOG_ERR, status, f->c,
-+                                  APLOGNO(02908) "protocol switch to '%s' failed",
-+                                  protocol);
-+                    return status;
-+                }
-+            }
-+        }
-+        inctx->alpn_finished = 1;
-+    }
-+#endif
-+
-     return APR_SUCCESS;
- }
- 
-@@ -1893,6 +1933,9 @@
-     inctx->block = APR_BLOCK_READ;
-     inctx->pool = c->pool;
-     inctx->filter_ctx = filter_ctx;
-+#ifdef HAVE_TLS_ALPN
-+    inctx->alpn_finished = 0;
-+#endif
- }
- 
- /* The request_rec pointer is passed in here only to ensure that the
-Index: modules/ssl/ssl_engine_kernel.c
-===================================================================
---- modules/ssl/ssl_engine_kernel.c	(revision 1700543)
-+++ modules/ssl/ssl_engine_kernel.c	(working copy)
-@@ -29,6 +29,7 @@
-                                   time I was too famous.''
-                                             -- Unknown                */
- #include "ssl_private.h"
-+#include "mod_ssl.h"
- #include "util_md5.h"
- 
- static void ssl_configure_env(request_rec *r, SSLConnRec *sslconn);
-@@ -203,6 +204,9 @@
-                 ap_log_error(APLOG_MARK, APLOG_ERR, 0, r->server, APLOGNO(02032)
-                             "Hostname %s provided via SNI and hostname %s provided"
-                             " via HTTP are different", servername, host);
-+                if (r->connection->keepalives > 0) {
-+                    return HTTP_MISDIRECTED_REQUEST;
-+                }
-                 return HTTP_BAD_REQUEST;
-             }
-         }
-@@ -1903,16 +1907,22 @@
- 
- #ifdef HAVE_TLSEXT
- /*
-- * This callback function is executed when OpenSSL encounters an extended
-+ * This function sets the virtual host from an extended
-  * client hello with a server name indication extension ("SNI", cf. RFC 6066).
-  */
--int ssl_callback_ServerNameIndication(SSL *ssl, int *al, modssl_ctx_t *mctx)
-+static apr_status_t init_vhost(conn_rec *c, SSL *ssl)
- {
--    const char *servername =
--                SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
--    conn_rec *c = (conn_rec *)SSL_get_app_data(ssl);
--
-+    const char *servername;
-+    
-     if (c) {
-+        SSLConnRec *sslcon = myConnConfig(c);
-+        
-+        if (sslcon->server != c->base_server) {
-+            /* already found the vhost */
-+            return APR_SUCCESS;
-+        }
-+        
-+        servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
-         if (servername) {
-             if (ap_vhost_iterate_given_conn(c, ssl_find_vhost,
-                                             (void *)servername)) {
-@@ -1919,7 +1929,7 @@
-                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02043)
-                               "SSL virtual host for servername %s found",
-                               servername);
--                return SSL_TLSEXT_ERR_OK;
-+                return APR_SUCCESS;
-             }
-             else {
-                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02044)
-@@ -1949,8 +1959,20 @@
-                           "(using default/first virtual host)");
-         }
-     }
-+    
-+    return APR_NOTFOUND;
-+}
- 
--    return SSL_TLSEXT_ERR_NOACK;
-+/*
-+ * This callback function is executed when OpenSSL encounters an extended
-+ * client hello with a server name indication extension ("SNI", cf. RFC 6066).
-+ */
-+int ssl_callback_ServerNameIndication(SSL *ssl, int *al, modssl_ctx_t *mctx)
-+{
-+    conn_rec *c = (conn_rec *)SSL_get_app_data(ssl);
-+    apr_status_t status = init_vhost(c, ssl);
-+    
-+    return (status == APR_SUCCESS)? SSL_TLSEXT_ERR_OK : SSL_TLSEXT_ERR_NOACK;
- }
- 
- /*
-@@ -2149,6 +2171,79 @@
- }
- #endif /* HAVE_TLS_SESSION_TICKETS */
- 
-+#ifdef HAVE_TLS_ALPN
-+
-+/*
-+ * This callback function is executed when the TLS Application-Layer
-+ * Protocol Negotiation Extension (ALPN, RFC 7301) is triggered by the Client
-+ * Hello, giving a list of desired protocol names (in descending preference) 
-+ * to the server.
-+ * The callback has to select a protocol name or return an error if none of
-+ * the clients preferences is supported.
-+ * The selected protocol does not have to be on the client list, according
-+ * to RFC 7301, so no checks are performed.
-+ * The client protocol list is serialized as length byte followed by ASCII
-+ * characters (not null-terminated), followed by the next protocol name.
-+ */
-+int ssl_callback_alpn_select(SSL *ssl,
-+                             const unsigned char **out, unsigned char *outlen,
-+                             const unsigned char *in, unsigned int inlen,
-+                             void *arg)
-+{
-+    conn_rec *c = (conn_rec*)SSL_get_app_data(ssl);
-+    SSLConnRec *sslconn = myConnConfig(c);
-+    apr_array_header_t *client_protos;
-+    size_t len;
-+    int i;
-+
-+    /* If the connection object is not available,
-+     * then there's nothing for us to do. */
-+    if (c == NULL) {
-+        return SSL_TLSEXT_ERR_OK;
-+    }
-+
-+    if (inlen == 0) {
-+        // someone tries to trick us?
-+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02837)
-+                      "ALPN client protocol list empty");
-+        return SSL_TLSEXT_ERR_ALERT_FATAL;
-+    }
-+
-+    client_protos = apr_array_make(c->pool, 0, sizeof(char *));
-+    for (i = 0; i < inlen; /**/) {
-+        unsigned int plen = in[i++];
-+        if (plen + i > inlen) {
-+            // someone tries to trick us?
-+            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02838)
-+                          "ALPN protocol identifier too long");
-+            return SSL_TLSEXT_ERR_ALERT_FATAL;
-+        }
-+        APR_ARRAY_PUSH(client_protos, char *) =
-+            apr_pstrndup(c->pool, (const char *)in+i, plen);
-+        i += plen;
-+    }
-+
-+    /* The order the callbacks are invoked from TLS extensions is, unfortunately
-+     * not defined and older openssl versions do call ALPN selection before
-+     * they callback the SNI. We need to make sure that we know which vhost
-+     * we are dealing with so we respect the correct protocols.
-+     */
-+    init_vhost(c, ssl);
-+    
-+    *out = (const unsigned char *)ap_select_protocol(c, NULL, sslconn->server, 
-+                                                     client_protos);
-+    len = strlen((const char*)*out);
-+    if (len > 255) {
-+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02840)
-+                      "ALPN negotiated protocol name too long");
-+        return SSL_TLSEXT_ERR_ALERT_FATAL;
-+    }
-+    *outlen = (unsigned char)len;
-+
-+    return SSL_TLSEXT_ERR_OK;
-+}
-+#endif /* HAVE_TLS_ALPN */
-+
- #ifdef HAVE_SRP
- 
- int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
-Index: modules/ssl/ssl_private.h
-===================================================================
---- modules/ssl/ssl_private.h	(revision 1700543)
-+++ modules/ssl/ssl_private.h	(working copy)
-@@ -182,6 +182,11 @@
- #include <openssl/srp.h>
- #endif
- 
-+/* ALPN Protocol Negotiation */
-+#if defined(TLSEXT_TYPE_application_layer_protocol_negotiation)
-+#define HAVE_TLS_ALPN
-+#endif
-+
- #endif /* !defined(OPENSSL_NO_TLSEXT) && defined(SSL_set_tlsext_host_name) */
- 
- /* mod_ssl headers */
-@@ -798,6 +803,12 @@
-                                        EVP_CIPHER_CTX *, HMAC_CTX *, int);
- #endif
- 
-+#ifdef HAVE_TLS_ALPN
-+int ssl_callback_alpn_select(SSL *ssl, const unsigned char **out,
-+                             unsigned char *outlen, const unsigned char *in,
-+                             unsigned int inlen, void *arg);
-+#endif
-+
- /**  Session Cache Support  */
- apr_status_t ssl_scache_init(server_rec *, apr_pool_t *);
- void         ssl_scache_status_register(apr_pool_t *p);
-Index: server/core.c
-===================================================================
---- server/core.c	(revision 1700543)
-+++ server/core.c	(working copy)
-@@ -468,6 +468,9 @@
- 
-     conf->trace_enable = AP_TRACE_UNSET;
- 
-+    conf->protocols = apr_array_make(a, 5, sizeof(const char *));
-+    conf->protocols_honor_order = -1;
-+    
-     return (void *)conf;
- }
- 
-@@ -518,6 +521,12 @@
-                            ? virt->merge_trailers
-                            : base->merge_trailers;
- 
-+    conf->protocols = ((virt->protocols->nelts > 0)? 
-+                       virt->protocols : base->protocols);
-+    conf->protocols_honor_order = ((virt->protocols_honor_order < 0)?
-+                                       base->protocols_honor_order :
-+                                       virt->protocols_honor_order);
-+    
-     return conf;
- }
- 
-@@ -3692,6 +3701,48 @@
-     return NULL;
- }
- 
-+static const char *set_protocols(cmd_parms *cmd, void *dummy,
-+                                 const char *arg)
-+{
-+    core_server_config *conf =
-+    ap_get_core_module_config(cmd->server->module_config);
-+    const char **np;
-+    const char *err = ap_check_cmd_context(cmd, NOT_IN_DIR_LOC_FILE);
-+
-+    if (err) {
-+        return err;
-+    }
-+    
-+    np = (const char **)apr_array_push(conf->protocols);
-+    *np = arg;
-+
-+    return NULL;
-+}
-+
-+static const char *set_protocols_honor_order(cmd_parms *cmd, void *dummy,
-+                                             const char *arg)
-+{
-+    core_server_config *conf =
-+    ap_get_core_module_config(cmd->server->module_config);
-+    const char *err = ap_check_cmd_context(cmd, NOT_IN_DIR_LOC_FILE);
-+    
-+    if (err) {
-+        return err;
-+    }
-+    
-+    if (strcasecmp(arg, "on") == 0) {
-+        conf->protocols_honor_order = 1;
-+    }
-+    else if (strcasecmp(arg, "off") == 0) {
-+        conf->protocols_honor_order = 0;
-+    }
-+    else {
-+        return "ProtocolsHonorOrder must be 'on' or 'off'";
-+    }
-+    
-+    return NULL;
-+}
-+
- static apr_hash_t *errorlog_hash;
- 
- static int log_constant_item(const ap_errorlog_info *info, const char *arg,
-@@ -4205,6 +4256,11 @@
-               "'on' (default), 'off' or 'extended' to trace request body content"),
- AP_INIT_FLAG("MergeTrailers", set_merge_trailers, NULL, RSRC_CONF,
-               "merge request trailers into request headers or not"),
-+AP_INIT_ITERATE("Protocols", set_protocols, NULL, RSRC_CONF,
-+                "Controls which protocols are allowed"),
-+AP_INIT_TAKE1("ProtocolsHonorOrder", set_protocols_honor_order, NULL, RSRC_CONF,
-+              "'off' (default) or 'on' to respect given order of protocols, "
-+              "by default the client specified order determines selection"),
- { NULL }
- };
- 
-@@ -4936,6 +4992,61 @@
-     }
- }
- 
-+static int core_upgrade_handler(request_rec *r)
-+{
-+    conn_rec *c = r->connection;
-+    const char *upgrade = apr_table_get(r->headers_in, "Upgrade");
-+
-+    if (upgrade && *upgrade) {
-+        const char *conn = apr_table_get(r->headers_in, "Connection");
-+        if (ap_find_token(r->pool, conn, "upgrade")) {
-+            apr_array_header_t *offers = NULL;
-+            const char *err;
-+            
-+            err = ap_parse_token_list_strict(r->pool, upgrade, &offers, 0);
-+            if (err) {
-+                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(02910)
-+                              "parsing Upgrade header: %s", err);
-+                return DECLINED;
-+            }
-+            
-+            if (offers && offers->nelts > 0) {
-+                const char *protocol = ap_select_protocol(c, r, r->server,
-+                                                          offers);
-+                if (strcmp(protocol, ap_get_protocol(c))) {
-+                    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(02909)
-+                                  "Upgrade selects '%s'", protocol);
-+                    /* Let the client know what we are upgrading to. */
-+                    apr_table_clear(r->headers_out);
-+                    apr_table_setn(r->headers_out, "Upgrade", protocol);
-+                    apr_table_setn(r->headers_out, "Connection", "Upgrade");
-+                    
-+                    r->status = HTTP_SWITCHING_PROTOCOLS;
-+                    r->status_line = ap_get_status_line(r->status);
-+                    ap_send_interim_response(r, 1);
-+
-+                    ap_switch_protocol(c, r, r->server, protocol);
-+
-+                    /* make sure httpd closes the connection after this */
-+                    c->keepalive = AP_CONN_CLOSE;
-+                    return DONE;
-+                }
-+            }
-+        }
-+    }
-+    
-+    return DECLINED;
-+}
-+
-+static int core_upgrade_storage(request_rec *r)
-+{
-+    if ((r->method_number == M_OPTIONS) && r->uri && (r->uri[0] == '*') &&
-+        (r->uri[1] == '\0')) {
-+        return core_upgrade_handler(r);
-+    }
-+    return DECLINED;
-+}
-+
- static void register_hooks(apr_pool_t *p)
- {
-     errorlog_hash = apr_hash_make(p);
-@@ -4958,10 +5069,12 @@
-     ap_hook_check_config(core_check_config,NULL,NULL,APR_HOOK_FIRST);
-     ap_hook_test_config(core_dump_config,NULL,NULL,APR_HOOK_FIRST);
-     ap_hook_translate_name(ap_core_translate,NULL,NULL,APR_HOOK_REALLY_LAST);
-+    ap_hook_map_to_storage(core_upgrade_storage,NULL,NULL,APR_HOOK_REALLY_FIRST);
-     ap_hook_map_to_storage(core_map_to_storage,NULL,NULL,APR_HOOK_REALLY_LAST);
-     ap_hook_open_logs(ap_open_logs,NULL,NULL,APR_HOOK_REALLY_FIRST);
-     ap_hook_child_init(core_child_init,NULL,NULL,APR_HOOK_REALLY_FIRST);
-     ap_hook_child_init(ap_logs_child_init,NULL,NULL,APR_HOOK_MIDDLE);
-+    ap_hook_handler(core_upgrade_handler,NULL,NULL,APR_HOOK_REALLY_FIRST);
-     ap_hook_handler(default_handler,NULL,NULL,APR_HOOK_REALLY_LAST);
-     /* FIXME: I suspect we can eliminate the need for these do_nothings - Ben */
-     ap_hook_type_checker(do_nothing,NULL,NULL,APR_HOOK_REALLY_LAST);
-Index: server/protocol.c
-===================================================================
---- server/protocol.c	(revision 1700543)
-+++ server/protocol.c	(working copy)
-@@ -67,6 +67,9 @@
-     APR_HOOK_LINK(http_scheme)
-     APR_HOOK_LINK(default_port)
-     APR_HOOK_LINK(note_auth_failure)
-+    APR_HOOK_LINK(protocol_propose)
-+    APR_HOOK_LINK(protocol_switch)
-+    APR_HOOK_LINK(protocol_get)
- )
- 
- AP_DECLARE_DATA ap_filter_rec_t *ap_old_write_func = NULL;
-@@ -1790,7 +1793,132 @@
-     apr_brigade_destroy(x.bb);
- }
- 
-+/*
-+ * Compare two protocol identifier. Result is similar to strcmp():
-+ * 0 gives same precedence, >0 means proto1 is preferred.
-+ */
-+static int protocol_cmp(apr_array_header_t *preferences,
-+                        const char *proto1,
-+                        const char *proto2)
-+{
-+    if (preferences && preferences->nelts > 0) {
-+        int index1 = ap_array_index(preferences, proto1, 0);
-+        int index2 = ap_array_index(preferences, proto2, 0);
-+        if (index2 > index1) {
-+            return (index1 >= 0) ? 1 : -1;
-+        }
-+        else if (index1 > index2) {
-+            return (index2 >= 0) ? -1 : 1;
-+        }
-+    }
-+    /* both have the same index (mabye -1 or no pref configured) and we compare
-+     * the names so that spdy3 gets precedence over spdy2. That makes
-+     * the outcome at least deterministic. */
-+    return strcmp(proto1, proto2);
-+}
- 
-+AP_DECLARE(const char *) ap_get_protocol(conn_rec *c)
-+{
-+    const char *protocol = ap_run_protocol_get(c);
-+    return protocol? protocol : AP_PROTOCOL_HTTP1;
-+}
-+
-+AP_DECLARE(const char *) ap_select_protocol(conn_rec *c, request_rec *r, 
-+                                            server_rec *s,
-+                                            apr_array_header_t *choices)
-+{
-+    apr_pool_t *pool = r? r->pool : c->pool;
-+    apr_array_header_t *proposals;
-+    const char *protocol = NULL, *existing = ap_get_protocol(c);
-+    core_server_config *conf = ap_get_core_module_config(s->module_config);
-+
-+    if (APLOGcdebug(c)) {
-+        const char *p = apr_array_pstrcat(pool, conf->protocols, ',');
-+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, 
-+                      "select protocol from %s, choices=%s for server %s", 
-+                      p, apr_array_pstrcat(pool, choices, ','),
-+                      s->server_hostname);
-+    }
-+    
-+    proposals = apr_array_make(pool, choices->nelts+1, sizeof(char *));
-+    ap_run_protocol_propose(c, r, s, choices, proposals);
-+    
-+    if (proposals->nelts > 0) {
-+        int i;
-+        apr_array_header_t *prefs = ((conf->protocols_honor_order > 0
-+                                      && conf->protocols->nelts > 0)? 
-+                                     conf->protocols : choices);
-+
-+        /* If the existing protocol has not been proposed, but is a choice,
-+         * add it to the proposals implicitly.
-+         */
-+        if (!ap_array_contains(proposals, existing) 
-+            && ap_array_contains(choices, existing)) {
-+            APR_ARRAY_PUSH(proposals, const char*) = existing;
-+        }
-+        
-+        /* Select the most preferred protocol */
-+        if (APLOGcdebug(c)) {
-+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, 
-+                          "select protocol, proposals=%s preferences=%s", 
-+                          apr_array_pstrcat(pool, proposals, ','),
-+                          apr_array_pstrcat(pool, prefs, ','));
-+        }
-+        for (i = 0; i < proposals->nelts; ++i) {
-+            const char *p = APR_ARRAY_IDX(proposals, i, const char *);
-+            if (conf->protocols->nelts > 0 
-+                && !ap_array_contains(conf->protocols, p)) {
-+                /* not a permitted protocol here */
-+                continue;
-+            }
-+            else if (!protocol 
-+                     || (protocol_cmp(prefs, protocol, p) < 0)) {
-+                /* none selected yet or this on has preference */
-+                protocol = p;
-+            }
-+        }
-+    }
-+    if (APLOGcdebug(c)) {
-+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "selected protocol=%s", 
-+                      protocol? protocol : "(none)");
-+    }
-+
-+    return protocol? protocol : existing;
-+}
-+
-+AP_DECLARE(apr_status_t) ap_switch_protocol(conn_rec *c, request_rec *r, 
-+                                            server_rec *s,
-+                                            const char *protocol)
-+{
-+    const char *current = ap_get_protocol(c);
-+    int rc;
-+    
-+    if (!strcmp(current, protocol)) {
-+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, c, APLOGNO(02906)
-+                      "already at it, protocol_switch to %s", 
-+                      protocol);
-+        return APR_SUCCESS;
-+    }
-+    
-+    rc = ap_run_protocol_switch(c, r, s, protocol);
-+    switch (rc) {
-+        case DECLINED:
-+            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02907)
-+                          "no implementation for protocol_switch to %s", 
-+                          protocol);
-+            return APR_ENOTIMPL;
-+        case OK:
-+        case DONE:
-+            return APR_SUCCESS;
-+        default:
-+            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02905)
-+                          "unexpected return code %d from protocol_switch to %s"
-+                          , rc, protocol);
-+            return APR_EOF;
-+    }    
-+}
-+
-+
- AP_IMPLEMENT_HOOK_VOID(pre_read_request,
-                        (request_rec *r, conn_rec *c),
-                        (r, c))
-@@ -1805,3 +1933,14 @@
- AP_IMPLEMENT_HOOK_RUN_FIRST(int, note_auth_failure,
-                             (request_rec *r, const char *auth_type),
-                             (r, auth_type), DECLINED)
-+AP_IMPLEMENT_HOOK_RUN_ALL(int,protocol_propose,
-+                          (conn_rec *c, request_rec *r, server_rec *s,
-+                           const apr_array_header_t *offers,
-+                           apr_array_header_t *proposals), 
-+                          (c, r, s, offers, proposals), OK, DECLINED)
-+AP_IMPLEMENT_HOOK_RUN_FIRST(int,protocol_switch,
-+                            (conn_rec *c, request_rec *r, server_rec *s,
-+                             const char *protocol), 
-+                            (c, r, s, protocol), DECLINED)
-+AP_IMPLEMENT_HOOK_RUN_FIRST(const char *,protocol_get,
-+                            (const conn_rec *c), (c), NULL)
-Index: server/util.c
-===================================================================
---- server/util.c	(revision 1700543)
-+++ server/util.c	(working copy)
-@@ -1451,6 +1451,95 @@
-     return find_list_item(p, line, tok, AP_ETAG_WEAK);
- }
- 
-+/* Grab a list of tokens of the format 1#token (from RFC7230) */
-+AP_DECLARE(const char *) ap_parse_token_list_strict(apr_pool_t *p,
-+                                                    const char *str_in,
-+                                                    apr_array_header_t **tokens,
-+                                                    int skip_invalid)
-+{
-+    int in_leading_space = 1;
-+    int in_trailing_space = 0;
-+    int string_end = 0;
-+    const char *tok_begin;
-+    const char *cur;
-+    
-+    if (!str_in) {
-+        return NULL;
-+    }
-+    
-+    tok_begin = cur = str_in;
-+    
-+    while (!string_end) {
-+        const unsigned char c = (unsigned char)*cur;
-+        
-+        if (!TEST_CHAR(c, T_HTTP_TOKEN_STOP) && c != '\0') {
-+            /* Non-separator character; we are finished with leading
-+             * whitespace. We must never have encountered any trailing
-+             * whitespace before the delimiter (comma) */
-+            in_leading_space = 0;
-+            if (in_trailing_space) {
-+                return "Encountered illegal whitespace in token";
-+            }
-+        }
-+        else if (c == ' ' || c == '\t') {
-+            /* "Linear whitespace" only includes ASCII CRLF, space, and tab;
-+             * we can't get a CRLF since headers are split on them already,
-+             * so only look for a space or a tab */
-+            if (in_leading_space) {
-+                /* We're still in leading whitespace */
-+                ++tok_begin;
-+            }
-+            else {
-+                /* We must be in trailing whitespace */
-+                ++in_trailing_space;
-+            }
-+        }
-+        else if (c == ',' || c == '\0') {
-+            if (!in_leading_space) {
-+                /* If we're out of the leading space, we know we've read some
-+                 * characters of a token */
-+                if (*tokens == NULL) {
-+                    *tokens = apr_array_make(p, 4, sizeof(char *));
-+                }
-+                APR_ARRAY_PUSH(*tokens, char *) =
-+                apr_pstrmemdup((*tokens)->pool, tok_begin,
-+                               (cur - tok_begin) - in_trailing_space);
-+            }
-+            /* We're allowed to have null elements, just don't add them to the
-+             * array */
-+            
-+            tok_begin = cur + 1;
-+            in_leading_space = 1;
-+            in_trailing_space = 0;
-+            string_end = (c == '\0');
-+        }
-+        else {
-+            /* Encountered illegal separator char */
-+            if (skip_invalid) {
-+                /* Skip to the next separator */
-+                const char *temp;
-+                temp = ap_strchr_c(cur, ',');
-+                if(!temp) {
-+                    temp = ap_strchr_c(cur, '\0');
-+                }
-+                
-+                /* Act like we haven't seen a token so we reset */
-+                cur = temp - 1;
-+                in_leading_space = 1;
-+                in_trailing_space = 0;
-+            }
-+            else {
-+                return apr_psprintf(p, "Encountered illegal separator "
-+                                    "'\\x%.2x'", (unsigned int)c);
-+            }
-+        }
-+        
-+        ++cur;
-+    }
-+    
-+    return NULL;
-+}
-+    
- /* Retrieve a token, spacing over it and returning a pointer to
-  * the first non-white byte afterwards.  Note that these tokens
-  * are delimited by semis and commas; and can also be delimited
-@@ -3005,3 +3094,24 @@
- 
-     return apr_pstrndup(p, buf, k);
- }
-+
-+AP_DECLARE(int) ap_array_index(const apr_array_header_t *array, 
-+                               const char *s,
-+                               apr_size_t start)
-+{
-+    apr_size_t i;
-+    for (i = start; i < array->nelts; i++) {
-+        const char *p = APR_ARRAY_IDX(array, i, const char *);
-+        if (!strcmp(p, s)) {
-+            return (int)i;
-+        }
-+    }
-+    return -1;
-+}
-+
-+AP_DECLARE(int) ap_array_contains(const apr_array_header_t *array, 
-+                                  const char *s)
-+{
-+    return (ap_array_index(array, s, 0) >= 0);
-+}
-+
-diff -x .svn -x srclib -uNr build/NWGNUenvironment.inc build/NWGNUenvironment.inc
---- build/NWGNUenvironment.inc	2015-09-02 15:03:57.000000000 +0200
-+++ build/NWGNUenvironment.inc	2015-09-02 14:35:36.000000000 +0200
-@@ -49,6 +49,12 @@
- $(error LDAPSDK does not point to a valid Novell CLDAP SDK) 
- endif
- 
-+ifdef WITH_HTTP2
-+ifneq "$(wildcard $(NGH2SRC)/lib/nghttp2_hd.h)" "$(NGH2SRC)/lib/nghttp2_hd.h"
-+$(error NGH2SRC does not point to a valid NGHTTP2 source tree)
-+endif
-+endif
-+
- ifndef PCRESRC
- PCRESRC = $(AP_WORK)/srclib/pcre
- endif
-diff -x .svn -x srclib -uNr docs/conf/extra/httpd-h2.conf.in docs/conf/extra/httpd-h2.conf.in
---- docs/conf/extra/httpd-h2.conf.in	1970-01-01 01:00:00.000000000 +0100
-+++ docs/conf/extra/httpd-h2.conf.in	2015-09-02 14:21:57.000000000 +0200
-@@ -0,0 +1,11 @@
-+#
-+# This is the Apache server configuration file providing HTTP/2 support.
-+# It contains the configuration directives to instruct the server how to
-+# serve pages via the http/2 protocol. For detailed information about these 
-+# directives see <URL:http://httpd.apache.org/docs/trunk/mod/mod_h2.html>
-+# 
-+# Required modules: mod_h2
-+
-+<IfModule h2_module>
-+  # h2 is enabled by loading, for site specific control see 'Protocols'
-+</IfModule>
-diff -x .svn -x srclib -uNr docs/conf/httpd.conf.in docs/conf/httpd.conf.in
---- docs/conf/httpd.conf.in	2015-09-02 15:03:57.000000000 +0200
-+++ docs/conf/httpd.conf.in	2015-09-02 14:17:59.000000000 +0200
-@@ -418,3 +418,6 @@
- #RequestHeader unset DNT env=bad_DNT
- #</IfModule>
- 
-+# h2/h2c (HTTP/2) connections
-+#Include @rel_sysconfdir@/extra/httpd-h2.conf
-+
-diff -x .svn -x srclib -uNr docs/manual/mod/allmodules.xml docs/manual/mod/allmodules.xml
---- docs/manual/mod/allmodules.xml	2015-09-02 15:03:55.000000000 +0200
-+++ docs/manual/mod/allmodules.xml	2015-09-02 14:17:59.000000000 +0200
-@@ -51,6 +51,7 @@
-   <modulefile>mod_ext_filter.xml</modulefile>
-   <modulefile>mod_file_cache.xml</modulefile>
-   <modulefile>mod_filter.xml</modulefile>
-+  <modulefile>mod_h2.xml</modulefile>
-   <modulefile>mod_headers.xml</modulefile>
-   <modulefile>mod_heartbeat.xml</modulefile>
-   <modulefile>mod_heartmonitor.xml</modulefile>
-diff -x .svn -x srclib -uNr docs/manual/mod/mod_h2.xml docs/manual/mod/mod_h2.xml
---- docs/manual/mod/mod_h2.xml	1970-01-01 01:00:00.000000000 +0100
-+++ docs/manual/mod/mod_h2.xml	2015-09-02 14:18:32.000000000 +0200
+--- docs/manual/mod/mod_h2.xml	(revision 0)
++++ docs/manual/mod/mod_h2.xml	(working copy)
 @@ -0,0 +1,278 @@
 +<?xml version="1.0"?>
 +<!DOCTYPE modulesynopsis SYSTEM "../style/modulesynopsis.dtd">
@@ -1384,9 +428,247 @@ diff -x .svn -x srclib -uNr docs/manual/mod/mod_h2.xml docs/manual/mod/mod_h2.xm
 +    </directivesynopsis>
 +
 +</modulesynopsis>
-diff -x .svn -x srclib -uNr modules/NWGNUmakefile modules/NWGNUmakefile
---- modules/NWGNUmakefile	2015-09-02 15:03:43.000000000 +0200
-+++ modules/NWGNUmakefile	2015-09-02 14:30:23.000000000 +0200
+Index: include/http_core.h
+===================================================================
+--- include/http_core.h	(revision 1700959)
++++ include/http_core.h	(working copy)
+@@ -681,6 +681,10 @@
+ #define AP_MERGE_TRAILERS_DISABLE  2
+     int merge_trailers;
+ 
++
++
++    apr_array_header_t *protocols;
++    int protocols_honor_order;
+ } core_server_config;
+ 
+ /* for AddOutputFiltersByType in core.c */
+Index: include/http_protocol.h
+===================================================================
+--- include/http_protocol.h	(revision 1700959)
++++ include/http_protocol.h	(working copy)
+@@ -700,6 +700,139 @@
+  */
+ AP_DECLARE_HOOK(apr_port_t,default_port,(const request_rec *r))
+ 
++
++#define AP_PROTOCOL_HTTP1		"http/1.1"
++
++/**
++ * Determine the list of protocols available for a connection/request. This may
++ * be collected with or without any request sent, in which case the request is 
++ * NULL. Or it may be triggered by the request received, e.g. through the 
++ * "Upgrade" header.
++ *
++ * This hook will be run whenever protocols are being negotiated (ALPN as
++ * one example). It may also be invoked at other times, e.g. when the server
++ * wants to advertise protocols it is capable of switching to.
++ * 
++ * The identifiers for protocols are taken from the TLS extension type ALPN:
++ * https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xml
++ *
++ * If no protocols are added to the proposals, the server not perform any
++ * switch. If the protocol selected from the proposals is the protocol
++ * already in place, also no protocol switch will be invoked.
++ *
++ * The client may already have announced the protocols it is willing to
++ * accept. These will then be listed as offers. This parameter may also
++ * be NULL, indicating that offers from the client are not known and
++ * the hooks should propose all protocols that are valid for the
++ * current connection/request.
++ *
++ * All hooks are run, unless one returns an error. Proposals may contain
++ * duplicates. The order in which proposals are added is usually ignored.
++ * 
++ * @param c The current connection
++ * @param r The current request or NULL
++ * @param s The server/virtual host selected
++ * @param offers A list of protocol identifiers offered by the client or
++ *               NULL to indicated that the hooks are free to propose 
++ * @param proposals The list of protocol identifiers proposed by the hooks
++ * @return OK or DECLINED
++ */
++AP_DECLARE_HOOK(int,protocol_propose,(conn_rec *c, request_rec *r,
++                                      server_rec *s,
++                                      const apr_array_header_t *offers,
++                                      apr_array_header_t *proposals))
++
++/**
++ * Perform a protocol switch on the connection. The exact requirements for
++ * that depend on the protocol in place and the one switched to. The first 
++ * protocol module to handle the switch is the last module run.
++ * 
++ * For a connection level switch (r == NULL), the handler must on return
++ * leave the conn_rec in a state suitable for processing the switched
++ * protocol, e.g. correct filters in place.
++ *
++ * For a request triggered switch (r != NULL), the protocol switch is done
++ * before the response is sent out. When switching from "http/1.1" via Upgrade
++ * header, the 101 intermediate response will have been sent. The
++ * hook needs then to process the connection until it can be closed. Which
++ * the server will enforce on hook return.
++ * Any error the hook might encounter must already be sent by the hook itself
++ * to the client in whatever form the new protocol requires.
++ *
++ * @param c The current connection
++ * @param r The current request or NULL
++ * @param s The server/virtual host selected
++ * @param choices A list of protocol identifiers, normally the clients whishes
++ * @param proposals the list of protocol identifiers proposed by the hooks
++ * @return OK or DECLINED
++ */
++AP_DECLARE_HOOK(int,protocol_switch,(conn_rec *c, request_rec *r,
++                                     server_rec *s,
++                                     const char *protocol))
++
++/**
++ * Return the protocol used on the connection. Modules implementing
++ * protocol switching must register here and return the correct protocol
++ * identifier for connections they switched.
++ *
++ * To find out the protocol for the current connection, better call
++ * @see ap_get_protocol which internally uses this hook.
++ *
++ * @param c The current connection
++ * @return The identifier of the protocol in place or NULL
++ */
++AP_DECLARE_HOOK(const char *,protocol_get,(const conn_rec *c))
++    
++/**
++ * Select a protocol for the given connection and optional request. Will return
++ * the protocol identifier selected which may be the protocol already in place
++ * on the connection. The selected protocol will be NULL if non of the given
++ * choices could be agreed upon (e.g. no proposal as made).
++ *
++ * A special case is where the choices itself is NULL (instead of empty). In
++ * this case there are no restrictions imposed on protocol selection.
++ *
++ * @param c The current connection
++ * @param r The current request or NULL
++ * @param s The server/virtual host selected
++ * @param choices A list of protocol identifiers, normally the clients whishes
++ * @return The selected protocol or NULL if no protocol could be agreed upon
++ */
++AP_DECLARE(const char *) ap_select_protocol(conn_rec *c, request_rec *r, 
++                                            server_rec *s,
++                                            const apr_array_header_t *choices);
++
++/**
++ * Perform the actual protocol switch. The protocol given must have been
++ * selected before on the very same connection and request pair.
++ *
++ * @param c The current connection
++ * @param r The current request or NULL
++ * @param s The server/virtual host selected
++ * @param protocol the protocol to switch to
++ * @return APR_SUCCESS, if caller may continue processing as usual
++ *         APR_EOF,     if caller needs to stop processing the connection
++ *         APR_EINVAL,  if the protocol is already in place
++ *         APR_NOTIMPL, if no module performed the switch
++ *         Other errors where appropriate
++ */
++AP_DECLARE(apr_status_t) ap_switch_protocol(conn_rec *c, request_rec *r, 
++                                            server_rec *s,
++                                            const char *protocol);
++
++/**
++ * Call the protocol_get hook to determine the protocol currently in use
++ * for the given connection.
++ *
++ * Unless another protocol has been switch to, will default to
++ * @see AP_PROTOCOL_HTTP1 and modules implementing a  new protocol must
++ * report a switched connection via the protocol_get hook.
++ *
++ * @param c The connection to determine the protocol for
++ * @return the protocol in use, never NULL
++ */
++AP_DECLARE(const char *) ap_get_protocol(conn_rec *c);
++
+ /** @see ap_bucket_type_error */
+ typedef struct ap_bucket_error ap_bucket_error;
+ 
+Index: include/http_request.h
+===================================================================
+--- include/http_request.h	(revision 1700959)
++++ include/http_request.h	(working copy)
+@@ -315,7 +315,7 @@
+  * the response to the client
+  * @param r The current request
+  */
+-void ap_process_request(request_rec *r);
++AP_DECLARE(void) ap_process_request(request_rec *r);
+ 
+ /* For post-processing after a handler has finished with a request.
+  * (Commonly used after it was suspended)
+Index: include/httpd.h
+===================================================================
+--- include/httpd.h	(revision 1700959)
++++ include/httpd.h	(working copy)
+@@ -518,6 +518,7 @@
+ #define HTTP_UNSUPPORTED_MEDIA_TYPE          415
+ #define HTTP_RANGE_NOT_SATISFIABLE           416
+ #define HTTP_EXPECTATION_FAILED              417
++#define HTTP_MISDIRECTED_REQUEST             421
+ #define HTTP_UNPROCESSABLE_ENTITY            422
+ #define HTTP_LOCKED                          423
+ #define HTTP_FAILED_DEPENDENCY               424
+@@ -1549,6 +1550,23 @@
+ AP_DECLARE(int) ap_find_etag_strong(apr_pool_t *p, const char *line, const char *tok);
+ 
+ /**
++ * Retrieve an array of tokens in the format "1#token" defined in RFC2616. Only
++ * accepts ',' as a delimiter, does not accept quoted strings, and errors on
++ * any separator.
++ * @param p The pool to allocate from
++ * @param tok The line to read tokens from
++ * @param tokens Pointer to an array of tokens. If not NULL, must be an array
++ *    of char*, otherwise it will be allocated on @a p when a token is found
++ * @param skip_invalid If true, when an invalid separator is encountered, it
++ *    will be ignored.
++ * @return NULL on success, an error string otherwise.
++ * @remark *tokens may be NULL on output if NULL in input and no token is found
++ */
++AP_DECLARE(const char *) ap_parse_token_list_strict(apr_pool_t *p, const char *tok,
++                                                    apr_array_header_t **tokens,
++                                                    int skip_invalid);
++    
++/**
+  * Retrieve a token, spacing over it and adjusting the pointer to
+  * the first non-white byte afterwards.  Note that these tokens
+  * are delimited by semis and commas and can also be delimited
+@@ -2265,6 +2283,28 @@
+ 
+ #define AP_NORESTART APR_OS_START_USEERR + 1
+ 
++/**
++ * Get the first index of the string in the array or -1 if not found. Start
++ * searching a start. 
++ * @param array The array the check
++ * @param s The string to find
++ * @param start Start index for search. If start is out of bounds (negative or  
++                equal to array length or greater), -1 will be returned.
++ * @return index of string in array or -1
++ */
++AP_DECLARE(int) ap_array_str_index(const apr_array_header_t *array, 
++                                   const char *s,
++                                   int start);
++
++/**
++ * Check if the string is member of the given array by strcmp.
++ * @param array The array the check
++ * @param s The string to find
++ * @return !=0 iff string is member of array (via strcmp)
++ */
++AP_DECLARE(int) ap_array_str_contains(const apr_array_header_t *array, 
++                                      const char *s);
++
+ #ifdef __cplusplus
+ }
+ #endif
+Index: modules/NWGNUmakefile
+===================================================================
+--- modules/NWGNUmakefile	(revision 1700959)
++++ modules/NWGNUmakefile	(working copy)
 @@ -5,7 +5,8 @@
  #  variable WITH_SSL=1
  # To build with the mod_lua module set the environment
@@ -1411,9 +693,10 @@ diff -x .svn -x srclib -uNr modules/NWGNUmakefile modules/NWGNUmakefile
  # Allow the experimental modules to be built if WITH_EXPERIMENTAL is defined
  ifeq "$(WITH_EXPERIMENTAL)" "1"
  SUBDIRS += experimental
-diff -x .svn -x srclib -uNr modules/README modules/README
---- modules/README	2015-09-02 15:03:43.000000000 +0200
-+++ modules/README	2015-09-02 14:27:23.000000000 +0200
+Index: modules/README
+===================================================================
+--- modules/README	(revision 1700959)
++++ modules/README	(working copy)
 @@ -41,6 +41,9 @@
  http/
    This directory houses modules that basic HTTP protocol implementation.
@@ -1424,9 +707,80 @@ diff -x .svn -x srclib -uNr modules/README modules/README
  loggers/
    This directory houses modules that handle logging functions.
  
-diff -x .svn -x srclib -uNr modules/http2/Makefile.in modules/http2/Makefile.in
---- modules/http2/Makefile.in	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/Makefile.in	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http/http_protocol.c
+===================================================================
+--- modules/http/http_protocol.c	(revision 1700959)
++++ modules/http/http_protocol.c	(working copy)
+@@ -135,7 +135,7 @@
+     NULL, /* 418 */
+     NULL, /* 419 */
+     NULL, /* 420 */
+-    NULL, /* 421 */
++    "421 Misdirected Request",
+     "422 Unprocessable Entity",
+     "423 Locked",
+     "424 Failed Dependency",
+@@ -1293,6 +1293,11 @@
+     case HTTP_NETWORK_AUTHENTICATION_REQUIRED:
+         return("<p>The client needs to authenticate to gain\n"
+                "network access.</p>\n");
++    case HTTP_MISDIRECTED_REQUEST:
++        return("<p>The client needs a new connection for this\n"
++               "request as the requested host name does not match\n"
++               "the Server Name Indication (SNI) in use for this\n"
++               "connection.</p>\n");
+     default:                    /* HTTP_INTERNAL_SERVER_ERROR */
+         /*
+          * This comparison to expose error-notes could be modified to
+Index: modules/http/http_request.c
+===================================================================
+--- modules/http/http_request.c	(revision 1700959)
++++ modules/http/http_request.c	(working copy)
+@@ -363,7 +363,7 @@
+     ap_process_request_after_handler(r);
+ }
+ 
+-void ap_process_request(request_rec *r)
++AP_DECLARE(void) ap_process_request(request_rec *r)
+ {
+     apr_bucket_brigade *bb;
+     apr_bucket *b;
+Index: modules/http2/.deps
+===================================================================
+Index: modules/http2/Makefile
+===================================================================
+--- modules/http2/Makefile	(revision 0)
++++ modules/http2/Makefile	(working copy)
+@@ -0,0 +1,25 @@
++top_srcdir   = /Users/sei/projects/httpd/2.4.x
++top_builddir = /Users/sei/projects/httpd/2.4.x
++srcdir       = /Users/sei/projects/httpd/2.4.x/modules/http2
++builddir     = /Users/sei/projects/httpd/2.4.x/modules/http2
++VPATH        = /Users/sei/projects/httpd/2.4.x/modules/http2
++# Licensed to the Apache Software Foundation (ASF) under one or more
++# contributor license agreements.  See the NOTICE file distributed with
++# this work for additional information regarding copyright ownership.
++# The ASF licenses this file to You under the Apache License, Version 2.0
++# (the "License"); you may not use this file except in compliance with
++# the License.  You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++#
++#   standard stuff
++#
++
++include $(top_srcdir)/build/special.mk
+Index: modules/http2/Makefile.in
+===================================================================
+--- modules/http2/Makefile.in	(revision 0)
++++ modules/http2/Makefile.in	(working copy)
 @@ -0,0 +1,20 @@
 +# Licensed to the Apache Software Foundation (ASF) under one or more
 +# contributor license agreements.  See the NOTICE file distributed with
@@ -1448,9 +802,10 @@ diff -x .svn -x srclib -uNr modules/http2/Makefile.in modules/http2/Makefile.in
 +#
 +
 +include $(top_srcdir)/build/special.mk
-diff -x .svn -x srclib -uNr modules/http2/NWGNUmakefile modules/http2/NWGNUmakefile
---- modules/http2/NWGNUmakefile	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/NWGNUmakefile	2015-09-02 14:25:30.000000000 +0200
+Index: modules/http2/NWGNUmakefile
+===================================================================
+--- modules/http2/NWGNUmakefile	(revision 0)
++++ modules/http2/NWGNUmakefile	(working copy)
 @@ -0,0 +1,331 @@
 +#
 +# This Makefile requires the environment var NGH2SRC
@@ -1783,9 +1138,10 @@ diff -x .svn -x srclib -uNr modules/http2/NWGNUmakefile modules/http2/NWGNUmakef
 +include $(APBUILD)/NWGNUtail.inc
 +
 +
-diff -x .svn -x srclib -uNr modules/http2/README.h2 modules/http2/README.h2
---- modules/http2/README.h2	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/README.h2	2015-09-02 14:25:31.000000000 +0200
+Index: modules/http2/README.h2
+===================================================================
+--- modules/http2/README.h2	(revision 0)
++++ modules/http2/README.h2	(working copy)
 @@ -0,0 +1,70 @@
 +The h2 module adds support for the HTTP/2 protocol to the server.
 +
@@ -1857,9 +1213,10 @@ diff -x .svn -x srclib -uNr modules/http2/README.h2 modules/http2/README.h2
 +
 +  https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
 +
-diff -x .svn -x srclib -uNr modules/http2/config.m4 modules/http2/config.m4
---- modules/http2/config.m4	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/config.m4	2015-09-02 14:25:48.000000000 +0200
+Index: modules/http2/config.m4
+===================================================================
+--- modules/http2/config.m4	(revision 0)
++++ modules/http2/config.m4	(working copy)
 @@ -0,0 +1,186 @@
 +dnl Licensed to the Apache Software Foundation (ASF) under one or more
 +dnl contributor license agreements.  See the NOTICE file distributed with
@@ -2047,9 +1404,10 @@ diff -x .svn -x srclib -uNr modules/http2/config.m4 modules/http2/config.m4
 +dnl #  end of module specific part
 +APACHE_MODPATH_FINISH
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_alt_svc.c modules/http2/h2_alt_svc.c
---- modules/http2/h2_alt_svc.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_alt_svc.c	2015-09-02 14:25:27.000000000 +0200
+Index: modules/http2/h2_alt_svc.c
+===================================================================
+--- modules/http2/h2_alt_svc.c	(revision 0)
++++ modules/http2/h2_alt_svc.c	(working copy)
 @@ -0,0 +1,132 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -2183,9 +1541,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_alt_svc.c modules/http2/h2_alt_svc.
 +    return DECLINED;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_alt_svc.h modules/http2/h2_alt_svc.h
---- modules/http2/h2_alt_svc.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_alt_svc.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_alt_svc.h
+===================================================================
+--- modules/http2/h2_alt_svc.h	(revision 0)
++++ modules/http2/h2_alt_svc.h	(working copy)
 @@ -0,0 +1,39 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -2226,9 +1585,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_alt_svc.h modules/http2/h2_alt_svc.
 +
 +
 +#endif /* defined(__mod_h2__h2_alt_svc__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_config.c modules/http2/h2_config.c
---- modules/http2/h2_config.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_config.c	2015-09-02 14:26:06.000000000 +0200
+Index: modules/http2/h2_config.c
+===================================================================
+--- modules/http2/h2_config.c	(revision 0)
++++ modules/http2/h2_config.c	(working copy)
 @@ -0,0 +1,416 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -2646,9 +2006,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_config.c modules/http2/h2_config.c
 +    return h2_config_sget(c->base_server);
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_config.h modules/http2/h2_config.h
---- modules/http2/h2_config.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_config.h	2015-09-02 14:25:59.000000000 +0200
+Index: modules/http2/h2_config.h
+===================================================================
+--- modules/http2/h2_config.h	(revision 0)
++++ modules/http2/h2_config.h	(working copy)
 @@ -0,0 +1,74 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -2724,9 +2085,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_config.h modules/http2/h2_config.h
 +
 +#endif /* __mod_h2__h2_config_h__ */
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_conn.c modules/http2/h2_conn.c
---- modules/http2/h2_conn.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_conn.c	2015-09-02 14:25:59.000000000 +0200
+Index: modules/http2/h2_conn.c
+===================================================================
+--- modules/http2/h2_conn.c	(revision 0)
++++ modules/http2/h2_conn.c	(working copy)
 @@ -0,0 +1,532 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -3260,9 +2622,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_conn.c modules/http2/h2_conn.c
 +    c->cs = &(cs->pub);
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_conn.h modules/http2/h2_conn.h
---- modules/http2/h2_conn.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_conn.h	2015-09-02 14:25:19.000000000 +0200
+Index: modules/http2/h2_conn.h
+===================================================================
+--- modules/http2/h2_conn.h	(revision 0)
++++ modules/http2/h2_conn.h	(working copy)
 @@ -0,0 +1,60 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -3324,9 +2687,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_conn.h modules/http2/h2_conn.h
 +apr_status_t h2_conn_process(conn_rec *c, apr_socket_t *socket);
 +
 +#endif /* defined(__mod_h2__h2_conn__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_conn_io.c modules/http2/h2_conn_io.c
---- modules/http2/h2_conn_io.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_conn_io.c	2015-09-02 14:25:41.000000000 +0200
+Index: modules/http2/h2_conn_io.c
+===================================================================
+--- modules/http2/h2_conn_io.c	(revision 0)
++++ modules/http2/h2_conn_io.c	(working copy)
 @@ -0,0 +1,321 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -3649,9 +3013,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_conn_io.c modules/http2/h2_conn_io.
 +    return APR_SUCCESS;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_conn_io.h modules/http2/h2_conn_io.h
---- modules/http2/h2_conn_io.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_conn_io.h	2015-09-02 14:25:10.000000000 +0200
+Index: modules/http2/h2_conn_io.h
+===================================================================
+--- modules/http2/h2_conn_io.h	(revision 0)
++++ modules/http2/h2_conn_io.h	(working copy)
 @@ -0,0 +1,58 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -3711,9 +3076,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_conn_io.h modules/http2/h2_conn_io.
 +apr_status_t h2_conn_io_flush(h2_conn_io *io);
 +
 +#endif /* defined(__mod_h2__h2_conn_io__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_ctx.c modules/http2/h2_ctx.c
---- modules/http2/h2_ctx.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_ctx.c	2015-09-02 14:25:41.000000000 +0200
+Index: modules/http2/h2_ctx.c
+===================================================================
+--- modules/http2/h2_ctx.c	(revision 0)
++++ modules/http2/h2_ctx.c	(working copy)
 @@ -0,0 +1,84 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -3799,9 +3165,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_ctx.c modules/http2/h2_ctx.c
 +{
 +    return ctx->task_env;
 +}
-diff -x .svn -x srclib -uNr modules/http2/h2_ctx.h modules/http2/h2_ctx.h
---- modules/http2/h2_ctx.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_ctx.h	2015-09-02 14:25:41.000000000 +0200
+Index: modules/http2/h2_ctx.h
+===================================================================
+--- modules/http2/h2_ctx.h	(revision 0)
++++ modules/http2/h2_ctx.h	(working copy)
 @@ -0,0 +1,59 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -3862,9 +3229,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_ctx.h modules/http2/h2_ctx.h
 +struct h2_task_env *h2_ctx_get_task(h2_ctx *ctx);
 +
 +#endif /* defined(__mod_h2__h2_ctx__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_from_h1.c modules/http2/h2_from_h1.c
---- modules/http2/h2_from_h1.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_from_h1.c	2015-09-02 14:25:24.000000000 +0200
+Index: modules/http2/h2_from_h1.c
+===================================================================
+--- modules/http2/h2_from_h1.c	(revision 0)
++++ modules/http2/h2_from_h1.c	(working copy)
 @@ -0,0 +1,570 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -4436,9 +3804,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_from_h1.c modules/http2/h2_from_h1.
 +    }
 +    return ap_pass_brigade(f->next, bb);
 +}
-diff -x .svn -x srclib -uNr modules/http2/h2_from_h1.h modules/http2/h2_from_h1.h
---- modules/http2/h2_from_h1.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_from_h1.h	2015-09-02 14:24:50.000000000 +0200
+Index: modules/http2/h2_from_h1.h
+===================================================================
+--- modules/http2/h2_from_h1.h	(revision 0)
++++ modules/http2/h2_from_h1.h	(working copy)
 @@ -0,0 +1,82 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -4522,10 +3891,11 @@ diff -x .svn -x srclib -uNr modules/http2/h2_from_h1.h modules/http2/h2_from_h1.
 +apr_status_t h2_response_output_filter(ap_filter_t *f, apr_bucket_brigade *bb);
 +
 +#endif /* defined(__mod_h2__h2_from_h1__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_h2.c modules/http2/h2_h2.c
---- modules/http2/h2_h2.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_h2.c	2015-09-02 14:25:46.000000000 +0200
-@@ -0,0 +1,244 @@
+Index: modules/http2/h2_h2.c
+===================================================================
+--- modules/http2/h2_h2.c	(revision 0)
++++ modules/http2/h2_h2.c	(working copy)
+@@ -0,0 +1,232 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
@@ -4651,19 +4021,7 @@ diff -x .svn -x srclib -uNr modules/http2/h2_h2.c modules/http2/h2_h2.c
 +{
 +    h2_ctx *ctx = h2_ctx_get(c);
 +    
-+    if (h2_ctx_is_task(ctx)) {
-+        /* cleanup on task connections */
-+        /* we once removed the reqtimeout filter on task connections,
-+         * but timeouts here might have been a side effect of other things.
-+         * Ideally mod_reqtimeout would do its work on task connections
-+         * as it basically is a HTTP/1.1 request/response and it's made
-+         * for that.
-+         * So, let the filter stay for now and see if we ever encounter
-+         * unexpected timeouts on tasks again.
-+         */
-+        //ap_remove_input_filter_byhandle(c->input_filters, "reqtimeout");
-+    }
-+    else if (h2_ctx_is_active(ctx)) {
++    if (h2_ctx_is_active(ctx) && !h2_ctx_is_task(ctx)) {
 +        /* cleanup on master h2 connections */
 +        ap_remove_input_filter_byhandle(c->input_filters, "reqtimeout");
 +    }
@@ -4770,9 +4128,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_h2.c modules/http2/h2_h2.c
 +}
 +
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_h2.h modules/http2/h2_h2.h
---- modules/http2/h2_h2.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_h2.h	2015-09-02 14:25:04.000000000 +0200
+Index: modules/http2/h2_h2.h
+===================================================================
+--- modules/http2/h2_h2.h	(revision 0)
++++ modules/http2/h2_h2.h	(working copy)
 @@ -0,0 +1,57 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -4831,9 +4190,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_h2.h modules/http2/h2_h2.h
 +
 +
 +#endif /* defined(__mod_h2__h2_h2__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_io.c modules/http2/h2_io.c
---- modules/http2/h2_io.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_io.c	2015-09-02 14:26:04.000000000 +0200
+Index: modules/http2/h2_io.c
+===================================================================
+--- modules/http2/h2_io.c	(revision 0)
++++ modules/http2/h2_io.c	(working copy)
 @@ -0,0 +1,165 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -5000,9 +4360,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_io.c modules/http2/h2_io.c
 +                            apr_bucket_eos_create(io->bbout->bucket_alloc));
 +    return APR_SUCCESS;
 +}
-diff -x .svn -x srclib -uNr modules/http2/h2_io.h modules/http2/h2_io.h
---- modules/http2/h2_io.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_io.h	2015-09-02 14:25:18.000000000 +0200
+Index: modules/http2/h2_io.h
+===================================================================
+--- modules/http2/h2_io.h	(revision 0)
++++ modules/http2/h2_io.h	(working copy)
 @@ -0,0 +1,126 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -5130,9 +4491,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_io.h modules/http2/h2_io.h
 +
 +
 +#endif /* defined(__mod_h2__h2_io__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_io_set.c modules/http2/h2_io_set.c
---- modules/http2/h2_io_set.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_io_set.c	2015-09-02 14:25:21.000000000 +0200
+Index: modules/http2/h2_io_set.c
+===================================================================
+--- modules/http2/h2_io_set.c	(revision 0)
++++ modules/http2/h2_io_set.c	(working copy)
 @@ -0,0 +1,180 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -5314,9 +4676,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_io_set.c modules/http2/h2_io_set.c
 +    return sp->list->nelts;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_io_set.h modules/http2/h2_io_set.h
---- modules/http2/h2_io_set.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_io_set.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_io_set.h
+===================================================================
+--- modules/http2/h2_io_set.h	(revision 0)
++++ modules/http2/h2_io_set.h	(working copy)
 @@ -0,0 +1,47 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -5365,9 +4728,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_io_set.h modules/http2/h2_io_set.h
 +                           h2_io_set_iter_fn *iter, void *ctx);
 +
 +#endif /* defined(__mod_h2__h2_io_set__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_mplx.c modules/http2/h2_mplx.c
---- modules/http2/h2_mplx.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_mplx.c	2015-09-02 14:25:50.000000000 +0200
+Index: modules/http2/h2_mplx.c
+===================================================================
+--- modules/http2/h2_mplx.c	(revision 0)
++++ modules/http2/h2_mplx.c	(working copy)
 @@ -0,0 +1,798 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -6167,9 +5531,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_mplx.c modules/http2/h2_mplx.c
 +    return status;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_mplx.h modules/http2/h2_mplx.h
---- modules/http2/h2_mplx.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_mplx.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_mplx.h
+===================================================================
+--- modules/http2/h2_mplx.h	(revision 0)
++++ modules/http2/h2_mplx.h	(working copy)
 @@ -0,0 +1,322 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -6493,9 +5858,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_mplx.h modules/http2/h2_mplx.h
 +
 +
 +#endif /* defined(__mod_h2__h2_mplx__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_private.h modules/http2/h2_private.h
---- modules/http2/h2_private.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_private.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_private.h
+===================================================================
+--- modules/http2/h2_private.h	(revision 0)
++++ modules/http2/h2_private.h	(working copy)
 @@ -0,0 +1,36 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -6533,9 +5899,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_private.h modules/http2/h2_private.
 +#define H2_CRLF             "\r\n"
 +
 +#endif
-diff -x .svn -x srclib -uNr modules/http2/h2_request.c modules/http2/h2_request.c
---- modules/http2/h2_request.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_request.c	2015-09-02 14:25:27.000000000 +0200
+Index: modules/http2/h2_request.c
+===================================================================
+--- modules/http2/h2_request.c	(revision 0)
++++ modules/http2/h2_request.c	(working copy)
 @@ -0,0 +1,182 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -6719,9 +6086,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_request.c modules/http2/h2_request.
 +    return h2_to_h1_flush(req->to_h1);
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_request.h modules/http2/h2_request.h
---- modules/http2/h2_request.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_request.h	2015-09-02 14:25:18.000000000 +0200
+Index: modules/http2/h2_request.h
+===================================================================
+--- modules/http2/h2_request.h	(revision 0)
++++ modules/http2/h2_request.h	(working copy)
 @@ -0,0 +1,67 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -6790,9 +6158,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_request.h modules/http2/h2_request.
 +                               struct h2_mplx *m);
 +
 +#endif /* defined(__mod_h2__h2_request__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_response.c modules/http2/h2_response.c
---- modules/http2/h2_response.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_response.c	2015-09-02 14:26:04.000000000 +0200
+Index: modules/http2/h2_response.c
+===================================================================
+--- modules/http2/h2_response.c	(revision 0)
++++ modules/http2/h2_response.c	(working copy)
 @@ -0,0 +1,232 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -7026,9 +6395,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_response.c modules/http2/h2_respons
 +    return h;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_response.h modules/http2/h2_response.h
---- modules/http2/h2_response.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_response.h	2015-09-02 14:25:35.000000000 +0200
+Index: modules/http2/h2_response.h
+===================================================================
+--- modules/http2/h2_response.h	(revision 0)
++++ modules/http2/h2_response.h	(working copy)
 @@ -0,0 +1,47 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -7077,10 +6447,11 @@ diff -x .svn -x srclib -uNr modules/http2/h2_response.h modules/http2/h2_respons
 +h2_response *h2_response_copy(apr_pool_t *pool, h2_response *from);
 +
 +#endif /* defined(__mod_h2__h2_response__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_session.c modules/http2/h2_session.c
---- modules/http2/h2_session.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_session.c	2015-09-02 14:26:04.000000000 +0200
-@@ -0,0 +1,1256 @@
+Index: modules/http2/h2_session.c
+===================================================================
+--- modules/http2/h2_session.c	(revision 0)
++++ modules/http2/h2_session.c	(working copy)
+@@ -0,0 +1,1257 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
@@ -7342,8 +6713,9 @@ diff -x .svn -x srclib -uNr modules/http2/h2_session.c modules/http2/h2_session.
 +                               const nghttp2_frame *frame, void *userp)
 +{
 +    /* This starts a new stream. */
++    int rv;
 +    (void)ngh2;
-+    int rv = stream_open((h2_session *)userp, frame->hd.stream_id);
++    rv = stream_open((h2_session *)userp, frame->hd.stream_id);
 +    if (rv != NGHTTP2_ERR_CALLBACK_FAILURE) {
 +      /* on_header_cb or on_frame_recv_cb will dectect that stream
 +         does not exist and submit RST_STREAM. */
@@ -8337,9 +7709,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_session.c modules/http2/h2_session.
 +    }
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_session.h modules/http2/h2_session.h
---- modules/http2/h2_session.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_session.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_session.h
+===================================================================
+--- modules/http2/h2_session.h	(revision 0)
++++ modules/http2/h2_session.h	(working copy)
 @@ -0,0 +1,137 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -8478,9 +7851,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_session.h modules/http2/h2_session.
 +void h2_session_log_stats(h2_session *session);
 +
 +#endif /* defined(__mod_h2__h2_session__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_stream.c modules/http2/h2_stream.c
---- modules/http2/h2_stream.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_stream.c	2015-09-02 14:24:30.000000000 +0200
+Index: modules/http2/h2_stream.c
+===================================================================
+--- modules/http2/h2_stream.c	(revision 0)
++++ modules/http2/h2_stream.c	(working copy)
 @@ -0,0 +1,273 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -8755,9 +8129,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_stream.c modules/http2/h2_stream.c
 +    return stream->suspended;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_stream.h modules/http2/h2_stream.h
---- modules/http2/h2_stream.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_stream.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_stream.h
+===================================================================
+--- modules/http2/h2_stream.h	(revision 0)
++++ modules/http2/h2_stream.h	(working copy)
 @@ -0,0 +1,108 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -8867,9 +8242,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_stream.h modules/http2/h2_stream.h
 +int h2_stream_is_suspended(h2_stream *stream);
 +
 +#endif /* defined(__mod_h2__h2_stream__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_stream_set.c modules/http2/h2_stream_set.c
---- modules/http2/h2_stream_set.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_stream_set.c	2015-09-02 14:25:44.000000000 +0200
+Index: modules/http2/h2_stream_set.c
+===================================================================
+--- modules/http2/h2_stream_set.c	(revision 0)
++++ modules/http2/h2_stream_set.c	(working copy)
 @@ -0,0 +1,164 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -9035,9 +8411,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_stream_set.c modules/http2/h2_strea
 +    return sp->list->nelts;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_stream_set.h modules/http2/h2_stream_set.h
---- modules/http2/h2_stream_set.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_stream_set.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_stream_set.h
+===================================================================
+--- modules/http2/h2_stream_set.h	(revision 0)
++++ modules/http2/h2_stream_set.h	(working copy)
 @@ -0,0 +1,52 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -9091,9 +8468,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_stream_set.h modules/http2/h2_strea
 +                        h2_stream_set_iter_fn *iter, void *ctx);
 +
 +#endif /* defined(__mod_h2__h2_stream_set__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_switch.c modules/http2/h2_switch.c
---- modules/http2/h2_switch.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_switch.c	2015-09-02 14:26:04.000000000 +0200
+Index: modules/http2/h2_switch.c
+===================================================================
+--- modules/http2/h2_switch.c	(revision 0)
++++ modules/http2/h2_switch.c	(working copy)
 @@ -0,0 +1,180 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -9275,9 +8653,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_switch.c modules/http2/h2_switch.c
 +    ap_hook_protocol_get(h2_protocol_get, NULL, NULL, APR_HOOK_MIDDLE);
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_switch.h modules/http2/h2_switch.h
---- modules/http2/h2_switch.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_switch.h	2015-09-02 14:25:04.000000000 +0200
+Index: modules/http2/h2_switch.h
+===================================================================
+--- modules/http2/h2_switch.h	(revision 0)
++++ modules/http2/h2_switch.h	(working copy)
 @@ -0,0 +1,29 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -9308,9 +8687,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_switch.h modules/http2/h2_switch.h
 +
 +
 +#endif /* defined(__mod_h2__h2_switch__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_task.c modules/http2/h2_task.c
---- modules/http2/h2_task.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_task.c	2015-09-02 14:26:06.000000000 +0200
+Index: modules/http2/h2_task.c
+===================================================================
+--- modules/http2/h2_task.c	(revision 0)
++++ modules/http2/h2_task.c	(working copy)
 @@ -0,0 +1,467 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -9779,9 +9159,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_task.c modules/http2/h2_task.c
 +
 +
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_task.h modules/http2/h2_task.h
---- modules/http2/h2_task.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_task.h	2015-09-02 14:25:18.000000000 +0200
+Index: modules/http2/h2_task.h
+===================================================================
+--- modules/http2/h2_task.h	(revision 0)
++++ modules/http2/h2_task.h	(working copy)
 @@ -0,0 +1,187 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -9970,9 +9351,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_task.h modules/http2/h2_task.h
 +void h2_task_die(h2_task_env *env, int status, request_rec *r);
 +
 +#endif /* defined(__mod_h2__h2_task__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_task_input.c modules/http2/h2_task_input.c
---- modules/http2/h2_task_input.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_task_input.c	2015-09-02 14:25:19.000000000 +0200
+Index: modules/http2/h2_task_input.c
+===================================================================
+--- modules/http2/h2_task_input.c	(revision 0)
++++ modules/http2/h2_task_input.c	(working copy)
 @@ -0,0 +1,219 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -10193,9 +9575,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_task_input.c modules/http2/h2_task_
 +    return (block == APR_NONBLOCK_READ)? APR_EAGAIN : APR_EOF;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_task_input.h modules/http2/h2_task_input.h
---- modules/http2/h2_task_input.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_task_input.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_task_input.h
+===================================================================
+--- modules/http2/h2_task_input.h	(revision 0)
++++ modules/http2/h2_task_input.h	(working copy)
 @@ -0,0 +1,46 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -10243,9 +9626,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_task_input.h modules/http2/h2_task_
 +                                  apr_off_t readbytes);
 +
 +#endif /* defined(__mod_h2__h2_task_input__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_task_output.c modules/http2/h2_task_output.c
---- modules/http2/h2_task_output.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_task_output.c	2015-09-02 14:26:04.000000000 +0200
+Index: modules/http2/h2_task_output.c
+===================================================================
+--- modules/http2/h2_task_output.c	(revision 0)
++++ modules/http2/h2_task_output.c	(working copy)
 @@ -0,0 +1,132 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -10379,9 +9763,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_task_output.c modules/http2/h2_task
 +                             f, bb, output->env->io);
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_task_output.h modules/http2/h2_task_output.h
---- modules/http2/h2_task_output.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_task_output.h	2015-09-02 14:24:50.000000000 +0200
+Index: modules/http2/h2_task_output.h
+===================================================================
+--- modules/http2/h2_task_output.h	(revision 0)
++++ modules/http2/h2_task_output.h	(working copy)
 @@ -0,0 +1,56 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -10439,9 +9824,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_task_output.h modules/http2/h2_task
 +int h2_task_output_has_started(h2_task_output *output);
 +
 +#endif /* defined(__mod_h2__h2_task_output__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_task_queue.c modules/http2/h2_task_queue.c
---- modules/http2/h2_task_queue.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_task_queue.c	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_task_queue.c
+===================================================================
+--- modules/http2/h2_task_queue.c	(revision 0)
++++ modules/http2/h2_task_queue.c	(working copy)
 @@ -0,0 +1,88 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -10531,9 +9917,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_task_queue.c modules/http2/h2_task_
 +
 +
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_task_queue.h modules/http2/h2_task_queue.h
---- modules/http2/h2_task_queue.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_task_queue.h	2015-09-02 14:24:03.000000000 +0200
+Index: modules/http2/h2_task_queue.h
+===================================================================
+--- modules/http2/h2_task_queue.h	(revision 0)
++++ modules/http2/h2_task_queue.h	(working copy)
 @@ -0,0 +1,148 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -10683,9 +10070,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_task_queue.h modules/http2/h2_task_
 +#define H2_TQ_EMPTY(e)	H2_TASK_LIST_EMPTY(&(e)->tasks)
 +
 +#endif /* defined(__mod_h2__h2_task_queue__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_to_h1.c modules/http2/h2_to_h1.c
---- modules/http2/h2_to_h1.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_to_h1.c	2015-09-02 14:26:04.000000000 +0200
+Index: modules/http2/h2_to_h1.c
+===================================================================
+--- modules/http2/h2_to_h1.c	(revision 0)
++++ modules/http2/h2_to_h1.c	(working copy)
 @@ -0,0 +1,305 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -10803,7 +10191,7 @@ diff -x .svn -x srclib -uNr modules/http2/h2_to_h1.c modules/http2/h2_to_h1.c
 +             || H2_HD_MATCH_LIT("proxy-connection", name, nlen)
 +             || H2_HD_MATCH_LIT("keep-alive", name, nlen)
 +             || H2_HD_MATCH_LIT("http2-settings", name, nlen)) {
-+        // ignore these.
++        /* ignore these. */
 +        return APR_SUCCESS;
 +    }
 +    else if (H2_HD_MATCH_LIT("cookie", name, nlen)) {
@@ -10992,9 +10380,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_to_h1.c modules/http2/h2_to_h1.c
 +}
 +
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_to_h1.h modules/http2/h2_to_h1.h
---- modules/http2/h2_to_h1.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_to_h1.h	2015-09-02 14:25:18.000000000 +0200
+Index: modules/http2/h2_to_h1.h
+===================================================================
+--- modules/http2/h2_to_h1.h	(revision 0)
++++ modules/http2/h2_to_h1.h	(working copy)
 @@ -0,0 +1,87 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -11083,9 +10472,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_to_h1.h modules/http2/h2_to_h1.h
 +apr_status_t h2_to_h1_close(h2_to_h1 *to_h1);
 +
 +#endif /* defined(__mod_h2__h2_to_h1__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_util.c modules/http2/h2_util.c
---- modules/http2/h2_util.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_util.c	2015-09-02 14:26:06.000000000 +0200
+Index: modules/http2/h2_util.c
+===================================================================
+--- modules/http2/h2_util.c	(revision 0)
++++ modules/http2/h2_util.c	(working copy)
 @@ -0,0 +1,627 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -11714,9 +11104,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_util.c modules/http2/h2_util.c
 +    return status;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_util.h modules/http2/h2_util.h
---- modules/http2/h2_util.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_util.h	2015-09-02 14:25:04.000000000 +0200
+Index: modules/http2/h2_util.h
+===================================================================
+--- modules/http2/h2_util.h	(revision 0)
++++ modules/http2/h2_util.h	(working copy)
 @@ -0,0 +1,124 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -11842,9 +11233,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_util.h modules/http2/h2_util.h
 +                              apr_size_t *plen, int *peos);
 +
 +#endif /* defined(__mod_h2__h2_util__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_version.h modules/http2/h2_version.h
---- modules/http2/h2_version.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_version.h	2015-09-02 14:25:59.000000000 +0200
+Index: modules/http2/h2_version.h
+===================================================================
+--- modules/http2/h2_version.h	(revision 0)
++++ modules/http2/h2_version.h	(working copy)
 @@ -0,0 +1,34 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 +*
@@ -11868,7 +11260,7 @@ diff -x .svn -x srclib -uNr modules/http2/h2_version.h modules/http2/h2_version.
 + * @macro
 + * Version number of the h2 module as c string
 + */
-+#define MOD_H2_VERSION "0.9.6"
++#define MOD_H2_VERSION "0.9.7"
 +
 +/**
 + * @macro
@@ -11876,13 +11268,14 @@ diff -x .svn -x srclib -uNr modules/http2/h2_version.h modules/http2/h2_version.
 + * release. This is a 24 bit number with 8 bits for major number, 8 bits
 + * for minor and 8 bits for patch. Version 1.2.3 becomes 0x010203.
 + */
-+#define MOD_H2_VERSION_NUM 0x000906
++#define MOD_H2_VERSION_NUM 0x000907
 +
 +
 +#endif /* mod_h2_h2_version_h */
-diff -x .svn -x srclib -uNr modules/http2/h2_worker.c modules/http2/h2_worker.c
---- modules/http2/h2_worker.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_worker.c	2015-09-02 14:25:44.000000000 +0200
+Index: modules/http2/h2_worker.c
+===================================================================
+--- modules/http2/h2_worker.c	(revision 0)
++++ modules/http2/h2_worker.c	(working copy)
 @@ -0,0 +1,170 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -12054,9 +11447,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_worker.c modules/http2/h2_worker.c
 +    return worker->bucket_alloc;
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_worker.h modules/http2/h2_worker.h
---- modules/http2/h2_worker.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_worker.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_worker.h
+===================================================================
+--- modules/http2/h2_worker.h	(revision 0)
++++ modules/http2/h2_worker.h	(working copy)
 @@ -0,0 +1,155 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -12213,9 +11607,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_worker.h modules/http2/h2_worker.h
 +struct apr_thread_cond_t *h2_worker_get_cond(h2_worker *worker);
 +
 +#endif /* defined(__mod_h2__h2_worker__) */
-diff -x .svn -x srclib -uNr modules/http2/h2_workers.c modules/http2/h2_workers.c
---- modules/http2/h2_workers.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_workers.c	2015-09-02 14:25:04.000000000 +0200
+Index: modules/http2/h2_workers.c
+===================================================================
+--- modules/http2/h2_workers.c	(revision 0)
++++ modules/http2/h2_workers.c	(working copy)
 @@ -0,0 +1,352 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -12569,9 +11964,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_workers.c modules/http2/h2_workers.
 +    apr_atomic_set32(&workers->max_idle_secs, idle_secs);
 +}
 +
-diff -x .svn -x srclib -uNr modules/http2/h2_workers.h modules/http2/h2_workers.h
---- modules/http2/h2_workers.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/h2_workers.h	2015-09-02 14:24:02.000000000 +0200
+Index: modules/http2/h2_workers.h
+===================================================================
+--- modules/http2/h2_workers.h	(revision 0)
++++ modules/http2/h2_workers.h	(working copy)
 @@ -0,0 +1,87 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + 
@@ -12660,9 +12056,10 @@ diff -x .svn -x srclib -uNr modules/http2/h2_workers.h modules/http2/h2_workers.
 +void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs);
 +
 +#endif /* defined(__mod_h2__h2_workers__) */
-diff -x .svn -x srclib -uNr modules/http2/mod_h2.c modules/http2/mod_h2.c
---- modules/http2/mod_h2.c	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/mod_h2.c	2015-09-02 14:25:04.000000000 +0200
+Index: modules/http2/mod_h2.c
+===================================================================
+--- modules/http2/mod_h2.c	(revision 0)
++++ modules/http2/mod_h2.c	(working copy)
 @@ -0,0 +1,146 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -12810,9 +12207,10 @@ diff -x .svn -x srclib -uNr modules/http2/mod_h2.c modules/http2/mod_h2.c
 +}
 +
 +
-diff -x .svn -x srclib -uNr modules/http2/mod_h2.dsp modules/http2/mod_h2.dsp
---- modules/http2/mod_h2.dsp	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/mod_h2.dsp	2015-09-02 14:25:47.000000000 +0200
+Index: modules/http2/mod_h2.dsp
+===================================================================
+--- modules/http2/mod_h2.dsp	(revision 0)
++++ modules/http2/mod_h2.dsp	(working copy)
 @@ -0,0 +1,211 @@
 +# Microsoft Developer Studio Project File - Name="mod_h2" - Package Owner=<4>
 +# Microsoft Developer Studio Generated Build File, Format Version 6.00
@@ -13025,9 +12423,10 @@ diff -x .svn -x srclib -uNr modules/http2/mod_h2.dsp modules/http2/mod_h2.dsp
 +# End Source File
 +# End Target
 +# End Project
-diff -x .svn -x srclib -uNr modules/http2/mod_h2.h modules/http2/mod_h2.h
---- modules/http2/mod_h2.h	1970-01-01 01:00:00.000000000 +0100
-+++ modules/http2/mod_h2.h	2015-09-02 14:25:04.000000000 +0200
+Index: modules/http2/mod_h2.h
+===================================================================
+--- modules/http2/mod_h2.h	(revision 0)
++++ modules/http2/mod_h2.h	(working copy)
 @@ -0,0 +1,19 @@
 +/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
 + *
@@ -13048,3 +12447,775 @@ diff -x .svn -x srclib -uNr modules/http2/mod_h2.h modules/http2/mod_h2.h
 +#define mod_h2_mod_h2_h
 +
 +#endif
+Index: modules/ssl/ssl_engine_init.c
+===================================================================
+--- modules/ssl/ssl_engine_init.c	(revision 1700959)
++++ modules/ssl/ssl_engine_init.c	(working copy)
+@@ -625,6 +625,10 @@
+     SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
+ 
+     SSL_CTX_set_info_callback(ctx, ssl_callback_Info);
++
++#ifdef HAVE_TLS_ALPN
++    SSL_CTX_set_alpn_select_cb(ctx, ssl_callback_alpn_select, NULL);
++#endif
+ }
+ 
+ static apr_status_t ssl_init_ctx_verify(server_rec *s,
+Index: modules/ssl/ssl_engine_io.c
+===================================================================
+--- modules/ssl/ssl_engine_io.c	(revision 1700959)
++++ modules/ssl/ssl_engine_io.c	(working copy)
+@@ -28,6 +28,7 @@
+                                   core keeps dumping.''
+                                             -- Unknown    */
+ #include "ssl_private.h"
++#include "mod_ssl.h"
+ #include "apr_date.h"
+ 
+ /*  _________________________________________________________________
+@@ -297,6 +298,9 @@
+     apr_pool_t *pool;
+     char buffer[AP_IOBUFSIZE];
+     ssl_filter_ctx_t *filter_ctx;
++#ifdef HAVE_TLS_ALPN
++    int alpn_finished;  /* 1 if ALPN has finished, 0 otherwise */
++#endif
+ } bio_filter_in_ctx_t;
+ 
+ /*
+@@ -1412,6 +1416,42 @@
+         APR_BRIGADE_INSERT_TAIL(bb, bucket);
+     }
+ 
++#ifdef HAVE_TLS_ALPN
++    /* By this point, Application-Layer Protocol Negotiation (ALPN) should be 
++     * completed (if our version of OpenSSL supports it). If we haven't already, 
++     * find out which protocol was decided upon and inform other modules 
++     * by calling alpn_proto_negotiated_hook. 
++     */
++    if (!inctx->alpn_finished) {
++        SSLConnRec *sslconn = myConnConfig(f->c);
++        const unsigned char *next_proto = NULL;
++        unsigned next_proto_len = 0;
++        const char *protocol;
++        int n;
++
++        SSL_get0_alpn_selected(inctx->ssl, &next_proto, &next_proto_len);
++        if (next_proto && next_proto_len) {
++            protocol = apr_pstrmemdup(f->c->pool, (const char *)next_proto,
++                                       next_proto_len);
++            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, f->c,
++                          APLOGNO(02836) "ALPN selected protocol: '%s'",
++                          protocol);
++            
++            if (strcmp(protocol, ap_get_protocol(f->c))) {
++                status = ap_switch_protocol(f->c, NULL, sslconn->server,
++                                            protocol);
++                if (status != APR_SUCCESS) {
++                    ap_log_cerror(APLOG_MARK, APLOG_ERR, status, f->c,
++                                  APLOGNO(02908) "protocol switch to '%s' failed",
++                                  protocol);
++                    return status;
++                }
++            }
++        }
++        inctx->alpn_finished = 1;
++    }
++#endif
++
+     return APR_SUCCESS;
+ }
+ 
+@@ -1893,6 +1933,9 @@
+     inctx->block = APR_BLOCK_READ;
+     inctx->pool = c->pool;
+     inctx->filter_ctx = filter_ctx;
++#ifdef HAVE_TLS_ALPN
++    inctx->alpn_finished = 0;
++#endif
+ }
+ 
+ /* The request_rec pointer is passed in here only to ensure that the
+Index: modules/ssl/ssl_engine_kernel.c
+===================================================================
+--- modules/ssl/ssl_engine_kernel.c	(revision 1700959)
++++ modules/ssl/ssl_engine_kernel.c	(working copy)
+@@ -29,6 +29,7 @@
+                                   time I was too famous.''
+                                             -- Unknown                */
+ #include "ssl_private.h"
++#include "mod_ssl.h"
+ #include "util_md5.h"
+ 
+ static void ssl_configure_env(request_rec *r, SSLConnRec *sslconn);
+@@ -203,6 +204,9 @@
+                 ap_log_error(APLOG_MARK, APLOG_ERR, 0, r->server, APLOGNO(02032)
+                             "Hostname %s provided via SNI and hostname %s provided"
+                             " via HTTP are different", servername, host);
++                if (r->connection->keepalives > 0) {
++                    return HTTP_MISDIRECTED_REQUEST;
++                }
+                 return HTTP_BAD_REQUEST;
+             }
+         }
+@@ -1903,16 +1907,22 @@
+ 
+ #ifdef HAVE_TLSEXT
+ /*
+- * This callback function is executed when OpenSSL encounters an extended
++ * This function sets the virtual host from an extended
+  * client hello with a server name indication extension ("SNI", cf. RFC 6066).
+  */
+-int ssl_callback_ServerNameIndication(SSL *ssl, int *al, modssl_ctx_t *mctx)
++static apr_status_t init_vhost(conn_rec *c, SSL *ssl)
+ {
+-    const char *servername =
+-                SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+-    conn_rec *c = (conn_rec *)SSL_get_app_data(ssl);
+-
++    const char *servername;
++    
+     if (c) {
++        SSLConnRec *sslcon = myConnConfig(c);
++        
++        if (sslcon->server != c->base_server) {
++            /* already found the vhost */
++            return APR_SUCCESS;
++        }
++        
++        servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+         if (servername) {
+             if (ap_vhost_iterate_given_conn(c, ssl_find_vhost,
+                                             (void *)servername)) {
+@@ -1919,7 +1929,7 @@
+                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02043)
+                               "SSL virtual host for servername %s found",
+                               servername);
+-                return SSL_TLSEXT_ERR_OK;
++                return APR_SUCCESS;
+             }
+             else {
+                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(02044)
+@@ -1949,8 +1959,20 @@
+                           "(using default/first virtual host)");
+         }
+     }
++    
++    return APR_NOTFOUND;
++}
+ 
+-    return SSL_TLSEXT_ERR_NOACK;
++/*
++ * This callback function is executed when OpenSSL encounters an extended
++ * client hello with a server name indication extension ("SNI", cf. RFC 6066).
++ */
++int ssl_callback_ServerNameIndication(SSL *ssl, int *al, modssl_ctx_t *mctx)
++{
++    conn_rec *c = (conn_rec *)SSL_get_app_data(ssl);
++    apr_status_t status = init_vhost(c, ssl);
++    
++    return (status == APR_SUCCESS)? SSL_TLSEXT_ERR_OK : SSL_TLSEXT_ERR_NOACK;
+ }
+ 
+ /*
+@@ -2149,6 +2171,80 @@
+ }
+ #endif /* HAVE_TLS_SESSION_TICKETS */
+ 
++#ifdef HAVE_TLS_ALPN
++
++/*
++ * This callback function is executed when the TLS Application-Layer
++ * Protocol Negotiation Extension (ALPN, RFC 7301) is triggered by the Client
++ * Hello, giving a list of desired protocol names (in descending preference) 
++ * to the server.
++ * The callback has to select a protocol name or return an error if none of
++ * the clients preferences is supported.
++ * The selected protocol does not have to be on the client list, according
++ * to RFC 7301, so no checks are performed.
++ * The client protocol list is serialized as length byte followed by ASCII
++ * characters (not null-terminated), followed by the next protocol name.
++ */
++int ssl_callback_alpn_select(SSL *ssl,
++                             const unsigned char **out, unsigned char *outlen,
++                             const unsigned char *in, unsigned int inlen,
++                             void *arg)
++{
++    conn_rec *c = (conn_rec*)SSL_get_app_data(ssl);
++    SSLConnRec *sslconn = myConnConfig(c);
++    apr_array_header_t *client_protos;
++    const char *proposed;
++    size_t len;
++    int i;
++
++    /* If the connection object is not available,
++     * then there's nothing for us to do. */
++    if (c == NULL) {
++        return SSL_TLSEXT_ERR_OK;
++    }
++
++    if (inlen == 0) {
++        // someone tries to trick us?
++        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02837)
++                      "ALPN client protocol list empty");
++        return SSL_TLSEXT_ERR_ALERT_FATAL;
++    }
++
++    client_protos = apr_array_make(c->pool, 0, sizeof(char *));
++    for (i = 0; i < inlen; /**/) {
++        unsigned int plen = in[i++];
++        if (plen + i > inlen) {
++            // someone tries to trick us?
++            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02838)
++                          "ALPN protocol identifier too long");
++            return SSL_TLSEXT_ERR_ALERT_FATAL;
++        }
++        APR_ARRAY_PUSH(client_protos, char *) =
++            apr_pstrndup(c->pool, (const char *)in+i, plen);
++        i += plen;
++    }
++
++    /* The order the callbacks are invoked from TLS extensions is, unfortunately
++     * not defined and older openssl versions do call ALPN selection before
++     * they callback the SNI. We need to make sure that we know which vhost
++     * we are dealing with so we respect the correct protocols.
++     */
++    init_vhost(c, ssl);
++    
++    proposed = ap_select_protocol(c, NULL, sslconn->server, client_protos);
++    *out = (const unsigned char *)(proposed? proposed : ap_get_protocol(c));
++    len = strlen((const char*)*out);
++    if (len > 255) {
++        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02840)
++                      "ALPN negotiated protocol name too long");
++        return SSL_TLSEXT_ERR_ALERT_FATAL;
++    }
++    *outlen = (unsigned char)len;
++
++    return SSL_TLSEXT_ERR_OK;
++}
++#endif /* HAVE_TLS_ALPN */
++
+ #ifdef HAVE_SRP
+ 
+ int ssl_callback_SRPServerParams(SSL *ssl, int *ad, void *arg)
+Index: modules/ssl/ssl_private.h
+===================================================================
+--- modules/ssl/ssl_private.h	(revision 1700959)
++++ modules/ssl/ssl_private.h	(working copy)
+@@ -182,6 +182,11 @@
+ #include <openssl/srp.h>
+ #endif
+ 
++/* ALPN Protocol Negotiation */
++#if defined(TLSEXT_TYPE_application_layer_protocol_negotiation)
++#define HAVE_TLS_ALPN
++#endif
++
+ #endif /* !defined(OPENSSL_NO_TLSEXT) && defined(SSL_set_tlsext_host_name) */
+ 
+ /* mod_ssl headers */
+@@ -798,6 +803,12 @@
+                                        EVP_CIPHER_CTX *, HMAC_CTX *, int);
+ #endif
+ 
++#ifdef HAVE_TLS_ALPN
++int ssl_callback_alpn_select(SSL *ssl, const unsigned char **out,
++                             unsigned char *outlen, const unsigned char *in,
++                             unsigned int inlen, void *arg);
++#endif
++
+ /**  Session Cache Support  */
+ apr_status_t ssl_scache_init(server_rec *, apr_pool_t *);
+ void         ssl_scache_status_register(apr_pool_t *p);
+Index: server/core.c
+===================================================================
+--- server/core.c	(revision 1700959)
++++ server/core.c	(working copy)
+@@ -423,6 +423,7 @@
+ static void *create_core_server_config(apr_pool_t *a, server_rec *s)
+ {
+     core_server_config *conf;
++    const char **np;
+     int is_virtual = s->is_virtual;
+ 
+     conf = (core_server_config *)apr_pcalloc(a, sizeof(core_server_config));
+@@ -468,6 +469,9 @@
+ 
+     conf->trace_enable = AP_TRACE_UNSET;
+ 
++    conf->protocols = apr_array_make(a, 5, sizeof(const char *));
++    conf->protocols_honor_order = -1;
++    
+     return (void *)conf;
+ }
+ 
+@@ -518,6 +522,12 @@
+                            ? virt->merge_trailers
+                            : base->merge_trailers;
+ 
++    conf->protocols = ((virt->protocols->nelts > 0)? 
++                       virt->protocols : base->protocols);
++    conf->protocols_honor_order = ((virt->protocols_honor_order < 0)?
++                                       base->protocols_honor_order :
++                                       virt->protocols_honor_order);
++    
+     return conf;
+ }
+ 
+@@ -3692,6 +3702,48 @@
+     return NULL;
+ }
+ 
++static const char *set_protocols(cmd_parms *cmd, void *dummy,
++                                 const char *arg)
++{
++    core_server_config *conf =
++    ap_get_core_module_config(cmd->server->module_config);
++    const char **np;
++    const char *err = ap_check_cmd_context(cmd, NOT_IN_DIR_LOC_FILE);
++
++    if (err) {
++        return err;
++    }
++    
++    np = (const char **)apr_array_push(conf->protocols);
++    *np = arg;
++
++    return NULL;
++}
++
++static const char *set_protocols_honor_order(cmd_parms *cmd, void *dummy,
++                                             const char *arg)
++{
++    core_server_config *conf =
++    ap_get_core_module_config(cmd->server->module_config);
++    const char *err = ap_check_cmd_context(cmd, NOT_IN_DIR_LOC_FILE);
++    
++    if (err) {
++        return err;
++    }
++    
++    if (strcasecmp(arg, "on") == 0) {
++        conf->protocols_honor_order = 1;
++    }
++    else if (strcasecmp(arg, "off") == 0) {
++        conf->protocols_honor_order = 0;
++    }
++    else {
++        return "ProtocolsHonorOrder must be 'on' or 'off'";
++    }
++    
++    return NULL;
++}
++
+ static apr_hash_t *errorlog_hash;
+ 
+ static int log_constant_item(const ap_errorlog_info *info, const char *arg,
+@@ -4205,6 +4257,11 @@
+               "'on' (default), 'off' or 'extended' to trace request body content"),
+ AP_INIT_FLAG("MergeTrailers", set_merge_trailers, NULL, RSRC_CONF,
+               "merge request trailers into request headers or not"),
++AP_INIT_ITERATE("Protocols", set_protocols, NULL, RSRC_CONF,
++                "Controls which protocols are allowed"),
++AP_INIT_TAKE1("ProtocolsHonorOrder", set_protocols_honor_order, NULL, RSRC_CONF,
++              "'off' (default) or 'on' to respect given order of protocols, "
++              "by default the client specified order determines selection"),
+ { NULL }
+ };
+ 
+@@ -4936,6 +4993,61 @@
+     }
+ }
+ 
++static int core_upgrade_handler(request_rec *r)
++{
++    conn_rec *c = r->connection;
++    const char *upgrade = apr_table_get(r->headers_in, "Upgrade");
++
++    if (upgrade && *upgrade) {
++        const char *conn = apr_table_get(r->headers_in, "Connection");
++        if (ap_find_token(r->pool, conn, "upgrade")) {
++            apr_array_header_t *offers = NULL;
++            const char *err;
++            
++            err = ap_parse_token_list_strict(r->pool, upgrade, &offers, 0);
++            if (err) {
++                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(02910)
++                              "parsing Upgrade header: %s", err);
++                return DECLINED;
++            }
++            
++            if (offers && offers->nelts > 0) {
++                const char *protocol = ap_select_protocol(c, r, r->server,
++                                                          offers);
++                if (protocol && strcmp(protocol, ap_get_protocol(c))) {
++                    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(02909)
++                                  "Upgrade selects '%s'", protocol);
++                    /* Let the client know what we are upgrading to. */
++                    apr_table_clear(r->headers_out);
++                    apr_table_setn(r->headers_out, "Upgrade", protocol);
++                    apr_table_setn(r->headers_out, "Connection", "Upgrade");
++                    
++                    r->status = HTTP_SWITCHING_PROTOCOLS;
++                    r->status_line = ap_get_status_line(r->status);
++                    ap_send_interim_response(r, 1);
++
++                    ap_switch_protocol(c, r, r->server, protocol);
++
++                    /* make sure httpd closes the connection after this */
++                    c->keepalive = AP_CONN_CLOSE;
++                    return DONE;
++                }
++            }
++        }
++    }
++    
++    return DECLINED;
++}
++
++static int core_upgrade_storage(request_rec *r)
++{
++    if ((r->method_number == M_OPTIONS) && r->uri && (r->uri[0] == '*') &&
++        (r->uri[1] == '\0')) {
++        return core_upgrade_handler(r);
++    }
++    return DECLINED;
++}
++
+ static void register_hooks(apr_pool_t *p)
+ {
+     errorlog_hash = apr_hash_make(p);
+@@ -4958,10 +5070,12 @@
+     ap_hook_check_config(core_check_config,NULL,NULL,APR_HOOK_FIRST);
+     ap_hook_test_config(core_dump_config,NULL,NULL,APR_HOOK_FIRST);
+     ap_hook_translate_name(ap_core_translate,NULL,NULL,APR_HOOK_REALLY_LAST);
++    ap_hook_map_to_storage(core_upgrade_storage,NULL,NULL,APR_HOOK_REALLY_FIRST);
+     ap_hook_map_to_storage(core_map_to_storage,NULL,NULL,APR_HOOK_REALLY_LAST);
+     ap_hook_open_logs(ap_open_logs,NULL,NULL,APR_HOOK_REALLY_FIRST);
+     ap_hook_child_init(core_child_init,NULL,NULL,APR_HOOK_REALLY_FIRST);
+     ap_hook_child_init(ap_logs_child_init,NULL,NULL,APR_HOOK_MIDDLE);
++    ap_hook_handler(core_upgrade_handler,NULL,NULL,APR_HOOK_REALLY_FIRST);
+     ap_hook_handler(default_handler,NULL,NULL,APR_HOOK_REALLY_LAST);
+     /* FIXME: I suspect we can eliminate the need for these do_nothings - Ben */
+     ap_hook_type_checker(do_nothing,NULL,NULL,APR_HOOK_REALLY_LAST);
+Index: server/protocol.c
+===================================================================
+--- server/protocol.c	(revision 1700959)
++++ server/protocol.c	(working copy)
+@@ -67,6 +67,9 @@
+     APR_HOOK_LINK(http_scheme)
+     APR_HOOK_LINK(default_port)
+     APR_HOOK_LINK(note_auth_failure)
++    APR_HOOK_LINK(protocol_propose)
++    APR_HOOK_LINK(protocol_switch)
++    APR_HOOK_LINK(protocol_get)
+ )
+ 
+ AP_DECLARE_DATA ap_filter_rec_t *ap_old_write_func = NULL;
+@@ -1790,7 +1793,151 @@
+     apr_brigade_destroy(x.bb);
+ }
+ 
++/*
++ * Compare two protocol identifier. Result is similar to strcmp():
++ * 0 gives same precedence, >0 means proto1 is preferred.
++ */
++static int protocol_cmp(const apr_array_header_t *preferences,
++                        const char *proto1,
++                        const char *proto2)
++{
++    if (preferences && preferences->nelts > 0) {
++        int index1 = ap_array_str_index(preferences, proto1, 0);
++        int index2 = ap_array_str_index(preferences, proto2, 0);
++        if (index2 > index1) {
++            return (index1 >= 0) ? 1 : -1;
++        }
++        else if (index1 > index2) {
++            return (index2 >= 0) ? -1 : 1;
++        }
++    }
++    /* both have the same index (mabye -1 or no pref configured) and we compare
++     * the names so that spdy3 gets precedence over spdy2. That makes
++     * the outcome at least deterministic. */
++    return strcmp(proto1, proto2);
++}
+ 
++AP_DECLARE(const char *) ap_get_protocol(conn_rec *c)
++{
++    const char *protocol = ap_run_protocol_get(c);
++    return protocol? protocol : AP_PROTOCOL_HTTP1;
++}
++
++AP_DECLARE(const char *) ap_select_protocol(conn_rec *c, request_rec *r, 
++                                            server_rec *s,
++                                            const apr_array_header_t *choices)
++{
++    apr_pool_t *pool = r? r->pool : c->pool;
++    core_server_config *conf = ap_get_core_module_config(s->module_config);
++    const char *protocol = NULL, *existing;
++    apr_array_header_t *proposals;
++
++    if (APLOGcdebug(c)) {
++        const char *p = apr_array_pstrcat(pool, conf->protocols, ',');
++        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, 
++                      "select protocol from %s, choices=%s for server %s", 
++                      p, apr_array_pstrcat(pool, choices, ','),
++                      s->server_hostname);
++    }
++
++    if (conf->protocols->nelts <= 0) {
++        /* nothing configured, by default, we only allow http/1.1 here.
++         * For now...
++         */
++        if (ap_array_str_contains(choices, AP_PROTOCOL_HTTP1)) {
++            return AP_PROTOCOL_HTTP1;
++        }
++        else {
++            return NULL;
++        }
++    }
++
++    proposals = apr_array_make(pool, choices->nelts + 1, sizeof(char *));
++    ap_run_protocol_propose(c, r, s, choices, proposals);
++
++    /* If the existing protocol has not been proposed, but is a choice,
++     * add it to the proposals implicitly.
++     */
++    existing = ap_get_protocol(c);
++    if (!ap_array_str_contains(proposals, existing)
++        && ap_array_str_contains(choices, existing)) {
++        APR_ARRAY_PUSH(proposals, const char*) = existing;
++    }
++
++    if (proposals->nelts > 0) {
++        int i;
++        const apr_array_header_t *prefs = NULL;
++
++        /* Default for protocols_honor_order is 'on' or != 0 */
++        if (conf->protocols_honor_order == 0 && choices->nelts > 0) {
++            prefs = choices;
++        }
++        else {
++            prefs = conf->protocols;
++        }
++
++        /* Select the most preferred protocol */
++        if (APLOGcdebug(c)) {
++            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, 
++                          "select protocol, proposals=%s preferences=%s configured=%s", 
++                          apr_array_pstrcat(pool, proposals, ','),
++                          apr_array_pstrcat(pool, prefs, ','),
++                          apr_array_pstrcat(pool, conf->protocols, ','));
++        }
++        for (i = 0; i < proposals->nelts; ++i) {
++            const char *p = APR_ARRAY_IDX(proposals, i, const char *);
++            if (!ap_array_str_contains(conf->protocols, p)) {
++                /* not a configured protocol here */
++                continue;
++            }
++            else if (!protocol 
++                     || (protocol_cmp(prefs, protocol, p) < 0)) {
++                /* none selected yet or this one has preference */
++                protocol = p;
++            }
++        }
++    }
++    if (APLOGcdebug(c)) {
++        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "selected protocol=%s", 
++                      protocol? protocol : "(none)");
++    }
++
++    return protocol;
++}
++
++AP_DECLARE(apr_status_t) ap_switch_protocol(conn_rec *c, request_rec *r, 
++                                            server_rec *s,
++                                            const char *protocol)
++{
++    const char *current = ap_get_protocol(c);
++    int rc;
++    
++    if (!strcmp(current, protocol)) {
++        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, c, APLOGNO(02906)
++                      "already at it, protocol_switch to %s", 
++                      protocol);
++        return APR_SUCCESS;
++    }
++    
++    rc = ap_run_protocol_switch(c, r, s, protocol);
++    switch (rc) {
++        case DECLINED:
++            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02907)
++                          "no implementation for protocol_switch to %s", 
++                          protocol);
++            return APR_ENOTIMPL;
++        case OK:
++        case DONE:
++            return APR_SUCCESS;
++        default:
++            ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02905)
++                          "unexpected return code %d from protocol_switch to %s"
++                          , rc, protocol);
++            return APR_EOF;
++    }    
++}
++
++
+ AP_IMPLEMENT_HOOK_VOID(pre_read_request,
+                        (request_rec *r, conn_rec *c),
+                        (r, c))
+@@ -1805,3 +1952,14 @@
+ AP_IMPLEMENT_HOOK_RUN_FIRST(int, note_auth_failure,
+                             (request_rec *r, const char *auth_type),
+                             (r, auth_type), DECLINED)
++AP_IMPLEMENT_HOOK_RUN_ALL(int,protocol_propose,
++                          (conn_rec *c, request_rec *r, server_rec *s,
++                           const apr_array_header_t *offers,
++                           apr_array_header_t *proposals), 
++                          (c, r, s, offers, proposals), OK, DECLINED)
++AP_IMPLEMENT_HOOK_RUN_FIRST(int,protocol_switch,
++                            (conn_rec *c, request_rec *r, server_rec *s,
++                             const char *protocol), 
++                            (c, r, s, protocol), DECLINED)
++AP_IMPLEMENT_HOOK_RUN_FIRST(const char *,protocol_get,
++                            (const conn_rec *c), (c), NULL)
+Index: server/util.c
+===================================================================
+--- server/util.c	(revision 1700959)
++++ server/util.c	(working copy)
+@@ -1451,6 +1451,95 @@
+     return find_list_item(p, line, tok, AP_ETAG_WEAK);
+ }
+ 
++/* Grab a list of tokens of the format 1#token (from RFC7230) */
++AP_DECLARE(const char *) ap_parse_token_list_strict(apr_pool_t *p,
++                                                    const char *str_in,
++                                                    apr_array_header_t **tokens,
++                                                    int skip_invalid)
++{
++    int in_leading_space = 1;
++    int in_trailing_space = 0;
++    int string_end = 0;
++    const char *tok_begin;
++    const char *cur;
++    
++    if (!str_in) {
++        return NULL;
++    }
++    
++    tok_begin = cur = str_in;
++    
++    while (!string_end) {
++        const unsigned char c = (unsigned char)*cur;
++        
++        if (!TEST_CHAR(c, T_HTTP_TOKEN_STOP) && c != '\0') {
++            /* Non-separator character; we are finished with leading
++             * whitespace. We must never have encountered any trailing
++             * whitespace before the delimiter (comma) */
++            in_leading_space = 0;
++            if (in_trailing_space) {
++                return "Encountered illegal whitespace in token";
++            }
++        }
++        else if (c == ' ' || c == '\t') {
++            /* "Linear whitespace" only includes ASCII CRLF, space, and tab;
++             * we can't get a CRLF since headers are split on them already,
++             * so only look for a space or a tab */
++            if (in_leading_space) {
++                /* We're still in leading whitespace */
++                ++tok_begin;
++            }
++            else {
++                /* We must be in trailing whitespace */
++                ++in_trailing_space;
++            }
++        }
++        else if (c == ',' || c == '\0') {
++            if (!in_leading_space) {
++                /* If we're out of the leading space, we know we've read some
++                 * characters of a token */
++                if (*tokens == NULL) {
++                    *tokens = apr_array_make(p, 4, sizeof(char *));
++                }
++                APR_ARRAY_PUSH(*tokens, char *) =
++                apr_pstrmemdup((*tokens)->pool, tok_begin,
++                               (cur - tok_begin) - in_trailing_space);
++            }
++            /* We're allowed to have null elements, just don't add them to the
++             * array */
++            
++            tok_begin = cur + 1;
++            in_leading_space = 1;
++            in_trailing_space = 0;
++            string_end = (c == '\0');
++        }
++        else {
++            /* Encountered illegal separator char */
++            if (skip_invalid) {
++                /* Skip to the next separator */
++                const char *temp;
++                temp = ap_strchr_c(cur, ',');
++                if(!temp) {
++                    temp = ap_strchr_c(cur, '\0');
++                }
++                
++                /* Act like we haven't seen a token so we reset */
++                cur = temp - 1;
++                in_leading_space = 1;
++                in_trailing_space = 0;
++            }
++            else {
++                return apr_psprintf(p, "Encountered illegal separator "
++                                    "'\\x%.2x'", (unsigned int)c);
++            }
++        }
++        
++        ++cur;
++    }
++    
++    return NULL;
++}
++    
+ /* Retrieve a token, spacing over it and returning a pointer to
+  * the first non-white byte afterwards.  Note that these tokens
+  * are delimited by semis and commas; and can also be delimited
+@@ -3005,3 +3094,28 @@
+ 
+     return apr_pstrndup(p, buf, k);
+ }
++
++AP_DECLARE(int) ap_array_str_index(const apr_array_header_t *array, 
++                                   const char *s,
++                                   int start)
++{
++    if (start >= 0) {
++        int i;
++        
++        for (i = start; i < array->nelts; i++) {
++            const char *p = APR_ARRAY_IDX(array, i, const char *);
++            if (!strcmp(p, s)) {
++                return i;
++            }
++        }
++    }
++    
++    return -1;
++}
++
++AP_DECLARE(int) ap_array_str_contains(const apr_array_header_t *array, 
++                                      const char *s)
++{
++    return (ap_array_str_index(array, s, 0) >= 0);
++}
++
+Index: .
+===================================================================
+--- .	(revision 1700959)
++++ .	(working copy)
+
+Property changes on: .
+___________________________________________________________________
+Modified: svn:mergeinfo
+   Merged /httpd/httpd/trunk:r1694950,1700917,1700925,1700968,1701005,1701145,1701178,1701204
