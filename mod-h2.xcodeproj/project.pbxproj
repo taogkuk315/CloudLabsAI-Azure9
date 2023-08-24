@@ -62,6 +62,9 @@
 		B27D32E91A9487B4003DBAF4 /* h2_mplx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_mplx.h; sourceTree = "<group>"; };
 		B284ACC91A7B9DF900C35863 /* h2_task_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_input.c; sourceTree = "<group>"; };
 		B284ACCA1A7B9DF900C35863 /* h2_task_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_input.h; sourceTree = "<group>"; };
+		B2876C101BA707FD00762ECD /* core-h2-all-in-one-v5.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-h2-all-in-one-v5.patch"; sourceTree = "<group>"; };
+		B2876C111BA7082400762ECD /* core-protocols-v5.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-v5.patch"; sourceTree = "<group>"; };
+		B2876C121BA70B8000762ECD /* core-protocols-release-v5.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-release-v5.patch"; sourceTree = "<group>"; };
 		B2A6EF171A9B598B005DFC5B /* h2_request.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_request.c; sourceTree = "<group>"; };
 		B2A6EF181A9B598B005DFC5B /* h2_request.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_request.h; sourceTree = "<group>"; };
 		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
@@ -474,8 +477,11 @@
 			isa = PBXGroup;
 			children = (
 				B249BBF61B99AA6D00434956 /* core-h2-all-in-one-v4.patch */,
+				B2876C101BA707FD00762ECD /* core-h2-all-in-one-v5.patch */,
 				B2E17FBE1B96EFB100F352BA /* core-protocols-release-v4.patch */,
+				B2876C121BA70B8000762ECD /* core-protocols-release-v5.patch */,
 				B249BBF31B9998D000434956 /* core-protocols-v4.patch */,
+				B2876C111BA7082400762ECD /* core-protocols-v5.patch */,
 			);
 			path = patches;
 			sourceTree = "<group>";
