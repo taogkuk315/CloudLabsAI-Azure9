@@ -1,3 +1,10 @@
+v0.9.8
+-------------------------------------------------------------------------------- 
+ * server protocol of requests served via mod_h2 is now `HTTP/2`
+ * directive `H2SerializeHeaders` had no effect any longer, fixed.
+ * requests served in `H2SerializeHeaders on` hosts, report `HTTP/1.1` as
+   protocol. This is the mode to enabled when having compatiblity issues.
+
 v0.9.7
 -------------------------------------------------------------------------------- 
  * update of core-protocols.patch to v4
