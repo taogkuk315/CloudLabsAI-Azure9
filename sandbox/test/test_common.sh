@@ -19,6 +19,9 @@
 
 URL_PREFIX="$1"
 OPT_DIRECT="$2"
+EXP_PROTOCOL="${3:-HTTP/2}"
+EXP_SSL_PROTOCOL=""
+
 AUTH="${URL_PREFIX#*://}"
 HOST="${AUTH%%:*}"
 URL_SCHEME="${URL_PREFIX%%:*}"
@@ -27,7 +30,11 @@ if [ "$URL_PATH" = "/$AUTH" ]; then
     URL_PATH=""
 fi
 
-INSTALL_DIR="../install"
+if [ "$URL_SCHEME" = "https" ]; then
+    EXP_SSL_PROTOCOL="TLSv1.2"
+fi
+
+INSTALL_DIR="${PREFIX:-gen/apache}"
 BIN_DIR="${INSTALL_DIR}/bin"
 if [ "${HOST#*.}" = 'example.org' ]; then
     DOC_ROOT="htdocs/test.example.org"
@@ -38,8 +45,8 @@ fi
 GEN="gen"
 TMP="$GEN/tmp"
 
-CURL="${BIN_DIR}/curl  -sk --resolv ${HOST#*://}:127.0.0.1"
-NGHTTP="${BIN_DIR}/nghttp"
+CURL="${CURL:-${BIN_DIR}/curl}  -sk --resolv ${HOST#*://}:127.0.0.1"
+NGHTTP="${NGHTTP:-${BIN_DIR}/nghttp}"
 
 
 fail() {
@@ -75,9 +82,8 @@ curl_check_alpn() {
     echo -n " * curl /: $MSG..."
     rm -rf $TMP
     mkdir -p $TMP
-    ${CURL} $ARGS $URL_PREFIX > $TMP/out 2>&1 || fail "XXX$(cat $TMP/out)"
-    fgrep "* ALPN, server accepted to use $PROTOCOL" $TMP/out >/dev/null || 
-    fail "XXX$(cat $TMP/out)"
+    ${CURL} $ARGS $URL_PREFIX > $TMP/out 2>&1 || fail
+    fgrep "* ALPN, server accepted to use $PROTOCOL" $TMP/out >/dev/null || fail
     echo ok.
 }
 

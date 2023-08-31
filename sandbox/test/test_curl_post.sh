@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-source test_common.sh
+source $(dirname $0)/test_common.sh
 echo "curl POST on: $@"
 
 CHR100="012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678

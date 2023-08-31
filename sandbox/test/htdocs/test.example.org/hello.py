@@ -8,6 +8,7 @@ print """\
 <html>
 <body>
 <h2>Hello World!</h2>"""
-print "SSL_PROTOCOL=" + os.getenv('SSL_PROTOCOL', '')
+print "PROTOCOL=" + os.getenv('SERVER_PROTOCOL', '') + "<br/>"
+print "SSL_PROTOCOL=" + os.getenv('SSL_PROTOCOL', '') + "<br/>"
 print """</body>
 </html>"""
