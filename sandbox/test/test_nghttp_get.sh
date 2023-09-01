@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-source test_common.sh
+source $(dirname $0)/test_common.sh
 echo "nghttp GET on: $@"
 
 ################################################################################
@@ -257,23 +257,13 @@ EOF
 # check cgi generated content
 ################################################################################
 
-if [ "$URL_SCHEME" = "https" ]; then
-    CONTENT="<html>
-<body>
-<h2>Hello World!</h2>
-SSL_PROTOCOL=TLSv1.2
-</body>
-</html>"
-else
-    CONTENT="<html>
-<body>
-<h2>Hello World!</h2>
-SSL_PROTOCOL=
-</body>
-</html>"
-fi
-
 nghttp_check_content hello.py "get hello.py"   <<EOF
-$CONTENT
+<html>
+<body>
+<h2>Hello World!</h2>
+PROTOCOL=${EXP_PROTOCOL}<br/>
+SSL_PROTOCOL=${EXP_SSL_PROTOCOL}<br/>
+</body>
+</html>
 EOF
 

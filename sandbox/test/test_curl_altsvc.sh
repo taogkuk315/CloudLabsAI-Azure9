@@ -17,7 +17,7 @@
 HTTP_URL="$1"
 HTTPS_URL="$2"
 
-source test_common.sh
+source $(dirname $0)/test_common.sh
 echo "curl ALT-SVC on: $@"
 
 URL_PREFIX="$HTTP_URL"

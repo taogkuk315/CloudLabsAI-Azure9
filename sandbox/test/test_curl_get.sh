@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-source test_common.sh
+source $(dirname $0)/test_common.sh
 echo "curl GET on: $@"
 
 ################################################################################
@@ -36,32 +36,38 @@ fi
 ################################################################################
 # check cgi generated content
 ################################################################################
-if [ "$URL_SCHEME" = "https" ]; then
-    CONTENT="<html>
-<body>
-<h2>Hello World!</h2>
-SSL_PROTOCOL=TLSv1.2
-</body>
-</html>"
-else
-    CONTENT="<html>
-<body>
-<h2>Hello World!</h2>
-SSL_PROTOCOL=
-</body>
-</html>"
-fi
 
+# as long as --http2 is not default, expect a plain HTTP/1.1 connection
 curl_check_content hello.py "default" <<EOF
-$CONTENT
+<html>
+<body>
+<h2>Hello World!</h2>
+PROTOCOL=HTTP/1.1<br/>
+SSL_PROTOCOL=${EXP_SSL_PROTOCOL}<br/>
+</body>
+</html>
 EOF
 
+# force HTTP/1.1 connection
 curl_check_content hello.py "http/1.1" --http1.1 <<EOF
-$CONTENT
+<html>
+<body>
+<h2>Hello World!</h2>
+PROTOCOL=HTTP/1.1<br/>
+SSL_PROTOCOL=${EXP_SSL_PROTOCOL}<br/>
+</body>
+</html>
 EOF
 
+# force HTTP/2 connection
 curl_check_content hello.py "http2"    --http2 <<EOF
-$CONTENT
+<html>
+<body>
+<h2>Hello World!</h2>
+PROTOCOL=${EXP_PROTOCOL}<br/>
+SSL_PROTOCOL=${EXP_SSL_PROTOCOL}<br/>
+</body>
+</html>
 EOF
 
 

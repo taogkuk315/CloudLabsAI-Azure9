@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-source test_common.sh
+source $(dirname $0)/test_common.sh
 echo "alt host access: $@"
 
 ################################################################################
@@ -26,14 +26,41 @@ echo "alt host access: $@"
 # https://bz.apache.org/bugzilla/show_bug.cgi?id=58007#c9
 #
 MISDIR_STATUS="421 Misdirected Request"
-#MISDIR_STATUS="400 Bad Request"
+
+URL1="$1"
+URL2="$2"
+
+URL_PREFIX="$URL1"
 
 nghttp_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
 [ERROR] HTTP/2 protocol was not selected. (nghttp2 expects h2)
 Some requests were not processed. total=1, processed=0
 EOF
 
+curl_check_content hello.py "serveralias" --http2 -H'Host: test3.example.org'  <<EOF
+<html>
+<body>
+<h2>Hello World!</h2>
+PROTOCOL=HTTP/2<br/>
+SSL_PROTOCOL=${EXP_SSL_PROTOCOL}<br/>
+</body>
+</html>
+EOF
+
 curl_check_content index.html "noh2 host" --http2 -H'Host: noh2.example.org' <<EOF
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<html><head>
+<title>$MISDIR_STATUS</title>
+</head><body>
+<h1>Misdirected Request</h1>
+<p>The client needs a new connection for this
+request as the requested host name does not match
+the Server Name Indication (SNI) in use for this
+connection.</p>
+</body></html>
+EOF
+
+curl_check_content index.html "unknown host" --http2 -H'Host: unknown.example.org' <<EOF
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
 <html><head>
 <title>$MISDIR_STATUS</title>

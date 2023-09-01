@@ -28,10 +28,8 @@
 		B225493C1A713D18004BDEC9 /* h2_util.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_util.c; sourceTree = "<group>"; };
 		B225493D1A713D18004BDEC9 /* h2_util.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_util.h; sourceTree = "<group>"; };
 		B22D25281AA89A0B0041D8E5 /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
-		B249BBF31B9998D000434956 /* core-protocols-v4.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-v4.patch"; sourceTree = "<group>"; };
 		B249BBF41B999F6600434956 /* test2.example.org.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = test2.example.org.conf; sourceTree = "<group>"; };
 		B249BBF51B99A01900434956 /* test_proto_order.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_proto_order.sh; sourceTree = "<group>"; };
-		B249BBF61B99AA6D00434956 /* core-h2-all-in-one-v4.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-h2-all-in-one-v4.patch"; sourceTree = "<group>"; };
 		B24C597F1B8C66930003DF74 /* ax_check_compile_flag.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ax_check_compile_flag.m4; sourceTree = "<group>"; };
 		B24C59801B8C66930003DF74 /* h2.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.m4; sourceTree = "<group>"; };
 		B24C59811B8C66930003DF74 /* libtool.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = libtool.m4; sourceTree = "<group>"; };
@@ -60,6 +58,9 @@
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B27D32E81A9487B4003DBAF4 /* h2_mplx.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_mplx.c; sourceTree = "<group>"; };
 		B27D32E91A9487B4003DBAF4 /* h2_mplx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_mplx.h; sourceTree = "<group>"; };
+		B2829C361BAC40EA00AB4B48 /* core-h2-all-in-one-v6.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-h2-all-in-one-v6.patch"; sourceTree = "<group>"; };
+		B2829C371BAC412000AB4B48 /* core-protocols-v6.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-v6.patch"; sourceTree = "<group>"; };
+		B2829C391BAC423A00AB4B48 /* core-protocols-release-v6.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-release-v6.patch"; sourceTree = "<group>"; };
 		B284ACC91A7B9DF900C35863 /* h2_task_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_task_input.c; sourceTree = "<group>"; };
 		B284ACCA1A7B9DF900C35863 /* h2_task_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_task_input.h; sourceTree = "<group>"; };
 		B2876C101BA707FD00762ECD /* core-h2-all-in-one-v5.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-h2-all-in-one-v5.patch"; sourceTree = "<group>"; };
@@ -88,7 +89,6 @@
 		B2CB61151A8B698A00D270A6 /* h2_worker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_worker.h; sourceTree = "<group>"; };
 		B2CB61161A8B699E00D270A6 /* h2_workers.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = h2_workers.c; sourceTree = "<group>"; };
 		B2CB61171A8B699E00D270A6 /* h2_workers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = h2_workers.h; sourceTree = "<group>"; };
-		B2E17FBE1B96EFB100F352BA /* core-protocols-release-v4.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "core-protocols-release-v4.patch"; sourceTree = "<group>"; };
 		B2E5D5081AADAD28001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
@@ -476,12 +476,12 @@
 		B2E6DF9F1AC2EF6E00D557D8 /* patches */ = {
 			isa = PBXGroup;
 			children = (
-				B249BBF61B99AA6D00434956 /* core-h2-all-in-one-v4.patch */,
 				B2876C101BA707FD00762ECD /* core-h2-all-in-one-v5.patch */,
-				B2E17FBE1B96EFB100F352BA /* core-protocols-release-v4.patch */,
+				B2829C361BAC40EA00AB4B48 /* core-h2-all-in-one-v6.patch */,
 				B2876C121BA70B8000762ECD /* core-protocols-release-v5.patch */,
-				B249BBF31B9998D000434956 /* core-protocols-v4.patch */,
+				B2829C391BAC423A00AB4B48 /* core-protocols-release-v6.patch */,
 				B2876C111BA7082400762ECD /* core-protocols-v5.patch */,
+				B2829C371BAC412000AB4B48 /* core-protocols-v6.patch */,
 			);
 			path = patches;
 			sourceTree = "<group>";
