@@ -3,7 +3,7 @@
 
 Copyright (C) 2015 greenbytes GmbH
 
-This repository contains the `mod_h[http]2` for Apache httpd. It enables the HTTP2
+This repository contains the `mod_h[ttp]2` for Apache httpd. It enables the HTTP2
 protocol inside the server, using nghttp2 (https://nghttp2.org) as base engine.
 
 ##Status
