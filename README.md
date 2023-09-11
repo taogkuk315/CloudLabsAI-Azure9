@@ -11,7 +11,14 @@ protocol inside the server, using nghttp2 (https://nghttp2.org) as base engine.
 
 What you find here are **early experience versions** for people who like living on the edge and want to help me test not yet released changes.
 
-If you want HTTP/2 in your production environment, please head over to the official releases at Apache and grab one of those or wait until the various OS distributions have assembled one for you.
+If you want HTTP/2 in your production environment, please head over to the official releases at Apache and grab one of those or wait until the various OS distributions have assembled one for you. 
+
+##OS Packages
+
+* **Ubuntu**: [ppa by ondrej](https://launchpad.net/~ondrej/+archive/ubuntu/apache2) for Ubuntu 14.04 and others
+* **Fedora**: [Rawhide includes httpd 2.4.17](http://rpmfind.net/linux/rpm2html/search.php?query=httpd)
+* **FreeBSD**: [sp1l has been working on ports](https://github.com/Sp1l/ports)
+
 
 ##Documenation
 There is the official [Apache documentation](https://httpd.apache.org/docs/2.4/en/mod/mod_http2.html) of the module, which you will not find here.
