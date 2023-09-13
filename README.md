@@ -17,6 +17,7 @@ If you want HTTP/2 in your production environment, please head over to the offic
 
 * **Ubuntu**: [ppa by ondrej](https://launchpad.net/~ondrej/+archive/ubuntu/apache2) for Ubuntu 14.04 and others
 * **Fedora**: [Rawhide includes httpd 2.4.17](http://rpmfind.net/linux/rpm2html/search.php?query=httpd)
+* **Debian** sid (unstable) includes httpd 2.4.17. See [how to install debian sid](https://wiki.debian.org/InstallFAQ#Q._How_do_I_install_.22unstable.22_.28.22sid.22.29.3F)
 * **FreeBSD**: [sp1l has been working on ports](https://github.com/Sp1l/ports)
 
 
