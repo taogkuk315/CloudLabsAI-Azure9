@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_h2], [0.9.8], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.0.3], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -42,8 +42,8 @@ AM_INIT_AUTOMAKE([subdir-objects no-define])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
-AC_CONFIG_SRCDIR([mod_h2/h2_config.c])
-AC_CONFIG_HEADERS([mod_h2/config.h])
+AC_CONFIG_SRCDIR([mod_http2/h2_config.c])
+AC_CONFIG_HEADERS([mod_http2/config.h])
 
 AC_ARG_ENABLE([werror],
     [AS_HELP_STRING([--enable-werror],
@@ -112,7 +112,7 @@ if test x"$build_mode" = "xsandbox"; then
 
     # easy, we know where everything will be
     #
-    export BUILD_SUBDIRS="sandbox mod_h2"
+    export BUILD_SUBDIRS="sandbox mod_http2"
 
     prefix="$PWD/sandbox/install"
     APXS="$prefix/bin/apxs"
@@ -140,7 +140,7 @@ else
         AC_MSG_NOTICE("using APXS=$APXS as configured")
     fi
 
-    export BUILD_SUBDIRS="mod_h2 setup"
+    export BUILD_SUBDIRS="mod_http2 setup"
 
     prefix="$($APXS -q prefix)"
     LDFLAGS="$LDFLAGS -L$($APXS -q libdir)"
@@ -180,8 +180,8 @@ AC_SUBST(LIBEXEC_DIR)
 
 AC_CONFIG_FILES([
     Makefile
-    mod_h2/Makefile
-    mod_h2/h2_version.h
+    mod_http2/Makefile
+    mod_http2/h2_version.h
     sandbox/Makefile 
     setup/Makefile
 ])

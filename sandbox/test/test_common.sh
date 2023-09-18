@@ -81,7 +81,7 @@ curl_check_alpn() {
     ARGS="$@ -v"
     echo -n " * curl /: $MSG..."
     rm -rf $TMP
-    mkdir -p $TMP
+    mkdir -p "$TMP"
     ${CURL} $ARGS $URL_PREFIX > $TMP/out 2>&1 || fail
     fgrep "* ALPN, server accepted to use $PROTOCOL" $TMP/out >/dev/null || fail
     echo ok.
@@ -93,7 +93,7 @@ nghttp_check_doc() {
     ARGS="$@"$ARG_UPGRADE
     echo -n " * nghttp /$DOC: $MSG..."
     rm -rf $TMP &&
-    mkdir -p $TMP &&
+    mkdir -p "$TMP" &&
     ${NGHTTP} $ARGS $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail
     diff  $DOC_ROOT/$DOC $TMP/$DOC || fail
     echo ok.
@@ -105,7 +105,7 @@ nghttp_check_assets() {
     ARGS="$@"$ARG_UPGRADE
     echo -n " * nghttp /$DOC: $MSG..."
     rm -rf $TMP &&
-    mkdir -p $TMP &&
+    mkdir -p "$TMP"
     sort > $TMP/reference
     ${NGHTTP} -ans $ARGS $URL_PREFIX/$DOC > $TMP/out 2>&1 || fail
     fgrep " /" $TMP/out | while read id begin end dur stat size path; do
@@ -115,24 +115,67 @@ nghttp_check_assets() {
     echo ok.
 }
 
+nghttp_check_rst_error() {
+    DOC="$1"; shift;
+    ERROR="$1"; shift;
+    MSG="$1"; shift;
+    rm -rf $TMP
+    mkdir -p "$(dirname $TMP/$DOC)"
+    echo -n " * nghttp /$DOC: $MSG..."
+    ${NGHTTP} "$@" -v $ARG_UPGRADE $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail "ret: $?"
+    fgrep RST_STREAM $TMP/$DOC >/dev/null || fail "expected RST_STREAM in output: $( cat $TMP/$DOC )"
+    fgrep "error_code=$ERROR" $TMP/$DOC >/dev/null || fail "expected error_code=$ERROR in output: $( cat $TMP/$DOC )"
+    echo ok.
+}
+
 nghttp_check_content() {
     DOC="$1"; shift;
     MSG="$1"; shift;
     rm -rf $TMP
-    mkdir -p $TMP
+    mkdir -p "$(dirname $TMP/$DOC)"
     cat > $TMP/expected
     echo -n " * nghttp /$DOC: $MSG..."
-    ${NGHTTP} "$@" $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail
+    ${NGHTTP} "$@" $ARG_UPGRADE $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail
     diff  $TMP/expected $TMP/$DOC || fail
     echo ok.
 }
 
 
+curl_check_status() {
+    DOC="$1"; shift;
+    STATUS="$1"; shift;
+    MSG="$1"; shift;
+    rm -rf $TMP
+    mkdir -p "$(dirname $TMP/$DOC)"
+    echo -n " * curl /$DOC: $MSG..."
+    ${CURL} -D - "$@" $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail "ret: $?"
+    read proto stat descr < $TMP/$DOC
+    if test "$STATUS" != "$stat"; then
+        fail "expected: $STATUS, got: $stat"
+    fi
+    echo ok.
+}
+
+curl_check_upgrade() {
+    DOC="$1"; shift;
+    UPGRADE="$1"; shift;
+    MSG="$1"; shift;
+    rm -rf $TMP
+    mkdir -p "$(dirname $TMP/$DOC)"
+    echo -n " * curl /$DOC: $MSG..."
+    ${CURL} -D - "$@" $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail "ret: $?"
+    found=$( fgrep -i 'Upgrade: ' $TMP/$DOC | tr -d '\n\r')
+    if test "$UPGRADE" != "$found"; then
+        fail "expected: '$UPGRADE', got: $found"
+    fi
+    echo ok.
+}
+
 curl_check_content() {
     DOC="$1"; shift;
     MSG="$1"; shift;
     rm -rf $TMP
-    mkdir -p $TMP
+    mkdir -p "$(dirname $TMP/$DOC)"
     cat > $TMP/expected
     echo -n " * curl /$DOC: $MSG..."
     ${CURL} "$@" $URL_PREFIX/$DOC > $TMP/$DOC 2>&1 || fail

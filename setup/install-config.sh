@@ -27,29 +27,29 @@ else
 fi
 echo "[DEBUG] Install location is assumed to be $INSTALL_LOC"
 if [ -d "$SYSCONF/mods-available" ]; then
-    echo -n "Debian layout assumed, installing mod_h2 config in $INSTALL_LOC..."
-    cp h2.conf h2.load "$INSTALL_LOC/mods-available"
+    echo -n "Debian layout assumed, installing mod_http2 config in $INSTALL_LOC..."
+    cp http2.conf http2.load "$INSTALL_LOC/mods-available"
     echo "done."
     if [ -x "$A2ENMOD" ] && [ ! -d "$DESTDIR" ]; then
-        echo -n "enabling mod_h2..."
+        echo -n "enabling mod_http2..."
         "$A2ENMOD" h2
         echo "done."
     fi
 elif [ -d "$SYSCONF/../conf.d" ] && [ -d "$SYSCONF/../conf.modules.d" ]; then
     # Odds are this is a Fedora box!
-    echo -n "RHEL/Fedora layout assumed, installing mod_h2 config in $INSTALL_LOC..."
-    cp h2.conf "$INSTALL_LOC/../conf.d"
-    cp h2.load "$INSTALL_LOC/../conf.modules.d/10-h2.conf"
+    echo -n "RHEL/Fedora layout assumed, installing mod_http2 config in $INSTALL_LOC..."
+    cp http2.conf "$INSTALL_LOC/../conf.d"
+    cp http2.load "$INSTALL_LOC/../conf.modules.d/10-h2.conf"
     echo "done."
 else
     cat <<EOF
   This does not look like a apache2 installation, as in Ubuntu or
-  other debian based systems. Therefore, the local files h2.load and
+  other debian based systems. Therefore, the local files http2.load and
   h2.conf have *not* been installed.
 
   If you want to have the h2 module enabled in your apache installtion, you
   need to add
-     LoadModule h2_module modules/mod_h2.so
+     LoadModule h2_module modules/mod_http2.so
   somewhere in your config files.
 
 EOF

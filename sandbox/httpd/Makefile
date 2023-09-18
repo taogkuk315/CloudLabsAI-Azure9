@@ -28,7 +28,7 @@ APR-UTIL_DIR = apr-util-$(APR-UTIL_VERSION)
 APR-UTIL_TAR = $(APR-UTIL_DIR).tar.gz
 APR-UTIL_URL = http://archive.apache.org/dist/apr/$(APR-UTIL_TAR)
 
-HTTPD_VERSION = 2.4.16
+HTTPD_VERSION = 2.4.17
 HTTPD_DIR    = httpd-$(HTTPD_VERSION)
 HTTPD_TAR    = httpd-$(HTTPD_VERSION).tar.gz
 HTTPD_URL    = https://archive.apache.org/dist/httpd/$(HTTPD_TAR)
@@ -76,11 +76,10 @@ OPENSSL_VERSION = $(shell openssl version -v | sed -e 's/OpenSSL *//g' -e 's/[a-
 ifeq ($(OPENSSL_VERSION), $(filter $(OPENSSL_VERSION),0.9.7 0.9.8 1.0.0 1.0.1))
 	# Very old openssl without alpn support installed, need a newer one
 	HTTPD_DEPS  += $(INST_DIR)/.openssl-installed
-    HTTPD_CONF  += --enable-ssl --with-ssl=$(BLD_PREFIX)
+    HTTPD_CONF  += --enable-ssl --with-ssl=$(BLD_PREFIX) --with-crypto=$(BLD_PREFIX)
 	ifeq ($(OS),Darwin)
         OPENSSL_CONF_CMD = ./Configure
-        OPENSSL_CONF = darwin64-x86_64-cc
-        HTTPD_CONF  += --enable-ssl-staticlib-deps
+        OPENSSL_CONF += darwin64-x86_64-cc
 	endif
 endif
 
@@ -154,7 +153,7 @@ $(GEN)/$(HTTPD_DIR)/.httpd-configured: \
 $(GEN)/$(HTTPD_DIR)/.httpd-patched: \
 		$(GEN)/$(HTTPD_DIR)/.httpd-extracted
 	@echo applying patches...
-	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/core-protocols-release-v6.patch
+	@cd gen/$(HTTPD_DIR) && patch -p0 < ../../patches/2.4.17-protocols.patch
 	@echo httpd patched.
 	@touch $(GEN)/$(HTTPD_DIR)/.httpd-patched
 
@@ -263,21 +262,11 @@ $(GEN)/$(OPENSSL_DIR)/.built: \
 	@touch $(GEN)/$(OPENSSL_DIR)/.built
 
 $(GEN)/$(OPENSSL_DIR)/.configured: \
-        $(GEN)/$(OPENSSL_DIR)/.patched
+        $(GEN)/$(OPENSSL_DIR)/.extracted
 	@echo -n configuring openssl...
 	cd $(GEN)/$(OPENSSL_DIR) && $(OPENSSL_CONF_CMD) --openssldir=$(BLD_PREFIX) $(OPENSSL_CONF)
 	@echo done.
 	@touch $(GEN)/$(OPENSSL_DIR)/.configured
-
-$(GEN)/$(OPENSSL_DIR)/.patched: \
-		$(GEN)/$(OPENSSL_DIR)/.extracted
-	@echo applying patches...
-	# experimental patch to solve SNI+ALPN callback ordering in openssl
-	# not vital with latest httpd-alpn patch. We leave this out of our sandbox
-	# to have it running against an unpatched ssl for better test coverage.
-	#@cd gen/$(OPENSSL_DIR) && patch -p1 < ../../patches/openssl-1.0.2-alpn.patch
-	@echo openssl patched.
-	@touch $(GEN)/$(OPENSSL_DIR)/.patched
 
 $(GEN)/$(OPENSSL_DIR)/.extracted:
 	@echo -n downloading and extracting openssl...

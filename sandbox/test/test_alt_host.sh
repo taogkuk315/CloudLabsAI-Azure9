@@ -21,9 +21,11 @@ echo "alt host access: $@"
 # check access to other hosts on same connection
 ################################################################################
 
-# The correct answer is 421 and mod_h2 will created if once the SSL parse 
-# request filter is no longer strict on SNI name checking. See
-# https://bz.apache.org/bugzilla/show_bug.cgi?id=58007#c9
+# The correct answer is 421 if a request cannot be served on the connection
+# it appears on (see RFC 7540). 
+#
+# mod_ssl refuses to serve requests for other servers than the one negotiated
+# via SNI.
 #
 MISDIR_STATUS="421 Misdirected Request"
 
@@ -32,11 +34,17 @@ URL2="$2"
 
 URL_PREFIX="$URL1"
 
+# nghttp uses the host from the header for SNI. this will fail as the
+# test conf has h2 disabled for this vhost
+#
 nghttp_check_content index.html "noh2 host" -H'Host: noh2.example.org' <<EOF
 [ERROR] HTTP/2 protocol was not selected. (nghttp2 expects h2)
 Some requests were not processed. total=1, processed=0
 EOF
 
+# Make a request via curl (that uses the url host for SNI) for a ServerAlias
+# configured on the same host.
+#
 curl_check_content hello.py "serveralias" --http2 -H'Host: test3.example.org'  <<EOF
 <html>
 <body>
@@ -47,6 +55,22 @@ SSL_PROTOCOL=${EXP_SSL_PROTOCOL}<br/>
 </html>
 EOF
 
+# Make a request via curl (that uses the url host for SNI) for a different
+# vhost that is configured, allows h2 and has the same SSL parameter.
+#
+curl_check_content hello.py "test2 host" --http2 -H'Host: test2.example.org' <<EOF
+<html>
+<body>
+<h2>Hello World!</h2>
+PROTOCOL=HTTP/2<br/>
+SSL_PROTOCOL=${EXP_SSL_PROTOCOL}<br/>
+</body>
+</html>
+EOF
+
+# Make a request via curl (that uses the url host for SNI) for a different
+# vhost that is configured without h2 support.
+#
 curl_check_content index.html "noh2 host" --http2 -H'Host: noh2.example.org' <<EOF
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
 <html><head>
@@ -60,6 +84,9 @@ connection.</p>
 </body></html>
 EOF
 
+# Make a request via curl (that uses the url host for SNI) for an unknown
+# host.
+#
 curl_check_content index.html "unknown host" --http2 -H'Host: unknown.example.org' <<EOF
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
 <html><head>

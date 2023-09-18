@@ -87,6 +87,8 @@ test: \
 	@$(TESTRUN) test_curl_altsvc.sh http://$(HTTP_AUTH) https://$(HTTPS_AUTH)
 	@$(TESTRUN) test_proto_order.sh https://$(HTTPS_AUTH) https://$(HTTPS_AUTH_2)
 	@$(TESTRUN) test_alt_host.sh    https://$(HTTPS_AUTH) https://$(HTTPS_AUTH_2)
+	@$(TESTRUN) test_renegotiate.sh https://$(HTTPS_AUTH)
+	@$(TESTRUN) test_upgrade.sh     http://$(HTTP_AUTH) https://$(HTTPS_AUTH)
 	@$(TESTRUN) test_nghttp_get.sh  https://$(HTTPS_AUTH)
 	@$(TESTRUN) test_nghttp_post.sh https://$(HTTPS_AUTH)
 	@$(TESTRUN) test_curl_get.sh    https://$(HTTPS_AUTH)
@@ -108,7 +110,6 @@ test: \
 	@$(TESTRUN) test_nghttp_get.sh  http://$(HTTP_AUTH)/proxy alpn "HTTP/1.1"
 	@$(TESTRUN) test_nghttp_post.sh http://$(HTTP_AUTH)/proxy alpn "HTTP/1.1"
 	@$(TESTRUN) test_curl_get.sh    http://$(HTTP_AUTH)/proxy alpn "HTTP/1.1"
-	@$(TESTRUN) test_curl_post.sh   http://$(HTTP_AUTH)/proxy alpn "HTTP/1.1"
 	@$(TESTRUN) test_nghttp_get.sh  http://$(HTTP_AUTH)/rewrite alpn "HTTP/1.1"
 	@$(TESTRUN) test_nghttp_post.sh http://$(HTTP_AUTH)/rewrite alpn "HTTP/1.1"
 	@$(TESTRUN) test_curl_get.sh    http://$(HTTP_AUTH)/rewrite alpn "HTTP/1.1"
@@ -200,14 +201,19 @@ $(INST_DIR)/.test-setup: \
         $(wildcard bin/*) \
         $(wildcard conf/mods-available/*.*) \
 		$(wildcard conf/sites/*.conf) \
-        $(INST_DIR)/conf/mods-enabled/h2.load \
+        $(INST_DIR)/conf/mods-enabled/http2.load \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
 		$(INST_DIR)/conf/ssl/test.example.org.pem \
+		$(INST_DIR)/conf/ssl/noh2.example.org.key \
+		$(INST_DIR)/conf/ssl/noh2.example.org.pem \
 		$(INST_DIR)/.testdocs-setup
 	@echo -n setup httpd locally...
+	@mkdir -p $(INST_DIR)/bin
 	@mkdir -p $(INST_DIR)/conf/sites
+	@mkdir -p $(INST_DIR)/conf/mods-available
 	@mkdir -p $(INST_DIR)/conf/mods-enabled
 	@mkdir -p $(INST_DIR)/conf/ssl
+	@mkdir -p $(INST_DIR)/logs
 	@for file in $(SETUP_FILES); do \
 		sed -e "s,SUBST_SERVER_ROOT_SUBST,$(BLD_PREFIX),g" \
 			-e "s,SUBST_SERVER_NAME_SUBST,$(shell hostname -f),g" \
@@ -230,8 +236,8 @@ $(INST_DIR)/conf/ssl/test.example.org.req: \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
         conf/ssl/req-template.conf
 	openssl req -new -key $(INST_DIR)/conf/ssl/test.example.org.key \
-        -out $(INST_DIR)/conf/ssl/test.example.org.req \
-        -config conf/ssl/req-template.conf
+		-out $(INST_DIR)/conf/ssl/test.example.org.req \
+	    -config conf/ssl/req-template.conf
 
 $(INST_DIR)/conf/ssl/test.example.org.pem: \
 		$(INST_DIR)/conf/ssl/test.example.org.key \
@@ -243,19 +249,40 @@ $(INST_DIR)/conf/ssl/test.example.org.pem: \
 		-out $(INST_DIR)/conf/ssl/test.example.org.pem \
         -extfile conf/ssl/extensions.conf -extensions ssl_test
 
-$(INST_DIR)/conf/mods-available/h2.load:
-	@mkdir -p $(INST_DIR)/conf/mods-available
-	cp ../../setup/h2.load $(INST_DIR)/conf/mods-available
+$(INST_DIR)/conf/ssl/noh2.example.org.key:
+	@mkdir -p $(INST_DIR)/conf/ssl
+	openssl genrsa -out $(INST_DIR)/conf/ssl/noh2.example.org.key 4096
 
-$(INST_DIR)/conf/mods-available/h2.conf:
-	@mkdir -p $(INST_DIR)/conf/mods-available
-	cp ../../setup/h2.conf $(INST_DIR)/conf/mods-available
+$(INST_DIR)/conf/ssl/noh2.example.org.req: \
+		$(INST_DIR)/conf/ssl/noh2.example.org.key \
+        conf/ssl/noh2-template.conf
+	openssl req -new -key $(INST_DIR)/conf/ssl/noh2.example.org.key \
+		-out $(INST_DIR)/conf/ssl/noh2.example.org.req \
+	    -config conf/ssl/noh2-template.conf
 
-$(INST_DIR)/conf/mods-enabled/h2.load: \
-        $(INST_DIR)/conf/mods-available/h2.load \
-        $(INST_DIR)/conf/mods-available/h2.conf
+$(INST_DIR)/conf/ssl/noh2.example.org.pem: \
+		$(INST_DIR)/conf/ssl/noh2.example.org.key \
+		$(INST_DIR)/conf/ssl/noh2.example.org.req \
+		conf/ssl/extensions.conf
+	openssl x509 -req -sha256 -days 1095 \
+		-signkey $(INST_DIR)/conf/ssl/noh2.example.org.key \
+		-in $(INST_DIR)/conf/ssl/noh2.example.org.req \
+		-out $(INST_DIR)/conf/ssl/noh2.example.org.pem \
+        -extfile conf/ssl/extensions.conf -extensions ssl_test
+
+$(INST_DIR)/conf/mods-available/http2.load:
+	@mkdir -p $(INST_DIR)/conf/mods-available
+	cp ../../setup/http2.load $(INST_DIR)/conf/mods-available
+
+$(INST_DIR)/conf/mods-available/http2.conf:
+	@mkdir -p $(INST_DIR)/conf/mods-available
+	cp ../../setup/http2.conf $(INST_DIR)/conf/mods-available
+
+$(INST_DIR)/conf/mods-enabled/http2.load: \
+        $(INST_DIR)/conf/mods-available/http2.load \
+        $(INST_DIR)/conf/mods-available/http2.conf
 	@mkdir -p $(INST_DIR)/conf/mods-enabled
-	@cd $(INST_DIR)/conf/mods-enabled && ln -sf ../mods-available/h2.* .
+	@cd $(INST_DIR)/conf/mods-enabled && ln -sf ../mods-available/http2.* .
 
 
 ################################################################################

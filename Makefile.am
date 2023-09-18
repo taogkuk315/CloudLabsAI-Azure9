@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 SUBDIRS         = @BUILD_SUBDIRS@
-DIST_SUBDIRS    = mod_h2 sandbox setup
+DIST_SUBDIRS    = mod_http2 sandbox setup
 
 ACLOCAL_AMFLAGS = -I m4
 

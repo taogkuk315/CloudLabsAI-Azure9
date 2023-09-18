@@ -15,8 +15,8 @@
 SUBDIRS =
 
 EXTRA_DIST = \
-    h2.load \
-    h2.conf \
+    http2.load \
+    http2.conf \
     install-config.sh
 
 

@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 
-NGHTTP2_VERSION = 1.3.0
+NGHTTP2_VERSION = 1.4.0
 NGHTTP2_DIR     = nghttp2-$(NGHTTP2_VERSION)
 NGHTTP2_TAR     = $(NGHTTP2_DIR).tar.gz
 NGHTTP2_URL     = https://github.com/tatsuhiro-t/nghttp2/releases/download/v$(NGHTTP2_VERSION)/$(NGHTTP2_TAR)
@@ -142,7 +142,7 @@ $(GEN)/$(NGHTTP2_DIR)/.nghttp2-extracted: \
 #
 $(GEN)/$(NGHTTP2_TAR):
 	@mkdir -p $(GEN)
-	curl $(CURL_OPTS) -L $(NGHTTP2_URL) > $(GEN)/$(NGHTTP2_TAR)
+	curl $(CURL_OPTS) -k -L $(NGHTTP2_URL) > $(GEN)/$(NGHTTP2_TAR)
 
 
 ################################################################################
