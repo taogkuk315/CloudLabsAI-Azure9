@@ -24,6 +24,214 @@
 		B25574071BEB53540058F97B /* 2.4.17-protocols.patch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "2.4.17-protocols.patch"; sourceTree = "<group>"; };
 		B25574081BEB557D0058F97B /* test_renegotiate.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_renegotiate.sh; sourceTree = "<group>"; };
 		B25574091BEB557D0058F97B /* test_upgrade.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test_upgrade.sh; sourceTree = "<group>"; };
+		B255740C1BEB6EFC0058F97B /* mod_h2_la-h2_alpn.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_alpn.Plo"; sourceTree = "<group>"; };
+		B255740D1BEB6EFC0058F97B /* mod_h2_la-h2_alt_svc.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_alt_svc.Plo"; sourceTree = "<group>"; };
+		B255740E1BEB6EFC0058F97B /* mod_h2_la-h2_bucket_eoc.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_bucket_eoc.Plo"; sourceTree = "<group>"; };
+		B255740F1BEB6EFC0058F97B /* mod_h2_la-h2_bucket_eos.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_bucket_eos.Plo"; sourceTree = "<group>"; };
+		B25574101BEB6EFC0058F97B /* mod_h2_la-h2_config.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_config.Plo"; sourceTree = "<group>"; };
+		B25574111BEB6EFC0058F97B /* mod_h2_la-h2_conn.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_conn.Plo"; sourceTree = "<group>"; };
+		B25574121BEB6EFC0058F97B /* mod_h2_la-h2_conn_io.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_conn_io.Plo"; sourceTree = "<group>"; };
+		B25574131BEB6EFC0058F97B /* mod_h2_la-h2_ctx.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_ctx.Plo"; sourceTree = "<group>"; };
+		B25574141BEB6EFC0058F97B /* mod_h2_la-h2_from_h1.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_from_h1.Plo"; sourceTree = "<group>"; };
+		B25574151BEB6EFC0058F97B /* mod_h2_la-h2_h2.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_h2.Plo"; sourceTree = "<group>"; };
+		B25574161BEB6EFC0058F97B /* mod_h2_la-h2_h2c.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_h2c.Plo"; sourceTree = "<group>"; };
+		B25574171BEB6EFC0058F97B /* mod_h2_la-h2_io.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_io.Plo"; sourceTree = "<group>"; };
+		B25574181BEB6EFC0058F97B /* mod_h2_la-h2_io_set.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_io_set.Plo"; sourceTree = "<group>"; };
+		B25574191BEB6EFC0058F97B /* mod_h2_la-h2_mplx.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_mplx.Plo"; sourceTree = "<group>"; };
+		B255741A1BEB6EFC0058F97B /* mod_h2_la-h2_request.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_request.Plo"; sourceTree = "<group>"; };
+		B255741B1BEB6EFC0058F97B /* mod_h2_la-h2_response.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_response.Plo"; sourceTree = "<group>"; };
+		B255741C1BEB6EFC0058F97B /* mod_h2_la-h2_session.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_session.Plo"; sourceTree = "<group>"; };
+		B255741D1BEB6EFC0058F97B /* mod_h2_la-h2_stream.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_stream.Plo"; sourceTree = "<group>"; };
+		B255741E1BEB6EFC0058F97B /* mod_h2_la-h2_stream_set.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_stream_set.Plo"; sourceTree = "<group>"; };
+		B255741F1BEB6EFC0058F97B /* mod_h2_la-h2_switch.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_switch.Plo"; sourceTree = "<group>"; };
+		B25574201BEB6EFC0058F97B /* mod_h2_la-h2_task.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_task.Plo"; sourceTree = "<group>"; };
+		B25574211BEB6EFC0058F97B /* mod_h2_la-h2_task_input.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_task_input.Plo"; sourceTree = "<group>"; };
+		B25574221BEB6EFC0058F97B /* mod_h2_la-h2_task_output.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_task_output.Plo"; sourceTree = "<group>"; };
+		B25574231BEB6EFC0058F97B /* mod_h2_la-h2_task_queue.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_task_queue.Plo"; sourceTree = "<group>"; };
+		B25574241BEB6EFC0058F97B /* mod_h2_la-h2_to_h1.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_to_h1.Plo"; sourceTree = "<group>"; };
+		B25574251BEB6EFC0058F97B /* mod_h2_la-h2_upgrade.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_upgrade.Plo"; sourceTree = "<group>"; };
+		B25574261BEB6EFC0058F97B /* mod_h2_la-h2_util.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_util.Plo"; sourceTree = "<group>"; };
+		B25574271BEB6EFC0058F97B /* mod_h2_la-h2_worker.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_worker.Plo"; sourceTree = "<group>"; };
+		B25574281BEB6EFC0058F97B /* mod_h2_la-h2_workers.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-h2_workers.Plo"; sourceTree = "<group>"; };
+		B25574291BEB6EFC0058F97B /* mod_h2_la-mod_h2.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-mod_h2.Plo"; sourceTree = "<group>"; };
+		B255742A1BEB6EFC0058F97B /* mod_h2_la-mod_http2.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2_la-mod_http2.Plo"; sourceTree = "<group>"; };
+		B255742B1BEB6EFC0058F97B /* mod_http2_la-h2_alt_svc.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_alt_svc.Plo"; sourceTree = "<group>"; };
+		B255742C1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eoc.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_bucket_eoc.Plo"; sourceTree = "<group>"; };
+		B255742D1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eoc.Tpo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_bucket_eoc.Tpo"; sourceTree = "<group>"; };
+		B255742E1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eos.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_bucket_eos.Plo"; sourceTree = "<group>"; };
+		B255742F1BEB6EFC0058F97B /* mod_http2_la-h2_config.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_config.Plo"; sourceTree = "<group>"; };
+		B25574301BEB6EFC0058F97B /* mod_http2_la-h2_conn.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_conn.Plo"; sourceTree = "<group>"; };
+		B25574311BEB6EFC0058F97B /* mod_http2_la-h2_conn_io.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_conn_io.Plo"; sourceTree = "<group>"; };
+		B25574321BEB6EFC0058F97B /* mod_http2_la-h2_ctx.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_ctx.Plo"; sourceTree = "<group>"; };
+		B25574331BEB6EFC0058F97B /* mod_http2_la-h2_from_h1.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_from_h1.Plo"; sourceTree = "<group>"; };
+		B25574341BEB6EFC0058F97B /* mod_http2_la-h2_h2.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_h2.Plo"; sourceTree = "<group>"; };
+		B25574351BEB6EFC0058F97B /* mod_http2_la-h2_io.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_io.Plo"; sourceTree = "<group>"; };
+		B25574361BEB6EFC0058F97B /* mod_http2_la-h2_io_set.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_io_set.Plo"; sourceTree = "<group>"; };
+		B25574371BEB6EFC0058F97B /* mod_http2_la-h2_mplx.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_mplx.Plo"; sourceTree = "<group>"; };
+		B25574381BEB6EFC0058F97B /* mod_http2_la-h2_request.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_request.Plo"; sourceTree = "<group>"; };
+		B25574391BEB6EFC0058F97B /* mod_http2_la-h2_response.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_response.Plo"; sourceTree = "<group>"; };
+		B255743A1BEB6EFC0058F97B /* mod_http2_la-h2_session.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_session.Plo"; sourceTree = "<group>"; };
+		B255743B1BEB6EFC0058F97B /* mod_http2_la-h2_stream.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_stream.Plo"; sourceTree = "<group>"; };
+		B255743C1BEB6EFC0058F97B /* mod_http2_la-h2_stream_set.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_stream_set.Plo"; sourceTree = "<group>"; };
+		B255743D1BEB6EFC0058F97B /* mod_http2_la-h2_switch.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_switch.Plo"; sourceTree = "<group>"; };
+		B255743E1BEB6EFC0058F97B /* mod_http2_la-h2_task.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_task.Plo"; sourceTree = "<group>"; };
+		B255743F1BEB6EFC0058F97B /* mod_http2_la-h2_task_input.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_task_input.Plo"; sourceTree = "<group>"; };
+		B25574401BEB6EFC0058F97B /* mod_http2_la-h2_task_output.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_task_output.Plo"; sourceTree = "<group>"; };
+		B25574411BEB6EFC0058F97B /* mod_http2_la-h2_task_queue.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_task_queue.Plo"; sourceTree = "<group>"; };
+		B25574421BEB6EFC0058F97B /* mod_http2_la-h2_to_h1.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_to_h1.Plo"; sourceTree = "<group>"; };
+		B25574431BEB6EFC0058F97B /* mod_http2_la-h2_util.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_util.Plo"; sourceTree = "<group>"; };
+		B25574441BEB6EFC0058F97B /* mod_http2_la-h2_worker.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_worker.Plo"; sourceTree = "<group>"; };
+		B25574451BEB6EFC0058F97B /* mod_http2_la-h2_workers.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_workers.Plo"; sourceTree = "<group>"; };
+		B25574461BEB6EFC0058F97B /* mod_http2_la-mod_http2.Plo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-mod_http2.Plo"; sourceTree = "<group>"; };
+		B25574471BEB6EFC0058F97B /* .gitignore */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		B25574491BEB6EFC0058F97B /* mod_http2.0.so */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.bundle"; path = mod_http2.0.so; sourceTree = "<group>"; };
+		B255744A1BEB6EFC0058F97B /* mod_http2.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = mod_http2.a; sourceTree = "<group>"; };
+		B255744B1BEB6EFC0058F97B /* mod_http2.la */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mod_http2.la; sourceTree = "<group>"; };
+		B255744C1BEB6EFC0058F97B /* mod_http2.lai */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mod_http2.lai; sourceTree = "<group>"; };
+		B255744D1BEB6EFC0058F97B /* mod_http2.so */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.bundle"; path = mod_http2.so; sourceTree = "<group>"; };
+		B255744E1BEB6EFC0058F97B /* mod_http2_la-h2_alt_svc.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_alt_svc.o"; sourceTree = "<group>"; };
+		B255744F1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eos.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_bucket_eos.o"; sourceTree = "<group>"; };
+		B25574501BEB6EFC0058F97B /* mod_http2_la-h2_config.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_config.o"; sourceTree = "<group>"; };
+		B25574511BEB6EFC0058F97B /* mod_http2_la-h2_conn.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_conn.o"; sourceTree = "<group>"; };
+		B25574521BEB6EFC0058F97B /* mod_http2_la-h2_conn_io.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_conn_io.o"; sourceTree = "<group>"; };
+		B25574531BEB6EFC0058F97B /* mod_http2_la-h2_ctx.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_ctx.o"; sourceTree = "<group>"; };
+		B25574541BEB6EFC0058F97B /* mod_http2_la-h2_from_h1.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_from_h1.o"; sourceTree = "<group>"; };
+		B25574551BEB6EFC0058F97B /* mod_http2_la-h2_h2.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_h2.o"; sourceTree = "<group>"; };
+		B25574561BEB6EFC0058F97B /* mod_http2_la-h2_io.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_io.o"; sourceTree = "<group>"; };
+		B25574571BEB6EFC0058F97B /* mod_http2_la-h2_io_set.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_io_set.o"; sourceTree = "<group>"; };
+		B25574581BEB6EFC0058F97B /* mod_http2_la-h2_mplx.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_mplx.o"; sourceTree = "<group>"; };
+		B25574591BEB6EFC0058F97B /* mod_http2_la-h2_request.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_request.o"; sourceTree = "<group>"; };
+		B255745A1BEB6EFC0058F97B /* mod_http2_la-h2_response.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_response.o"; sourceTree = "<group>"; };
+		B255745B1BEB6EFC0058F97B /* mod_http2_la-h2_session.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_session.o"; sourceTree = "<group>"; };
+		B255745C1BEB6EFC0058F97B /* mod_http2_la-h2_stream.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_stream.o"; sourceTree = "<group>"; };
+		B255745D1BEB6EFC0058F97B /* mod_http2_la-h2_stream_set.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_stream_set.o"; sourceTree = "<group>"; };
+		B255745E1BEB6EFC0058F97B /* mod_http2_la-h2_switch.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_switch.o"; sourceTree = "<group>"; };
+		B255745F1BEB6EFC0058F97B /* mod_http2_la-h2_task.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_task.o"; sourceTree = "<group>"; };
+		B25574601BEB6EFC0058F97B /* mod_http2_la-h2_task_input.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_task_input.o"; sourceTree = "<group>"; };
+		B25574611BEB6EFC0058F97B /* mod_http2_la-h2_task_output.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_task_output.o"; sourceTree = "<group>"; };
+		B25574621BEB6EFC0058F97B /* mod_http2_la-h2_task_queue.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_task_queue.o"; sourceTree = "<group>"; };
+		B25574631BEB6EFC0058F97B /* mod_http2_la-h2_to_h1.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_to_h1.o"; sourceTree = "<group>"; };
+		B25574641BEB6EFC0058F97B /* mod_http2_la-h2_util.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_util.o"; sourceTree = "<group>"; };
+		B25574651BEB6EFC0058F97B /* mod_http2_la-h2_worker.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_worker.o"; sourceTree = "<group>"; };
+		B25574661BEB6EFC0058F97B /* mod_http2_la-h2_workers.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_workers.o"; sourceTree = "<group>"; };
+		B25574671BEB6EFC0058F97B /* mod_http2_la-mod_http2.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-mod_http2.o"; sourceTree = "<group>"; };
+		B25574681BEB6EFC0058F97B /* config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = config.h; sourceTree = "<group>"; };
+		B25574691BEB6EFC0058F97B /* config.h.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = config.h.in; sourceTree = "<group>"; };
+		B255746A1BEB6EFC0058F97B /* h2_alt_svc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_alt_svc.c; sourceTree = "<group>"; };
+		B255746B1BEB6EFC0058F97B /* h2_alt_svc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_alt_svc.h; sourceTree = "<group>"; };
+		B255746C1BEB6EFC0058F97B /* h2_bucket_eoc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_bucket_eoc.c; sourceTree = "<group>"; };
+		B255746D1BEB6EFC0058F97B /* h2_bucket_eoc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_bucket_eoc.h; sourceTree = "<group>"; };
+		B255746E1BEB6EFC0058F97B /* h2_bucket_eos.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_bucket_eos.c; sourceTree = "<group>"; };
+		B255746F1BEB6EFC0058F97B /* h2_bucket_eos.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_bucket_eos.h; sourceTree = "<group>"; };
+		B25574701BEB6EFC0058F97B /* h2_config.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_config.c; sourceTree = "<group>"; };
+		B25574711BEB6EFC0058F97B /* h2_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_config.h; sourceTree = "<group>"; };
+		B25574721BEB6EFC0058F97B /* h2_conn.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_conn.c; sourceTree = "<group>"; };
+		B25574731BEB6EFC0058F97B /* h2_conn.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_conn.h; sourceTree = "<group>"; };
+		B25574741BEB6EFC0058F97B /* h2_conn_io.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_conn_io.c; sourceTree = "<group>"; };
+		B25574751BEB6EFC0058F97B /* h2_conn_io.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_conn_io.h; sourceTree = "<group>"; };
+		B25574761BEB6EFC0058F97B /* h2_ctx.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_ctx.c; sourceTree = "<group>"; };
+		B25574771BEB6EFC0058F97B /* h2_ctx.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_ctx.h; sourceTree = "<group>"; };
+		B25574781BEB6EFC0058F97B /* h2_from_h1.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_from_h1.c; sourceTree = "<group>"; };
+		B25574791BEB6EFC0058F97B /* h2_from_h1.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_from_h1.h; sourceTree = "<group>"; };
+		B255747A1BEB6EFC0058F97B /* h2_h2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_h2.c; sourceTree = "<group>"; };
+		B255747B1BEB6EFC0058F97B /* h2_h2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_h2.h; sourceTree = "<group>"; };
+		B255747C1BEB6EFC0058F97B /* h2_io.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_io.c; sourceTree = "<group>"; };
+		B255747D1BEB6EFC0058F97B /* h2_io.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_io.h; sourceTree = "<group>"; };
+		B255747E1BEB6EFC0058F97B /* h2_io_set.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_io_set.c; sourceTree = "<group>"; };
+		B255747F1BEB6EFC0058F97B /* h2_io_set.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_io_set.h; sourceTree = "<group>"; };
+		B25574801BEB6EFC0058F97B /* h2_mplx.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_mplx.c; sourceTree = "<group>"; };
+		B25574811BEB6EFC0058F97B /* h2_mplx.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_mplx.h; sourceTree = "<group>"; };
+		B25574821BEB6EFC0058F97B /* h2_private.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_private.h; sourceTree = "<group>"; };
+		B25574831BEB6EFC0058F97B /* h2_request.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_request.c; sourceTree = "<group>"; };
+		B25574841BEB6EFC0058F97B /* h2_request.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_request.h; sourceTree = "<group>"; };
+		B25574851BEB6EFC0058F97B /* h2_response.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_response.c; sourceTree = "<group>"; };
+		B25574861BEB6EFC0058F97B /* h2_response.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_response.h; sourceTree = "<group>"; };
+		B25574871BEB6EFC0058F97B /* h2_session.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_session.c; sourceTree = "<group>"; };
+		B25574881BEB6EFC0058F97B /* h2_session.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_session.h; sourceTree = "<group>"; };
+		B25574891BEB6EFC0058F97B /* h2_stream.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_stream.c; sourceTree = "<group>"; };
+		B255748A1BEB6EFC0058F97B /* h2_stream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_stream.h; sourceTree = "<group>"; };
+		B255748B1BEB6EFC0058F97B /* h2_stream_set.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_stream_set.c; sourceTree = "<group>"; };
+		B255748C1BEB6EFC0058F97B /* h2_stream_set.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_stream_set.h; sourceTree = "<group>"; };
+		B255748D1BEB6EFC0058F97B /* h2_switch.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_switch.c; sourceTree = "<group>"; };
+		B255748E1BEB6EFC0058F97B /* h2_switch.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_switch.h; sourceTree = "<group>"; };
+		B255748F1BEB6EFC0058F97B /* h2_task.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_task.c; sourceTree = "<group>"; };
+		B25574901BEB6EFC0058F97B /* h2_task.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_task.h; sourceTree = "<group>"; };
+		B25574911BEB6EFC0058F97B /* h2_task_input.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_task_input.c; sourceTree = "<group>"; };
+		B25574921BEB6EFC0058F97B /* h2_task_input.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_task_input.h; sourceTree = "<group>"; };
+		B25574931BEB6EFC0058F97B /* h2_task_output.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_task_output.c; sourceTree = "<group>"; };
+		B25574941BEB6EFC0058F97B /* h2_task_output.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_task_output.h; sourceTree = "<group>"; };
+		B25574951BEB6EFC0058F97B /* h2_task_queue.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_task_queue.c; sourceTree = "<group>"; };
+		B25574961BEB6EFC0058F97B /* h2_task_queue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_task_queue.h; sourceTree = "<group>"; };
+		B25574971BEB6EFC0058F97B /* h2_to_h1.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_to_h1.c; sourceTree = "<group>"; };
+		B25574981BEB6EFC0058F97B /* h2_to_h1.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_to_h1.h; sourceTree = "<group>"; };
+		B25574991BEB6EFC0058F97B /* h2_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_util.c; sourceTree = "<group>"; };
+		B255749A1BEB6EFC0058F97B /* h2_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_util.h; sourceTree = "<group>"; };
+		B255749B1BEB6EFC0058F97B /* h2_version.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_version.h; sourceTree = "<group>"; };
+		B255749C1BEB6EFC0058F97B /* h2_version.h.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2_version.h.in; sourceTree = "<group>"; };
+		B255749D1BEB6EFC0058F97B /* h2_worker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_worker.c; sourceTree = "<group>"; };
+		B255749E1BEB6EFC0058F97B /* h2_worker.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_worker.h; sourceTree = "<group>"; };
+		B255749F1BEB6EFC0058F97B /* h2_workers.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_workers.c; sourceTree = "<group>"; };
+		B25574A01BEB6EFC0058F97B /* h2_workers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_workers.h; sourceTree = "<group>"; };
+		B25574A21BEB6EFC0058F97B /* h2.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.m4; sourceTree = "<group>"; };
+		B25574A31BEB6EFC0058F97B /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		B25574A41BEB6EFC0058F97B /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
+		B25574A51BEB6EFC0058F97B /* Makefile.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
+		B25574A61BEB6EFC0058F97B /* mod_h2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mod_h2.h; sourceTree = "<group>"; };
+		B25574A71BEB6EFC0058F97B /* mod_http2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mod_http2.c; sourceTree = "<group>"; };
+		B25574A81BEB6EFC0058F97B /* mod_http2.la */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mod_http2.la; sourceTree = "<group>"; };
+		B25574A91BEB6EFC0058F97B /* mod_http2_la-h2_alt_svc.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_alt_svc.lo"; sourceTree = "<group>"; };
+		B25574AA1BEB6EFC0058F97B /* mod_http2_la-h2_alt_svc.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_alt_svc.o"; sourceTree = "<group>"; };
+		B25574AB1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eos.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_bucket_eos.lo"; sourceTree = "<group>"; };
+		B25574AC1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eos.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_bucket_eos.o"; sourceTree = "<group>"; };
+		B25574AD1BEB6EFC0058F97B /* mod_http2_la-h2_config.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_config.lo"; sourceTree = "<group>"; };
+		B25574AE1BEB6EFC0058F97B /* mod_http2_la-h2_config.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_config.o"; sourceTree = "<group>"; };
+		B25574AF1BEB6EFC0058F97B /* mod_http2_la-h2_conn.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_conn.lo"; sourceTree = "<group>"; };
+		B25574B01BEB6EFC0058F97B /* mod_http2_la-h2_conn.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_conn.o"; sourceTree = "<group>"; };
+		B25574B11BEB6EFC0058F97B /* mod_http2_la-h2_conn_io.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_conn_io.lo"; sourceTree = "<group>"; };
+		B25574B21BEB6EFC0058F97B /* mod_http2_la-h2_conn_io.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_conn_io.o"; sourceTree = "<group>"; };
+		B25574B31BEB6EFC0058F97B /* mod_http2_la-h2_ctx.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_ctx.lo"; sourceTree = "<group>"; };
+		B25574B41BEB6EFC0058F97B /* mod_http2_la-h2_ctx.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_ctx.o"; sourceTree = "<group>"; };
+		B25574B51BEB6EFC0058F97B /* mod_http2_la-h2_from_h1.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_from_h1.lo"; sourceTree = "<group>"; };
+		B25574B61BEB6EFC0058F97B /* mod_http2_la-h2_from_h1.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_from_h1.o"; sourceTree = "<group>"; };
+		B25574B71BEB6EFC0058F97B /* mod_http2_la-h2_h2.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_h2.lo"; sourceTree = "<group>"; };
+		B25574B81BEB6EFC0058F97B /* mod_http2_la-h2_h2.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_h2.o"; sourceTree = "<group>"; };
+		B25574B91BEB6EFC0058F97B /* mod_http2_la-h2_io.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_io.lo"; sourceTree = "<group>"; };
+		B25574BA1BEB6EFC0058F97B /* mod_http2_la-h2_io.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_io.o"; sourceTree = "<group>"; };
+		B25574BB1BEB6EFC0058F97B /* mod_http2_la-h2_io_set.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_io_set.lo"; sourceTree = "<group>"; };
+		B25574BC1BEB6EFC0058F97B /* mod_http2_la-h2_io_set.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_io_set.o"; sourceTree = "<group>"; };
+		B25574BD1BEB6EFC0058F97B /* mod_http2_la-h2_mplx.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_mplx.lo"; sourceTree = "<group>"; };
+		B25574BE1BEB6EFC0058F97B /* mod_http2_la-h2_mplx.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_mplx.o"; sourceTree = "<group>"; };
+		B25574BF1BEB6EFC0058F97B /* mod_http2_la-h2_request.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_request.lo"; sourceTree = "<group>"; };
+		B25574C01BEB6EFC0058F97B /* mod_http2_la-h2_request.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_request.o"; sourceTree = "<group>"; };
+		B25574C11BEB6EFC0058F97B /* mod_http2_la-h2_response.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_response.lo"; sourceTree = "<group>"; };
+		B25574C21BEB6EFC0058F97B /* mod_http2_la-h2_response.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_response.o"; sourceTree = "<group>"; };
+		B25574C31BEB6EFC0058F97B /* mod_http2_la-h2_session.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_session.lo"; sourceTree = "<group>"; };
+		B25574C41BEB6EFC0058F97B /* mod_http2_la-h2_session.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_session.o"; sourceTree = "<group>"; };
+		B25574C51BEB6EFC0058F97B /* mod_http2_la-h2_stream.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_stream.lo"; sourceTree = "<group>"; };
+		B25574C61BEB6EFC0058F97B /* mod_http2_la-h2_stream.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_stream.o"; sourceTree = "<group>"; };
+		B25574C71BEB6EFC0058F97B /* mod_http2_la-h2_stream_set.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_stream_set.lo"; sourceTree = "<group>"; };
+		B25574C81BEB6EFC0058F97B /* mod_http2_la-h2_stream_set.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_stream_set.o"; sourceTree = "<group>"; };
+		B25574C91BEB6EFC0058F97B /* mod_http2_la-h2_switch.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_switch.lo"; sourceTree = "<group>"; };
+		B25574CA1BEB6EFC0058F97B /* mod_http2_la-h2_switch.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_switch.o"; sourceTree = "<group>"; };
+		B25574CB1BEB6EFC0058F97B /* mod_http2_la-h2_task.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_task.lo"; sourceTree = "<group>"; };
+		B25574CC1BEB6EFC0058F97B /* mod_http2_la-h2_task.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_task.o"; sourceTree = "<group>"; };
+		B25574CD1BEB6EFC0058F97B /* mod_http2_la-h2_task_input.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_task_input.lo"; sourceTree = "<group>"; };
+		B25574CE1BEB6EFC0058F97B /* mod_http2_la-h2_task_input.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_task_input.o"; sourceTree = "<group>"; };
+		B25574CF1BEB6EFC0058F97B /* mod_http2_la-h2_task_output.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_task_output.lo"; sourceTree = "<group>"; };
+		B25574D01BEB6EFC0058F97B /* mod_http2_la-h2_task_output.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_task_output.o"; sourceTree = "<group>"; };
+		B25574D11BEB6EFC0058F97B /* mod_http2_la-h2_task_queue.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_task_queue.lo"; sourceTree = "<group>"; };
+		B25574D21BEB6EFC0058F97B /* mod_http2_la-h2_task_queue.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_task_queue.o"; sourceTree = "<group>"; };
+		B25574D31BEB6EFC0058F97B /* mod_http2_la-h2_to_h1.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_to_h1.lo"; sourceTree = "<group>"; };
+		B25574D41BEB6EFC0058F97B /* mod_http2_la-h2_to_h1.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_to_h1.o"; sourceTree = "<group>"; };
+		B25574D51BEB6EFC0058F97B /* mod_http2_la-h2_util.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_util.lo"; sourceTree = "<group>"; };
+		B25574D61BEB6EFC0058F97B /* mod_http2_la-h2_util.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_util.o"; sourceTree = "<group>"; };
+		B25574D71BEB6EFC0058F97B /* mod_http2_la-h2_worker.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_worker.lo"; sourceTree = "<group>"; };
+		B25574D81BEB6EFC0058F97B /* mod_http2_la-h2_worker.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_worker.o"; sourceTree = "<group>"; };
+		B25574D91BEB6EFC0058F97B /* mod_http2_la-h2_workers.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-h2_workers.lo"; sourceTree = "<group>"; };
+		B25574DA1BEB6EFC0058F97B /* mod_http2_la-h2_workers.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-h2_workers.o"; sourceTree = "<group>"; };
+		B25574DB1BEB6EFC0058F97B /* mod_http2_la-mod_http2.lo */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_http2_la-mod_http2.lo"; sourceTree = "<group>"; };
+		B25574DC1BEB6EFC0058F97B /* mod_http2_la-mod_http2.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = "mod_http2_la-mod_http2.o"; sourceTree = "<group>"; };
+		B25574DD1BEB6EFC0058F97B /* stamp-h1 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "stamp-h1"; sourceTree = "<group>"; };
 		B256C4BA1ADD5FF10042C760 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
@@ -284,10 +492,248 @@
 			path = m4;
 			sourceTree = "<group>";
 		};
+		B255740A1BEB6EFC0058F97B /* mod_http2 */ = {
+			isa = PBXGroup;
+			children = (
+				B255740B1BEB6EFC0058F97B /* .deps */,
+				B25574471BEB6EFC0058F97B /* .gitignore */,
+				B25574481BEB6EFC0058F97B /* .libs */,
+				B25574681BEB6EFC0058F97B /* config.h */,
+				B25574691BEB6EFC0058F97B /* config.h.in */,
+				B255746A1BEB6EFC0058F97B /* h2_alt_svc.c */,
+				B255746B1BEB6EFC0058F97B /* h2_alt_svc.h */,
+				B255746C1BEB6EFC0058F97B /* h2_bucket_eoc.c */,
+				B255746D1BEB6EFC0058F97B /* h2_bucket_eoc.h */,
+				B255746E1BEB6EFC0058F97B /* h2_bucket_eos.c */,
+				B255746F1BEB6EFC0058F97B /* h2_bucket_eos.h */,
+				B25574701BEB6EFC0058F97B /* h2_config.c */,
+				B25574711BEB6EFC0058F97B /* h2_config.h */,
+				B25574721BEB6EFC0058F97B /* h2_conn.c */,
+				B25574731BEB6EFC0058F97B /* h2_conn.h */,
+				B25574741BEB6EFC0058F97B /* h2_conn_io.c */,
+				B25574751BEB6EFC0058F97B /* h2_conn_io.h */,
+				B25574761BEB6EFC0058F97B /* h2_ctx.c */,
+				B25574771BEB6EFC0058F97B /* h2_ctx.h */,
+				B25574781BEB6EFC0058F97B /* h2_from_h1.c */,
+				B25574791BEB6EFC0058F97B /* h2_from_h1.h */,
+				B255747A1BEB6EFC0058F97B /* h2_h2.c */,
+				B255747B1BEB6EFC0058F97B /* h2_h2.h */,
+				B255747C1BEB6EFC0058F97B /* h2_io.c */,
+				B255747D1BEB6EFC0058F97B /* h2_io.h */,
+				B255747E1BEB6EFC0058F97B /* h2_io_set.c */,
+				B255747F1BEB6EFC0058F97B /* h2_io_set.h */,
+				B25574801BEB6EFC0058F97B /* h2_mplx.c */,
+				B25574811BEB6EFC0058F97B /* h2_mplx.h */,
+				B25574821BEB6EFC0058F97B /* h2_private.h */,
+				B25574831BEB6EFC0058F97B /* h2_request.c */,
+				B25574841BEB6EFC0058F97B /* h2_request.h */,
+				B25574851BEB6EFC0058F97B /* h2_response.c */,
+				B25574861BEB6EFC0058F97B /* h2_response.h */,
+				B25574871BEB6EFC0058F97B /* h2_session.c */,
+				B25574881BEB6EFC0058F97B /* h2_session.h */,
+				B25574891BEB6EFC0058F97B /* h2_stream.c */,
+				B255748A1BEB6EFC0058F97B /* h2_stream.h */,
+				B255748B1BEB6EFC0058F97B /* h2_stream_set.c */,
+				B255748C1BEB6EFC0058F97B /* h2_stream_set.h */,
+				B255748D1BEB6EFC0058F97B /* h2_switch.c */,
+				B255748E1BEB6EFC0058F97B /* h2_switch.h */,
+				B255748F1BEB6EFC0058F97B /* h2_task.c */,
+				B25574901BEB6EFC0058F97B /* h2_task.h */,
+				B25574911BEB6EFC0058F97B /* h2_task_input.c */,
+				B25574921BEB6EFC0058F97B /* h2_task_input.h */,
+				B25574931BEB6EFC0058F97B /* h2_task_output.c */,
+				B25574941BEB6EFC0058F97B /* h2_task_output.h */,
+				B25574951BEB6EFC0058F97B /* h2_task_queue.c */,
+				B25574961BEB6EFC0058F97B /* h2_task_queue.h */,
+				B25574971BEB6EFC0058F97B /* h2_to_h1.c */,
+				B25574981BEB6EFC0058F97B /* h2_to_h1.h */,
+				B25574991BEB6EFC0058F97B /* h2_util.c */,
+				B255749A1BEB6EFC0058F97B /* h2_util.h */,
+				B255749B1BEB6EFC0058F97B /* h2_version.h */,
+				B255749C1BEB6EFC0058F97B /* h2_version.h.in */,
+				B255749D1BEB6EFC0058F97B /* h2_worker.c */,
+				B255749E1BEB6EFC0058F97B /* h2_worker.h */,
+				B255749F1BEB6EFC0058F97B /* h2_workers.c */,
+				B25574A01BEB6EFC0058F97B /* h2_workers.h */,
+				B25574A11BEB6EFC0058F97B /* m4 */,
+				B25574A31BEB6EFC0058F97B /* Makefile */,
+				B25574A41BEB6EFC0058F97B /* Makefile.am */,
+				B25574A51BEB6EFC0058F97B /* Makefile.in */,
+				B25574A61BEB6EFC0058F97B /* mod_h2.h */,
+				B25574A71BEB6EFC0058F97B /* mod_http2.c */,
+				B25574A81BEB6EFC0058F97B /* mod_http2.la */,
+				B25574A91BEB6EFC0058F97B /* mod_http2_la-h2_alt_svc.lo */,
+				B25574AA1BEB6EFC0058F97B /* mod_http2_la-h2_alt_svc.o */,
+				B25574AB1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eos.lo */,
+				B25574AC1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eos.o */,
+				B25574AD1BEB6EFC0058F97B /* mod_http2_la-h2_config.lo */,
+				B25574AE1BEB6EFC0058F97B /* mod_http2_la-h2_config.o */,
+				B25574AF1BEB6EFC0058F97B /* mod_http2_la-h2_conn.lo */,
+				B25574B01BEB6EFC0058F97B /* mod_http2_la-h2_conn.o */,
+				B25574B11BEB6EFC0058F97B /* mod_http2_la-h2_conn_io.lo */,
+				B25574B21BEB6EFC0058F97B /* mod_http2_la-h2_conn_io.o */,
+				B25574B31BEB6EFC0058F97B /* mod_http2_la-h2_ctx.lo */,
+				B25574B41BEB6EFC0058F97B /* mod_http2_la-h2_ctx.o */,
+				B25574B51BEB6EFC0058F97B /* mod_http2_la-h2_from_h1.lo */,
+				B25574B61BEB6EFC0058F97B /* mod_http2_la-h2_from_h1.o */,
+				B25574B71BEB6EFC0058F97B /* mod_http2_la-h2_h2.lo */,
+				B25574B81BEB6EFC0058F97B /* mod_http2_la-h2_h2.o */,
+				B25574B91BEB6EFC0058F97B /* mod_http2_la-h2_io.lo */,
+				B25574BA1BEB6EFC0058F97B /* mod_http2_la-h2_io.o */,
+				B25574BB1BEB6EFC0058F97B /* mod_http2_la-h2_io_set.lo */,
+				B25574BC1BEB6EFC0058F97B /* mod_http2_la-h2_io_set.o */,
+				B25574BD1BEB6EFC0058F97B /* mod_http2_la-h2_mplx.lo */,
+				B25574BE1BEB6EFC0058F97B /* mod_http2_la-h2_mplx.o */,
+				B25574BF1BEB6EFC0058F97B /* mod_http2_la-h2_request.lo */,
+				B25574C01BEB6EFC0058F97B /* mod_http2_la-h2_request.o */,
+				B25574C11BEB6EFC0058F97B /* mod_http2_la-h2_response.lo */,
+				B25574C21BEB6EFC0058F97B /* mod_http2_la-h2_response.o */,
+				B25574C31BEB6EFC0058F97B /* mod_http2_la-h2_session.lo */,
+				B25574C41BEB6EFC0058F97B /* mod_http2_la-h2_session.o */,
+				B25574C51BEB6EFC0058F97B /* mod_http2_la-h2_stream.lo */,
+				B25574C61BEB6EFC0058F97B /* mod_http2_la-h2_stream.o */,
+				B25574C71BEB6EFC0058F97B /* mod_http2_la-h2_stream_set.lo */,
+				B25574C81BEB6EFC0058F97B /* mod_http2_la-h2_stream_set.o */,
+				B25574C91BEB6EFC0058F97B /* mod_http2_la-h2_switch.lo */,
+				B25574CA1BEB6EFC0058F97B /* mod_http2_la-h2_switch.o */,
+				B25574CB1BEB6EFC0058F97B /* mod_http2_la-h2_task.lo */,
+				B25574CC1BEB6EFC0058F97B /* mod_http2_la-h2_task.o */,
+				B25574CD1BEB6EFC0058F97B /* mod_http2_la-h2_task_input.lo */,
+				B25574CE1BEB6EFC0058F97B /* mod_http2_la-h2_task_input.o */,
+				B25574CF1BEB6EFC0058F97B /* mod_http2_la-h2_task_output.lo */,
+				B25574D01BEB6EFC0058F97B /* mod_http2_la-h2_task_output.o */,
+				B25574D11BEB6EFC0058F97B /* mod_http2_la-h2_task_queue.lo */,
+				B25574D21BEB6EFC0058F97B /* mod_http2_la-h2_task_queue.o */,
+				B25574D31BEB6EFC0058F97B /* mod_http2_la-h2_to_h1.lo */,
+				B25574D41BEB6EFC0058F97B /* mod_http2_la-h2_to_h1.o */,
+				B25574D51BEB6EFC0058F97B /* mod_http2_la-h2_util.lo */,
+				B25574D61BEB6EFC0058F97B /* mod_http2_la-h2_util.o */,
+				B25574D71BEB6EFC0058F97B /* mod_http2_la-h2_worker.lo */,
+				B25574D81BEB6EFC0058F97B /* mod_http2_la-h2_worker.o */,
+				B25574D91BEB6EFC0058F97B /* mod_http2_la-h2_workers.lo */,
+				B25574DA1BEB6EFC0058F97B /* mod_http2_la-h2_workers.o */,
+				B25574DB1BEB6EFC0058F97B /* mod_http2_la-mod_http2.lo */,
+				B25574DC1BEB6EFC0058F97B /* mod_http2_la-mod_http2.o */,
+				B25574DD1BEB6EFC0058F97B /* stamp-h1 */,
+			);
+			path = mod_http2;
+			sourceTree = "<group>";
+		};
+		B255740B1BEB6EFC0058F97B /* .deps */ = {
+			isa = PBXGroup;
+			children = (
+				B255740C1BEB6EFC0058F97B /* mod_h2_la-h2_alpn.Plo */,
+				B255740D1BEB6EFC0058F97B /* mod_h2_la-h2_alt_svc.Plo */,
+				B255740E1BEB6EFC0058F97B /* mod_h2_la-h2_bucket_eoc.Plo */,
+				B255740F1BEB6EFC0058F97B /* mod_h2_la-h2_bucket_eos.Plo */,
+				B25574101BEB6EFC0058F97B /* mod_h2_la-h2_config.Plo */,
+				B25574111BEB6EFC0058F97B /* mod_h2_la-h2_conn.Plo */,
+				B25574121BEB6EFC0058F97B /* mod_h2_la-h2_conn_io.Plo */,
+				B25574131BEB6EFC0058F97B /* mod_h2_la-h2_ctx.Plo */,
+				B25574141BEB6EFC0058F97B /* mod_h2_la-h2_from_h1.Plo */,
+				B25574151BEB6EFC0058F97B /* mod_h2_la-h2_h2.Plo */,
+				B25574161BEB6EFC0058F97B /* mod_h2_la-h2_h2c.Plo */,
+				B25574171BEB6EFC0058F97B /* mod_h2_la-h2_io.Plo */,
+				B25574181BEB6EFC0058F97B /* mod_h2_la-h2_io_set.Plo */,
+				B25574191BEB6EFC0058F97B /* mod_h2_la-h2_mplx.Plo */,
+				B255741A1BEB6EFC0058F97B /* mod_h2_la-h2_request.Plo */,
+				B255741B1BEB6EFC0058F97B /* mod_h2_la-h2_response.Plo */,
+				B255741C1BEB6EFC0058F97B /* mod_h2_la-h2_session.Plo */,
+				B255741D1BEB6EFC0058F97B /* mod_h2_la-h2_stream.Plo */,
+				B255741E1BEB6EFC0058F97B /* mod_h2_la-h2_stream_set.Plo */,
+				B255741F1BEB6EFC0058F97B /* mod_h2_la-h2_switch.Plo */,
+				B25574201BEB6EFC0058F97B /* mod_h2_la-h2_task.Plo */,
+				B25574211BEB6EFC0058F97B /* mod_h2_la-h2_task_input.Plo */,
+				B25574221BEB6EFC0058F97B /* mod_h2_la-h2_task_output.Plo */,
+				B25574231BEB6EFC0058F97B /* mod_h2_la-h2_task_queue.Plo */,
+				B25574241BEB6EFC0058F97B /* mod_h2_la-h2_to_h1.Plo */,
+				B25574251BEB6EFC0058F97B /* mod_h2_la-h2_upgrade.Plo */,
+				B25574261BEB6EFC0058F97B /* mod_h2_la-h2_util.Plo */,
+				B25574271BEB6EFC0058F97B /* mod_h2_la-h2_worker.Plo */,
+				B25574281BEB6EFC0058F97B /* mod_h2_la-h2_workers.Plo */,
+				B25574291BEB6EFC0058F97B /* mod_h2_la-mod_h2.Plo */,
+				B255742A1BEB6EFC0058F97B /* mod_h2_la-mod_http2.Plo */,
+				B255742B1BEB6EFC0058F97B /* mod_http2_la-h2_alt_svc.Plo */,
+				B255742C1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eoc.Plo */,
+				B255742D1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eoc.Tpo */,
+				B255742E1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eos.Plo */,
+				B255742F1BEB6EFC0058F97B /* mod_http2_la-h2_config.Plo */,
+				B25574301BEB6EFC0058F97B /* mod_http2_la-h2_conn.Plo */,
+				B25574311BEB6EFC0058F97B /* mod_http2_la-h2_conn_io.Plo */,
+				B25574321BEB6EFC0058F97B /* mod_http2_la-h2_ctx.Plo */,
+				B25574331BEB6EFC0058F97B /* mod_http2_la-h2_from_h1.Plo */,
+				B25574341BEB6EFC0058F97B /* mod_http2_la-h2_h2.Plo */,
+				B25574351BEB6EFC0058F97B /* mod_http2_la-h2_io.Plo */,
+				B25574361BEB6EFC0058F97B /* mod_http2_la-h2_io_set.Plo */,
+				B25574371BEB6EFC0058F97B /* mod_http2_la-h2_mplx.Plo */,
+				B25574381BEB6EFC0058F97B /* mod_http2_la-h2_request.Plo */,
+				B25574391BEB6EFC0058F97B /* mod_http2_la-h2_response.Plo */,
+				B255743A1BEB6EFC0058F97B /* mod_http2_la-h2_session.Plo */,
+				B255743B1BEB6EFC0058F97B /* mod_http2_la-h2_stream.Plo */,
+				B255743C1BEB6EFC0058F97B /* mod_http2_la-h2_stream_set.Plo */,
+				B255743D1BEB6EFC0058F97B /* mod_http2_la-h2_switch.Plo */,
+				B255743E1BEB6EFC0058F97B /* mod_http2_la-h2_task.Plo */,
+				B255743F1BEB6EFC0058F97B /* mod_http2_la-h2_task_input.Plo */,
+				B25574401BEB6EFC0058F97B /* mod_http2_la-h2_task_output.Plo */,
+				B25574411BEB6EFC0058F97B /* mod_http2_la-h2_task_queue.Plo */,
+				B25574421BEB6EFC0058F97B /* mod_http2_la-h2_to_h1.Plo */,
+				B25574431BEB6EFC0058F97B /* mod_http2_la-h2_util.Plo */,
+				B25574441BEB6EFC0058F97B /* mod_http2_la-h2_worker.Plo */,
+				B25574451BEB6EFC0058F97B /* mod_http2_la-h2_workers.Plo */,
+				B25574461BEB6EFC0058F97B /* mod_http2_la-mod_http2.Plo */,
+			);
+			path = .deps;
+			sourceTree = "<group>";
+		};
+		B25574481BEB6EFC0058F97B /* .libs */ = {
+			isa = PBXGroup;
+			children = (
+				B25574491BEB6EFC0058F97B /* mod_http2.0.so */,
+				B255744A1BEB6EFC0058F97B /* mod_http2.a */,
+				B255744B1BEB6EFC0058F97B /* mod_http2.la */,
+				B255744C1BEB6EFC0058F97B /* mod_http2.lai */,
+				B255744D1BEB6EFC0058F97B /* mod_http2.so */,
+				B255744E1BEB6EFC0058F97B /* mod_http2_la-h2_alt_svc.o */,
+				B255744F1BEB6EFC0058F97B /* mod_http2_la-h2_bucket_eos.o */,
+				B25574501BEB6EFC0058F97B /* mod_http2_la-h2_config.o */,
+				B25574511BEB6EFC0058F97B /* mod_http2_la-h2_conn.o */,
+				B25574521BEB6EFC0058F97B /* mod_http2_la-h2_conn_io.o */,
+				B25574531BEB6EFC0058F97B /* mod_http2_la-h2_ctx.o */,
+				B25574541BEB6EFC0058F97B /* mod_http2_la-h2_from_h1.o */,
+				B25574551BEB6EFC0058F97B /* mod_http2_la-h2_h2.o */,
+				B25574561BEB6EFC0058F97B /* mod_http2_la-h2_io.o */,
+				B25574571BEB6EFC0058F97B /* mod_http2_la-h2_io_set.o */,
+				B25574581BEB6EFC0058F97B /* mod_http2_la-h2_mplx.o */,
+				B25574591BEB6EFC0058F97B /* mod_http2_la-h2_request.o */,
+				B255745A1BEB6EFC0058F97B /* mod_http2_la-h2_response.o */,
+				B255745B1BEB6EFC0058F97B /* mod_http2_la-h2_session.o */,
+				B255745C1BEB6EFC0058F97B /* mod_http2_la-h2_stream.o */,
+				B255745D1BEB6EFC0058F97B /* mod_http2_la-h2_stream_set.o */,
+				B255745E1BEB6EFC0058F97B /* mod_http2_la-h2_switch.o */,
+				B255745F1BEB6EFC0058F97B /* mod_http2_la-h2_task.o */,
+				B25574601BEB6EFC0058F97B /* mod_http2_la-h2_task_input.o */,
+				B25574611BEB6EFC0058F97B /* mod_http2_la-h2_task_output.o */,
+				B25574621BEB6EFC0058F97B /* mod_http2_la-h2_task_queue.o */,
+				B25574631BEB6EFC0058F97B /* mod_http2_la-h2_to_h1.o */,
+				B25574641BEB6EFC0058F97B /* mod_http2_la-h2_util.o */,
+				B25574651BEB6EFC0058F97B /* mod_http2_la-h2_worker.o */,
+				B25574661BEB6EFC0058F97B /* mod_http2_la-h2_workers.o */,
+				B25574671BEB6EFC0058F97B /* mod_http2_la-mod_http2.o */,
+			);
+			path = .libs;
+			sourceTree = "<group>";
+		};
+		B25574A11BEB6EFC0058F97B /* m4 */ = {
+			isa = PBXGroup;
+			children = (
+				B25574A21BEB6EFC0058F97B /* h2.m4 */,
+			);
+			path = m4;
+			sourceTree = "<group>";
+		};
 		B27BBD1F1A65757700C58A41 = {
 			isa = PBXGroup;
 			children = (
-				B24C597E1B8C66930003DF74 /* m4 */,
 				B2E5D7861AAF1F4D001FD280 /* AUTHORS */,
 				B2E5D7871AAF1F4D001FD280 /* ChangeLog */,
 				B2E5D7841AAEEF8C001FD280 /* configure.ac */,
@@ -295,7 +741,9 @@
 				B2A6EF2C1A9F2452005DFC5B /* DISCUSS */,
 				B2A6EF2A1A9E3A93005DFC5B /* INSTALL */,
 				B22D25281AA89A0B0041D8E5 /* LICENSE */,
+				B24C597E1B8C66930003DF74 /* m4 */,
 				B2E5D7851AAF1D87001FD280 /* Makefile.am */,
+				B255740A1BEB6EFC0058F97B /* mod_http2 */,
 				B2E5D7891AAF1F4D001FD280 /* NEWS */,
 				B27BBD2D1A6575C200C58A41 /* README */,
 				B256C4BA1ADD5FF10042C760 /* README.md */,

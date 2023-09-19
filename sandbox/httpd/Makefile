@@ -33,7 +33,7 @@ HTTPD_DIR    = httpd-$(HTTPD_VERSION)
 HTTPD_TAR    = httpd-$(HTTPD_VERSION).tar.gz
 HTTPD_URL    = https://archive.apache.org/dist/httpd/$(HTTPD_TAR)
 
-HTTPD_CONF   = --enable-mpms-shared=all --with-included-apr
+HTTPD_CONF   = --enable-mpms-shared=all --disable-http2 --with-included-apr
 HTTPD_DEPS   = $(GEN)/$(HTTPD_DIR)/.apr-extracted
 
 PCRE_VERSION = 8.36

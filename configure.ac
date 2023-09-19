@@ -48,16 +48,16 @@ AC_CONFIG_HEADERS([mod_http2/config.h])
 AC_ARG_ENABLE([werror],
     [AS_HELP_STRING([--enable-werror],
                     [Turn on compile time warnings])],
-    [werror=$enableval], [werror=no])
+    [werror=$enableval], [werror=yes])
 
 AC_ARG_ENABLE([sandbox], [AS_HELP_STRING([--enable-sandbox],
-    [Build a sandbox installation [default=no]])],
+    [Build a sandbox installation [default=yes]])],
     [case "${enableval}" in
         yes) build_mode=sandbox ;;
         no)  build_mode=extern ;;
         *) AC_MSG_ERROR([bad value ${enableval} for --enable-sandbox]) ;;
     esac],
-    [build_mode=extern])
+    [build_mode=sandbox])
 
 AC_ARG_WITH([apxs], [AS_HELP_STRING([--with-apxs],
     [Use APXS executable [default=check]])],
@@ -201,7 +201,4 @@ AC_MSG_NOTICE([summary of build options:
     LDFLAGS:        ${LDFLAGS}
     LIBS:           ${LIBS}
     CPPFLAGS:       ${CPPFLAGS}
-    C preprocessor: ${CPP}
-    BUILD_SUBDIRS   ${BUILD_SUBDIRS}
-    a2enmod         ${A2ENMOD:--}
 ])

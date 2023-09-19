@@ -1,3 +1,20 @@
+v1.0.3
+-------------------------------------------------------------------------------- 
+ * copy from https://svn.apache.org/repos/asf/httpd/httpd/trunk
+ * includes proposed backport patch for Apache httpd 2.4.17
+   * improved https:// throughput
+   * vastly improved http:// throughput
+   * several stability and logging improvements
+   * 
+ * updated test cases from Apache tests
+ * configure now builds the sandbox by default, too many user problems
+   otherwise
+
+
+v0.9.9 - 1.0.2
+-------------------------------------------------------------------------------- 
+never happened here, but at http://httpd.apache.org
+
 v0.9.8
 -------------------------------------------------------------------------------- 
  * server protocol of requests served via mod_h2 is now `HTTP/2`

@@ -13,6 +13,15 @@ What you find here are **early experience versions** for people who like living 
 
 If you want HTTP/2 in your production environment, please head over to the official releases at Apache and grab one of those or wait until the various OS distributions have assembled one for you. 
 
+##Current Version
+The version here is the **Proposed backport to 2.4.x**, to be published hopefully as 2.4.18. 
+
+This is therefore an **early experience version**
+and there is no guarantee that it will be released as it is here by Apache. But you are welcome to test it and give feedback.
+
+Notice that this version builds in ```sandbox```mode by default when you give no arguments to ```configure```. That is so, because several people tried to compile it against a release Apache httpd. That does not work however, as patches to httpd core are necessary. Luckily, these are applied automatically to the sandbox built.
+
+
 ##OS Packages
 
 * **Ubuntu**: [ppa by ondrej](https://launchpad.net/~ondrej/+archive/ubuntu/apache2) for Ubuntu 14.04 and others
@@ -51,7 +60,7 @@ SPDY protocol. And without Tatsuhiro Tsujikawa excellent nghttp2 work, this
 would not have been possible.
 
 
-Münster, 09.10.2015,
+Münster, 05.11.2015,
 
 Stefan Eissing, greenbytes GmbH
 
