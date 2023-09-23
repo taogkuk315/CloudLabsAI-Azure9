@@ -5,7 +5,35 @@ v1.0.3
    * improved https:// throughput
    * vastly improved http:// throughput
    * several stability and logging improvements
-   * 
+   * connection reuse: virtual hosts that have exactly the same TLS setup
+     (certificates, protocol, ciphers and all) allow using a single HTTP/2
+     connection.
+   * h2c: first HTTP/1.1 request on a connection will announce additionally
+     available and more preferred protocols in the ```Upgrade``` response
+     header.
+   * H2Direct is by default on for cleartext connections where h2c is an
+     allowed protocol. Or, the other way around, it is always disabled unless
+     h2/h2c is configured.
+   * TLS handshake is triggered earlier, allowing all connection hooks which
+     register behind mod_ssl to see negotiated values.
+   * new experimental directives ```H2TLSWarmUpSize``` and ```H2TLSCoolDownSecs```
+     that specify how TLS record sizes should used during the lifetime of a
+     connection.
+     * H2TLSWarmUpSize: amount of bytes to send in small (~1300 bytes) chunks,
+       so that packets fit inside a single MTU. After this many bytes have
+       been sent, data is written with max size of 16 KB when possible.
+     * H2TLSCoolDownSecs: number of idle seconds to pass before a warmed
+       up TLS connection falls back to small chunks again.
+     Set both to 0 to always write max chunks. Defaults are 1 MB and 1 second.
+   * HTTP/2 priorities are now respected when scheduling streams for handling.
+     This effects which queued task is handled first whenever a worker becomes
+     available.
+   * New directive ```H2ModernTLSOnly on|off``` that checks connections for
+     TLS protocol version and negotiated ciphers, so that HTTP/2 connections
+     only happen on ```modern``` TLS and none of the ciphers in the black
+     list from RFC 7540 are used.
+   * 'HTTP/2.0' is written in log files when requests are served via mod_http2.
+     
  * updated test cases from Apache tests
  * configure now builds the sandbox by default, too many user problems
    otherwise
