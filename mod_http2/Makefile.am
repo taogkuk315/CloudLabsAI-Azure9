@@ -29,11 +29,13 @@ OBJECTS = \
     h2_conn.c \
     h2_conn_io.c \
     h2_ctx.c \
+    h2_filter.c \
     h2_from_h1.c \
     h2_h2.c \
     h2_io.c \
     h2_io_set.c \
     h2_mplx.c \
+    h2_push.c \
     h2_request.c \
     h2_response.c \
     h2_session.c \
@@ -44,7 +46,6 @@ OBJECTS = \
     h2_task_input.c \
     h2_task_output.c \
     h2_task_queue.c \
-    h2_to_h1.c \
     h2_util.c \
     h2_worker.c \
     h2_workers.c \
@@ -58,12 +59,13 @@ HFILES = \
     h2_conn.h \
     h2_conn_io.h \
     h2_ctx.h \
+    h2_filter.h \
     h2_from_h1.h \
     h2_h2.h \
     h2_io.h \
     h2_io_set.h \
     h2_mplx.h \
-    h2_private.h \
+    h2_push.h \
     h2_request.h \
     h2_response.h \
     h2_session.h \
@@ -74,7 +76,6 @@ HFILES = \
     h2_task_input.h \
     h2_task_output.h \
     h2_task_queue.h \
-    h2_to_h1.h \
     h2_util.h \
     h2_version.h \
     h2_worker.h \
@@ -91,6 +92,6 @@ install-libLTLIBRARIES:
 
 install-exec-local: mod_http2.la
 	$(MKDIR_P) $(DESTDIR)/@LIBEXEC_DIR@
-	$(APXS) -i -S LIBEXECDIR=$(DESTDIR)/@LIBEXEC_DIR@ -n http2 mod_http2.la
+	$(APXS) -i -S LIBEXECDIR=$(DESTDIR)/@LIBEXEC_DIR@ -n h2 mod_http2.la
 
 

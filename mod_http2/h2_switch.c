@@ -136,7 +136,7 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
     }
     
     if (found) {
-        h2_ctx *ctx = h2_ctx_get(c);
+        h2_ctx *ctx = h2_ctx_get(c, 1);
         
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "switching protocol to '%s'", protocol);
@@ -152,14 +152,18 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
              */
             ap_remove_input_filter_byhandle(r->input_filters, "http_in");
             ap_remove_input_filter_byhandle(r->input_filters, "reqtimeout");
+            ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
             
             /* Ok, start an h2_conn on this one. */
-            status = h2_conn_rprocess(r);
-            if (status != DONE) {
-                /* Nothing really to do about this. */
+            h2_ctx_server_set(ctx, r->server);
+            status = h2_conn_setup(ctx, r->connection, r);
+            if (status != APR_SUCCESS) {
                 ap_log_rerror(APLOG_MARK, APLOG_DEBUG, status, r,
-                              "session proessed, unexpected status");
+                              "session setup");
+                return status;
             }
+            
+            return h2_conn_run(ctx, c);
         }
         return DONE;
     }
@@ -178,4 +182,3 @@ void h2_switch_register_hooks(void)
     ap_hook_protocol_switch(h2_protocol_switch, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_protocol_get(h2_protocol_get, NULL, NULL, APR_HOOK_MIDDLE);
 }
-

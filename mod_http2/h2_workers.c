@@ -18,6 +18,7 @@
 #include <apr_thread_mutex.h>
 #include <apr_thread_cond.h>
 
+#include <mpm_common.h>
 #include <httpd.h>
 #include <http_core.h>
 #include <http_log.h>
@@ -42,7 +43,8 @@ static int in_list(h2_workers *workers, h2_mplx *m)
     return 0;
 }
 
-static void cleanup_zombies(h2_workers *workers, int lock) {
+static void cleanup_zombies(h2_workers *workers, int lock)
+{
     if (lock) {
         apr_thread_mutex_lock(workers->lock);
     }
@@ -57,7 +59,6 @@ static void cleanup_zombies(h2_workers *workers, int lock) {
         apr_thread_mutex_unlock(workers->lock);
     }
 }
-
 
 /**
  * Get the next task for the given worker. Will block until a task arrives
@@ -79,7 +80,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
     if (*pm && ptask != NULL) {
         /* We have a h2_mplx instance and the worker wants the next task. 
          * Try to get one from the given mplx. */
-        *ptask = h2_mplx_pop_task(*pm, &has_more);
+        *ptask = h2_mplx_pop_task(*pm, worker, &has_more);
         if (*ptask) {
             return APR_SUCCESS;
         }
@@ -124,7 +125,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
                 m = H2_MPLX_LIST_FIRST(&workers->mplxs);
                 H2_MPLX_REMOVE(m);
                 
-                task = h2_mplx_pop_task(m, &has_more);
+                task = h2_mplx_pop_task(m, worker, &has_more);
                 if (task) {
                     if (has_more) {
                         H2_MPLX_LIST_INSERT_TAIL(&workers->mplxs, m);
@@ -174,7 +175,7 @@ static apr_status_t get_mplx_next(h2_worker *worker, h2_mplx **pm,
          * needed to give up with more than enough workers.
          */
         if (task) {
-            ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+            ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, workers->s,
                          "h2_worker(%d): start task(%s)",
                          h2_worker_get_id(worker), task->id);
             /* Since we hand out a reference to the worker, we increase
@@ -215,7 +216,6 @@ static void worker_done(h2_worker *worker, void *ctx)
     }
 }
 
-
 static apr_status_t add_worker(h2_workers *workers)
 {
     h2_worker *w = h2_worker_create(workers->next_worker_id++,
@@ -231,7 +231,8 @@ static apr_status_t add_worker(h2_workers *workers)
     return APR_SUCCESS;
 }
 
-static apr_status_t h2_workers_start(h2_workers *workers) {
+static apr_status_t h2_workers_start(h2_workers *workers)
+{
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
@@ -271,6 +272,14 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *server_pool,
         apr_atomic_set32(&workers->max_idle_secs, 10);
         
         apr_threadattr_create(&workers->thread_attr, workers->pool);
+        apr_threadattr_detach_set(workers->thread_attr, 0);
+        if (ap_thread_stacksize != 0) {
+            apr_threadattr_stacksize_set(workers->thread_attr,
+                                         ap_thread_stacksize);
+            ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
+                         "h2_workers: using stacksize=%ld", 
+                         (long)ap_thread_stacksize);
+        }
         
         APR_RING_INIT(&workers->workers, h2_worker, link);
         APR_RING_INIT(&workers->zombies, h2_worker, link);
@@ -326,7 +335,7 @@ apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m)
 {
     apr_status_t status = apr_thread_mutex_lock(workers->lock);
     if (status == APR_SUCCESS) {
-        ap_log_error(APLOG_MARK, APLOG_DEBUG, status, workers->s,
+        ap_log_error(APLOG_MARK, APLOG_TRACE2, status, workers->s,
                      "h2_workers: register mplx(%ld)", m->id);
         if (in_list(workers, m)) {
             status = APR_EAGAIN;
@@ -381,4 +390,3 @@ void h2_workers_set_max_idle_secs(h2_workers *workers, int idle_secs)
     }
     apr_atomic_set32(&workers->max_idle_secs, idle_secs);
 }
-

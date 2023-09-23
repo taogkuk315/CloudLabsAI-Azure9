@@ -3,26 +3,40 @@
 
 Copyright (C) 2015 greenbytes GmbH
 
-This repository contains the `mod_h[ttp]2` for Apache httpd. It enables the HTTP2
-protocol inside the server, using nghttp2 (https://nghttp2.org) as base engine.
+This repository contains the `mod_h[ttp]2` from Apache httpd as a standalone build. 
 
 ##Status
-**Officially an Apache httpd module**, first released in 2.4.17. See [Apache downloads](https://httpd.apache.org/download.cgi) to get a released version.
+**An official Apache httpd module**, first released in 2.4.17. See [Apache downloads](https://httpd.apache.org/download.cgi) to get a released version.
 
 What you find here are **early experience versions** for people who like living on the edge and want to help me test not yet released changes.
 
 If you want HTTP/2 in your production environment, please head over to the official releases at Apache and grab one of those or wait until the various OS distributions have assembled one for you. 
 
 ##Current Version
-The version here is the **Proposed backport to 2.4.x**, to be published hopefully as 2.4.18. 
+The version here is the **Proposed backport to 2.4.x**, to be published hopefully as 2.4.19. 
 
 This is therefore an **early experience version**
 and there is no guarantee that it will be released as it is here by Apache. But you are welcome to test it and give feedback.
 
-Notice that this version builds in ```sandbox```mode by default when you give no arguments to ```configure```. That is so, because several people tried to compile it against a release Apache httpd. That does not work however, as patches to httpd core are necessary. Luckily, these are applied automatically to the sandbox built.
+##Install
 
+You need a built Apache httpd 2.4.18, including apxs and headers to compile and 
+run this module. Additionally, you need an installed libnghttp2, at least in version
+1.3.0. And additionally, you want an installed OpenSSL 1.0.2.
 
-##OS Packages
+tl;dr
+
+**You need an installed Apache 2.4.18 which already runs ```mod_http2``` in it.**
+
+If you do not have that or don't know how to get it, look at google, stackoverflow, Apache mailing lists or your Linux distro. Not here!
+
+##Changes
+
+Different to earlier releases, this module no longer has a ```sandbox``` build mode. It always needs an Apache + apxs installed on your system, as
+well as all dependant libraries. It was too much work for me to keep the
+sandbox up to date...
+
+##Apache 2.4.x Packages
 
 * **Ubuntu**: [ppa by ondrej](https://launchpad.net/~ondrej/+archive/ubuntu/apache2) for Ubuntu 14.04 and others
 * **Fedora**: [Rawhide includes httpd 2.4.17](http://rpmfind.net/linux/rpm2html/search.php?query=httpd)
@@ -44,10 +58,9 @@ used:
 > autoreconf -i
 > automake
 > autoconf
-> ./configure
+> ./configure --with-apxs=<path to apxs>
 > make
 ```
-
 
 ##Licensing
 Please see the file called LICENSE.
@@ -60,7 +73,7 @@ SPDY protocol. And without Tatsuhiro Tsujikawa excellent nghttp2 work, this
 would not have been possible.
 
 
-Münster, 05.11.2015,
+Münster, 18.12.2015,
 
 Stefan Eissing, greenbytes GmbH
 

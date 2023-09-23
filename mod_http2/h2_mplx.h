@@ -44,6 +44,7 @@ struct h2_stream;
 struct h2_request;
 struct h2_io_set;
 struct apr_thread_cond_t;
+struct h2_worker;
 struct h2_workers;
 struct h2_stream_set;
 struct h2_task_queue;
@@ -52,10 +53,16 @@ struct h2_task_queue;
 
 typedef struct h2_mplx h2_mplx;
 
+/**
+ * Callback invoked for every stream that had input data read since
+ * the last invocation.
+ */
+typedef void h2_mplx_consumed_cb(void *ctx, int stream_id, apr_off_t consumed);
+
 struct h2_mplx {
     long id;
     APR_RING_ENTRY(h2_mplx) link;
-    volatile apr_uint32_t refs;
+    volatile int refs;
     conn_rec *c;
     apr_pool_t *pool;
     apr_bucket_alloc_t *bucket_alloc;
@@ -74,6 +81,9 @@ struct h2_mplx {
     apr_pool_t *spare_pool;           /* spare pool, ready for next io */
     struct h2_workers *workers;
     int file_handles_allowed;
+    
+    h2_mplx_consumed_cb *input_consumed;
+    void *input_consumed_ctx;
 };
 
 
@@ -87,6 +97,7 @@ struct h2_mplx {
  * Implicitly has reference count 1.
  */
 h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *master, 
+                        const struct h2_config *conf, 
                         struct h2_workers *workers);
 
 /**
@@ -157,7 +168,7 @@ apr_status_t h2_mplx_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
  * @param ctx context data for the compare function
  */
 apr_status_t h2_mplx_process(h2_mplx *m, int stream_id,
-                             struct h2_request *r, int eos, 
+                             const struct h2_request *r, int eos, 
                              h2_stream_pri_cmp *cmp, void *ctx);
 
 /**
@@ -169,7 +180,18 @@ apr_status_t h2_mplx_process(h2_mplx *m, int stream_id,
  */
 apr_status_t h2_mplx_reprioritize(h2_mplx *m, h2_stream_pri_cmp *cmp, void *ctx);
 
-struct h2_task *h2_mplx_pop_task(h2_mplx *mplx, int *has_more);
+struct h2_task *h2_mplx_pop_task(h2_mplx *mplx, struct h2_worker *w, int *has_more);
+
+/**
+ * Register a callback for the amount of input data consumed per stream. The
+ * will only ever be invoked from the thread creating this h2_mplx, e.g. when
+ * calls from that thread into this h2_mplx are made.
+ *
+ * @param m the multiplexer to register the callback at
+ * @param cb the function to invoke
+ * @param ctx user supplied argument to invocation.
+ */
+void h2_mplx_set_consumed_cb(h2_mplx *m, h2_mplx_consumed_cb *cb, void *ctx);
 
 /*******************************************************************************
  * Input handling of streams.
@@ -184,6 +206,7 @@ struct h2_task *h2_mplx_pop_task(h2_mplx *mplx, int *has_more);
  */
 apr_status_t h2_mplx_in_read(h2_mplx *m, apr_read_type_e block,
                              int stream_id, apr_bucket_brigade *bb,
+                             apr_table_t *trailers, 
                              struct apr_thread_cond_t *iowait);
 
 /**
@@ -205,20 +228,15 @@ apr_status_t h2_mplx_in_close(h2_mplx *m, int stream_id);
 int h2_mplx_in_has_eos_for(h2_mplx *m, int stream_id);
 
 /**
- * Callback invoked for every stream that had input data read since
- * the last invocation.
- */
-typedef void h2_mplx_consumed_cb(void *ctx, int stream_id, apr_size_t consumed);
-
-/**
- * Invoke the callback for all streams that had bytes read since the last
- * call to this function. If no stream had input data consumed, the callback
- * is not invoked.
+ * Invoke the consumed callback for all streams that had bytes read since the 
+ * last call to this function. If no stream had input data consumed, the 
+ * callback is not invoked.
+ * The consumed callback may also be invoked at other times whenever
+ * the need arises.
  * Returns APR_SUCCESS when an update happened, APR_EAGAIN if no update
  * happened.
  */
-apr_status_t h2_mplx_in_update_windows(h2_mplx *m, 
-                                       h2_mplx_consumed_cb *cb, void *ctx);
+apr_status_t h2_mplx_in_update_windows(h2_mplx *m);
 
 /*******************************************************************************
  * Output handling of streams.
@@ -239,7 +257,8 @@ struct h2_stream *h2_mplx_next_submit(h2_mplx *m,
  */
 apr_status_t h2_mplx_out_readx(h2_mplx *mplx, int stream_id, 
                                h2_io_data_cb *cb, void *ctx, 
-                               apr_size_t *plen, int *peos);
+                               apr_off_t *plen, int *peos,
+                               apr_table_t **ptrailers);
 
 /**
  * Reads output data into the given brigade. Will never block, but
@@ -247,7 +266,8 @@ apr_status_t h2_mplx_out_readx(h2_mplx *mplx, int stream_id,
  */
 apr_status_t h2_mplx_out_read_to(h2_mplx *mplx, int stream_id, 
                                  apr_bucket_brigade *bb, 
-                                 apr_size_t *plen, int *peos);
+                                 apr_off_t *plen, int *peos,
+                                 apr_table_t **ptrailers);
 
 /**
  * Opens the output for the given stream with the specified response.
@@ -263,17 +283,19 @@ apr_status_t h2_mplx_out_open(h2_mplx *mplx, int stream_id,
  * @param stream_id the stream identifier
  * @param filter the apache filter context of the data
  * @param bb the bucket brigade to append
+ * @param trailers optional trailers for response, maybe NULL
  * @param iowait a conditional used for block/signalling in h2_mplx
  */
 apr_status_t h2_mplx_out_write(h2_mplx *mplx, int stream_id, 
                                ap_filter_t* filter, apr_bucket_brigade *bb,
+                               apr_table_t *trailers,
                                struct apr_thread_cond_t *iowait);
 
 /**
- * Closes the output stream. Readers of this stream will get all pending 
- * data and then only APR_EOF as result. 
+ * Closes the output for stream stream_id. Optionally forwards trailers
+ * fromt the processed stream.  
  */
-apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id);
+apr_status_t h2_mplx_out_close(h2_mplx *m, int stream_id, apr_table_t *trailers);
 
 apr_status_t h2_mplx_out_rst(h2_mplx *m, int stream_id, int error);
 
