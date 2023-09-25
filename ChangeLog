@@ -1,3 +1,19 @@
+v1.0.12
+-------------------------------------------------------------------------------- 
+ * alpha release on top of Apache httpd 2.4.18
+ * removed sandbox from build, needs installed 2.4.18 + apxs
+ * new directives:
+   - H2Timeout           timeout of a http/2 connection (seconds), default 5
+   - H2KeepAliveTimeout  timeout of an idle http/2 connection (seconds), default 300
+   - H2StreamTimeout     timeout on individual streams (seconds), default 120
+   you can set them to `0` in which case no timeout may apply. You may try that
+   for the stream timeouts if you have problems. This is the very experimental
+   part right now...
+ * improved handling of connection closes to make a better effort on freeing
+   worker threads still involved in streams.
+ * worker numbers are constant MaxThreadsPerChild by default
+ * fixed bug on handling large input without content length
+   
 v1.0.3
 -------------------------------------------------------------------------------- 
  * copy from https://svn.apache.org/repos/asf/httpd/httpd/trunk
