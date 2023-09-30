@@ -65,6 +65,7 @@ HFILES = \
     h2_io.h \
     h2_io_set.h \
     h2_mplx.h \
+    h2_private.h \
     h2_push.h \
     h2_request.h \
     h2_response.h \
