@@ -43,25 +43,31 @@ static struct h2_workers *workers;
 
 static h2_mpm_type_t mpm_type = H2_MPM_UNKNOWN;
 static module *mpm_module;
-static int checked;
+static int async_mpm;
 
-static void check_modules(void) 
+static void check_modules(int force) 
 {
+    static int checked = 0;
     int i;
-    if (!checked) {
+
+    if (force || !checked) {
         for (i = 0; ap_loaded_modules[i]; ++i) {
             module *m = ap_loaded_modules[i];
+            
             if (!strcmp("event.c", m->name)) {
                 mpm_type = H2_MPM_EVENT;
                 mpm_module = m;
+                break;
             }
             else if (!strcmp("worker.c", m->name)) {
                 mpm_type = H2_MPM_WORKER;
                 mpm_module = m;
+                break;
             }
             else if (!strcmp("prefork.c", m->name)) {
                 mpm_type = H2_MPM_PREFORK;
                 mpm_module = m;
+                break;
             }
         }
         checked = 1;
@@ -72,32 +78,26 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
     const h2_config *config = h2_config_sget(s);
     apr_status_t status = APR_SUCCESS;
-    int minw = h2_config_geti(config, H2_CONF_MIN_WORKERS);
-    int maxw = h2_config_geti(config, H2_CONF_MAX_WORKERS);    
+    int minw, maxw;
     int max_threads_per_child = 0;
     int idle_secs = 0;
-    int i;
 
-    h2_config_init(pool);
+    check_modules(1);
     
     ap_mpm_query(AP_MPMQ_MAX_THREADS, &max_threads_per_child);
     
-    for (i = 0; ap_loaded_modules[i]; ++i) {
-        module *m = ap_loaded_modules[i];
-        if (!strcmp("event.c", m->name)) {
-            mpm_type = H2_MPM_EVENT;
-            mpm_module = m;
-        }
-        else if (!strcmp("worker.c", m->name)) {
-            mpm_type = H2_MPM_WORKER;
-            mpm_module = m;
-        }
-        else if (!strcmp("prefork.c", m->name)) {
-            mpm_type = H2_MPM_PREFORK;
-            mpm_module = m;
-        }
+    status = ap_mpm_query(AP_MPMQ_IS_ASYNC, &async_mpm);
+    if (status != APR_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_TRACE1, status, s, "querying MPM for async");
+        /* some MPMs do not implemnent this */
+        async_mpm = 0;
+        status = APR_SUCCESS;
     }
+
+    h2_config_init(pool);
     
+    minw = h2_config_geti(config, H2_CONF_MIN_WORKERS);
+    maxw = h2_config_geti(config, H2_CONF_MAX_WORKERS);    
     if (minw <= 0) {
         minw = max_threads_per_child;
     }
@@ -105,7 +105,7 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
         maxw = minw;
     }
     
-    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
+    ap_log_error(APLOG_MARK, APLOG_TRACE3, 0, s,
                  "h2_workers: min=%d max=%d, mthrpchild=%d", 
                  minw, maxw, max_threads_per_child);
     
@@ -119,13 +119,15 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     return status;
 }
 
-h2_mpm_type_t h2_conn_mpm_type(void) {
-    check_modules();
+h2_mpm_type_t h2_conn_mpm_type(void)
+{
+    check_modules(0);
     return mpm_type;
 }
 
-static module *h2_conn_mpm_module(void) {
-    check_modules();
+static module *h2_conn_mpm_module(void)
+{
+    check_modules(0);
     return mpm_module;
 }
 
@@ -133,7 +135,6 @@ apr_status_t h2_conn_setup(h2_ctx *ctx, conn_rec *c, request_rec *r)
 {
     h2_session *session;
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, "setup");
     if (!workers) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c, APLOGNO(02911) 
                       "workers not initialized");
@@ -154,9 +155,8 @@ apr_status_t h2_conn_setup(h2_ctx *ctx, conn_rec *c, request_rec *r)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_conn_process(h2_ctx *ctx, int async)
+static apr_status_t h2_conn_process(h2_ctx *ctx)
 {
-    apr_status_t status;
     h2_session *session;
     
     session = h2_ctx_session_get(ctx);
@@ -164,25 +164,22 @@ apr_status_t h2_conn_process(h2_ctx *ctx, int async)
         session->c->cs->sense = CONN_SENSE_DEFAULT;
     }
 
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, "process");
-    status = h2_session_process(session, async);
+    h2_session_process(session, async_mpm);
 
+    session->c->keepalive = AP_CONN_KEEPALIVE;
     if (session->c->cs) {
         session->c->cs->state = CONN_STATE_WRITE_COMPLETION;
     }
     
-    if (status == APR_EOF) {
-        ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, session->c,
+    if (session->state == H2_SESSION_ST_CLOSING) {
+        ap_log_cerror( APLOG_MARK, APLOG_DEBUG, 0, session->c,
                       "h2_session(%ld): done", session->id);
         /* Make sure this connection gets closed properly. */
         ap_update_child_status_from_conn(session->c->sbh, SERVER_CLOSING, session->c);
         session->c->keepalive = AP_CONN_CLOSE;
         
         h2_session_close(session);
-        /* hereafter session will be gone */
-    }
-    else {
-        session->c->keepalive = AP_CONN_KEEPALIVE;
+        /* hereafter session may be gone */
     }
     
     return DONE;
@@ -190,9 +187,16 @@ apr_status_t h2_conn_process(h2_ctx *ctx, int async)
 
 apr_status_t h2_conn_run(struct h2_ctx *ctx, conn_rec *c)
 {
+    int mpm_state = 0;
     do {
-        h2_conn_process(ctx, 0);
-    } while (c->keepalive == AP_CONN_KEEPALIVE && !c->aborted);
+        h2_conn_process(ctx);
+        
+        if (ap_mpm_query(AP_MPMQ_MPM_STATE, &mpm_state)) {
+            break;
+        }
+    } while (!async_mpm 
+             && c->keepalive == AP_CONN_KEEPALIVE 
+             && mpm_state != AP_MPMQ_STOPPING);
     
     return DONE;
 }

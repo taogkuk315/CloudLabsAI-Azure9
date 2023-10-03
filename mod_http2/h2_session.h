@@ -53,9 +53,16 @@ struct h2_workers;
 
 struct nghttp2_session;
 
-typedef struct h2_session h2_session;
+typedef enum {
+    H2_SESSION_ST_INIT,             /* send initial SETTINGS, etc. */
+    H2_SESSION_ST_IDLE_READ,        /* nothing to write, expecting data inc */
+    H2_SESSION_ST_BUSY,             /* read/write without stop */
+    H2_SESSION_ST_BUSY_WAIT,        /* waiting for tasks reporting back */
+    H2_SESSION_ST_KEEPALIVE,        /* nothing to write, normal timeout passed */
+    H2_SESSION_ST_CLOSING,          /* shuting down */
+} h2_session_state;
 
-struct h2_session {
+typedef struct h2_session {
     long id;                        /* identifier of this session, unique
                                      * inside a httpd process */
     conn_rec *c;                    /* the connection this session serves */
@@ -64,12 +71,12 @@ struct h2_session {
     server_rec *s;                  /* server/vhost we're starting on */
     const struct h2_config *config; /* Relevant config for this session */
     
-    int started;
-    int aborted;                    /* this session is being aborted */
-    int reprioritize;               /* scheduled streams priority needs to 
-                                     * be re-evaluated */
-                                     
-    apr_interval_time_t  wait_micros;
+    h2_session_state state;         /* state session is in */
+    unsigned int aborted       : 1; /* aborted processing, emergency exit */
+    unsigned int reprioritize  : 1; /* scheduled streams priority changed */
+    unsigned int client_goaway : 1; /* client sent us a GOAWAY */
+    apr_interval_time_t  wait_us;   /* timout during BUSY_WAIT state, micro secs */
+    
     int unsent_submits;             /* number of submitted, but not yet sent
                                        responses. */
     int unsent_promises;            /* number of submitted, but not yet sent
@@ -77,15 +84,21 @@ struct h2_session {
                                      
     apr_size_t frames_received;     /* number of http/2 frames received */
     apr_size_t frames_sent;         /* number of http/2 frames sent */
+    int requests_received;          /* number of http/2 requests received */
+    int responses_sent;             /* number of http/2 responses submitted */
+    int streams_reset;              /* number of http/2 streams reset by client */
+    int streams_pushed;             /* number of http/2 streams pushed */
+    int max_stream_received;        /* highest stream id created */
+    int max_stream_handled;         /* highest stream id handled successfully */
+    
     apr_size_t max_stream_count;    /* max number of open streams */
     apr_size_t max_stream_mem;      /* max buffer memory for a single stream */
+    int timeout_secs;               /* connection timeout (seconds) */
+    int keepalive_secs;             /* connection idle timeout (seconds) */
     
     apr_pool_t *pool;               /* pool to use in session handling */
     apr_bucket_brigade *bbtmp;      /* brigade for keeping temporary data */
     struct apr_thread_cond_t *iowait; /* our cond when trywaiting for data */
-    
-    int timeout_secs;               /* connection timeout (seconds) */
-    int keepalive_secs;             /* connection idle timeout (seconds) */
     
     struct h2_filter_cin *cin;      /* connection input filter context */
     h2_conn_io io;                  /* io on httpd conn filters */
@@ -95,14 +108,11 @@ struct h2_session {
     struct h2_stream *last_stream;  /* last stream worked with */
     struct h2_stream_set *streams;  /* streams handled by this session */
     
-    int max_stream_received;        /* highest stream id created */
-    int max_stream_handled;         /* highest stream id handled successfully */
-    
     apr_pool_t *spare;              /* spare stream pool */
     
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
     struct h2_workers *workers;     /* for executing stream tasks */
-};
+} h2_session;
 
 
 /**
@@ -136,13 +146,6 @@ h2_session *h2_session_rcreate(request_rec *r, struct h2_ctx *ctx,
 apr_status_t h2_session_process(h2_session *session, int async);
 
 /**
- * Destroy the session and all objects it still contains. This will not
- * destroy h2_task instances that have not finished yet. 
- * @param session the session to destroy
- */
-void h2_session_destroy(h2_session *session);
-
-/**
  * Cleanup the session and all objects it still contains. This will not
  * destroy h2_task instances that have not finished yet. 
  * @param session the session to destroy
@@ -159,9 +162,9 @@ void h2_session_eoc_callback(h2_session *session);
 apr_status_t h2_session_abort(h2_session *session, apr_status_t reason, int rv);
 
 /**
- * Called before a session gets destroyed, might flush output etc. 
+ * Close and deallocate the given session.
  */
-apr_status_t h2_session_close(h2_session *session);
+void h2_session_close(h2_session *session);
 
 /* Start submitting the response to a stream request. This is possible
  * once we have all the response headers. */

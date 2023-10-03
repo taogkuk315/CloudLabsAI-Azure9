@@ -24,8 +24,10 @@
 #include <http_config.h>
 #include <http_connection.h>
 #include <http_protocol.h>
+#include <http_request.h>
 #include <http_log.h>
 
+#include "mod_http2.h"
 #include "h2_private.h"
 
 #include "h2_stream.h"
@@ -33,9 +35,11 @@
 #include "h2_config.h"
 #include "h2_ctx.h"
 #include "h2_conn.h"
+#include "h2_request.h"
 #include "h2_session.h"
 #include "h2_util.h"
 #include "h2_h2.h"
+#include "mod_http2.h"
 
 const char *h2_tls_protos[] = {
     "h2", NULL
@@ -439,14 +443,13 @@ static int cipher_is_blacklisted(const char *cipher, const char **psource)
 static int h2_h2_process_conn(conn_rec* c);
 static int h2_h2_post_read_req(request_rec *r);
 
-
 /*******************************************************************************
  * Once per lifetime init, retrieve optional functions
  */
 apr_status_t h2_h2_init(apr_pool_t *pool, server_rec *s)
 {
     (void)pool;
-    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, "h2_h2, child_init");
+    ap_log_error(APLOG_MARK, APLOG_TRACE1, 0, s, "h2_h2, child_init");
     opt_ssl_engine_disable = APR_RETRIEVE_OPTIONAL_FN(ssl_engine_disable);
     opt_ssl_is_https = APR_RETRIEVE_OPTIONAL_FN(ssl_is_https);
     opt_ssl_var_lookup = APR_RETRIEVE_OPTIONAL_FN(ssl_var_lookup);
@@ -648,12 +651,7 @@ int h2_h2_process_conn(conn_rec* c)
                 return status;
             }
         }
-        if (h2_config_async_mpm()) {
-            return h2_conn_process(ctx, 1);
-        }
-        else {
-            return h2_conn_run(ctx, c);
-        }
+        return h2_conn_run(ctx, c);
     }
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "h2_h2, declined");
@@ -700,3 +698,4 @@ static int h2_h2_post_read_req(request_rec *r)
     }
     return DECLINED;
 }
+

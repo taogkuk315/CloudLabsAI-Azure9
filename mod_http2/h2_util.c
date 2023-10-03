@@ -64,17 +64,6 @@ size_t h2_util_header_print(char *buffer, size_t maxlen,
 }
 
 
-char *h2_strlwr(char *s)
-{
-    char *p;
-    for (p = s; *p; ++p) {
-        if (*p >= 'A' && *p <= 'Z') {
-            *p += 'a' - 'A';
-        }
-    }
-    return s;
-}
-
 void h2_util_camel_case_header(char *s, size_t len)
 {
     size_t start = 1;
@@ -288,7 +277,8 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
     
     AP_DEBUG_ASSERT(to);
     AP_DEBUG_ASSERT(from);
-    same_alloc = (to->bucket_alloc == from->bucket_alloc);
+    same_alloc = (to->bucket_alloc == from->bucket_alloc 
+                  || to->p == from->p);
 
     if (!FILE_MOVE) {
         pfile_handles_allowed = NULL;
@@ -906,7 +896,6 @@ typedef struct {
 } literal;
 
 #define H2_DEF_LITERAL(n)   { (n), (sizeof(n)-1) }
-#define H2_ALEN(a)          (sizeof(a)/sizeof((a)[0]))
 #define H2_LIT_ARGS(a)      (a),H2_ALEN(a)
 
 static literal IgnoredRequestHeaders[] = {

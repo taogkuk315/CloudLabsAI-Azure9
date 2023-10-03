@@ -1,3 +1,15 @@
+v1.0.13
+-------------------------------------------------------------------------------- 
+ * reworked connection state handling. Improved scoreboard update (server-status).
+   Default on H2KeepAliveTimeout same as H2Timeout, 5 seconds. After that, 
+   connections are closed.
+   On asynchronous MPMs (event), keep-alive connections no longer block threads,
+   but exact timeout handling is then up to the MPM. In these MPMs, having a
+   longer H2KeepAliveTimeout may be suitable.
+ * new CGI environment variables HTTP2 and H2PUSH. With former "on", the 
+   connection uses HTTP/2. With latter "on", the request may trigger Server Push
+   via Link headers, as both server and clients support it.
+
 v1.0.12
 -------------------------------------------------------------------------------- 
  * alpha release on top of Apache httpd 2.4.18

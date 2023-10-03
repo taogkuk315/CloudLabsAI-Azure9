@@ -3,5 +3,6 @@
 *.lo
 *.la
 .libs
+h2_version.h
 Makefile.in
 Makefile
