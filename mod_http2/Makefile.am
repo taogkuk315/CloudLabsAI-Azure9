@@ -81,7 +81,7 @@ HFILES = \
     h2_version.h \
     h2_worker.h \
     h2_workers.h \
-    mod_h2.h
+    mod_http2.h
 
 
 mod_http2_la_SOURCES = $(HFILES) $(OBJECTS)
