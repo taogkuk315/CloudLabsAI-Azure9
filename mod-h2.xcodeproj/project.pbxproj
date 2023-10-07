@@ -72,12 +72,17 @@
 		B25574A01BEB6EFC0058F97B /* h2_workers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_workers.h; sourceTree = "<group>"; };
 		B25574A21BEB6EFC0058F97B /* h2.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = h2.m4; sourceTree = "<group>"; };
 		B25574A41BEB6EFC0058F97B /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
-		B25574A61BEB6EFC0058F97B /* mod_h2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mod_h2.h; sourceTree = "<group>"; };
 		B25574A71BEB6EFC0058F97B /* mod_http2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mod_http2.c; sourceTree = "<group>"; };
 		B256C4BA1ADD5FF10042C760 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
 		B2A6EF2C1A9F2452005DFC5B /* DISCUSS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = DISCUSS; sourceTree = "<group>"; };
+		B2AB9AB71C2ADBE100908DD6 /* h2_filter.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_filter.c; sourceTree = "<group>"; };
+		B2AB9AB81C2ADBE100908DD6 /* h2_filter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_filter.h; sourceTree = "<group>"; };
+		B2AB9AB91C2ADBE100908DD6 /* h2_push.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_push.c; sourceTree = "<group>"; };
+		B2AB9ABA1C2ADBE100908DD6 /* h2_push.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_push.h; sourceTree = "<group>"; };
+		B2AB9ABB1C2ADBE100908DD6 /* h2_version.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_version.h; sourceTree = "<group>"; };
+		B2AB9ABC1C2ADBE100908DD6 /* mod_http2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mod_http2.h; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D7861AAF1F4D001FD280 /* AUTHORS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = AUTHORS; sourceTree = "<group>"; };
@@ -113,47 +118,52 @@
 				B255746F1BEB6EFC0058F97B /* h2_bucket_eos.h */,
 				B25574701BEB6EFC0058F97B /* h2_config.c */,
 				B25574711BEB6EFC0058F97B /* h2_config.h */,
-				B25574721BEB6EFC0058F97B /* h2_conn.c */,
 				B25574741BEB6EFC0058F97B /* h2_conn_io.c */,
-				B25574731BEB6EFC0058F97B /* h2_conn.h */,
 				B25574751BEB6EFC0058F97B /* h2_conn_io.h */,
+				B25574721BEB6EFC0058F97B /* h2_conn.c */,
+				B25574731BEB6EFC0058F97B /* h2_conn.h */,
 				B25574761BEB6EFC0058F97B /* h2_ctx.c */,
 				B25574771BEB6EFC0058F97B /* h2_ctx.h */,
+				B2AB9AB71C2ADBE100908DD6 /* h2_filter.c */,
+				B2AB9AB81C2ADBE100908DD6 /* h2_filter.h */,
 				B25574781BEB6EFC0058F97B /* h2_from_h1.c */,
 				B25574791BEB6EFC0058F97B /* h2_from_h1.h */,
 				B255747A1BEB6EFC0058F97B /* h2_h2.c */,
 				B255747B1BEB6EFC0058F97B /* h2_h2.h */,
-				B255747C1BEB6EFC0058F97B /* h2_io.c */,
-				B255747D1BEB6EFC0058F97B /* h2_io.h */,
 				B255747E1BEB6EFC0058F97B /* h2_io_set.c */,
 				B255747F1BEB6EFC0058F97B /* h2_io_set.h */,
+				B255747C1BEB6EFC0058F97B /* h2_io.c */,
+				B255747D1BEB6EFC0058F97B /* h2_io.h */,
 				B25574801BEB6EFC0058F97B /* h2_mplx.c */,
 				B25574811BEB6EFC0058F97B /* h2_mplx.h */,
 				B25574821BEB6EFC0058F97B /* h2_private.h */,
+				B2AB9AB91C2ADBE100908DD6 /* h2_push.c */,
+				B2AB9ABA1C2ADBE100908DD6 /* h2_push.h */,
 				B25574831BEB6EFC0058F97B /* h2_request.c */,
 				B25574841BEB6EFC0058F97B /* h2_request.h */,
 				B25574851BEB6EFC0058F97B /* h2_response.c */,
 				B25574861BEB6EFC0058F97B /* h2_response.h */,
 				B25574871BEB6EFC0058F97B /* h2_session.c */,
 				B25574881BEB6EFC0058F97B /* h2_session.h */,
-				B25574891BEB6EFC0058F97B /* h2_stream.c */,
-				B255748A1BEB6EFC0058F97B /* h2_stream.h */,
 				B255748B1BEB6EFC0058F97B /* h2_stream_set.c */,
 				B255748C1BEB6EFC0058F97B /* h2_stream_set.h */,
+				B25574891BEB6EFC0058F97B /* h2_stream.c */,
+				B255748A1BEB6EFC0058F97B /* h2_stream.h */,
 				B255748D1BEB6EFC0058F97B /* h2_switch.c */,
 				B255748E1BEB6EFC0058F97B /* h2_switch.h */,
-				B255748F1BEB6EFC0058F97B /* h2_task.c */,
-				B25574901BEB6EFC0058F97B /* h2_task.h */,
 				B25574911BEB6EFC0058F97B /* h2_task_input.c */,
 				B25574921BEB6EFC0058F97B /* h2_task_input.h */,
 				B25574931BEB6EFC0058F97B /* h2_task_output.c */,
 				B25574941BEB6EFC0058F97B /* h2_task_output.h */,
 				B25574951BEB6EFC0058F97B /* h2_task_queue.c */,
 				B25574961BEB6EFC0058F97B /* h2_task_queue.h */,
+				B255748F1BEB6EFC0058F97B /* h2_task.c */,
+				B25574901BEB6EFC0058F97B /* h2_task.h */,
 				B25574971BEB6EFC0058F97B /* h2_to_h1.c */,
 				B25574981BEB6EFC0058F97B /* h2_to_h1.h */,
 				B25574991BEB6EFC0058F97B /* h2_util.c */,
 				B255749A1BEB6EFC0058F97B /* h2_util.h */,
+				B2AB9ABB1C2ADBE100908DD6 /* h2_version.h */,
 				B255749C1BEB6EFC0058F97B /* h2_version.h.in */,
 				B255749D1BEB6EFC0058F97B /* h2_worker.c */,
 				B255749E1BEB6EFC0058F97B /* h2_worker.h */,
@@ -161,8 +171,8 @@
 				B25574A01BEB6EFC0058F97B /* h2_workers.h */,
 				B25574A11BEB6EFC0058F97B /* m4 */,
 				B25574A41BEB6EFC0058F97B /* Makefile.am */,
-				B25574A61BEB6EFC0058F97B /* mod_h2.h */,
 				B25574A71BEB6EFC0058F97B /* mod_http2.c */,
+				B2AB9ABC1C2ADBE100908DD6 /* mod_http2.h */,
 			);
 			path = mod_http2;
 			sourceTree = "<group>";

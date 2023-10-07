@@ -1,3 +1,7 @@
+v1.0.14
+-------------------------------------------------------------------------------- 
+ * fixed segfault on connection shutdown
+ 
 v1.0.13
 -------------------------------------------------------------------------------- 
  * reworked connection state handling. Improved scoreboard update (server-status).
