@@ -20,7 +20,7 @@
  * @macro
  * Version number of the h2 module as c string
  */
-#define MOD_HTTP2_VERSION "1.0.14-DEVa"
+#define MOD_HTTP2_VERSION "1.0.14"
 
 /**
  * @macro

@@ -1,6 +1,8 @@
 v1.0.14
 -------------------------------------------------------------------------------- 
  * fixed segfault on connection shutdown
+ * added support for accept-push-policy headers, see
+   https://tools.ietf.org/html/draft-ruellan-http-accept-push-policy-00
  
 v1.0.13
 -------------------------------------------------------------------------------- 
