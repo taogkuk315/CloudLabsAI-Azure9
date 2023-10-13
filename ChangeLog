@@ -1,3 +1,11 @@
+v1.0.15
+-------------------------------------------------------------------------------- 
+ * fixed busy loops on random connection errors
+ * fixed connection state for event MPM that shutdown child with 'G' status
+ * changed default for H2KeepAliveTimeout. For async MPMs (event), will leave
+   keepalive handling to the MPM. For sync (worker, prefork), will default to
+   whatever is set for H2Timeout.
+ 
 v1.0.14
 -------------------------------------------------------------------------------- 
  * fixed segfault on connection shutdown
