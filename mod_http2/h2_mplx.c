@@ -15,6 +15,7 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #include <apr_atomic.h>
 #include <apr_thread_mutex.h>
@@ -148,31 +149,14 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent,
     return m;
 }
 
-static void release(h2_mplx *m, int lock)
+static void release(h2_mplx *m)
 {
-    if (lock) {
-        apr_thread_mutex_lock(m->lock);
-        --m->refs;
-        if (m->join_wait) {
-            apr_thread_cond_signal(m->join_wait);
-        }
-        apr_thread_mutex_unlock(m->lock);
-    }
-    else {
-        --m->refs;
-    }
+    --m->refs;
 }
 
-void h2_mplx_reference(h2_mplx *m)
+static void reference(h2_mplx *m)
 {
-    apr_thread_mutex_lock(m->lock);
     ++m->refs;
-    apr_thread_mutex_unlock(m->lock);
-}
-
-void h2_mplx_release(h2_mplx *m)
-{
-    release(m, 1);
 }
 
 static void workers_register(h2_mplx *m)
@@ -272,7 +256,7 @@ apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
             /* iterator until all h2_io have been orphaned or destroyed */
         }
     
-        release(m, 0);
+        release(m);
         for (i = 0; m->refs > 0; ++i) {
             
             m->join_wait = wait;
@@ -280,11 +264,11 @@ apr_status_t h2_mplx_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
                           "h2_mplx(%ld): release_join, refs=%d, waiting...", 
                           m->id, m->refs);
                           
-            status = apr_thread_cond_timedwait(wait, m->lock, apr_time_from_sec(2));
+            status = apr_thread_cond_timedwait(wait, m->lock, apr_time_from_sec(10));
             if (APR_STATUS_IS_TIMEUP(status)) {
-                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, m->c,
-                              "h2_mplx(%ld): release timeup %d, refs=%d, waiting...", 
-                              m->id, i, m->refs);
+                ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c,
+                              "h2_mplx(%ld): release timeup %d, refs=%d, ios=%d, waiting...", 
+                              m->id, i, m->refs, (int)h2_io_set_size(m->stream_ios));
             }
         }
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
@@ -329,13 +313,28 @@ apr_status_t h2_mplx_stream_done(h2_mplx *m, int stream_id, int rst_error)
     return status;
 }
 
-void h2_mplx_task_done(h2_mplx *m, int stream_id)
+static const h2_request *pop_request(h2_mplx *m)
 {
+    const h2_request *req = NULL;
+    int sid;
+    while (!req && (sid = h2_tq_shift(m->q)) > 0) {
+        h2_io *io = h2_io_set_get(m->stream_ios, sid);
+        if (io) {
+            req = io->request;
+        }
+    }
+    return req;
+}
+
+void h2_mplx_request_done(h2_mplx **pm, int stream_id, const h2_request **preq)
+{
+    h2_mplx *m = *pm;
+    
     apr_status_t status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
         h2_io *io = h2_io_set_get(m->stream_ios, stream_id);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
-                      "h2_mplx(%ld): task(%d) done", m->id, stream_id);
+                      "h2_mplx(%ld): request(%d) done", m->id, stream_id);
         if (io) {
             io->task_done = 1;
             if (io->orphaned) {
@@ -344,6 +343,17 @@ void h2_mplx_task_done(h2_mplx *m, int stream_id)
             else {
                 /* hang around until the stream deregisteres */
             }
+        }
+        
+        if (preq) {
+            /* someone wants another request, if we have */
+            *preq = pop_request(m);
+        }
+        if (!preq || !*preq) {
+            /* No request to hand back to the worker, NULLify reference
+             * and decrement count */
+            *pm = NULL;
+            release(m);
         }
         apr_thread_mutex_unlock(m->lock);
     }
@@ -961,14 +971,12 @@ const h2_request *h2_mplx_pop_request(h2_mplx *m, int *has_more)
     }
     status = apr_thread_mutex_lock(m->lock);
     if (APR_SUCCESS == status) {
-        int sid;
-        while (!req && (sid = h2_tq_shift(m->q)) > 0) {
-            h2_io *io = h2_io_set_get(m->stream_ios, sid);
-            if (io) {
-                req = io->request;
-            }
-        }
+        req = pop_request(m);
         *has_more = !h2_tq_empty(m->q);
+        if (req) {
+            /* handing out a reference to a worker. */
+            reference(m);
+        }
         apr_thread_mutex_unlock(m->lock);
     }
     return req;
