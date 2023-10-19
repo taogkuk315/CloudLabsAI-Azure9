@@ -1,3 +1,15 @@
+v1.0.17
+-------------------------------------------------------------------------------- 
+ * H2Timeout/H2KeepAliveTimeout now defaults to what ever is set for HTTP/1
+   connections via Timeout/KeepAliveTimeout
+ * fixes in calculating remaining timeout values
+
+v1.0.16
+-------------------------------------------------------------------------------- 
+ * simplified connection shutdown and worker join for robustness
+ * improved performance for small requests due to less locking
+ * http2 connections work in event with normal server KeepAliveTimeout setting
+ 
 v1.0.15
 -------------------------------------------------------------------------------- 
  * fixed busy loops on random connection errors

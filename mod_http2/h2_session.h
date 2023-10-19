@@ -95,6 +95,7 @@ typedef struct h2_session {
     
     apr_size_t max_stream_count;    /* max number of open streams */
     apr_size_t max_stream_mem;      /* max buffer memory for a single stream */
+    
     int timeout_secs;               /* connection timeout (seconds) */
     int keepalive_secs;             /* connection idle timeout (seconds) */
     

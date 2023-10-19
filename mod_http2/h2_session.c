@@ -787,9 +787,12 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->max_stream_count = h2_config_geti(session->config, H2_CONF_MAX_STREAMS);
         session->max_stream_mem = h2_config_geti(session->config, H2_CONF_STREAM_MAX_MEM);
         session->timeout_secs = h2_config_geti(session->config, H2_CONF_TIMEOUT_SECS);
+        if (session->timeout_secs <= 0) {
+            session->timeout_secs = apr_time_sec(session->s->timeout);
+        }
         session->keepalive_secs = h2_config_geti(session->config, H2_CONF_KEEPALIVE_SECS);
         if (session->keepalive_secs <= 0) {
-            session->keepalive_secs = session->timeout_secs;
+            session->keepalive_secs = apr_time_sec(session->s->keep_alive_timeout);
         }
         
         status = apr_thread_cond_create(&session->iowait, session->pool);
@@ -858,7 +861,14 @@ static h2_session *h2_session_create_int(conn_rec *c,
             h2_session_destroy(session);
             return NULL;
         }
-        
+            
+        if (APLOGcdebug(c)) {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+                          "session(%ld) created, timeout=%d, keepalive_timeout=%d, "
+                          "max_streams=%d, stream_mem=%d",
+                          session->id, session->timeout_secs, session->keepalive_secs,
+                          (int)session->max_stream_count, (int)session->max_stream_mem);
+        }
     }
     return session;
 }
@@ -1770,6 +1780,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                 
             case H2_SESSION_ST_BUSY:
                 if (nghttp2_session_want_read(session->ngh2)) {
+                    h2_filter_cin_timeout_set(session->cin, session->timeout_secs);
                     status = h2_session_read(session, 0, 10);
                     if (status == APR_SUCCESS) {
                         /* got something, continue processing */
@@ -1898,24 +1909,25 @@ apr_status_t h2_session_process(h2_session *session, int async)
                 
             case H2_SESSION_ST_KEEPALIVE:
                 /* Our normal H2Timeout has passed and we are considering to
-                 * extend that with the H2KeepAliveTimeout. This works different
-                 * for async MPMs. */
+                 * extend that with the H2KeepAliveTimeout. */
                 remain_secs = session->keepalive_secs - session->timeout_secs;
-                if (!async && remain_secs <= 0) {
-                    /* not async, keepalive is smaller than normal timeout, close the session */
+                if (remain_secs <= 0) {
+                    /* keepalive is <= normal timeout, close the session */
                     reason = "keepalive expired";
                     h2_session_shutdown(session, 0);
                     goto out;
                 }
                 session->c->keepalive = AP_CONN_KEEPALIVE;
                 ap_update_child_status_from_conn(c->sbh, SERVER_BUSY_KEEPALIVE, c);
-                if (async && !session->r && session->c->cs) {
+                
+                if ((apr_time_sec(session->s->keep_alive_timeout) >= remain_secs)
+                    && async && session->c->cs
+                    && !session->r) {
                     /* Async MPMs are able to handle keep-alive connections without
                      * blocking a thread. For this to happen, we need to return from
                      * processing, indicating the IO event we are waiting for, and
                      * may be called again if the event happens.
-                     * For now, we let the MPM handle any timing on this, so we
-                     * cannot really enforce the remain_secs here.
+                     * TODO: this does not properly GOAWAY connections...
                      * TODO: This currently does not work on upgraded requests...
                      */
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, c,
