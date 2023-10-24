@@ -1,3 +1,8 @@
+v1.0.18
+-------------------------------------------------------------------------------- 
+ * fixed race condition in connnection shutdown that could cause indefinite 
+   hang, fixed cleanup of http2 worker threads, thanks to Yann Ylavic
+ 
 v1.0.17
 -------------------------------------------------------------------------------- 
  * H2Timeout/H2KeepAliveTimeout now defaults to what ever is set for HTTP/1
