@@ -1,3 +1,32 @@
+v1.1.0
+-------------------------------------------------------------------------------- 
+ * GOAWAY will be sent when a HTTP/2 connection is shutdown, whenever the
+   connection still allows it. Calculation of the last stream id has been
+   corrected to include streams started, not only streams finished processing.
+ * several issues fixed with new fuzzing tests that simulate random closes 
+   and delays/timeouts
+ * H2SessionExtraFiles are now shared between all sessions in the same process.
+   It now works like this:
+   H2MaxWorkers * H2SessionFiles is assumed to be the total number of file
+   handles that can be safely used for HTTP/2 transfers without other parts
+   of the server running out of handles. This number is shared between all
+   HTTP/2 connections in the same server process.
+   The default is set to 2. With H2MaxWorkers on most platforms/mpms
+   defaulting to 25 that gives a maximum of 50 handles that can be invoved in
+   transfers. 
+   I think I have to write a blog post one day of how this works and affects
+   performance. tl;dr the more handles http2 may use, the faster static files
+   can be served.
+ * KeepAlive is not correctly visible on the server status page for HTTP/2
+   connections. (Would like more info there, need to extend the scoreboard
+   for it.)
+ * KeepAlive connections are *not* set aside in async MPMs such as event. This
+   is a very desirable feature, but I could not get it to work reliably with
+   the existing MPM interface. Will work on that for the next Apache release.
+   (The main problem is that event will silently close such connections and
+    http2 has no chance to send a last GOAWAY frame. That makes clients fail
+    requests which they have just started.)
+
 v1.0.18
 -------------------------------------------------------------------------------- 
  * fixed race condition in connnection shutdown that could cause indefinite 

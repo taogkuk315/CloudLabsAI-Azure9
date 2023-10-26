@@ -71,6 +71,8 @@ struct h2_mplx {
     struct h2_io_set *stream_ios;
     struct h2_io_set *ready_ios;
     
+    int max_stream_started;      /* highest stream id that started processing */
+
     apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *added_output;
     struct apr_thread_cond_t *join_wait;
@@ -80,7 +82,8 @@ struct h2_mplx {
     
     apr_pool_t *spare_pool;           /* spare pool, ready for next io */
     struct h2_workers *workers;
-    int file_handles_allowed;
+    apr_size_t tx_handles_reserved;
+    apr_size_t tx_chunk_size;
     
     h2_mplx_consumed_cb *input_consumed;
     void *input_consumed_ctx;
@@ -117,6 +120,14 @@ apr_status_t h2_mplx_release_and_join(h2_mplx *m, struct apr_thread_cond_t *wait
 void h2_mplx_abort(h2_mplx *mplx);
 
 void h2_mplx_request_done(h2_mplx **pm, int stream_id, const struct h2_request **preq);
+
+/**
+ * Get the highest stream identifier that has been passed on to processing.
+ * Maybe 0 in case no stream has been processed yet.
+ * @param m the multiplexer
+ * @return highest stream identifier for which processing started
+ */
+int h2_mplx_get_max_stream_started(h2_mplx *m);
 
 /*******************************************************************************
  * IO lifetime of streams.
