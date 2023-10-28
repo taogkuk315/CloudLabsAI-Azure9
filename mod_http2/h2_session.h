@@ -45,6 +45,7 @@ struct h2_filter_cin;
 struct h2_mplx;
 struct h2_priority;
 struct h2_push;
+struct h2_push_diary;
 struct h2_response;
 struct h2_session;
 struct h2_stream;
@@ -55,12 +56,27 @@ struct nghttp2_session;
 
 typedef enum {
     H2_SESSION_ST_INIT,             /* send initial SETTINGS, etc. */
-    H2_SESSION_ST_IDLE_READ,        /* nothing to write, expecting data inc */
+    H2_SESSION_ST_DONE,             /* finished, connection close */
+    H2_SESSION_ST_IDLE,             /* nothing to write, expecting data inc */
     H2_SESSION_ST_BUSY,             /* read/write without stop */
-    H2_SESSION_ST_BUSY_WAIT,        /* waiting for tasks reporting back */
-    H2_SESSION_ST_CLOSING,          /* shuting down */
-    H2_SESSION_ST_ABORTED,          /* client closed connection or sky fall */
+    H2_SESSION_ST_WAIT,             /* waiting for tasks reporting back */
+    H2_SESSION_ST_LOCAL_SHUTDOWN,   /* we announced GOAWAY */
+    H2_SESSION_ST_REMOTE_SHUTDOWN,  /* client announced GOAWAY */
 } h2_session_state;
+
+typedef enum {
+    H2_SESSION_EV_INIT,             /* session was initialized */
+    H2_SESSION_EV_LOCAL_GOAWAY,     /* we send a GOAWAY */
+    H2_SESSION_EV_REMOTE_GOAWAY,    /* remote send us a GOAWAY */
+    H2_SESSION_EV_CONN_ERROR,       /* connection error */
+    H2_SESSION_EV_PROTO_ERROR,      /* protocol error */
+    H2_SESSION_EV_CONN_TIMEOUT,     /* connection timeout */
+    H2_SESSION_EV_NO_IO,            /* nothing has been read or written */
+    H2_SESSION_EV_WAIT_TIMEOUT,     /* timeout waiting for tasks */
+    H2_SESSION_EV_STREAM_READY,     /* stream signalled availability of headers/data */
+    H2_SESSION_EV_DATA_READ,        /* connection data has been read */
+    H2_SESSION_EV_NGH2_DONE,        /* nghttp2 wants neither read nor write anything */
+} h2_session_event_t;
 
 typedef struct h2_session {
     long id;                        /* identifier of this session, unique
@@ -72,23 +88,23 @@ typedef struct h2_session {
     const struct h2_config *config; /* Relevant config for this session */
     
     h2_session_state state;         /* state session is in */
-    unsigned int aborted       : 1; /* aborted processing, emergency exit */
     unsigned int reprioritize  : 1; /* scheduled streams priority changed */
-    unsigned int client_goaway : 1; /* client sent us a GOAWAY */
-    unsigned int server_goaway : 1; /* we sent a GOAWAY */
+    unsigned int eoc_written   : 1; /* h2 eoc bucket written */
     apr_interval_time_t  wait_us;   /* timout during BUSY_WAIT state, micro secs */
     
-    int unsent_submits;             /* number of submitted, but not yet sent
-                                       responses. */
-    int unsent_promises;            /* number of submitted, but not yet sent
-                                     * push promised */
-                                     
+    int unsent_submits;             /* number of submitted, but not yet written responses. */
+    int unsent_promises;            /* number of submitted, but not yet written push promised */
+                                         
+    int requests_received;          /* number of http/2 requests received */
+    int responses_submitted;        /* number of http/2 responses submitted */
+    int streams_reset;              /* number of http/2 streams reset by client */
+    int pushes_promised;            /* number of http/2 push promises submitted */
+    int pushes_submitted;           /* number of http/2 pushed responses submitted */
+    int pushes_reset;               /* number of http/2 pushed reset by client */
+    
     apr_size_t frames_received;     /* number of http/2 frames received */
     apr_size_t frames_sent;         /* number of http/2 frames sent */
-    int requests_received;          /* number of http/2 requests received */
-    int responses_sent;             /* number of http/2 responses submitted */
-    int streams_reset;              /* number of http/2 streams reset by client */
-    int streams_pushed;             /* number of http/2 streams pushed */
+    
     int max_stream_received;        /* highest stream id created */
     int max_stream_handled;         /* highest stream id completed */
     
@@ -114,6 +130,8 @@ typedef struct h2_session {
     
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
     struct h2_workers *workers;     /* for executing stream tasks */
+    
+    struct h2_push_diary *push_diary; /* remember pushes, avoid duplicates */
 } h2_session;
 
 

@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.1.0], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.2.0], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -129,6 +129,12 @@ AC_CHECK_FUNCS([nghttp2_stream_get_weight],
 # nghttp2 >= 1.5.0: changing stream priorities
 AC_CHECK_FUNCS([nghttp2_session_change_stream_priority], 
         [CPPFLAGS="$CPPFLAGS -DH2_NG2_CHANGE_PRIO"], [])
+
+
+AC_CHECK_LIB([crypto], [SHA256_Init], [
+CPPFLAGS="$CPPFLAGS -DH2_OPENSSL"
+LIBS="$LIBS -lcrypto"],
+[AC_MSG_ERROR("libcrypto not found")])
 
 # Checks for header files.
 AC_CHECK_HEADERS([ \

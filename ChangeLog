@@ -1,3 +1,29 @@
+v1.2.0
+-------------------------------------------------------------------------------- 
+ * Each connection now has a push diary where already pushed resources are
+   recorded (as 64-bit subsets sha256 URL hashes). The maximum size of a diary
+   can be configured with the new directive 'H2PushDiarySize'. The default is 256.
+ * The module recognizes the request header 'Cache-Digest', carrying a base64url
+   encoded set of hash values using Golomb set encoding as described in
+      https://datatracker.ietf.org/doc/draft-kazuho-h2-cache-digest/
+   This is highly experimental and will most likely change in format and
+   interpretation as the draft evolves. For now, this value is used to replace
+   the current push diary. This allows clients to inform the server about
+   which resources they already have cached.
+ * module configuration now looks to the crypto library (because it wants SHA256
+   from it). If it is not found, a replacement hash is used, however this is
+   not interoperable with cache digests from clients, e.g. hits will be missed.
+ * the module has a new handler named "http2-status" which exposes certain
+   properties and statistics of the *current* HTTP/2 connection. It can be 
+   configured just like:
+       <Location "/http2-status">
+         SetHandler http2-status
+       </Location>
+   The usual precautions about exposing some internals of your server to the
+   outside world apply. Just as for "server-status"."
+ * Due to more test cases and new functions, more bugs have been exposed,
+   examined and exterminated.
+
 v1.1.0
 -------------------------------------------------------------------------------- 
  * GOAWAY will be sent when a HTTP/2 connection is shutdown, whenever the
