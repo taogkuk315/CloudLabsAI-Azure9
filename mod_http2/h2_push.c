@@ -625,7 +625,7 @@ static void h2_push_diary_append(h2_push_diary *diary, h2_push_diary_entry *e)
         *ne = *e;
     }
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, diary->entries->pool,
-                  "push_diary_append: %lx", ne->hash);
+                  "push_diary_append: %"APR_UINT64_T_HEX_FMT, ne->hash);
 }
 
 apr_array_header_t *h2_push_diary_update(h2_session *session, apr_array_header_t *pushes)
@@ -714,16 +714,6 @@ static unsigned char h2_log2(apr_uint32_t n)
     return 31 - lz;
 }
 
-/* log2(n) iff n is a power of 2 */
-static unsigned char h2_log2_64(apr_uint64_t n)
-{
-    apr_uint32_t i = (n & 0xffffffffu);
-    if (i) {
-        return h2_log2(i);
-    }
-    return h2_log2((apr_uint32_t)(n >> 32)) + 32;
-}
-
 static apr_int32_t h2_log2inv(unsigned char log2)
 {
     return log2? (1 << log2) : 1;
@@ -798,8 +788,9 @@ static apr_status_t gset_encode_next(gset_encoder *encoder, apr_uint64_t pval)
     encoder->last = pval;
     flex_bits = (delta >> encoder->fixed_bits);
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, encoder->pool,
-                  "h2_push_diary_enc: val=%lx, delta=%lx flex_bits=%ld, "
-                  "fixed_bits=%d, fixed_val=%lx", 
+                  "h2_push_diary_enc: val=%"APR_UINT64_T_HEX_FMT", delta=%"
+                  APR_UINT64_T_HEX_FMT" flex_bits=%ld, "
+                  "fixed_bits=%d, fixed_val=%"APR_UINT64_T_HEX_FMT, 
                   pval, delta, flex_bits, encoder->fixed_bits, delta&encoder->fixed_mask);
     for (; flex_bits != 0; --flex_bits) {
         status = gset_encode_bit(encoder, 1);
@@ -961,7 +952,8 @@ static apr_status_t gset_decode_next(gset_decoder *decoder, apr_uint64_t *phash)
     decoder->last_val = *phash;
     
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, decoder->pool,
-                  "h2_push_diary_digest_dec: val=%lx, delta=%lx, flex=%d, fixed=%lx", 
+                  "h2_push_diary_digest_dec: val=%"APR_UINT64_T_HEX_FMT", delta=%"
+                  APR_UINT64_T_HEX_FMT", flex=%d, fixed=%"APR_UINT64_T_HEX_FMT, 
                   *phash, delta, (int)flex, fixed);
                   
     return APR_SUCCESS;
@@ -985,8 +977,6 @@ apr_status_t h2_push_diary_digest_set(h2_push_diary *diary, const char *authorit
     apr_pool_t *pool = diary->entries->pool;
     h2_push_diary_entry e;
     apr_status_t status = APR_SUCCESS;
-    apr_uint64_t mask;
-    int mask_bits;
     
     if (len < 2) {
         /* at least this should be there */
