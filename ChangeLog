@@ -1,3 +1,9 @@
+v1.2.1
+-------------------------------------------------------------------------------- 
+ * fixed compilation error because of stupid own log2n function
+ * fixed cache digest calculation to spit out same values as Kazuho Oku's
+   reference implementation (https://github.com/kazuho/h2-cache-digest).
+ 
 v1.2.0
 -------------------------------------------------------------------------------- 
  * Each connection now has a push diary where already pushed resources are
