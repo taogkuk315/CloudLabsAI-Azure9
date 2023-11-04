@@ -1,3 +1,10 @@
+v1.2.3
+-------------------------------------------------------------------------------- 
+ * connection timeout handling when requests do not report back
+ * setting correct server config for event mpm on main connection, so that
+   timeouts, keepalives use the correct values
+ * fixes event hack to match changes in structures
+
 v1.2.2
 -------------------------------------------------------------------------------- 
  * removed unused code

@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.2.2], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.2.3], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
