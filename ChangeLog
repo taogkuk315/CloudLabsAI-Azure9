@@ -1,3 +1,13 @@
+v1.2.4
+-------------------------------------------------------------------------------- 
+ * removed all H2*Timeout directives. HTTP/2 uses not the same Timeout and
+   KeepAliveTimeout as HTTP/1.1.
+ * enforcing the Timeout value on read and write operations from the selected
+   virtual host (TLS+SNI). httpd was wrongly using the defaults set in the
+   base server config.
+ * add DEBUG logging to see if writing properly returns to catch a connection
+   hanger reported in #79
+ 
 v1.2.3
 -------------------------------------------------------------------------------- 
  * connection timeout handling when requests do not report back

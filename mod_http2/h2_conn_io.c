@@ -113,13 +113,15 @@ static apr_status_t pass_out(apr_bucket_brigade *bb, void *ctx)
     status = apr_brigade_length(bb, 0, &bblen);
     if (status == APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
-                      "h2_conn_io(%ld): pass_out brigade %ld bytes",
+                      "h2_conn_io(%ld): pass_out brigade %ld bytes --> ",
                       c->id, (long)bblen);
         status = ap_pass_brigade(c->output_filters, bb);
         if (status == APR_SUCCESS && pctx->io) {
             pctx->io->bytes_written += (apr_size_t)bblen;
             pctx->io->last_write = apr_time_now();
         }
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
+                      "h2_conn_io(%ld): --> pass_out brigade returned",c->id);
     }
     apr_brigade_cleanup(bb);
     return status;

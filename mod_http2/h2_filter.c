@@ -92,9 +92,9 @@ h2_filter_cin *h2_filter_cin_create(apr_pool_t *p, h2_filter_cin_cb *cb, void *c
     return cin;
 }
 
-void h2_filter_cin_timeout_set(h2_filter_cin *cin, int timeout_secs)
+void h2_filter_cin_timeout_set(h2_filter_cin *cin, apr_interval_time_t timeout)
 {
-    cin->timeout_secs = timeout_secs;
+    cin->timeout = timeout;
 }
 
 apr_status_t h2_filter_core_input(ap_filter_t* f,
@@ -108,9 +108,9 @@ apr_status_t h2_filter_core_input(ap_filter_t* f,
     apr_time_t saved_timeout = UNSET;
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                  "core_input(%ld): read, %s, mode=%d, readbytes=%ld, timeout=%d", 
+                  "core_input(%ld): read, %s, mode=%d, readbytes=%ld", 
                   (long)f->c->id, (block == APR_BLOCK_READ)? "BLOCK_READ" : "NONBLOCK_READ", 
-                  mode, (long)readbytes, cin->timeout_secs);
+                  mode, (long)readbytes);
     
     if (mode == AP_MODE_INIT || mode == AP_MODE_SPECULATIVE) {
         return ap_get_brigade(f->next, brigade, mode, block, readbytes);
@@ -137,10 +137,9 @@ apr_status_t h2_filter_core_input(ap_filter_t* f,
          * in the scoreboard is preserved.
          */
         if (block == APR_BLOCK_READ) {
-            if (cin->timeout_secs > 0) {
-                apr_time_t t = apr_time_from_sec(cin->timeout_secs);
+            if (cin->timeout > 0) {
                 apr_socket_timeout_get(cin->socket, &saved_timeout);
-                apr_socket_timeout_set(cin->socket, t);
+                apr_socket_timeout_set(cin->socket, cin->timeout);
             }
         }
         status = ap_get_brigade(f->next, cin->bb, AP_MODE_READBYTES,
