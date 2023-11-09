@@ -1439,14 +1439,14 @@ apr_status_t h2_session_stream_destroy(h2_session *session, h2_stream *stream)
     apr_pool_t *pool = h2_stream_detach_pool(stream);
 
     /* this may be called while the session has already freed
-     * some internal structures. */
+     * some internal structures or even when the mplx is locked. */
     if (session->mplx) {
         h2_mplx_stream_done(session->mplx, stream->id, stream->rst_error);
-        if (session->last_stream == stream) {
-            session->last_stream = NULL;
-        }
     }
     
+    if (session->last_stream == stream) {
+        session->last_stream = NULL;
+    }
     if (session->streams) {
         h2_stream_set_remove(session->streams, stream->id);
     }

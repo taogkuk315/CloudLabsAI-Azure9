@@ -1,3 +1,9 @@
+v1.2.5
+-------------------------------------------------------------------------------- 
+ * fixes a deadlock that caused connections to get stuck in output, locking
+   up the connection and a server thread forever. Thanks to @FrankStolle for
+   reporting and getting the necessary data.
+ 
 v1.2.4
 -------------------------------------------------------------------------------- 
  * removed all H2*Timeout directives. HTTP/2 uses not the same Timeout and
