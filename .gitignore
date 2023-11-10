@@ -31,5 +31,5 @@ stamp-h1
 Makefile.in
 Makefile
 mod_h2-*.tar.gz
-mod_h2/h2_version.h
+mod_http2-*.tar.gz
 m4

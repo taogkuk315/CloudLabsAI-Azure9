@@ -1,3 +1,220 @@
+v1.2.5
+-------------------------------------------------------------------------------- 
+ * fixes a deadlock that caused connections to get stuck in output, locking
+   up the connection and a server thread forever. Thanks to @FrankStolle for
+   reporting and getting the necessary data.
+ 
+v1.2.4
+-------------------------------------------------------------------------------- 
+ * removed all H2*Timeout directives. HTTP/2 uses not the same Timeout and
+   KeepAliveTimeout as HTTP/1.1.
+ * enforcing the Timeout value on read and write operations from the selected
+   virtual host (TLS+SNI). httpd was wrongly using the defaults set in the
+   base server config.
+ * add DEBUG logging to see if writing properly returns to catch a connection
+   hanger reported in #79
+ 
+v1.2.3
+-------------------------------------------------------------------------------- 
+ * connection timeout handling when requests do not report back
+ * setting correct server config for event mpm on main connection, so that
+   timeouts, keepalives use the correct values
+ * fixes event hack to match changes in structures
+
+v1.2.2
+-------------------------------------------------------------------------------- 
+ * removed unused code
+ 
+v1.2.1
+-------------------------------------------------------------------------------- 
+ * fixed compilation error because of stupid own log2n function
+ * fixed cache digest calculation to spit out same values as Kazuho Oku's
+   reference implementation (https://github.com/kazuho/h2-cache-digest).
+ 
+v1.2.0
+-------------------------------------------------------------------------------- 
+ * Each connection now has a push diary where already pushed resources are
+   recorded (as 64-bit subsets sha256 URL hashes). The maximum size of a diary
+   can be configured with the new directive 'H2PushDiarySize'. The default is 256.
+ * The module recognizes the request header 'Cache-Digest', carrying a base64url
+   encoded set of hash values using Golomb set encoding as described in
+      https://datatracker.ietf.org/doc/draft-kazuho-h2-cache-digest/
+   This is highly experimental and will most likely change in format and
+   interpretation as the draft evolves. For now, this value is used to replace
+   the current push diary. This allows clients to inform the server about
+   which resources they already have cached.
+ * module configuration now looks to the crypto library (because it wants SHA256
+   from it). If it is not found, a replacement hash is used, however this is
+   not interoperable with cache digests from clients, e.g. hits will be missed.
+ * the module has a new handler named "http2-status" which exposes certain
+   properties and statistics of the *current* HTTP/2 connection. It can be 
+   configured just like:
+       <Location "/http2-status">
+         SetHandler http2-status
+       </Location>
+   The usual precautions about exposing some internals of your server to the
+   outside world apply. Just as for "server-status"."
+ * Due to more test cases and new functions, more bugs have been exposed,
+   examined and exterminated.
+
+v1.1.0
+-------------------------------------------------------------------------------- 
+ * GOAWAY will be sent when a HTTP/2 connection is shutdown, whenever the
+   connection still allows it. Calculation of the last stream id has been
+   corrected to include streams started, not only streams finished processing.
+ * several issues fixed with new fuzzing tests that simulate random closes 
+   and delays/timeouts
+ * H2SessionExtraFiles are now shared between all sessions in the same process.
+   It now works like this:
+   H2MaxWorkers * H2SessionFiles is assumed to be the total number of file
+   handles that can be safely used for HTTP/2 transfers without other parts
+   of the server running out of handles. This number is shared between all
+   HTTP/2 connections in the same server process.
+   The default is set to 2. With H2MaxWorkers on most platforms/mpms
+   defaulting to 25 that gives a maximum of 50 handles that can be invoved in
+   transfers. 
+   I think I have to write a blog post one day of how this works and affects
+   performance. tl;dr the more handles http2 may use, the faster static files
+   can be served.
+ * KeepAlive is not correctly visible on the server status page for HTTP/2
+   connections. (Would like more info there, need to extend the scoreboard
+   for it.)
+ * KeepAlive connections are *not* set aside in async MPMs such as event. This
+   is a very desirable feature, but I could not get it to work reliably with
+   the existing MPM interface. Will work on that for the next Apache release.
+   (The main problem is that event will silently close such connections and
+    http2 has no chance to send a last GOAWAY frame. That makes clients fail
+    requests which they have just started.)
+
+v1.0.18
+-------------------------------------------------------------------------------- 
+ * fixed race condition in connnection shutdown that could cause indefinite 
+   hang, fixed cleanup of http2 worker threads, thanks to Yann Ylavic
+ 
+v1.0.17
+-------------------------------------------------------------------------------- 
+ * H2Timeout/H2KeepAliveTimeout now defaults to what ever is set for HTTP/1
+   connections via Timeout/KeepAliveTimeout
+ * fixes in calculating remaining timeout values
+
+v1.0.16
+-------------------------------------------------------------------------------- 
+ * simplified connection shutdown and worker join for robustness
+ * improved performance for small requests due to less locking
+ * http2 connections work in event with normal server KeepAliveTimeout setting
+ 
+v1.0.15
+-------------------------------------------------------------------------------- 
+ * fixed busy loops on random connection errors
+ * fixed connection state for event MPM that shutdown child with 'G' status
+ * changed default for H2KeepAliveTimeout. For async MPMs (event), will leave
+   keepalive handling to the MPM. For sync (worker, prefork), will default to
+   whatever is set for H2Timeout.
+ 
+v1.0.14
+-------------------------------------------------------------------------------- 
+ * fixed segfault on connection shutdown
+ * added support for accept-push-policy headers, see
+   https://tools.ietf.org/html/draft-ruellan-http-accept-push-policy-00
+ 
+v1.0.13
+-------------------------------------------------------------------------------- 
+ * reworked connection state handling. Improved scoreboard update (server-status).
+   Default on H2KeepAliveTimeout same as H2Timeout, 5 seconds. After that, 
+   connections are closed.
+   On asynchronous MPMs (event), keep-alive connections no longer block threads,
+   but exact timeout handling is then up to the MPM. In these MPMs, having a
+   longer H2KeepAliveTimeout may be suitable.
+ * new CGI environment variables HTTP2 and H2PUSH. With former "on", the 
+   connection uses HTTP/2. With latter "on", the request may trigger Server Push
+   via Link headers, as both server and clients support it.
+
+v1.0.12
+-------------------------------------------------------------------------------- 
+ * alpha release on top of Apache httpd 2.4.18
+ * removed sandbox from build, needs installed 2.4.18 + apxs
+ * new directives:
+   - H2Timeout           timeout of a http/2 connection (seconds), default 5
+   - H2KeepAliveTimeout  timeout of an idle http/2 connection (seconds), default 300
+   - H2StreamTimeout     timeout on individual streams (seconds), default 120
+   you can set them to `0` in which case no timeout may apply. You may try that
+   for the stream timeouts if you have problems. This is the very experimental
+   part right now...
+ * improved handling of connection closes to make a better effort on freeing
+   worker threads still involved in streams.
+ * worker numbers are constant MaxThreadsPerChild by default
+ * fixed bug on handling large input without content length
+   
+v1.0.3
+-------------------------------------------------------------------------------- 
+ * copy from https://svn.apache.org/repos/asf/httpd/httpd/trunk
+ * includes proposed backport patch for Apache httpd 2.4.17
+   * improved https:// throughput
+   * vastly improved http:// throughput
+   * several stability and logging improvements
+   * connection reuse: virtual hosts that have exactly the same TLS setup
+     (certificates, protocol, ciphers and all) allow using a single HTTP/2
+     connection.
+   * h2c: first HTTP/1.1 request on a connection will announce additionally
+     available and more preferred protocols in the ```Upgrade``` response
+     header.
+   * H2Direct is by default on for cleartext connections where h2c is an
+     allowed protocol. Or, the other way around, it is always disabled unless
+     h2/h2c is configured.
+   * TLS handshake is triggered earlier, allowing all connection hooks which
+     register behind mod_ssl to see negotiated values.
+   * new experimental directives ```H2TLSWarmUpSize``` and ```H2TLSCoolDownSecs```
+     that specify how TLS record sizes should used during the lifetime of a
+     connection.
+     * H2TLSWarmUpSize: amount of bytes to send in small (~1300 bytes) chunks,
+       so that packets fit inside a single MTU. After this many bytes have
+       been sent, data is written with max size of 16 KB when possible.
+     * H2TLSCoolDownSecs: number of idle seconds to pass before a warmed
+       up TLS connection falls back to small chunks again.
+     Set both to 0 to always write max chunks. Defaults are 1 MB and 1 second.
+   * HTTP/2 priorities are now respected when scheduling streams for handling.
+     This effects which queued task is handled first whenever a worker becomes
+     available.
+   * New directive ```H2ModernTLSOnly on|off``` that checks connections for
+     TLS protocol version and negotiated ciphers, so that HTTP/2 connections
+     only happen on ```modern``` TLS and none of the ciphers in the black
+     list from RFC 7540 are used.
+   * 'HTTP/2.0' is written in log files when requests are served via mod_http2.
+     
+ * updated test cases from Apache tests
+ * configure now builds the sandbox by default, too many user problems
+   otherwise
+
+
+v0.9.9 - 1.0.2
+-------------------------------------------------------------------------------- 
+never happened here, but at http://httpd.apache.org
+
+v0.9.8
+-------------------------------------------------------------------------------- 
+ * server protocol of requests served via mod_h2 is now `HTTP/2`
+ * directive `H2SerializeHeaders` had no effect any longer, fixed.
+ * requests served in `H2SerializeHeaders on` hosts, report `HTTP/1.1` as
+   protocol. This is the mode to enabled when having compatiblity issues.
+
+v0.9.7
+-------------------------------------------------------------------------------- 
+ * update of core-protocols.patch to v4
+ * "Protocols" default changed. servers/vhosts need to explicitly enable h2/h2c 
+   now. For example with `Protocols h2 http/1.1`
+ * adding test cases for "Protocols" ordering
+ * configuration option -enable-werror now sets compiler flags to go for Apache
+   httpd standard code restrictions.
+
+v0.9.6
+-------------------------------------------------------------------------------- 
+ * for closed h2 connections proper state is set. Fixes resource/worker handling
+   issues in mpm_event
+ * upgrade the core-protocols patch to the latest relevant apache changes
+ * if not explicitly configured, H2SessionExtraFiles gets a default usable in
+   proecsses with 256 max file handles and depending on mpm used.
+ * upgraded sandbox to nghttp2 1.3.0
+
 v0.9.5
 -------------------------------------------------------------------------------- 
  * fix for resource management when running with mpm_event
