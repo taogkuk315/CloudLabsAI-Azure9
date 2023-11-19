@@ -1,3 +1,8 @@
+v1.2.6
+-------------------------------------------------------------------------------- 
+ * Adding 'accept-encoding' to headers used in PUSHed resources - as sent by
+   the initiating request.
+
 v1.2.5
 -------------------------------------------------------------------------------- 
  * fixes a deadlock that caused connections to get stuck in output, locking
