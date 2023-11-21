@@ -1,3 +1,6 @@
+ * Adding logio fix from apache trunk so that resource sizes are correcly 
+   reported in access logs.
+
 v1.2.6
 -------------------------------------------------------------------------------- 
  * Adding 'accept-encoding' to headers used in PUSHed resources - as sent by
