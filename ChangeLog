@@ -1,3 +1,5 @@
+v1.2.7
+-------------------------------------------------------------------------------- 
  * Adding logio fix from apache trunk so that resource sizes are correcly 
    reported in access logs.
 
