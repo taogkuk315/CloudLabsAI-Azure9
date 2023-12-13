@@ -1,3 +1,8 @@
+v1.2.8
+-------------------------------------------------------------------------------- 
+ * Requests without ':authority' header, using 'Host' instead, are no longer
+   denied.
+   
 v1.2.7
 -------------------------------------------------------------------------------- 
  * Adding logio fix from apache trunk so that resource sizes are correcly 
