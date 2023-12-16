@@ -65,7 +65,11 @@ h2_ctx *h2_ctx_rget(const request_rec *r)
 
 const char *h2_ctx_protocol_get(const conn_rec *c)
 {
-    h2_ctx *ctx = (h2_ctx*)ap_get_module_config(c->conn_config, &http2_module);
+    h2_ctx *ctx;
+    if (c->master) {
+        c = c->master;
+    }
+    ctx = (h2_ctx*)ap_get_module_config(c->conn_config, &http2_module);
     return ctx? ctx->protocol : NULL;
 }
 
@@ -101,7 +105,17 @@ int h2_ctx_is_task(h2_ctx *ctx)
     return ctx && ctx->task;
 }
 
-struct h2_task *h2_ctx_get_task(h2_ctx *ctx)
+h2_task *h2_ctx_get_task(h2_ctx *ctx)
 {
     return ctx? ctx->task : NULL;
+}
+
+h2_task *h2_ctx_cget_task(conn_rec *c)
+{
+    return h2_ctx_get_task(h2_ctx_get(c, 0));
+}
+
+h2_task *h2_ctx_rget_task(request_rec *r)
+{
+    return h2_ctx_get_task(h2_ctx_rget(r));
 }

@@ -32,7 +32,6 @@
 #include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
-#include "h2_stream_set.h"
 #include "h2_h2.h"
 #include "h2_task.h"
 #include "h2_worker.h"
@@ -45,6 +44,7 @@ static struct h2_workers *workers;
 static h2_mpm_type_t mpm_type = H2_MPM_UNKNOWN;
 static module *mpm_module;
 static int async_mpm;
+static apr_socket_t *dummy_socket;
 
 static void check_modules(int force) 
 {
@@ -60,8 +60,13 @@ static void check_modules(int force)
                 mpm_module = m;
                 break;
             }
-            else if (!strcmp("worker.c", m->name)) {
-                mpm_type = H2_MPM_WORKER;
+            else if (!strcmp("motorz.c", m->name)) {
+                mpm_type = H2_MPM_MOTORZ;
+                mpm_module = m;
+                break;
+            }
+            else if (!strcmp("mpm_netware.c", m->name)) {
+                mpm_type = H2_MPM_NETWARE;
                 mpm_module = m;
                 break;
             }
@@ -70,12 +75,25 @@ static void check_modules(int force)
                 mpm_module = m;
                 break;
             }
+            else if (!strcmp("simple_api.c", m->name)) {
+                mpm_type = H2_MPM_SIMPLE;
+                mpm_module = m;
+                break;
+            }
+            else if (!strcmp("mpm_winnt.c", m->name)) {
+                mpm_type = H2_MPM_WINNT;
+                mpm_module = m;
+                break;
+            }
+            else if (!strcmp("worker.c", m->name)) {
+                mpm_type = H2_MPM_WORKER;
+                mpm_module = m;
+                break;
+            }
         }
         checked = 1;
     }
 }
-
-static void fix_event_master_conn(h2_session *session);
 
 apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
 {
@@ -91,7 +109,6 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
     
     status = ap_mpm_query(AP_MPMQ_IS_ASYNC, &async_mpm);
     if (status != APR_SUCCESS) {
-        ap_log_error(APLOG_MARK, APLOG_TRACE1, status, s, "querying MPM for async");
         /* some MPMs do not implemnent this */
         async_mpm = 0;
         status = APR_SUCCESS;
@@ -138,7 +155,12 @@ apr_status_t h2_conn_child_init(apr_pool_t *pool, server_rec *s)
                              NULL, AP_FTYPE_CONNECTION);
    
     status = h2_mplx_child_init(pool, s);
-    
+
+    if (status == APR_SUCCESS) {
+        status = apr_socket_create(&dummy_socket, APR_INET, SOCK_STREAM,
+                                   APR_PROTO_TCP, pool);
+    }
+
     return status;
 }
 
@@ -172,15 +194,7 @@ apr_status_t h2_conn_setup(h2_ctx *ctx, conn_rec *c, request_rec *r)
     }
 
     h2_ctx_session_set(ctx, session);
-
-    switch (h2_conn_mpm_type()) {
-        case H2_MPM_EVENT: 
-            fix_event_master_conn(session);
-            break;
-        default:
-            break;
-    }
-
+    
     return APR_SUCCESS;
 }
 
@@ -195,11 +209,8 @@ apr_status_t h2_conn_run(struct h2_ctx *ctx, conn_rec *c)
         }
         status = h2_session_process(h2_ctx_session_get(ctx), async_mpm);
         
-        if (c->cs) {
-            c->cs->state = CONN_STATE_WRITE_COMPLETION;
-        }
         if (APR_STATUS_IS_EOF(status)) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c, APLOGNO(03045)
                           "h2_session(%ld): process, closing conn", c->id);
             c->keepalive = AP_CONN_CLOSE;
         }
@@ -217,24 +228,41 @@ apr_status_t h2_conn_run(struct h2_ctx *ctx, conn_rec *c)
     return DONE;
 }
 
-
-static void fix_event_conn(conn_rec *c, conn_rec *master);
-
-conn_rec *h2_slave_create(conn_rec *master, apr_pool_t *p, 
-                          apr_thread_t *thread, apr_socket_t *socket)
+apr_status_t h2_conn_pre_close(struct h2_ctx *ctx, conn_rec *c)
 {
+    apr_status_t status;
+    
+    status = h2_session_pre_close(h2_ctx_session_get(ctx), async_mpm);
+    if (status == APR_SUCCESS) {
+        return DONE; /* This is the same, right? */
+    }
+    return status;
+}
+
+conn_rec *h2_slave_create(conn_rec *master, apr_pool_t *parent,
+                          apr_allocator_t *allocator)
+{
+    apr_pool_t *pool;
     conn_rec *c;
+    void *cfg;
     
     AP_DEBUG_ASSERT(master);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, master,
-                  "h2_conn(%ld): created from master", master->id);
+                  "h2_conn(%ld): create slave", master->id);
     
-    /* This is like the slave connection creation from 2.5-DEV. A
-     * very efficient way - not sure how compatible this is, since
-     * the core hooks are no longer run.
-     * But maybe it's is better this way, not sure yet.
+    /* We create a pool with its own allocator to be used for
+     * processing a request. This is the only way to have the processing
+     * independant of its parent pool in the sense that it can work in
+     * another thread.
      */
-    c = (conn_rec *) apr_palloc(p, sizeof(conn_rec));
+    if (!allocator) {
+        apr_allocator_create(&allocator);
+    }
+    apr_pool_create_ex(&pool, parent, NULL, allocator);
+    apr_pool_tag(pool, "h2_slave_conn");
+    apr_allocator_owner_set(allocator, pool);
+
+    c = (conn_rec *) apr_palloc(pool, sizeof(conn_rec));
     if (c == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, master, 
                       APLOGNO(02913) "h2_task: creating conn");
@@ -244,112 +272,60 @@ conn_rec *h2_slave_create(conn_rec *master, apr_pool_t *p,
     memcpy(c, master, sizeof(conn_rec));
            
     /* Replace these */
-    c->id                     = (master->id & (long)p);
     c->master                 = master;
-    c->pool                   = p;        
-    c->current_thread         = thread;
-    c->conn_config            = ap_create_conn_config(p);
-    c->notes                  = apr_table_make(p, 5);
+    c->pool                   = pool;   
+    c->conn_config            = ap_create_conn_config(pool);
+    c->notes                  = apr_table_make(pool, 5);
     c->input_filters          = NULL;
     c->output_filters         = NULL;
-    c->bucket_alloc           = apr_bucket_alloc_create(p);
-    c->cs                     = NULL;
+    c->bucket_alloc           = apr_bucket_alloc_create(pool);
     c->data_in_input_filters  = 0;
     c->data_in_output_filters = 0;
     c->clogging_input_filters = 1;
     c->log                    = NULL;
     c->log_id                 = NULL;
-    
-    /* TODO: these should be unique to this thread */
-    c->sbh                    = master->sbh;
-    
     /* Simulate that we had already a request on this connection. */
     c->keepalives             = 1;
-    
-    ap_set_module_config(c->conn_config, &core_module, socket);
-    
-    /* This works for mpm_worker so far. Other mpm modules have 
-     * different needs, unfortunately. The most interesting one 
-     * being mpm_event...
+    /* We cannot install the master connection socket on the slaves, as
+     * modules mess with timeouts/blocking of the socket, with
+     * unwanted side effects to the master connection processing.
+     * Fortunately, since we never use the slave socket, we can just install
+     * a single, process-wide dummy and everyone is happy.
      */
-    switch (h2_conn_mpm_type()) {
-        case H2_MPM_WORKER:
-            /* all fine */
-            break;
-        case H2_MPM_EVENT: 
-            fix_event_conn(c, master);
-            break;
-        default:
-            /* fingers crossed */
-            break;
+    ap_set_module_config(c->conn_config, &core_module, dummy_socket);
+    /* TODO: these should be unique to this thread */
+    c->sbh                    = master->sbh;
+    /* TODO: not all mpm modules have learned about slave connections yet.
+     * copy their config from master to slave.
+     */
+    if (h2_conn_mpm_module()) {
+        cfg = ap_get_module_config(master->conn_config, h2_conn_mpm_module());
+        ap_set_module_config(c->conn_config, h2_conn_mpm_module(), cfg);
     }
-    
+
     return c;
 }
 
-/* This is an internal mpm event.c struct which is disguised
- * as a conn_state_t so that mpm_event can have special connection
- * state information without changing the struct seen on the outside.
- *
- * For our task connections we need to create a new beast of this type
- * and fill it with enough meaningful things that mpm_event reads and
- * starts processing out task request.
- */
-typedef struct event_conn_state_t event_conn_state_t;
-struct event_conn_state_t {
-    /** APR_RING of expiration timeouts */
-    APR_RING_ENTRY(event_conn_state_t) timeout_list;
-    /** the expiration time of the next keepalive timeout */
-    apr_time_t expiration_time;
-    /** connection record this struct refers to */
-    conn_rec *c;
-    /** request record (if any) this struct refers to */
-    request_rec *r;
-    /** server config this struct refers to */
-    void *sc;
-    /** is the current conn_rec suspended?  (disassociated with
-     * a particular MPM thread; for suspend_/resume_connection
-     * hooks)
-     */
-    int suspended;
-    /** memory pool to allocate from */
-    apr_pool_t *p;
-    /** bucket allocator */
-    apr_bucket_alloc_t *bucket_alloc;
-    /** poll file descriptor information */
-    apr_pollfd_t pfd;
-    /** public parts of the connection state */
-    conn_state_t pub;
-};
-APR_RING_HEAD(timeout_head_t, event_conn_state_t);
-
-static void fix_event_conn(conn_rec *c, conn_rec *master) 
+void h2_slave_destroy(conn_rec *slave, apr_allocator_t **pallocator)
 {
-    event_conn_state_t *master_cs = ap_get_module_config(master->conn_config, 
-                                                         h2_conn_mpm_module());
-    event_conn_state_t *cs = apr_pcalloc(c->pool, sizeof(event_conn_state_t));
-    cs->bucket_alloc = apr_bucket_alloc_create(c->pool);
-    
-    ap_set_module_config(c->conn_config, h2_conn_mpm_module(), cs);
-    
-    cs->c = c;
-    cs->r = NULL;
-    cs->p = master_cs->p;
-    cs->pfd = master_cs->pfd;
-    cs->pub = master_cs->pub;
-    cs->pub.state = CONN_STATE_READ_REQUEST_LINE;
-    
-    c->cs = &(cs->pub);
+    apr_pool_t *parent;
+    apr_allocator_t *allocator = apr_pool_allocator_get(slave->pool);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, slave,
+                  "h2_slave_conn(%ld): destroy (task=%s)", slave->id,
+                  apr_table_get(slave->notes, H2_TASK_ID_NOTE));
+    /* Attache the allocator to the parent pool and return it for
+     * reuse, otherwise the own is still the slave pool and it will
+     * get destroyed with it. */
+    parent = apr_pool_parent_get(slave->pool);
+    if (pallocator && parent) {
+        apr_allocator_owner_set(allocator, parent);
+        *pallocator = allocator;
+    }
+    apr_pool_destroy(slave->pool);
 }
 
-static void fix_event_master_conn(h2_session *session)
+apr_status_t h2_slave_run_pre_connection(conn_rec *slave, apr_socket_t *csd)
 {
-    /* TODO: event MPM normally does this in a post_read_request hook. But
-     * we never encounter that on our master connection. We *do* know which
-     * server was selected during protocol negotiation, so lets set that.
-     */
-    event_conn_state_t *cs = ap_get_module_config(session->c->conn_config, 
-                                                  h2_conn_mpm_module());
-    cs->sc = ap_get_module_config(session->s->module_config, h2_conn_mpm_module());
+    return ap_run_pre_connection(slave, csd);
 }
 

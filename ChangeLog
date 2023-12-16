@@ -1,3 +1,80 @@
+v1.4.6 (as released in Apache httpd 2.4.20)
+-------------------------------------------------------------------------------- 
+ * incrementing keepalives on each request started so that logging %k gives 
+   increasing numbers per master http2 connection. New documented variables 
+   in env, usable in custom log formats: H2_PUSH, H2_PUSHED, H2_PUSHED_ON, 
+   H2_STREAM_ID and H2_STREAM_TAG.
+ * more efficient passing of response bodies with less contention
+     and file bucket forwarding.
+ * fix for missing score board updates on request count, fix for memory leak 
+   on slave connection reuse.
+ * disabling PUSH when client sends GOAWAY. Slave connections are reused for 
+   several requests, improved performance and better memory use. 
+ * fixes problem with wrong lifetime of file buckets on main connection.
+ * fixes incorrect denial of requests without :authority header.
+ * give control to async mpm for keepalive timeouts only when no streams are 
+   open and even if only after 1 sec delay. Under load, event mpm discards 
+   connections otherwise too quickly.
+ * fixed possible read after free when streams were cancelled early by the 
+   client.
+ * fixed possible deadlock during connection shutdown. Thanks to @FrankStolle 
+   for reporting and getting the necessary data.
+ * fixed apr_uint64_t formatting in a log statement to user proper APR def, 
+   thanks to @Sp1l.
+ * number of worker threads allowed to a connection is adjusting 
+   dynamically. Starting with 4, the number is doubled when streams can be 
+   served without block on http/2 connection flow. The number is halfed, when
+   the server has to wait on client flow control grants. 
+   This can happen with a maximum frequency of 5 times per second. 
+   When a connection occupies too many workers, repeatable requests 
+   (GET/HEAD/OPTIONS) are cancelled and placed back in the queue. Should that 
+   not suffice and a stream is busy longer than the server timeout, the 
+   connection will be aborted with error code ENHANCE_YOUR_CALM.
+   This does *not* limit the number of streams a client may open, rather the
+   number of server threads a connection might use.
+ * allowing link header to specify multiple "rel" values, space-separated 
+   inside a quoted string. Prohibiting push when Link parameter "nopush" is 
+   present.
+ * reworked connection state handling. Idle connections accept a GOAWAY from 
+   the client without further reply. Otherwise the module makes a best effort 
+   to send one last GOAWAY to the client.
+ * the values from standard directives Timeout and KeepAliveTimeout properly 
+   are applied to http/2 connections.
+ * idle connections are returned to async mpms. new hook "pre_close_connection" 
+   used to send GOAWAY frame when not already done. Setting event mpm server 
+   config "by hand" for the main connection to the correct negotiated server.
+ * keep-alive blocking reads are done with 1 second timeouts to check for MPM 
+   stopping. Will announce early GOAWAY and finish processing open streams, 
+   then close.
+ * bytes read/written on slave connections are reported via the optional 
+   mod_logio functions. Fixes PR 58871.
+ * connections how keep a "push diary" where hashes of already pushed resources 
+   are kept. See directive H2PushDiarySize for managing this. Push diaries can 
+   be initialized by clients via the "Cache-Digest" request header. 
+   This carries a base64url encoded. compressed Golomb set as described
+   in https://datatracker.ietf.org/doc/draft-kazuho-h2-cache-digest/
+   Introduced a status handler for HTTP/2 connections, giving various counters
+   and statistics about the current connection, plus its cache digest value
+   in a JSON record. Not a replacement for more HTTP/2 in the server status. 
+   Configured as
+   <Location "/http2-status">
+       SetHandler http2-status
+   </Location>
+ * Fixed flushing of last GOAWAY frame. Previously, that frame did not always 
+   reach the client, causing some to fail the next request.
+   Fixed calculation of last stream id accepted as described in rfc7540. 
+   Reading in KEEPALIVE state now correctly shown in scoreboard. 
+   Fixed possible race in connection shutdown after review by Ylavic. 
+   Fixed segfault on connection shutdown, callback ran into a semi dismantled session. 
+ * Added support for experimental accept-push-policy draft
+   (https://tools.ietf.org/html/draft-ruellan-http-accept-push-policy-00). Clients
+   may now influence server pushes by sending accept-push-policy headers.
+ * new r->subprocess_env variables HTTP2 and H2PUSH, set to "on"
+   when available for request.
+ * mod_status/scoreboard: showing connection protocol in new column, new 
+   ap_update_child_status methods for updating server/description. mod_ssl
+   sets vhost negotiated by servername directly.
+
 v1.2.8
 -------------------------------------------------------------------------------- 
  * Requests without ':authority' header, using 'Host' instead, are no longer

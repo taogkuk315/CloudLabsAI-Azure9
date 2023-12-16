@@ -14,7 +14,6 @@
  */
 
 #include <assert.h>
-
 #include <apr_strings.h>
 
 #include <httpd.h>
@@ -27,6 +26,36 @@
 #include "h2_private.h"
 #include "h2_request.h"
 #include "h2_util.h"
+
+/* h2_log2(n) iff n is a power of 2 */
+unsigned char h2_log2(apr_uint32_t n)
+{
+    int lz = 0;
+    if (!n) {
+        return 0;
+    }
+    if (!(n & 0xffff0000u)) {
+        lz += 16;
+        n = (n << 16);
+    }
+    if (!(n & 0xff000000u)) {
+        lz += 8;
+        n = (n << 8);
+    }
+    if (!(n & 0xf0000000u)) {
+        lz += 4;
+        n = (n << 4);
+    }
+    if (!(n & 0xc0000000u)) {
+        lz += 2;
+        n = (n << 2);
+    }
+    if (!(n & 0x80000000u)) {
+        lz += 1;
+    }
+    
+    return 31 - lz;
+}
 
 size_t h2_util_hex_dump(char *buffer, size_t maxlen,
                         const char *data, size_t datalen)
@@ -170,10 +199,10 @@ const char *h2_util_base64url_encode(const char *data,
     enc = p;
     for (i = 0; i < mlen; i+= 3) {
         *p++ = BASE64URL_CHARS[ (udata[i] >> 2) & 0x3fu ];
-        *p++ = BASE64URL_CHARS[ (udata[i] << 4) + 
-                               ((i+1 < len)? (udata[i+1] >> 4) : 0) & 0x3fu ];
-        *p++ = BASE64URL_CHARS[ (udata[i+1] << 2) + 
-                               ((i+2 < len)? (udata[i+2] >> 6) : 0) & 0x3fu ];
+        *p++ = BASE64URL_CHARS[ ((udata[i] << 4) + 
+                                 ((i+1 < len)? (udata[i+1] >> 4) : 0)) & 0x3fu ];
+        *p++ = BASE64URL_CHARS[ ((udata[i+1] << 2) + 
+                                 ((i+2 < len)? (udata[i+2] >> 6) : 0)) & 0x3fu ];
         if (i+2 < len) {
             *p++ = BASE64URL_CHARS[ udata[i+2] & 0x3fu ];
         }
@@ -230,6 +259,77 @@ const char *h2_util_first_token_match(apr_pool_t *pool, const char *s,
     return NULL;
 }
 
+
+/*******************************************************************************
+ * ihash - hash for structs with int identifier
+ ******************************************************************************/
+struct h2_ihash_t {
+    apr_hash_t *hash;
+    size_t ioff;
+};
+
+static unsigned int ihash(const char *key, apr_ssize_t *klen)
+{
+    return (unsigned int)(*((int*)key));
+}
+
+h2_ihash_t *h2_ihash_create(apr_pool_t *pool, size_t offset_of_int)
+{
+    h2_ihash_t *ih = apr_pcalloc(pool, sizeof(h2_ihash_t));
+    ih->hash = apr_hash_make_custom(pool, ihash);
+    ih->ioff = offset_of_int;
+    return ih;
+}
+
+size_t h2_ihash_count(h2_ihash_t *ih)
+{
+    return apr_hash_count(ih->hash);
+}
+
+int h2_ihash_is_empty(h2_ihash_t *ih)
+{
+    return apr_hash_count(ih->hash) == 0;
+}
+
+void *h2_ihash_get(h2_ihash_t *ih, int id)
+{
+    return apr_hash_get(ih->hash, &id, sizeof(id));
+}
+
+typedef struct {
+    h2_ihash_iter_t *iter;
+    void *ctx;
+} iter_ctx;
+
+static int ihash_iter(void *ctx, const void *key, apr_ssize_t klen, 
+                     const void *val)
+{
+    iter_ctx *ictx = ctx;
+    return ictx->iter(ictx->ctx, (void*)val); /* why is this passed const?*/
+}
+
+int h2_ihash_iter(h2_ihash_t *ih, h2_ihash_iter_t *fn, void *ctx)
+{
+    iter_ctx ictx;
+    ictx.iter = fn;
+    ictx.ctx = ctx;
+    return apr_hash_do(ihash_iter, &ictx, ih->hash);
+}
+
+void h2_ihash_add(h2_ihash_t *ih, void *val)
+{
+    apr_hash_set(ih->hash, ((char *)val + ih->ioff), sizeof(int), val);
+}
+
+void h2_ihash_remove(h2_ihash_t *ih, int id)
+{
+    apr_hash_set(ih->hash, &id, sizeof(id), NULL);
+}
+
+void h2_ihash_clear(h2_ihash_t *ih)
+{
+    apr_hash_clear(ih->hash);
+}
 
 /*******************************************************************************
  * h2_util for apt_table_t
@@ -375,7 +475,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                 APR_BUCKET_REMOVE(b);
                 APR_BRIGADE_INSERT_TAIL(to, b);
 #if LOG_BUCKETS
-                ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
+                ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p, APLOGNO(03205)
                               "h2_util_move: %s, passed bucket(same bucket_alloc) "
                               "%ld-%ld, type=%s",
                               msg, (long)b->start, (long)b->length, 
@@ -394,9 +494,6 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     if (APR_BUCKET_IS_EOS(b)) {
                         APR_BRIGADE_INSERT_TAIL(to, apr_bucket_eos_create(to->bucket_alloc));
                     }
-                    else if (APR_BUCKET_IS_FLUSH(b)) {
-                        APR_BRIGADE_INSERT_TAIL(to, apr_bucket_flush_create(to->bucket_alloc));
-                    }
                     else {
                         /* ignore */
                     }
@@ -413,7 +510,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     apr_file_t *fd = f->fd;
                     int setaside = (f->readpool != to->p);
 #if LOG_BUCKETS
-                    ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
+                    ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p, APLOGNO(03206)
                                   "h2_util_move: %s, moving FILE bucket %ld-%ld "
                                   "from=%lx(p=%lx) to=%lx(p=%lx), setaside=%d",
                                   msg, (long)b->start, (long)b->length, 
@@ -436,11 +533,12 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                 else {
                     const char *data;
                     apr_size_t len;
+
                     status = apr_bucket_read(b, &data, &len, APR_BLOCK_READ);
                     if (status == APR_SUCCESS && len > 0) {
                         status = apr_brigade_write(to, NULL, NULL, data, len);
 #if LOG_BUCKETS
-                        ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
+                        ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p, APLOGNO(03207)
                                       "h2_util_move: %s, copied bucket %ld-%ld "
                                       "from=%lx(p=%lx) to=%lx(p=%lx)",
                                       msg, (long)b->start, (long)b->length, 
@@ -456,7 +554,7 @@ apr_status_t h2_util_move(apr_bucket_brigade *to, apr_bucket_brigade *from,
                 APR_BUCKET_REMOVE(b);
                 APR_BRIGADE_INSERT_TAIL(to, b);
 #if LOG_BUCKETS
-                ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
+                ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p, APLOGNO(03208)
                               "h2_util_move: %s, passed setaside bucket %ld-%ld "
                               "from=%lx(p=%lx) to=%lx(p=%lx)",
                               msg, (long)b->start, (long)b->length, 
@@ -519,7 +617,7 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
                     if (status == APR_SUCCESS && len > 0) {
                         status = apr_brigade_write(to, NULL, NULL, data, len);
 #if LOG_BUCKETS                        
-                        ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p,
+                        ap_log_perror(APLOG_MARK, LOG_LEVEL, 0, to->p, APLOGNO(03209)
                                       "h2_util_copy: %s, copied bucket %ld-%ld "
                                       "from=%lx(p=%lx) to=%lx(p=%lx)",
                                       msg, (long)b->start, (long)b->length, 
@@ -532,20 +630,6 @@ apr_status_t h2_util_copy(apr_bucket_brigade *to, apr_bucket_brigade *from,
         }
     }
     return status;
-}
-
-int h2_util_has_flush_or_eos(apr_bucket_brigade *bb)
-{
-    apr_bucket *b;
-    for (b = APR_BRIGADE_FIRST(bb);
-         b != APR_BRIGADE_SENTINEL(bb);
-         b = APR_BUCKET_NEXT(b))
-    {
-        if (APR_BUCKET_IS_EOS(b) || APR_BUCKET_IS_FLUSH(b)) {
-            return 1;
-        }
-    }
-    return 0;
 }
 
 int h2_util_has_eos(apr_bucket_brigade *bb, apr_off_t len)
@@ -613,7 +697,7 @@ apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb,
         return status;
     }
     else if (blen == 0) {
-        /* empty brigade, does it have an EOS bucket somwhere? */
+        /* brigade without data, does it have an EOS bucket somwhere? */
         *plen = 0;
         *peos = h2_util_has_eos(bb, -1);
     }
@@ -771,12 +855,13 @@ void h2_util_bb_log(conn_rec *c, int stream_id, int level,
         }
         line = *buffer? buffer : "(empty)";
     }
+    /* Intentional no APLOGNO */
     ap_log_cerror(APLOG_MARK, level, 0, c, "bb_dump(%ld-%d)-%s: %s", 
                   c->id, stream_id, tag, line);
 
 }
 
-apr_status_t h2_transfer_brigade(apr_bucket_brigade *to,
+apr_status_t h2_ltransfer_brigade(apr_bucket_brigade *to,
                                  apr_bucket_brigade *from, 
                                  apr_pool_t *p,
                                  apr_off_t *plen,
@@ -846,6 +931,113 @@ apr_status_t h2_transfer_brigade(apr_bucket_brigade *to,
     *plen = len;
     return APR_SUCCESS;
 }
+
+apr_status_t h2_transfer_brigade(apr_bucket_brigade *to,
+                                 apr_bucket_brigade *from, 
+                                 apr_pool_t *p)
+{
+    apr_bucket *e;
+    apr_status_t rv;
+
+    while (!APR_BRIGADE_EMPTY(from)) {
+        e = APR_BRIGADE_FIRST(from);
+        
+        rv = apr_bucket_setaside(e, p);
+        
+        /* If the bucket type does not implement setaside, then
+         * (hopefully) morph it into a bucket type which does, and set
+         * *that* aside... */
+        if (rv == APR_ENOTIMPL) {
+            const char *s;
+            apr_size_t n;
+            
+            rv = apr_bucket_read(e, &s, &n, APR_BLOCK_READ);
+            if (rv == APR_SUCCESS) {
+                rv = apr_bucket_setaside(e, p);
+            }
+        }
+        
+        if (rv != APR_SUCCESS) {
+            /* Return an error but still save the brigade if
+             * ->setaside() is really not implemented. */
+            if (rv != APR_ENOTIMPL) {
+                return rv;
+            }
+        }
+        
+        APR_BUCKET_REMOVE(e);
+        APR_BRIGADE_INSERT_TAIL(to, e);
+    }
+    return APR_SUCCESS;
+}
+
+apr_status_t h2_append_brigade(apr_bucket_brigade *to,
+                               apr_bucket_brigade *from, 
+                               apr_off_t *plen,
+                               int *peos)
+{
+    apr_bucket *e;
+    apr_off_t len = 0, remain = *plen;
+    apr_status_t rv;
+
+    *peos = 0;
+    
+    while (!APR_BRIGADE_EMPTY(from)) {
+        e = APR_BRIGADE_FIRST(from);
+        
+        if (APR_BUCKET_IS_METADATA(e)) {
+            if (APR_BUCKET_IS_EOS(e)) {
+                *peos = 1;
+            }
+        }
+        else {        
+            if (remain > 0 && e->length == ((apr_size_t)-1)) {
+                const char *ign;
+                apr_size_t ilen;
+                rv = apr_bucket_read(e, &ign, &ilen, APR_BLOCK_READ);
+                if (rv != APR_SUCCESS) {
+                    return rv;
+                }
+            }
+            
+            if (remain < e->length) {
+                if (remain <= 0) {
+                    return APR_SUCCESS;
+                }
+                apr_bucket_split(e, remain);
+            }
+        }
+        
+        APR_BUCKET_REMOVE(e);
+        APR_BRIGADE_INSERT_TAIL(to, e);
+        len += e->length;
+        remain -= e->length;
+    }
+    
+    *plen = len;
+    return APR_SUCCESS;
+}
+
+apr_off_t h2_brigade_mem_size(apr_bucket_brigade *bb)
+{
+    apr_bucket *b;
+    apr_off_t total = 0;
+
+    for (b = APR_BRIGADE_FIRST(bb);
+         b != APR_BRIGADE_SENTINEL(bb);
+         b = APR_BUCKET_NEXT(b))
+    {
+        total += sizeof(*b);
+        if (b->length > 0) {
+            if (APR_BUCKET_IS_HEAP(b)
+                || APR_BUCKET_IS_POOL(b)) {
+                total += b->length;
+            }
+        }
+    }
+    return total;
+}
+
 
 /*******************************************************************************
  * h2_ngheader
@@ -1002,6 +1194,9 @@ static literal IgnoredResponseTrailers[] = {
     H2_DEF_LITERAL("www-authenticate"),
     H2_DEF_LITERAL("proxy-authenticate"),
 };
+static literal IgnoredProxyRespHds[] = {
+    H2_DEF_LITERAL("alt-svc"),
+};
 
 static int ignore_header(const literal *lits, size_t llen,
                          const char *name, size_t nlen)
@@ -1034,12 +1229,126 @@ int h2_res_ignore_trailer(const char *name, size_t len)
     return ignore_header(H2_LIT_ARGS(IgnoredResponseTrailers), name, len);
 }
 
-void h2_req_strip_ignored_header(apr_table_t *headers)
+int h2_proxy_res_ignore_header(const char *name, size_t len)
 {
-    int i;
-    for (i = 0; i < H2_ALEN(IgnoredRequestHeaders); ++i) {
-        apr_table_unset(headers, IgnoredRequestHeaders[i].name);
+    return (h2_req_ignore_header(name, len) 
+            || ignore_header(H2_LIT_ARGS(IgnoredProxyRespHds), name, len));
+}
+
+
+/*******************************************************************************
+ * frame logging
+ ******************************************************************************/
+
+int h2_util_frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen)
+{
+    char scratch[128];
+    size_t s_len = sizeof(scratch)/sizeof(scratch[0]);
+    
+    switch (frame->hd.type) {
+        case NGHTTP2_DATA: {
+            return apr_snprintf(buffer, maxlen,
+                                "DATA[length=%d, flags=%d, stream=%d, padlen=%d]",
+                                (int)frame->hd.length, frame->hd.flags,
+                                frame->hd.stream_id, (int)frame->data.padlen);
+        }
+        case NGHTTP2_HEADERS: {
+            return apr_snprintf(buffer, maxlen,
+                                "HEADERS[length=%d, hend=%d, stream=%d, eos=%d]",
+                                (int)frame->hd.length,
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
+                                frame->hd.stream_id,
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
+        }
+        case NGHTTP2_PRIORITY: {
+            return apr_snprintf(buffer, maxlen,
+                                "PRIORITY[length=%d, flags=%d, stream=%d]",
+                                (int)frame->hd.length,
+                                frame->hd.flags, frame->hd.stream_id);
+        }
+        case NGHTTP2_RST_STREAM: {
+            return apr_snprintf(buffer, maxlen,
+                                "RST_STREAM[length=%d, flags=%d, stream=%d]",
+                                (int)frame->hd.length,
+                                frame->hd.flags, frame->hd.stream_id);
+        }
+        case NGHTTP2_SETTINGS: {
+            if (frame->hd.flags & NGHTTP2_FLAG_ACK) {
+                return apr_snprintf(buffer, maxlen,
+                                    "SETTINGS[ack=1, stream=%d]",
+                                    frame->hd.stream_id);
+            }
+            return apr_snprintf(buffer, maxlen,
+                                "SETTINGS[length=%d, stream=%d]",
+                                (int)frame->hd.length, frame->hd.stream_id);
+        }
+        case NGHTTP2_PUSH_PROMISE: {
+            return apr_snprintf(buffer, maxlen,
+                                "PUSH_PROMISE[length=%d, hend=%d, stream=%d]",
+                                (int)frame->hd.length,
+                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
+                                frame->hd.stream_id);
+        }
+        case NGHTTP2_PING: {
+            return apr_snprintf(buffer, maxlen,
+                                "PING[length=%d, ack=%d, stream=%d]",
+                                (int)frame->hd.length,
+                                frame->hd.flags&NGHTTP2_FLAG_ACK,
+                                frame->hd.stream_id);
+        }
+        case NGHTTP2_GOAWAY: {
+            size_t len = (frame->goaway.opaque_data_len < s_len)?
+            frame->goaway.opaque_data_len : s_len-1;
+            memcpy(scratch, frame->goaway.opaque_data, len);
+            scratch[len] = '\0';
+            return apr_snprintf(buffer, maxlen, "GOAWAY[error=%d, reason='%s', "
+                                "last_stream=%d]", frame->goaway.error_code, 
+                                scratch, frame->goaway.last_stream_id);
+        }
+        case NGHTTP2_WINDOW_UPDATE: {
+            return apr_snprintf(buffer, maxlen,
+                                "WINDOW_UPDATE[stream=%d, incr=%d]",
+                                frame->hd.stream_id, 
+                                frame->window_update.window_size_increment);
+        }
+        default:
+            return apr_snprintf(buffer, maxlen,
+                                "type=%d[length=%d, flags=%d, stream=%d]",
+                                frame->hd.type, (int)frame->hd.length,
+                                frame->hd.flags, frame->hd.stream_id);
     }
 }
 
+/*******************************************************************************
+ * push policy
+ ******************************************************************************/
+void h2_push_policy_determine(struct h2_request *req, apr_pool_t *p, int push_enabled)
+{
+    h2_push_policy policy = H2_PUSH_NONE;
+    if (push_enabled) {
+        const char *val = apr_table_get(req->headers, "accept-push-policy");
+        if (val) {
+            if (ap_find_token(p, val, "fast-load")) {
+                policy = H2_PUSH_FAST_LOAD;
+            }
+            else if (ap_find_token(p, val, "head")) {
+                policy = H2_PUSH_HEAD;
+            }
+            else if (ap_find_token(p, val, "default")) {
+                policy = H2_PUSH_DEFAULT;
+            }
+            else if (ap_find_token(p, val, "none")) {
+                policy = H2_PUSH_NONE;
+            }
+            else {
+                /* nothing known found in this header, go by default */
+                policy = H2_PUSH_DEFAULT;
+            }
+        }
+        else {
+            policy = H2_PUSH_DEFAULT;
+        }
+    }
+    req->push_policy = policy;
+}
 

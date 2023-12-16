@@ -35,7 +35,7 @@ typedef struct h2_filter_cin {
 
 h2_filter_cin *h2_filter_cin_create(apr_pool_t *p, h2_filter_cin_cb *cb, void *ctx);
 
-void h2_filter_cin_timeout_set(h2_filter_cin *cin, apr_interval_time_t timeout_secs);
+void h2_filter_cin_timeout_set(h2_filter_cin *cin, apr_interval_time_t timeout);
 
 apr_status_t h2_filter_core_input(ap_filter_t* filter,
                                   apr_bucket_brigade* brigade,
@@ -47,7 +47,7 @@ typedef struct h2_sos h2_sos;
 typedef apr_status_t h2_sos_data_cb(void *ctx, const char *data, apr_off_t len);
 
 typedef apr_status_t h2_sos_buffer(h2_sos *sos, apr_bucket_brigade *bb);
-typedef apr_status_t h2_sos_prep_read(h2_sos *sos, apr_off_t *plen, int *peos);
+typedef apr_status_t h2_sos_prepare(h2_sos *sos, apr_off_t *plen, int *peos);
 typedef apr_status_t h2_sos_readx(h2_sos *sos, h2_sos_data_cb *cb, 
                                   void *ctx, apr_off_t *plen, int *peos);
 typedef apr_status_t h2_sos_read_to(h2_sos *sos, apr_bucket_brigade *bb, 
@@ -63,7 +63,7 @@ struct h2_sos {
     struct h2_response *response;
     void             *ctx;
     h2_sos_buffer    *buffer;
-    h2_sos_prep_read *prep_read;
+    h2_sos_prepare   *prepare;
     h2_sos_readx     *readx;
     h2_sos_read_to   *read_to;
     h2_sos_get_trailers *get_trailers;

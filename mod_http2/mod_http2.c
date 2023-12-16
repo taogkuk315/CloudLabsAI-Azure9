@@ -15,6 +15,8 @@
 
 #include <apr_optional.h>
 #include <apr_optional_hooks.h>
+#include <apr_strings.h>
+#include <apr_time.h>
 #include <apr_want.h>
 
 #include <httpd.h>
@@ -34,6 +36,7 @@
 #include "h2_config.h"
 #include "h2_ctx.h"
 #include "h2_h2.h"
+#include "h2_mplx.h"
 #include "h2_push.h"
 #include "h2_request.h"
 #include "h2_switch.h"
@@ -71,14 +74,14 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
                           apr_pool_t *ptemp, server_rec *s)
 {
     void *data = NULL;
-    const char *mod_h2_init_key = "mod_h2_init_counter";
+    const char *mod_h2_init_key = "mod_http2_init_counter";
     nghttp2_info *ngh2;
     apr_status_t status;
     (void)plog;(void)ptemp;
     
     apr_pool_userdata_get(&data, mod_h2_init_key, s->process->pool);
     if ( data == NULL ) {
-        ap_log_error( APLOG_MARK, APLOG_DEBUG, 0, s,
+        ap_log_error( APLOG_MARK, APLOG_DEBUG, 0, s, APLOGNO(03089)
                      "initializing post config dry run");
         apr_pool_userdata_set((const void *)1, mod_h2_init_key,
                               apr_pool_cleanup_null, s->process->pool);
@@ -86,11 +89,17 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
     }
     
     ngh2 = nghttp2_version(0);
-    ap_log_error( APLOG_MARK, APLOG_INFO, 0, s,
+    ap_log_error( APLOG_MARK, APLOG_INFO, 0, s, APLOGNO(03090)
                  "mod_http2 (v%s, nghttp2 %s), initializing...",
                  MOD_HTTP2_VERSION, ngh2? ngh2->version_str : "unknown");
     
     switch (h2_conn_mpm_type()) {
+        case H2_MPM_SIMPLE:
+        case H2_MPM_MOTORZ:
+        case H2_MPM_NETWARE:
+        case H2_MPM_WINNT:
+            /* not sure we need something extra for those. */
+            break;
         case H2_MPM_EVENT:
         case H2_MPM_WORKER:
             /* all fine, we know these ones */
@@ -100,7 +109,7 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
             break;
         case H2_MPM_UNKNOWN:
             /* ??? */
-            ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
+            ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, APLOGNO(03091)
                          "post_config: mpm type unknown");
             break;
     }
@@ -120,6 +129,26 @@ static char *http2_var_lookup(apr_pool_t *, server_rec *,
                          conn_rec *, request_rec *, char *name);
 static int http2_is_h2(conn_rec *);
 
+static apr_status_t http2_req_engine_push(const char *ngn_type, 
+                                          request_rec *r, 
+                                          http2_req_engine_init *einit)
+{
+    return h2_mplx_req_engine_push(ngn_type, r, einit);
+}
+
+static apr_status_t http2_req_engine_pull(h2_req_engine *ngn, 
+                                          apr_read_type_e block, 
+                                          apr_uint32_t capacity, 
+                                          request_rec **pr)
+{
+    return h2_mplx_req_engine_pull(ngn, block, capacity, pr);
+}
+
+static void http2_req_engine_done(h2_req_engine *ngn, conn_rec *r_conn)
+{
+    h2_mplx_req_engine_done(ngn, r_conn);
+}
+
 /* Runs once per created child process. Perform any process 
  * related initionalization here.
  */
@@ -132,8 +161,6 @@ static void h2_child_init(apr_pool_t *pool, server_rec *s)
                      APLOGNO(02949) "initializing connection handling");
     }
     
-    APR_REGISTER_OPTIONAL_FN(http2_is_h2);
-    APR_REGISTER_OPTIONAL_FN(http2_var_lookup);
 }
 
 /* Install this module into the apache2 infrastructure.
@@ -142,6 +169,12 @@ static void h2_hooks(apr_pool_t *pool)
 {
     static const char *const mod_ssl[] = { "mod_ssl.c", NULL};
     
+    APR_REGISTER_OPTIONAL_FN(http2_is_h2);
+    APR_REGISTER_OPTIONAL_FN(http2_var_lookup);
+    APR_REGISTER_OPTIONAL_FN(http2_req_engine_push);
+    APR_REGISTER_OPTIONAL_FN(http2_req_engine_pull);
+    APR_REGISTER_OPTIONAL_FN(http2_req_engine_done);
+
     ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, pool, "installing hooks");
     
     /* Run once after configuration is set, but before mpm children initialize.
@@ -166,36 +199,83 @@ static void h2_hooks(apr_pool_t *pool)
     ap_hook_handler(h2_filter_h2_status_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
-static char *value_of_HTTP2(apr_pool_t *p, server_rec *s,
-                              conn_rec *c, request_rec *r)
+static const char *val_HTTP2(apr_pool_t *p, server_rec *s,
+                             conn_rec *c, request_rec *r, h2_ctx *ctx)
 {
-    return c && http2_is_h2(c)? "on" : "off";
+    return ctx? "on" : "off";
 }
 
-static char *value_of_H2PUSH(apr_pool_t *p, server_rec *s,
-                             conn_rec *c, request_rec *r)
+static const char *val_H2_PUSH(apr_pool_t *p, server_rec *s,
+                               conn_rec *c, request_rec *r, h2_ctx *ctx)
 {
-    h2_ctx *ctx;
-    if (r) {
-        ctx = h2_ctx_rget(r);
-        if (ctx) {
+    if (ctx) {
+        if (r) {
             h2_task *task = h2_ctx_get_task(ctx);
-            return (task && task->request->push_policy != H2_PUSH_NONE)? "on" : "off";
+            if (task && task->request->push_policy != H2_PUSH_NONE) {
+                return "on";
+            }
         }
-    }
-    else if (c) {
-        ctx = h2_ctx_get(c, 0);
-        return ctx && h2_session_push_enabled(ctx->session)? "on" : "off";
+        else if (c && h2_session_push_enabled(ctx->session)) {
+            return "on";
+        }
     }
     else if (s) {
         const h2_config *cfg = h2_config_sget(s);
-        return cfg && h2_config_geti(cfg, H2_CONF_PUSH)? "on" : "off";
+        if (cfg && h2_config_geti(cfg, H2_CONF_PUSH)) {
+            return "on";
+        }
     }
     return "off";
 }
 
-typedef char *h2_var_lookup(apr_pool_t *p, server_rec *s,
-                             conn_rec *c, request_rec *r);
+static const char *val_H2_PUSHED(apr_pool_t *p, server_rec *s,
+                                 conn_rec *c, request_rec *r, h2_ctx *ctx)
+{
+    if (ctx) {
+        h2_task *task = h2_ctx_get_task(ctx);
+        if (task && !H2_STREAM_CLIENT_INITIATED(task->stream_id)) {
+            return "PUSHED";
+        }
+    }
+    return "";
+}
+
+static const char *val_H2_PUSHED_ON(apr_pool_t *p, server_rec *s,
+                                    conn_rec *c, request_rec *r, h2_ctx *ctx)
+{
+    if (ctx) {
+        h2_task *task = h2_ctx_get_task(ctx);
+        if (task && !H2_STREAM_CLIENT_INITIATED(task->stream_id)) {
+            return apr_itoa(p, task->request->initiated_on);
+        }
+    }
+    return "";
+}
+
+static const char *val_H2_STREAM_TAG(apr_pool_t *p, server_rec *s,
+                                     conn_rec *c, request_rec *r, h2_ctx *ctx)
+{
+    if (ctx) {
+        h2_task *task = h2_ctx_get_task(ctx);
+        if (task) {
+            return task->id;
+        }
+    }
+    return "";
+}
+
+static const char *val_H2_STREAM_ID(apr_pool_t *p, server_rec *s,
+                                    conn_rec *c, request_rec *r, h2_ctx *ctx)
+{
+    const char *cp = val_H2_STREAM_TAG(p, s, c, r, ctx);
+    if (cp && (cp = ap_strchr_c(cp, '-'))) {
+        return ++cp;
+    }
+    return NULL;
+}
+
+typedef const char *h2_var_lookup(apr_pool_t *p, server_rec *s,
+                                  conn_rec *c, request_rec *r, h2_ctx *ctx);
 typedef struct h2_var_def {
     const char *name;
     h2_var_lookup *lookup;
@@ -203,8 +283,13 @@ typedef struct h2_var_def {
 } h2_var_def;
 
 static h2_var_def H2_VARS[] = {
-    { "HTTP2",     value_of_HTTP2,  1 },
-    { "H2PUSH",    value_of_H2PUSH, 1 },
+    { "HTTP2",               val_HTTP2,  1 },
+    { "H2PUSH",              val_H2_PUSH, 1 },
+    { "H2_PUSH",             val_H2_PUSH, 1 },
+    { "H2_PUSHED",           val_H2_PUSHED, 1 },
+    { "H2_PUSHED_ON",        val_H2_PUSHED_ON, 1 },
+    { "H2_STREAM_ID",        val_H2_STREAM_ID, 1 },
+    { "H2_STREAM_TAG",       val_H2_STREAM_TAG, 1 },
 };
 
 #ifndef H2_ALEN
@@ -225,7 +310,9 @@ static char *http2_var_lookup(apr_pool_t *p, server_rec *s,
     for (i = 0; i < H2_ALEN(H2_VARS); ++i) {
         h2_var_def *vdef = &H2_VARS[i];
         if (!strcmp(vdef->name, name)) {
-            return vdef->lookup(p, s, c, r);
+            h2_ctx *ctx = (r? h2_ctx_rget(r) : 
+                           h2_ctx_get(c->master? c->master : c, 0));
+            return (char *)vdef->lookup(p, s, c, r, ctx);
         }
     }
     return "";
@@ -241,7 +328,8 @@ static int h2_h2_fixups(request_rec *r)
             h2_var_def *vdef = &H2_VARS[i];
             if (vdef->subprocess) {
                 apr_table_setn(r->subprocess_env, vdef->name, 
-                               vdef->lookup(r->pool, r->server, r->connection, r));
+                               vdef->lookup(r->pool, r->server, r->connection, 
+                                            r, ctx));
             }
         }
     }

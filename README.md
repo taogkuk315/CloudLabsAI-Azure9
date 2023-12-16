@@ -1,7 +1,7 @@
 
 #mod_h[ttp]2 - http/2 for Apache httpd
 
-Copyright (C) 2015 greenbytes GmbH
+Copyright (C) 2015, 2016 greenbytes GmbH
 
 This repository contains the `mod_h[ttp]2` from Apache httpd as a standalone build. 
 
@@ -13,28 +13,22 @@ What you find here are **early experience versions** for people who like living 
 If you want HTTP/2 in your production environment, please head over to the official releases at Apache and grab one of those or wait until the various OS distributions have assembled one for you. 
 
 ##Current Version
-The version here is the **Proposed backport to 2.4.x**, to be published hopefully as 2.4.19. 
+The version 1.4.6 is **exactly** the one released in Apache httpd 2-.4.20.
 
-This is therefore an **early experience version**
+Later versions willl be an **early experience version**
 and there is no guarantee that it will be released as it is here by Apache. But you are welcome to test it and give feedback.
 
 ##Install
 
-You need a built Apache httpd 2.4.18, including apxs and headers to compile and 
+You need a built Apache httpd 2.4.20, including apxs and headers to compile and 
 run this module. Additionally, you need an installed libnghttp2, at least in version
 1.3.0. And additionally, you want an installed OpenSSL 1.0.2.
 
 tl;dr
 
-**You need an installed Apache 2.4.18 which already runs ```mod_http2``` in it.**
+**You need an installed Apache 2.4.20 which already runs ```mod_http2``` in it.**
 
 If you do not have that or don't know how to get it, look at google, stackoverflow, Apache mailing lists or your Linux distro. Not here!
-
-##Changes
-
-Different to earlier releases, this module no longer has a ```sandbox``` build mode. It always needs an Apache + apxs installed on your system, as
-well as all dependant libraries. It was too much work for me to keep the
-sandbox up to date...
 
 ##Apache 2.4.x Packages
 
@@ -43,6 +37,9 @@ sandbox up to date...
 * **Debian** sid (unstable) includes httpd 2.4.17. See [how to install debian sid](https://wiki.debian.org/InstallFAQ#Q._How_do_I_install_.22unstable.22_.28.22sid.22.29.3F)
 * **FreeBSD**: [Apache 2.4 port includes mod_http2](http://www.freshports.org/www/apache24/) / [mod_http2-devel port in review](https://reviews.freebsd.org/D5220)
 
+##Changes
+
+See ```ChangeLog``` for details.
 
 ##Documenation
 There is the official [Apache documentation](https://httpd.apache.org/docs/2.4/en/mod/mod_http2.html) of the module, which you will not find here.
@@ -73,7 +70,7 @@ SPDY protocol. And without Tatsuhiro Tsujikawa excellent nghttp2 work, this
 would not have been possible.
 
 
-Münster, 18.12.2015,
+Münster, 18.04.2016,
 
 Stefan Eissing, greenbytes GmbH
 

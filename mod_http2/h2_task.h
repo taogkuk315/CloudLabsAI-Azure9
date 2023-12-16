@@ -41,6 +41,7 @@ struct apr_thread_cond_t;
 struct h2_conn;
 struct h2_mplx;
 struct h2_task;
+struct h2_req_engine;
 struct h2_request;
 struct h2_resp_head;
 struct h2_worker;
@@ -50,23 +51,33 @@ typedef struct h2_task h2_task;
 struct h2_task {
     const char *id;
     int stream_id;
-    struct h2_mplx *mplx;    
+    conn_rec *c;
+    struct h2_mplx *mplx;
+    apr_pool_t *pool;
     const struct h2_request *request;
     
     unsigned int filters_set : 1;
     unsigned int input_eos   : 1;
     unsigned int ser_headers : 1;
+    unsigned int frozen      : 1;
+    unsigned int blocking    : 1;
+    unsigned int detached    : 1;
     
     struct h2_task_input *input;
     struct h2_task_output *output;
     struct apr_thread_cond_t *io;   /* used to wait for events on */
+    
+    struct h2_req_engine *engine;   /* engine hosted by this task */
+    struct h2_req_engine *assigned; /* engine that task has been assigned to */
+    request_rec *r;                 /* request being processed in this task */
 };
 
 h2_task *h2_task_create(long session_id, const struct h2_request *req, 
-                        apr_pool_t *pool, struct h2_mplx *mplx);
+                        conn_rec *c, struct h2_mplx *mplx);
 
-apr_status_t h2_task_do(h2_task *task, conn_rec *c, 
-                        struct apr_thread_cond_t *cond, apr_socket_t *socket);
+void h2_task_destroy(h2_task *task);
+
+apr_status_t h2_task_do(h2_task *task, struct apr_thread_cond_t *cond);
 
 void h2_task_register_hooks(void);
 /*
@@ -76,5 +87,11 @@ apr_status_t h2_task_init(apr_pool_t *pool, server_rec *s);
 
 extern APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_in) *h2_task_logio_add_bytes_in;
 extern APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_out) *h2_task_logio_add_bytes_out;
+
+apr_status_t h2_task_freeze(h2_task *task);
+apr_status_t h2_task_thaw(h2_task *task);
+int h2_task_is_detached(h2_task *task);
+
+void h2_task_set_io_blocking(h2_task *task, int blocking);
 
 #endif /* defined(__mod_h2__h2_task__) */

@@ -66,6 +66,7 @@ typedef struct h2_config {
     int tls_cooldown_secs;        /* Seconds of idle time before going back to small TLS records */
     int h2_push;                  /* if HTTP/2 server push is enabled */
     struct apr_hash_t *priorities;/* map of content-type to h2_priority records */
+    
     int push_diary_size;          /* # of entries in push diary */
 } h2_config;
 

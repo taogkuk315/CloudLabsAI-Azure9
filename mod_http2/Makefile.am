@@ -32,9 +32,11 @@ OBJECTS = \
     h2_filter.c \
     h2_from_h1.c \
     h2_h2.c \
+    h2_int_queue.c \
     h2_io.c \
     h2_io_set.c \
     h2_mplx.c \
+    h2_ngn_shed.c \
     h2_push.c \
     h2_request.c \
     h2_response.c \
@@ -45,13 +47,13 @@ OBJECTS = \
     h2_task.c \
     h2_task_input.c \
     h2_task_output.c \
-    h2_task_queue.c \
     h2_util.c \
     h2_worker.c \
     h2_workers.c \
     mod_http2.c
 
 HFILES = \
+    h2.h \
     h2_alt_svc.h \
     h2_bucket_eoc.h \
     h2_bucket_eos.h \
@@ -62,9 +64,11 @@ HFILES = \
     h2_filter.h \
     h2_from_h1.h \
     h2_h2.h \
+    h2_int_queue.h \
     h2_io.h \
     h2_io_set.h \
     h2_mplx.h \
+    h2_ngn_shed.h \
     h2_private.h \
     h2_push.h \
     h2_request.h \
@@ -76,7 +80,6 @@ HFILES = \
     h2_task.h \
     h2_task_input.h \
     h2_task_output.h \
-    h2_task_queue.h \
     h2_util.h \
     h2_version.h \
     h2_worker.h \

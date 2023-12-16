@@ -16,6 +16,8 @@
 #ifndef __mod_h2__h2_stream__
 #define __mod_h2__h2_stream__
 
+#include "h2.h"
+
 /**
  * A HTTP/2 stream, e.g. a client request+response in HTTP/1.1 terms.
  * 
@@ -30,16 +32,6 @@
  */
 #include "h2_io.h"
 
-typedef enum {
-    H2_STREAM_ST_IDLE,
-    H2_STREAM_ST_OPEN,
-    H2_STREAM_ST_RESV_LOCAL,
-    H2_STREAM_ST_RESV_REMOTE,
-    H2_STREAM_ST_CLOSED_INPUT,
-    H2_STREAM_ST_CLOSED_OUTPUT,
-    H2_STREAM_ST_CLOSED,
-} h2_stream_state_t;
-
 struct h2_mplx;
 struct h2_priority;
 struct h2_request;
@@ -51,7 +43,6 @@ typedef struct h2_stream h2_stream;
 
 struct h2_stream {
     int id;                     /* http2 stream id */
-    int initiated_on;           /* http2 stream id this was initiated on or 0 */
     h2_stream_state_t state;    /* http/2 state of this stream */
     struct h2_session *session; /* the session this stream belongs to */
     
@@ -65,7 +56,6 @@ struct h2_stream {
     unsigned int submitted : 1; /* response HEADER has been sent */
     
     apr_off_t input_remaining;  /* remaining bytes on input as advertised via content-length */
-    apr_bucket_brigade *bbin;   /* input DATA */
 
     struct h2_sos *sos;         /* stream output source, e.g. to read output from */
     apr_off_t data_frames_sent; /* # of DATA frames sent out for this stream */
@@ -73,15 +63,6 @@ struct h2_stream {
 
 
 #define H2_STREAM_RST(s, def)    (s->rst_error? s->rst_error : (def))
-
-/**
- * Create a stream in IDLE state.
- * @param id      the stream identifier
- * @param pool    the memory pool to use for this stream
- * @param session the session this stream belongs to
- * @return the newly created IDLE stream
- */
-h2_stream *h2_stream_create(int id, apr_pool_t *pool, struct h2_session *session);
 
 /**
  * Create a stream in OPEN state.
@@ -163,7 +144,7 @@ apr_status_t h2_stream_close_input(h2_stream *stream);
  * @param len the number of bytes to write
  */
 apr_status_t h2_stream_write_data(h2_stream *stream,
-                                  const char *data, size_t len);
+                                  const char *data, size_t len, int eos);
 
 /**
  * Reset the stream. Stream write/reads will return errors afterwards.
@@ -191,7 +172,7 @@ apr_status_t h2_stream_schedule(h2_stream *stream, int eos, int push_enabled,
  * @param stream the stream to check on
  * @return != 0 iff stream has been scheduled
  */
-int h2_stream_is_scheduled(h2_stream *stream);
+int h2_stream_is_scheduled(const h2_stream *stream);
 
 struct h2_response *h2_stream_get_response(h2_stream *stream);
 
@@ -221,8 +202,8 @@ apr_status_t h2_stream_set_response(h2_stream *stream,
  *         APR_EAGAIN if not data is available and end of stream has not been
  *         reached yet.
  */
-apr_status_t h2_stream_prep_read(h2_stream *stream, 
-                                 apr_off_t *plen, int *peos);
+apr_status_t h2_stream_out_prepare(h2_stream *stream, 
+                                   apr_off_t *plen, int *peos);
 
 /**
  * Read data from the stream output.
@@ -278,21 +259,21 @@ void h2_stream_set_suspended(h2_stream *stream, int suspended);
  * @param stream the stream to check
  * @return != 0 iff stream is suspended.
  */
-int h2_stream_is_suspended(h2_stream *stream);
+int h2_stream_is_suspended(const h2_stream *stream);
 
 /**
  * Check if the stream has open input.
  * @param stream the stream to check
  * @return != 0 iff stream has open input.
  */
-int h2_stream_input_is_open(h2_stream *stream);
+int h2_stream_input_is_open(const h2_stream *stream);
 
 /**
  * Check if the stream has not submitted a response or RST yet.
  * @param stream the stream to check
  * @return != 0 iff stream has not submitted a response or RST.
  */
-int h2_stream_needs_submit(h2_stream *stream);
+int h2_stream_needs_submit(const h2_stream *stream);
 
 /**
  * Submit any server push promises on this stream and schedule

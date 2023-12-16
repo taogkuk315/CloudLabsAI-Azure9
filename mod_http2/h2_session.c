@@ -14,6 +14,7 @@
  */
 
 #include <assert.h>
+#include <stddef.h>
 #include <apr_thread_cond.h>
 #include <apr_base64.h>
 #include <apr_strings.h>
@@ -38,7 +39,6 @@
 #include "h2_request.h"
 #include "h2_response.h"
 #include "h2_stream.h"
-#include "h2_stream_set.h"
 #include "h2_from_h1.h"
 #include "h2_task.h"
 #include "h2_session.h"
@@ -46,8 +46,6 @@
 #include "h2_version.h"
 #include "h2_workers.h"
 
-
-static int frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen);
 
 static int h2_session_status_from_apr_status(apr_status_t rv)
 {
@@ -80,6 +78,49 @@ static int is_accepting_streams(h2_session *session);
 static void dispatch_event(h2_session *session, h2_session_event_t ev, 
                              int err, const char *msg);
 
+typedef struct stream_sel_ctx {
+    h2_session *session;
+    h2_stream *candidate;
+} stream_sel_ctx;
+
+static int find_cleanup_stream(void *udata, void *sdata)
+{
+    stream_sel_ctx *ctx = udata;
+    h2_stream *stream = sdata;
+    if (H2_STREAM_CLIENT_INITIATED(stream->id)) {
+        if (!ctx->session->local.accepting
+            && stream->id > ctx->session->local.accepted_max) {
+            ctx->candidate = stream;
+            return 0;
+        }
+    }
+    else {
+        if (!ctx->session->remote.accepting
+            && stream->id > ctx->session->remote.accepted_max) {
+            ctx->candidate = stream;
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void cleanup_streams(h2_session *session)
+{
+    stream_sel_ctx ctx;
+    ctx.session = session;
+    ctx.candidate = NULL;
+    while (1) {
+        h2_ihash_iter(session->streams, find_cleanup_stream, &ctx);
+        if (ctx.candidate) {
+            h2_session_stream_destroy(session, ctx.candidate);
+            ctx.candidate = NULL;
+        }
+        else {
+            break;
+        }
+    }
+}
+
 h2_stream *h2_session_open_stream(h2_session *session, int stream_id)
 {
     h2_stream * stream;
@@ -91,21 +132,28 @@ h2_stream *h2_session_open_stream(h2_session *session, int stream_id)
     }
     else {
         apr_pool_create(&stream_pool, session->pool);
+        apr_pool_tag(stream_pool, "h2_stream");
     }
     
     stream = h2_stream_open(stream_id, stream_pool, session);
     
-    h2_stream_set_add(session->streams, stream);
-    if (H2_STREAM_CLIENT_INITIATED(stream_id)
-        && stream_id > session->max_stream_received) {
-        ++session->requests_received;
-        session->max_stream_received = stream->id;
+    h2_ihash_add(session->streams, stream);
+    if (H2_STREAM_CLIENT_INITIATED(stream_id)) {
+        if (stream_id > session->remote.emitted_max) {
+            ++session->remote.emitted_count;
+            session->remote.emitted_max = stream->id;
+            session->local.accepted_max = stream->id;
+        }
+    }
+    else {
+        if (stream_id > session->local.emitted_max) {
+            ++session->local.emitted_count;
+            session->remote.emitted_max = stream->id;
+        }
     }
     
     return stream;
 }
-
-#ifdef H2_NG2_STREAM_API
 
 /**
  * Determine the importance of streams when scheduling tasks.
@@ -160,20 +208,6 @@ static int stream_pri_cmp(int sid1, int sid2, void *ctx)
     return spri_cmp(sid1, s1, sid2, s2, session);
 }
 
-#else /* ifdef H2_NG2_STREAM_API */
-
-/* In absence of nghttp2_stream API, which gives information about
- * priorities since nghttp2 1.3.x, we just sort the streams by
- * their identifier, aka. order of arrival.
- */
-static int stream_pri_cmp(int sid1, int sid2, void *ctx)
-{
-    (void)ctx;
-    return sid1 - sid2;
-}
-
-#endif /* (ifdef else) H2_NG2_STREAM_API */
-
 static apr_status_t stream_schedule(h2_session *session,
                                     h2_stream *stream, int eos)
 {
@@ -201,7 +235,7 @@ static ssize_t send_cb(nghttp2_session *ngh2,
     if (APR_STATUS_IS_EAGAIN(status)) {
         return NGHTTP2_ERR_WOULDBLOCK;
     }
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c, APLOGNO(03062)
                   "h2_session: send error");
     return h2_session_status_from_apr_status(status);
 }
@@ -216,8 +250,8 @@ static int on_invalid_frame_recv_cb(nghttp2_session *ngh2,
     if (APLOGcdebug(session->c)) {
         char buffer[256];
         
-        frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03063)
                       "h2_session(%ld): recv unknown FRAME[%s], frames=%ld/%ld (r/s)",
                       session->id, buffer, (long)session->frames_received,
                      (long)session->frames_sent);
@@ -242,7 +276,7 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
     
     stream = h2_session_get_stream(session, stream_id);
     if (!stream) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03064)
                       "h2_stream(%ld-%d): on_data_chunk for unknown stream",
                       session->id, (int)stream_id);
         rv = nghttp2_submit_rst_stream(ngh2, NGHTTP2_FLAG_NONE, stream_id,
@@ -252,8 +286,11 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
         }
         return 0;
     }
-    
-    status = h2_stream_write_data(stream, (const char *)data, len);
+
+    /* FIXME: enabling setting EOS this way seems to break input handling
+     * in mod_proxy_http2. why? */
+    status = h2_stream_write_data(stream, (const char *)data, len,
+                                  0 /*flags & NGHTTP2_FLAG_END_STREAM*/);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, session->c,
                   "h2_stream(%ld-%d): data_chunk_recv, written %ld bytes",
                   session->id, stream_id, (long)len);
@@ -276,12 +313,14 @@ static apr_status_t stream_release(h2_session *session,
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                       "h2_stream(%ld-%d): handled, closing", 
                       session->id, (int)stream->id);
-        if (stream->id > session->max_stream_handled) {
-            session->max_stream_handled = stream->id;
+        if (H2_STREAM_CLIENT_INITIATED(stream->id)) {
+            if (stream->id > session->local.completed_max) {
+                session->local.completed_max = stream->id;
+            }
         }
     }
     else {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03065)
                       "h2_stream(%ld-%d): closing with err=%d %s", 
                       session->id, (int)stream->id, (int)error_code,
                       h2_h2_err_description(error_code));
@@ -323,7 +362,7 @@ static int on_begin_headers_cb(nghttp2_session *ngh2,
     else {
         s = h2_session_open_stream((h2_session *)userp, frame->hd.stream_id);
     }
-    return s? 0 : NGHTTP2_ERR_CALLBACK_FAILURE;
+    return s? 0 : NGHTTP2_ERR_START_STREAM_NOT_ALLOWED;
 }
 
 static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
@@ -377,8 +416,8 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
     if (APLOGcdebug(session->c)) {
         char buffer[256];
         
-        frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03066)
                       "h2_session(%ld): recv FRAME[%s], frames=%ld/%ld (r/s)",
                       session->id, buffer, (long)session->frames_received,
                      (long)session->frames_sent);
@@ -447,12 +486,12 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                           frame->window_update.window_size_increment);
             break;
         case NGHTTP2_RST_STREAM:
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03067)
                           "h2_session(%ld-%d): RST_STREAM by client, errror=%d",
                           session->id, (int)frame->hd.stream_id,
                           (int)frame->rst_stream.error_code);
             stream = h2_session_get_stream(session, frame->hd.stream_id);
-            if (stream && stream->initiated_on) {
+            if (stream && stream->request && stream->request->initiated_on) {
                 ++session->pushes_reset;
             }
             else {
@@ -460,14 +499,16 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             }
             break;
         case NGHTTP2_GOAWAY:
+            session->remote.accepted_max = frame->goaway.last_stream_id;
+            session->remote.error = frame->goaway.error_code;
             dispatch_event(session, H2_SESSION_EV_REMOTE_GOAWAY, 0, NULL);
             break;
         default:
             if (APLOGctrace2(session->c)) {
                 char buffer[256];
                 
-                frame_print(frame, buffer,
-                            sizeof(buffer)/sizeof(buffer[0]));
+                h2_util_frame_print(frame, buffer,
+                                    sizeof(buffer)/sizeof(buffer[0]));
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                               "h2_session: on_frame_rcv %s", buffer);
             }
@@ -514,6 +555,7 @@ static int on_send_data_cb(nghttp2_session *ngh2,
     unsigned char padlen;
     int eos;
     h2_stream *stream;
+    apr_bucket *b;
     
     (void)ngh2;
     (void)source;
@@ -558,16 +600,10 @@ static int on_send_data_cb(nghttp2_session *ngh2,
         }
     }
     else {
-        apr_bucket *b;
-        char *header = apr_pcalloc(stream->pool, 10);
-        memcpy(header, (const char *)framehd, 9);
-        if (padlen) {
-            header[9] = (char)padlen;
+        status = h2_conn_io_write(&session->io, (const char *)framehd, 9);
+        if (padlen && status == APR_SUCCESS) {
+            status = h2_conn_io_write(&session->io, (const char *)&padlen, 1);
         }
-        b = apr_bucket_pool_create(header, padlen? 10 : 9, 
-                                   stream->pool, session->c->bucket_alloc);
-        status = h2_conn_io_writeb(&session->io, b);
-        
         if (status == APR_SUCCESS) {
             apr_off_t len = length;
             status = h2_stream_read_to(stream, session->io.output, &len, &eos);
@@ -586,7 +622,7 @@ static int on_send_data_cb(nghttp2_session *ngh2,
     
     if (status == APR_SUCCESS) {
         stream->data_frames_sent++;
-        h2_conn_io_consider_flush(&session->io);
+        h2_conn_io_consider_pass(&session->io);
         return 0;
     }
     else {
@@ -607,8 +643,8 @@ static int on_frame_send_cb(nghttp2_session *ngh2,
     if (APLOGcdebug(session->c)) {
         char buffer[256];
         
-        frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03068)
                       "h2_session(%ld): sent FRAME[%s], frames=%ld/%ld (r/s)",
                       session->id, buffer, (long)session->frames_received,
                      (long)session->frames_sent);
@@ -674,40 +710,60 @@ static void h2_session_destroy(h2_session *session)
     if (APLOGctrace1(session->c)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                       "h2_session(%ld): destroy, %d streams open",
-                      session->id, (int)h2_stream_set_size(session->streams));
+                      session->id, (int)h2_ihash_count(session->streams));
     }
     if (session->mplx) {
         h2_mplx_set_consumed_cb(session->mplx, NULL, NULL);
         h2_mplx_release_and_join(session->mplx, session->iowait);
         session->mplx = NULL;
     }
-    if (session->streams) {
-        h2_stream_set_destroy(session->streams);
-        session->streams = NULL;
-    }
     if (session->pool) {
         apr_pool_destroy(session->pool);
     }
 }
 
-static apr_status_t h2_session_shutdown(h2_session *session, int reason, const char *msg)
+static apr_status_t h2_session_shutdown(h2_session *session, int error, 
+                                        const char *msg, int force_close)
 {
     apr_status_t status = APR_SUCCESS;
-    const char *err = msg;
     
     AP_DEBUG_ASSERT(session);
-    if (!err && reason) {
-        err = nghttp2_strerror(reason);
+    if (!msg && error) {
+        msg = nghttp2_strerror(error);
+    }
+    
+    if (error || force_close) {
+        /* not a graceful shutdown, we want to leave... 
+         * Do not start further streams that are waiting to be scheduled. 
+         * Find out the max stream id that we habe been processed or
+         * are still actively working on.
+         * Remove all streams greater than this number without submitting
+         * a RST_STREAM frame, since that should be clear from the GOAWAY
+         * we send. */
+        session->local.accepted_max = h2_mplx_shutdown(session->mplx);
+        session->local.error = error;
+    }
+    else {
+        /* graceful shutdown. we will continue processing all streams
+         * we have, but no longer accept new ones. Report the max stream
+         * we have received and discard all new ones. */
     }
     nghttp2_submit_goaway(session->ngh2, NGHTTP2_FLAG_NONE, 
-                          h2_mplx_get_max_stream_started(session->mplx), 
-                          reason, (uint8_t*)err, err? strlen(err):0);
+                          session->local.accepted_max, 
+                          error, (uint8_t*)msg, msg? strlen(msg):0);
     status = nghttp2_session_send(session->ngh2);
-    h2_conn_io_flush(&session->io);
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+    if (status == APR_SUCCESS) {
+        status = h2_conn_io_flush(&session->io);
+    }
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03069)
                   "session(%ld): sent GOAWAY, err=%d, msg=%s", 
-                  session->id, reason, err? err : "");
-    dispatch_event(session, H2_SESSION_EV_LOCAL_GOAWAY, reason, err);
+                  session->id, error, msg? msg : "");
+    dispatch_event(session, H2_SESSION_EV_LOCAL_GOAWAY, error, msg);
+    
+    if (force_close) {
+        h2_mplx_abort(session->mplx);
+    }
+    
     return status;
 }
 
@@ -734,7 +790,7 @@ static apr_status_t session_pool_cleanup(void *data)
          * connection when sending the next request, this has the effect
          * that at least this one request will fail.
          */
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, session->c, APLOGNO(03199)
                       "session(%ld): connection disappeared without proper "
                       "goodbye, clients will be confused, should not happen", 
                       session->id);
@@ -798,6 +854,7 @@ static h2_session *h2_session_create_int(conn_rec *c,
     if (status != APR_SUCCESS) {
         return NULL;
     }
+    apr_pool_tag(pool, "h2_session");
 
     session = apr_pcalloc(pool, sizeof(h2_session));
     if (session) {
@@ -808,31 +865,36 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->c = c;
         session->r = r;
         session->s = h2_ctx_server_get(ctx);
+        session->pool = pool;
         session->config = h2_config_sget(session->s);
+        session->workers = workers;
         
         session->state = H2_SESSION_ST_INIT;
+        session->local.accepting = 1;
+        session->remote.accepting = 1;
         
-        session->pool = pool;
         apr_pool_pre_cleanup_register(pool, session, session_pool_cleanup);
         
-        session->max_stream_count = h2_config_geti(session->config, H2_CONF_MAX_STREAMS);
-        session->max_stream_mem = h2_config_geti(session->config, H2_CONF_STREAM_MAX_MEM);
-        
+        session->max_stream_count = h2_config_geti(session->config, 
+                                                   H2_CONF_MAX_STREAMS);
+        session->max_stream_mem = h2_config_geti(session->config, 
+                                                 H2_CONF_STREAM_MAX_MEM);
+
         status = apr_thread_cond_create(&session->iowait, session->pool);
         if (status != APR_SUCCESS) {
             return NULL;
         }
         
-        session->streams = h2_stream_set_create(session->pool, session->max_stream_count);
-        
-        session->workers = workers;
+        session->streams = h2_ihash_create(session->pool,
+                                           offsetof(h2_stream, id));
         session->mplx = h2_mplx_create(c, session->pool, session->config, 
                                        session->s->timeout, workers);
         
         h2_mplx_set_consumed_cb(session->mplx, update_window, session);
         
         /* Install the connection input filter that feeds the session */
-        session->cin = h2_filter_cin_create(session->pool, h2_session_receive, session);
+        session->cin = h2_filter_cin_create(session->pool, 
+                                            h2_session_receive, session);
         ap_add_input_filter("H2_IN", session->cin, r, c);
 
         h2_conn_io_init(&session->io, c, session->config, session->pool);
@@ -854,8 +916,8 @@ static h2_session *h2_session_create_int(conn_rec *c,
             h2_session_destroy(session);
             return NULL;
         }
-        nghttp2_option_set_peer_max_concurrent_streams(options, 
-                                                       (uint32_t)session->max_stream_count);
+        nghttp2_option_set_peer_max_concurrent_streams(
+            options, (uint32_t)session->max_stream_count);
         /* We need to handle window updates ourself, otherwise we
          * get flooded by nghttp2. */
         nghttp2_option_set_no_auto_window_update(options, 1);
@@ -890,11 +952,15 @@ static h2_session *h2_session_create_int(conn_rec *c,
         session->push_diary = h2_push_diary_create(session->pool, n);
         
         if (APLOGcdebug(c)) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
-                          "session(%ld) created, max_streams=%d, stream_mem=%d, "
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(03200)
+                          "h2_session(%ld) created, max_streams=%d, "
+                          "stream_mem=%d, workers_limit=%d, workers_max=%d, "
                           "push_diary(type=%d,N=%d)",
                           session->id, (int)session->max_stream_count, 
-                          (int)session->max_stream_mem, session->push_diary->dtype,
+                          (int)session->max_stream_mem,
+                          session->mplx->workers_limit, 
+                          session->mplx->workers_max, 
+                          session->push_diary->dtype, 
                           (int)session->push_diary->N);
         }
     }
@@ -949,7 +1015,7 @@ static apr_status_t h2_session_start(h2_session *session, int *rv)
         if (APLOGrdebug(session->r)) {
             char buffer[128];
             h2_util_hex_dump(buffer, 128, (char*)cs, dlen);
-            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, session->r,
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, session->r, APLOGNO(03070)
                           "upgrading h2c session with HTTP2-Settings: %s -> %s (%d)",
                           s, buffer, (int)dlen);
         }
@@ -994,7 +1060,7 @@ static apr_status_t h2_session_start(h2_session *session, int *rv)
         ++slen;
     }
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c, APLOGNO(03201)
                   "h2_session(%ld): start, INITIAL_WINDOW_SIZE=%ld, "
                   "MAX_CONCURRENT_STREAMS=%d", 
                   session->id, (long)win_size, (int)session->max_stream_count);
@@ -1025,6 +1091,7 @@ static apr_status_t h2_session_start(h2_session *session, int *rv)
                           nghttp2_strerror(*rv));        
         }
     }
+    
     return status;
 }
 
@@ -1033,15 +1100,21 @@ typedef struct {
     int resume_count;
 } resume_ctx;
 
-static int resume_on_data(void *ctx, h2_stream *stream)
+static int resume_on_data(void *ctx, void *val)
 {
+    h2_stream *stream = val;
     resume_ctx *rctx = (resume_ctx*)ctx;
     h2_session *session = rctx->session;
     AP_DEBUG_ASSERT(session);
     AP_DEBUG_ASSERT(stream);
     
     if (h2_stream_is_suspended(stream)) {
-        if (h2_mplx_out_has_data_for(stream->session->mplx, stream->id)) {
+        apr_status_t status;
+        apr_off_t len = -1;
+        int eos;
+        
+        status = h2_stream_out_prepare(stream, &len, &eos);
+        if (status == APR_SUCCESS) {
             int rv;
             h2_stream_set_suspended(stream, 0);
             ++rctx->resume_count;
@@ -1050,8 +1123,9 @@ static int resume_on_data(void *ctx, h2_stream *stream)
             ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
                           APLOG_ERR : APLOG_DEBUG, 0, session->c,
                           APLOGNO(02936) 
-                          "h2_stream(%ld-%d): resuming %s",
-                          session->id, stream->id, rv? nghttp2_strerror(rv) : "");
+                          "h2_stream(%ld-%d): resuming %s, len=%ld, eos=%d",
+                          session->id, stream->id, 
+                          rv? nghttp2_strerror(rv) : "", (long)len, eos);
         }
     }
     return 1;
@@ -1060,7 +1134,7 @@ static int resume_on_data(void *ctx, h2_stream *stream)
 static int h2_session_resume_streams_with_data(h2_session *session)
 {
     AP_DEBUG_ASSERT(session);
-    if (!h2_stream_set_is_empty(session->streams)
+    if (!h2_ihash_is_empty(session->streams)
         && session->mplx && !session->mplx->aborted) {
         resume_ctx ctx;
         
@@ -1069,7 +1143,7 @@ static int h2_session_resume_streams_with_data(h2_session *session)
 
         /* Resume all streams where we have data in the out queue and
          * which had been suspended before. */
-        h2_stream_set_iter(session->streams, resume_on_data, &ctx);
+        h2_ihash_iter(session->streams, resume_on_data, &ctx);
         return ctx.resume_count;
     }
     return 0;
@@ -1077,10 +1151,7 @@ static int h2_session_resume_streams_with_data(h2_session *session)
 
 h2_stream *h2_session_get_stream(h2_session *session, int stream_id)
 {
-    if (!session->last_stream || stream_id != session->last_stream->id) {
-        session->last_stream = h2_stream_set_get(session->streams, stream_id);
-    }
-    return session->last_stream;
+    return h2_ihash_get(session->streams, stream_id);
 }
 
 static ssize_t stream_data_cb(nghttp2_session *ng2s,
@@ -1119,7 +1190,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     
     AP_DEBUG_ASSERT(!h2_stream_is_suspended(stream));
     
-    status = h2_stream_prep_read(stream, &nread, &eos);
+    status = h2_stream_out_prepare(stream, &nread, &eos);
     if (nread) {
         *data_flags |=  NGHTTP2_DATA_FLAG_NO_COPY;
     }
@@ -1139,15 +1210,10 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
              */
             nread = 0;
             h2_stream_set_suspended(stream, 1);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03071)
                           "h2_stream(%ld-%d): suspending",
                           session->id, (int)stream_id);
             return NGHTTP2_ERR_DEFERRED;
-            
-        case APR_EOF:
-            nread = 0;
-            eos = 1;
-            break;
             
         default:
             nread = 0;
@@ -1164,7 +1230,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
             int rv;
             
             nh = h2_util_ngheader_make(stream->pool, trailers);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03072)
                           "h2_stream(%ld-%d): submit %d trailers",
                           session->id, (int)stream_id,(int) nh->nvlen);
             rv = nghttp2_submit_trailer(ng2s, stream->id, nh->nv, nh->nvlen);
@@ -1204,17 +1270,20 @@ static apr_status_t submit_response(h2_session *session, h2_stream *stream)
         rv = NGHTTP2_PROTOCOL_ERROR;
     }
     else if (response && response->headers) {
-        nghttp2_data_provider provider;
+        nghttp2_data_provider provider, *pprovider = NULL;
         h2_ngheader *ngh;
         const h2_priority *prio;
         
-        memset(&provider, 0, sizeof(provider));
-        provider.source.fd = stream->id;
-        provider.read_callback = stream_data_cb;
-        
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03073)
                       "h2_stream(%ld-%d): submit response %d",
                       session->id, stream->id, response->http_status);
+        
+        if (response->content_length != 0) {
+            memset(&provider, 0, sizeof(provider));
+            provider.source.fd = stream->id;
+            provider.read_callback = stream_data_cb;
+            pprovider = &provider;
+        }
         
         /* If this stream is not a pushed one itself,
          * and HTTP/2 server push is enabled here,
@@ -1231,7 +1300,7 @@ static apr_status_t submit_response(h2_session *session, h2_stream *stream)
          *    as the client, having this resource in its cache, might
          *    also have the pushed ones as well.
          */
-        if (!stream->initiated_on
+        if (stream->request && !stream->request->initiated_on
             && H2_HTTP_2XX(response->http_status)
             && h2_session_push_enabled(session)) {
             
@@ -1247,12 +1316,12 @@ static apr_status_t submit_response(h2_session *session, h2_stream *stream)
         ngh = h2_util_ngheader_make_res(stream->pool, response->http_status, 
                                         response->headers);
         rv = nghttp2_submit_response(session->ngh2, response->stream_id,
-                                     ngh->nv, ngh->nvlen, &provider);
+                                     ngh->nv, ngh->nvlen, pprovider);
     }
     else {
         int err = H2_STREAM_RST(stream, H2_ERR_PROTOCOL_ERROR);
         
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03074)
                       "h2_stream(%ld-%d): RST_STREAM, err=%d",
                       session->id, stream->id, err);
 
@@ -1261,7 +1330,7 @@ static apr_status_t submit_response(h2_session *session, h2_stream *stream)
     }
     
     stream->submitted = 1;
-    if (stream->initiated_on) {
+    if (stream->request && stream->request->initiated_on) {
         ++session->pushes_submitted;
     }
     else {
@@ -1291,14 +1360,14 @@ struct h2_stream *h2_session_push(h2_session *session, h2_stream *is,
     nid = nghttp2_submit_push_promise(session->ngh2, 0, is->id, 
                                       ngh->nv, ngh->nvlen, NULL);
     if (nid <= 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03075)
                       "h2_stream(%ld-%d): submitting push promise fail: %s",
                       session->id, is->id, nghttp2_strerror(nid));
         return NULL;
     }
     ++session->pushes_promised;
     
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03076)
                   "h2_stream(%ld-%d): SERVER_PUSH %d for %s %s on %d",
                   session->id, is->id, nid,
                   push->req->method, push->req->path, is->id);
@@ -1317,7 +1386,7 @@ struct h2_stream *h2_session_push(h2_session *session, h2_stream *is,
         ++session->unsent_promises;
     }
     else {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03077)
                       "h2_stream(%ld-%d): failed to create stream obj %d",
                       session->id, is->id, nid);
     }
@@ -1396,7 +1465,7 @@ apr_status_t h2_session_set_prio(h2_session *session, h2_stream *stream,
                 id_grandpa = nghttp2_stream_get_stream_id(s_grandpa);
                 rv = nghttp2_session_change_stream_priority(session->ngh2, id_parent, &ps);
                 if (rv < 0) {
-                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03202)
                                   "h2_stream(%ld-%d): PUSH BEFORE, weight=%d, "
                                   "depends=%d, returned=%d",
                                   session->id, id_parent, ps.weight, ps.stream_id, rv);
@@ -1418,7 +1487,7 @@ apr_status_t h2_session_set_prio(h2_session *session, h2_stream *stream,
 
 
         rv = nghttp2_session_change_stream_priority(session->ngh2, stream->id, &ps);
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03203)
                       "h2_stream(%ld-%d): PUSH %s, weight=%d, "
                       "depends=%d, returned=%d",
                       session->id, stream->id, ptype, 
@@ -1438,17 +1507,17 @@ apr_status_t h2_session_stream_destroy(h2_session *session, h2_stream *stream)
 {
     apr_pool_t *pool = h2_stream_detach_pool(stream);
 
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                  "h2_stream(%ld-%d): cleanup by EOS bucket destroy", 
+                  session->id, stream->id);
     /* this may be called while the session has already freed
      * some internal structures or even when the mplx is locked. */
     if (session->mplx) {
         h2_mplx_stream_done(session->mplx, stream->id, stream->rst_error);
     }
     
-    if (session->last_stream == stream) {
-        session->last_stream = NULL;
-    }
     if (session->streams) {
-        h2_stream_set_remove(session->streams, stream->id);
+        h2_ihash_remove(session->streams, stream->id);
     }
     h2_stream_destroy(stream);
     
@@ -1462,90 +1531,13 @@ apr_status_t h2_session_stream_destroy(h2_session *session, h2_stream *stream)
     return APR_SUCCESS;
 }
 
-static int frame_print(const nghttp2_frame *frame, char *buffer, size_t maxlen)
-{
-    char scratch[128];
-    size_t s_len = sizeof(scratch)/sizeof(scratch[0]);
-    
-    switch (frame->hd.type) {
-        case NGHTTP2_DATA: {
-            return apr_snprintf(buffer, maxlen,
-                                "DATA[length=%d, flags=%d, stream=%d, padlen=%d]",
-                                (int)frame->hd.length, frame->hd.flags,
-                                frame->hd.stream_id, (int)frame->data.padlen);
-        }
-        case NGHTTP2_HEADERS: {
-            return apr_snprintf(buffer, maxlen,
-                                "HEADERS[length=%d, hend=%d, stream=%d, eos=%d]",
-                                (int)frame->hd.length,
-                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
-                                frame->hd.stream_id,
-                                !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM));
-        }
-        case NGHTTP2_PRIORITY: {
-            return apr_snprintf(buffer, maxlen,
-                                "PRIORITY[length=%d, flags=%d, stream=%d]",
-                                (int)frame->hd.length,
-                                frame->hd.flags, frame->hd.stream_id);
-        }
-        case NGHTTP2_RST_STREAM: {
-            return apr_snprintf(buffer, maxlen,
-                                "RST_STREAM[length=%d, flags=%d, stream=%d]",
-                                (int)frame->hd.length,
-                                frame->hd.flags, frame->hd.stream_id);
-        }
-        case NGHTTP2_SETTINGS: {
-            if (frame->hd.flags & NGHTTP2_FLAG_ACK) {
-                return apr_snprintf(buffer, maxlen,
-                                    "SETTINGS[ack=1, stream=%d]",
-                                    frame->hd.stream_id);
-            }
-            return apr_snprintf(buffer, maxlen,
-                                "SETTINGS[length=%d, stream=%d]",
-                                (int)frame->hd.length, frame->hd.stream_id);
-        }
-        case NGHTTP2_PUSH_PROMISE: {
-            return apr_snprintf(buffer, maxlen,
-                                "PUSH_PROMISE[length=%d, hend=%d, stream=%d]",
-                                (int)frame->hd.length,
-                                !!(frame->hd.flags & NGHTTP2_FLAG_END_HEADERS),
-                                frame->hd.stream_id);
-        }
-        case NGHTTP2_PING: {
-            return apr_snprintf(buffer, maxlen,
-                                "PING[length=%d, ack=%d, stream=%d]",
-                                (int)frame->hd.length,
-                                frame->hd.flags&NGHTTP2_FLAG_ACK,
-                                frame->hd.stream_id);
-        }
-        case NGHTTP2_GOAWAY: {
-            size_t len = (frame->goaway.opaque_data_len < s_len)?
-            frame->goaway.opaque_data_len : s_len-1;
-            memcpy(scratch, frame->goaway.opaque_data, len);
-            scratch[len+1] = '\0';
-            return apr_snprintf(buffer, maxlen, "GOAWAY[error=%d, reason='%s']",
-                                frame->goaway.error_code, scratch);
-        }
-        case NGHTTP2_WINDOW_UPDATE: {
-            return apr_snprintf(buffer, maxlen,
-                                "WINDOW_UPDATE[stream=%d, incr=%d]",
-                                frame->hd.stream_id, 
-                                frame->window_update.window_size_increment);
-        }
-        default:
-            return apr_snprintf(buffer, maxlen,
-                                "type=%d[length=%d, flags=%d, stream=%d]",
-                                frame->hd.type, (int)frame->hd.length,
-                                frame->hd.flags, frame->hd.stream_id);
-    }
-}
-
 int h2_session_push_enabled(h2_session *session)
 {
-    /* iff we can and they can */
-    return (h2_config_geti(session->config, H2_CONF_PUSH)
+    /* iff we can and they can and want */
+    return (session->remote.accepting /* remote GOAWAY received */
+            && h2_config_geti(session->config, H2_CONF_PUSH)
             && nghttp2_session_get_remote_settings(session->ngh2, 
-                                                   NGHTTP2_SETTINGS_ENABLE_PUSH));
+                   NGHTTP2_SETTINGS_ENABLE_PUSH));
 }
 
 static apr_status_t h2_session_send(h2_session *session)
@@ -1603,13 +1595,13 @@ static apr_status_t h2_session_receive(void *ctx, const char *data,
     return APR_SUCCESS;
 }
 
-static apr_status_t h2_session_read(h2_session *session, int block, int loops)
+static apr_status_t h2_session_read(h2_session *session, int block)
 {
     apr_status_t status, rstatus = APR_EAGAIN;
     conn_rec *c = session->c;
-    int i;
+    apr_off_t read_start = session->io.bytes_read;
     
-    for (i = 0; i < loops; ++i) {
+    while (1) {
         /* H2_IN filter handles all incoming data against the session.
          * We just pull at the filter chain to make it happen */
         status = ap_get_brigade(c->input_filters,
@@ -1634,7 +1626,7 @@ static apr_status_t h2_session_read(h2_session *session, int block, int loops)
             case APR_TIMEUP:
                 return status;
             default:
-                if (!i) {
+                if (session->io.bytes_read == read_start) {
                     /* first attempt failed */
                     if (APR_STATUS_IS_ETIMEDOUT(status)
                         || APR_STATUS_IS_ECONNABORTED(status)
@@ -1647,7 +1639,7 @@ static apr_status_t h2_session_read(h2_session *session, int block, int loops)
                     }
                     else {
                         /* uncommon status, log on INFO so that we see this */
-                        ap_log_cerror( APLOG_MARK, APLOG_INFO, status, c,
+                        ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, c,
                                       APLOGNO(02950) 
                                       "h2_session(%ld): error reading, terminating",
                                       session->id);
@@ -1661,8 +1653,48 @@ static apr_status_t h2_session_read(h2_session *session, int block, int loops)
         if (!is_accepting_streams(session)) {
             break;
         }
+        if ((session->io.bytes_read - read_start) > (64*1024)) {
+            /* read enough in one go, give write a chance */
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, c,
+                          "h2_session(%ld): read 64k, returning", session->id);
+            break;
+        }
     }
     return rstatus;
+}
+
+static int unsubmitted_iter(void *ctx, void *val)
+{
+    h2_stream *stream = val;
+    if (h2_stream_needs_submit(stream)) {
+        *((int *)ctx) = 1;
+        return 0;
+    }
+    return 1;
+}
+
+static int has_unsubmitted_streams(h2_session *session)
+{
+    int has_unsubmitted = 0;
+    h2_ihash_iter(session->streams, unsubmitted_iter, &has_unsubmitted);
+    return has_unsubmitted;
+}
+
+static int suspended_iter(void *ctx, void *val)
+{
+    h2_stream *stream = val;
+    if (h2_stream_is_suspended(stream)) {
+        *((int *)ctx) = 1;
+        return 0;
+    }
+    return 1;
+}
+
+static int has_suspended_streams(h2_session *session)
+{
+    int has_suspended = 0;
+    h2_ihash_iter(session->streams, suspended_iter, &has_suspended);
+    return has_suspended;
 }
 
 static apr_status_t h2_session_submit(h2_session *session)
@@ -1670,7 +1702,7 @@ static apr_status_t h2_session_submit(h2_session *session)
     apr_status_t status = APR_EAGAIN;
     h2_stream *stream;
     
-    if (h2_stream_set_has_unsubmitted(session->streams)) {
+    if (has_unsubmitted_streams(session)) {
         /* If we have responses ready, submit them now. */
         while ((stream = h2_mplx_next_submit(session->mplx, session->streams))) {
             status = submit_response(session, stream);
@@ -1727,7 +1759,7 @@ static int is_accepting_streams(h2_session *session)
 
 static void transit(h2_session *session, const char *action, h2_session_state nstate)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03078)
                   "h2_session(%ld): transit [%s] -- %s --> [%s]", session->id,
                   state_name(session->state), action, state_name(nstate));
     session->state = nstate;
@@ -1748,6 +1780,8 @@ static void h2_session_ev_init(h2_session *session, int arg, const char *msg)
 
 static void h2_session_ev_local_goaway(h2_session *session, int arg, const char *msg)
 {
+    session->local.accepting = 0;
+    cleanup_streams(session);
     switch (session->state) {
         case H2_SESSION_ST_LOCAL_SHUTDOWN:
             /* already did that? */
@@ -1765,6 +1799,8 @@ static void h2_session_ev_local_goaway(h2_session *session, int arg, const char 
 
 static void h2_session_ev_remote_goaway(h2_session *session, int arg, const char *msg)
 {
+    session->remote.accepting = 0;
+    cleanup_streams(session);
     switch (session->state) {
         case H2_SESSION_ST_REMOTE_SHUTDOWN:
             /* already received that? */
@@ -1791,9 +1827,9 @@ static void h2_session_ev_conn_error(h2_session *session, int arg, const char *m
             break;
         
         default:
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                           "h2_session(%ld): conn error -> shutdown", session->id);
-            h2_session_shutdown(session, arg, msg);
+            h2_session_shutdown(session, arg, msg, 0);
             break;
     }
 }
@@ -1808,9 +1844,9 @@ static void h2_session_ev_proto_error(h2_session *session, int arg, const char *
             break;
         
         default:
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                           "h2_session(%ld): proto error -> shutdown", session->id);
-            h2_session_shutdown(session, arg, msg);
+            h2_session_shutdown(session, arg, msg, 0);
             break;
     }
 }
@@ -1822,7 +1858,7 @@ static void h2_session_ev_conn_timeout(h2_session *session, int arg, const char 
             transit(session, "conn timeout", H2_SESSION_ST_DONE);
             break;
         default:
-            h2_session_shutdown(session, arg, msg);
+            h2_session_shutdown(session, arg, msg, 1);
             transit(session, "conn timeout", H2_SESSION_ST_DONE);
             break;
     }
@@ -1839,27 +1875,36 @@ static void h2_session_ev_no_io(h2_session *session, int arg, const char *msg)
              * CPU cycles. Ideally, we'd like to do a blocking read, but that
              * is not possible if we have scheduled tasks and wait
              * for them to produce something. */
-            if (h2_stream_set_is_empty(session->streams)) {
+            if (h2_conn_io_flush(&session->io) != APR_SUCCESS) {
+                dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
+            }
+            if (h2_ihash_is_empty(session->streams)) {
                 if (!is_accepting_streams(session)) {
                     /* We are no longer accepting new streams and have
                      * finished processing existing ones. Time to leave. */
-                    h2_session_shutdown(session, arg, msg);
+                    h2_session_shutdown(session, arg, msg, 0);
                     transit(session, "no io", H2_SESSION_ST_DONE);
                 }
                 else {
+                    apr_time_t now = apr_time_now();
                     /* When we have no streams, no task event are possible,
                      * switch to blocking reads */
                     transit(session, "no io", H2_SESSION_ST_IDLE);
-                    session->idle_until = apr_time_now() + session->s->keep_alive_timeout;
+                    session->idle_until = (session->remote.emitted_count? 
+                                           session->s->keep_alive_timeout : 
+                                           session->s->timeout) + now;
+                    session->keep_sync_until = now + apr_time_from_sec(1);
                 }
             }
-            else if (!h2_stream_set_has_unsubmitted(session->streams)
-                     && !h2_stream_set_has_suspended(session->streams)) {
+            else if (!has_unsubmitted_streams(session)
+                     && !has_suspended_streams(session)) {
                 /* none of our streams is waiting for a response or
                  * new output data from task processing, 
-                 * switch to blocking reads. */
+                 * switch to blocking reads. We are probably waiting on
+                 * window updates. */
                 transit(session, "no io", H2_SESSION_ST_IDLE);
                 session->idle_until = apr_time_now() + session->s->timeout;
+                session->keep_sync_until = session->idle_until;
             }
             else {
                 /* Unable to do blocking reads, as we wait on events from
@@ -1890,6 +1935,7 @@ static void h2_session_ev_data_read(h2_session *session, int arg, const char *ms
 {
     switch (session->state) {
         case H2_SESSION_ST_IDLE:
+        case H2_SESSION_ST_WAIT:
             transit(session, "data read", H2_SESSION_ST_BUSY);
             break;
             /* fall through */
@@ -1919,7 +1965,20 @@ static void h2_session_ev_mpm_stopping(h2_session *session, int arg, const char 
             /* nop */
             break;
         default:
-            h2_session_shutdown(session, arg, msg);
+            h2_session_shutdown(session, arg, msg, 0);
+            break;
+    }
+}
+
+static void h2_session_ev_pre_close(h2_session *session, int arg, const char *msg)
+{
+    switch (session->state) {
+        case H2_SESSION_ST_DONE:
+        case H2_SESSION_ST_LOCAL_SHUTDOWN:
+            /* nop */
+            break;
+        default:
+            h2_session_shutdown(session, arg, msg, 1);
             break;
     }
 }
@@ -1961,6 +2020,9 @@ static void dispatch_event(h2_session *session, h2_session_event_t ev,
         case H2_SESSION_EV_MPM_STOPPING:
             h2_session_ev_mpm_stopping(session, arg, msg);
             break;
+        case H2_SESSION_EV_PRE_CLOSE:
+            h2_session_ev_pre_close(session, arg, msg);
+            break;
         default:
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
                           "h2_session(%ld): unknown event %d", 
@@ -1975,11 +2037,29 @@ static void dispatch_event(h2_session *session, h2_session_event_t ev,
 
 static const int MAX_WAIT_MICROS = 200 * 1000;
 
+static void update_child_status(h2_session *session, int status, const char *msg)
+{
+    /* Assume that we also change code/msg when something really happened and
+     * avoid updating the scoreboard in between */
+    if (session->last_status_code != status 
+        || session->last_status_msg != msg) {
+        apr_snprintf(session->status, sizeof(session->status),
+                     "%s, streams: %d/%d/%d/%d/%d (open/recv/resp/push/rst)", 
+                     msg? msg : "-",
+                     (int)h2_ihash_count(session->streams), 
+                     (int)session->remote.emitted_count,
+                     (int)session->responses_submitted,
+                     (int)session->pushes_submitted,
+                     (int)session->pushes_reset + session->streams_reset);
+        ap_update_child_status_descr(session->c->sbh, status, session->status);
+    }
+}
+
 apr_status_t h2_session_process(h2_session *session, int async)
 {
     apr_status_t status = APR_SUCCESS;
     conn_rec *c = session->c;
-    int rv, have_written, have_read, mpm_state;
+    int rv, have_written, have_read, mpm_state, no_streams;
 
     ap_log_cerror( APLOG_MARK, APLOG_TRACE1, status, c,
                   "h2_session(%ld): process start, async=%d", session->id, async);
@@ -1998,15 +2078,19 @@ apr_status_t h2_session_process(h2_session *session, int async)
             }
         }
         
+        session->status[0] = '\0';
+        
         switch (session->state) {
             case H2_SESSION_ST_INIT:
+                ap_update_child_status_from_conn(c->sbh, SERVER_BUSY_READ, c);
                 if (!h2_is_acceptable_connection(c, 1)) {
-                    h2_session_shutdown(session, NGHTTP2_INADEQUATE_SECURITY, NULL);
+                    update_child_status(session, SERVER_BUSY_READ, "inadequate security");
+                    h2_session_shutdown(session, NGHTTP2_INADEQUATE_SECURITY, NULL, 1);
                 } 
                 else {
-                    ap_update_child_status(c->sbh, SERVER_BUSY_READ, NULL);
+                    update_child_status(session, SERVER_BUSY_READ, "init");
                     status = h2_session_start(session, &rv);
-                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
+                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c, APLOGNO(03079)
                                   "h2_session(%ld): started on %s:%d", session->id,
                                   session->s->server_hostname,
                                   c->local_addr->port);
@@ -2018,33 +2102,92 @@ apr_status_t h2_session_process(h2_session *session, int async)
                 break;
                 
             case H2_SESSION_ST_IDLE:
-                h2_filter_cin_timeout_set(session->cin, h2_stream_set_is_empty(session->streams)?
-                                          session->s->keep_alive_timeout : session->s->timeout);
-                status = h2_session_read(session, 1, 10);
-                if (status == APR_SUCCESS) {
-                    have_read = 1;
-                    dispatch_event(session, H2_SESSION_EV_DATA_READ, 0, NULL);
-                }
-                else if (status == APR_EAGAIN) {
-                    /* nothing to read */
-                }
-                else if (APR_STATUS_IS_TIMEUP(status)) {
-                    dispatch_event(session, H2_SESSION_EV_CONN_TIMEOUT, 0, "timeout");
+                no_streams = h2_ihash_is_empty(session->streams);
+                update_child_status(session, (no_streams? SERVER_BUSY_KEEPALIVE
+                                              : SERVER_BUSY_READ), "idle");
+                /* make certain, the client receives everything before we idle */
+                if (!session->keep_sync_until 
+                    && async && no_streams && !session->r && session->remote.emitted_count) {
+                    ap_log_cerror( APLOG_MARK, APLOG_TRACE1, status, c,
+                                  "h2_session(%ld): async idle, nonblock read", session->id);
+                    /* We do not return to the async mpm immediately, since under
+                     * load, mpms show the tendency to throw keep_alive connections
+                     * away very rapidly.
+                     * So, if we are still processing streams, we wait for the
+                     * normal timeout first and, on timeout, close.
+                     * If we have no streams, we still wait a short amount of
+                     * time here for the next frame to arrive, before handing
+                     * it to keep_alive processing of the mpm.
+                     */
+                    status = h2_session_read(session, 0);
+                    
+                    if (status == APR_SUCCESS) {
+                        have_read = 1;
+                        dispatch_event(session, H2_SESSION_EV_DATA_READ, 0, NULL);
+                    }
+                    else if (APR_STATUS_IS_EAGAIN(status) || APR_STATUS_IS_TIMEUP(status)) {
+                        if (apr_time_now() > session->idle_until) {
+                            dispatch_event(session, H2_SESSION_EV_CONN_TIMEOUT, 0, NULL);
+                        }
+                        else {
+                            status = APR_EAGAIN;
+                            goto out;
+                        }
+                    }
+                    else {
+                        ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, c,
+                                      "h2_session(%ld): idle, no data, error", 
+                                      session->id);
+                        dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, "timeout");
+                    }
                 }
                 else {
-                    dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
+                    /* We wait in smaller increments, using a 1 second timeout.
+                     * That gives us the chance to check for MPMQ_STOPPING often. 
+                     */
+                    status = h2_mplx_idle(session->mplx);
+                    if (status != APR_SUCCESS) {
+                        dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 
+                                       H2_ERR_ENHANCE_YOUR_CALM, "less is more");
+                    }
+                    h2_filter_cin_timeout_set(session->cin, apr_time_from_sec(1));
+                    status = h2_session_read(session, 1);
+                    if (status == APR_SUCCESS) {
+                        have_read = 1;
+                        dispatch_event(session, H2_SESSION_EV_DATA_READ, 0, NULL);
+                    }
+                    else if (status == APR_EAGAIN) {
+                        /* nothing to read */
+                    }
+                    else if (APR_STATUS_IS_TIMEUP(status)) {
+                        apr_time_t now = apr_time_now();
+                        if (now > session->keep_sync_until) {
+                            /* if we are on an async mpm, now is the time that
+                             * we may dare to pass control to it. */
+                            session->keep_sync_until = 0;
+                        }
+                        if (now > session->idle_until) {
+                            dispatch_event(session, H2_SESSION_EV_CONN_TIMEOUT, 0, "timeout");
+                        }
+                        /* continue reading handling */
+                    }
+                    else {
+                        dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, "error");
+                    }
                 }
+                
                 break;
                 
             case H2_SESSION_ST_BUSY:
             case H2_SESSION_ST_LOCAL_SHUTDOWN:
             case H2_SESSION_ST_REMOTE_SHUTDOWN:
                 if (nghttp2_session_want_read(session->ngh2)) {
-                    ap_update_child_status(c->sbh, SERVER_BUSY_READ, NULL);
+                    ap_update_child_status(session->c->sbh, SERVER_BUSY_READ, NULL);
                     h2_filter_cin_timeout_set(session->cin, session->s->timeout);
-                    status = h2_session_read(session, 0, 10);
+                    status = h2_session_read(session, 0);
                     if (status == APR_SUCCESS) {
                         have_read = 1;
+                        update_child_status(session, SERVER_BUSY_READ, "busy");
                         dispatch_event(session, H2_SESSION_EV_DATA_READ, 0, NULL);
                     }
                     else if (status == APR_EAGAIN) {
@@ -2059,7 +2202,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                     }
                 }
                 
-                if (!h2_stream_set_is_empty(session->streams)) {
+                if (!h2_ihash_is_empty(session->streams)) {
                     /* resume any streams for which data is available again */
                     h2_session_resume_streams_with_data(session);
                     /* Submit any responses/push_promises that are ready */
@@ -2082,6 +2225,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                 }
                 
                 if (nghttp2_session_want_write(session->ngh2)) {
+                    ap_update_child_status(session->c->sbh, SERVER_BUSY_WRITE, NULL);
                     status = h2_session_send(session);
                     if (status == APR_SUCCESS) {
                         have_written = 1;
@@ -2107,12 +2251,17 @@ apr_status_t h2_session_process(h2_session *session, int async)
                 if (session->wait_us <= 0) {
                     session->wait_us = 10;
                     session->start_wait = apr_time_now();
+                    if (h2_conn_io_flush(&session->io) != APR_SUCCESS) {
+                        dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
+                    }
+                    update_child_status(session, SERVER_BUSY_READ, "wait");
                 }
                 else if ((apr_time_now() - session->start_wait) >= session->s->timeout) {
                     /* waited long enough */
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, APR_TIMEUP, c,
                                   "h2_session: wait for data");
                     dispatch_event(session, H2_SESSION_EV_CONN_TIMEOUT, 0, "timeout");
+                    break;
                 }
                 else {
                     /* repeating, increase timer for graceful backoff */
@@ -2132,38 +2281,42 @@ apr_status_t h2_session_process(h2_session *session, int async)
                 }
                 else if (status == APR_TIMEUP) {
                     /* go back to checking all inputs again */
-                    transit(session, "wait cycle", H2_SESSION_ST_BUSY);
+                    transit(session, "wait cycle", session->local.accepting? 
+                            H2_SESSION_ST_BUSY : H2_SESSION_ST_LOCAL_SHUTDOWN);
                 }
                 else {
-                    h2_session_shutdown(session, H2_ERR_INTERNAL_ERROR, "cond wait error");
+                    ap_log_cerror(APLOG_MARK, APLOG_WARNING, status, c,
+                                  "h2_session(%ld): waiting on conditional",
+                                  session->id);
+                    h2_session_shutdown(session, H2_ERR_INTERNAL_ERROR, 
+                                        "cond wait error", 0);
                 }
                 break;
                 
             case H2_SESSION_ST_DONE:
+                update_child_status(session, SERVER_CLOSING, "done");
                 status = APR_EOF;
                 goto out;
                 
             default:
                 ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_EGENERAL, c,
+                              APLOGNO(03080)
                               "h2_session(%ld): unknown state %d", session->id, session->state);
                 dispatch_event(session, H2_SESSION_EV_PROTO_ERROR, 0, NULL);
                 break;
         }
 
-        if (have_written) {
-            h2_conn_io_flush(&session->io);
-        }
-        else if (!nghttp2_session_want_read(session->ngh2) 
+        if (!nghttp2_session_want_read(session->ngh2) 
                  && !nghttp2_session_want_write(session->ngh2)) {
             dispatch_event(session, H2_SESSION_EV_NGH2_DONE, 0, NULL); 
+        }
+        if (session->reprioritize) {
+            h2_mplx_reprioritize(session->mplx, stream_pri_cmp, session);
+            session->reprioritize = 0;
         }
     }
     
 out:
-    if (have_written) {
-        h2_conn_io_flush(&session->io);
-    }
-    
     ap_log_cerror( APLOG_MARK, APLOG_TRACE1, status, c,
                   "h2_session(%ld): [%s] process returns", 
                   session->id, state_name(session->state));
@@ -2179,10 +2332,17 @@ out:
     if (session->state == H2_SESSION_ST_DONE) {
         if (!session->eoc_written) {
             session->eoc_written = 1;
-            h2_conn_io_write_eoc(&session->io, 
-                                 h2_bucket_eoc_create(session->c->bucket_alloc, session));
+            h2_conn_io_write_eoc(&session->io, session);
         }
     }
     
     return status;
+}
+
+apr_status_t h2_session_pre_close(h2_session *session, int async)
+{
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c, 
+                  "h2_session(%ld): pre_close", session->id);
+    dispatch_event(session, H2_SESSION_EV_PRE_CLOSE, 0, "timeout");
+    return APR_SUCCESS;
 }

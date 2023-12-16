@@ -15,23 +15,21 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include <apr_pools.h>
 
-#include <httpd.h>
-#include <http_core.h>
-
-#include "h2_task_queue.h"
+#include "h2_int_queue.h"
 
 
-static void tq_grow(h2_task_queue *q, int nlen);
-static void tq_swap(h2_task_queue *q, int i, int j);
-static int tq_bubble_up(h2_task_queue *q, int i, int top, 
-                        h2_tq_cmp *cmp, void *ctx);
-static int tq_bubble_down(h2_task_queue *q, int i, int bottom, 
-                          h2_tq_cmp *cmp, void *ctx);
+static void tq_grow(h2_int_queue *q, int nlen);
+static void tq_swap(h2_int_queue *q, int i, int j);
+static int tq_bubble_up(h2_int_queue *q, int i, int top, 
+                        h2_iq_cmp *cmp, void *ctx);
+static int tq_bubble_down(h2_int_queue *q, int i, int bottom, 
+                          h2_iq_cmp *cmp, void *ctx);
 
-h2_task_queue *h2_tq_create(apr_pool_t *pool, int capacity)
+h2_int_queue *h2_iq_create(apr_pool_t *pool, int capacity)
 {
-    h2_task_queue *q = apr_pcalloc(pool, sizeof(h2_task_queue));
+    h2_int_queue *q = apr_pcalloc(pool, sizeof(h2_int_queue));
     if (q) {
         q->pool = pool;
         tq_grow(q, capacity);
@@ -40,12 +38,18 @@ h2_task_queue *h2_tq_create(apr_pool_t *pool, int capacity)
     return q;
 }
 
-int h2_tq_empty(h2_task_queue *q)
+int h2_iq_empty(h2_int_queue *q)
 {
     return q->nelts == 0;
 }
 
-void h2_tq_add(h2_task_queue *q, int sid, h2_tq_cmp *cmp, void *ctx)
+int h2_iq_size(h2_int_queue *q)
+{
+    return q->nelts;
+}
+
+
+void h2_iq_add(h2_int_queue *q, int sid, h2_iq_cmp *cmp, void *ctx)
 {
     int i;
     
@@ -57,11 +61,13 @@ void h2_tq_add(h2_task_queue *q, int sid, h2_tq_cmp *cmp, void *ctx)
     q->elts[i] = sid;
     ++q->nelts;
     
-    /* bubble it to the front of the queue */
-    tq_bubble_up(q, i, q->head, cmp, ctx);
+    if (cmp) {
+        /* bubble it to the front of the queue */
+        tq_bubble_up(q, i, q->head, cmp, ctx);
+    }
 }
 
-int h2_tq_remove(h2_task_queue *q, int sid)
+int h2_iq_remove(h2_int_queue *q, int sid)
 {
     int i;
     for (i = 0; i < q->nelts; ++i) {
@@ -81,7 +87,12 @@ int h2_tq_remove(h2_task_queue *q, int sid)
     return 0;
 }
 
-void h2_tq_sort(h2_task_queue *q, h2_tq_cmp *cmp, void *ctx)
+void h2_iq_clear(h2_int_queue *q)
+{
+    q->nelts = 0;
+}
+
+void h2_iq_sort(h2_int_queue *q, h2_iq_cmp *cmp, void *ctx)
 {
     /* Assume that changes in ordering are minimal. This needs,
      * best case, q->nelts - 1 comparisions to check that nothing
@@ -109,7 +120,7 @@ void h2_tq_sort(h2_task_queue *q, h2_tq_cmp *cmp, void *ctx)
 }
 
 
-int h2_tq_shift(h2_task_queue *q)
+int h2_iq_shift(h2_int_queue *q)
 {
     int sid;
     
@@ -124,9 +135,8 @@ int h2_tq_shift(h2_task_queue *q)
     return sid;
 }
 
-static void tq_grow(h2_task_queue *q, int nlen)
+static void tq_grow(h2_int_queue *q, int nlen)
 {
-    AP_DEBUG_ASSERT(q->nalloc <= nlen);
     if (nlen > q->nalloc) {
         int *nq = apr_pcalloc(q->pool, sizeof(int) * nlen);
         if (q->nelts > 0) {
@@ -145,15 +155,15 @@ static void tq_grow(h2_task_queue *q, int nlen)
     }
 }
 
-static void tq_swap(h2_task_queue *q, int i, int j)
+static void tq_swap(h2_int_queue *q, int i, int j)
 {
     int x = q->elts[i];
     q->elts[i] = q->elts[j];
     q->elts[j] = x;
 }
 
-static int tq_bubble_up(h2_task_queue *q, int i, int top, 
-                        h2_tq_cmp *cmp, void *ctx) 
+static int tq_bubble_up(h2_int_queue *q, int i, int top, 
+                        h2_iq_cmp *cmp, void *ctx) 
 {
     int prev;
     while (((prev = (q->nalloc + i - 1) % q->nalloc), i != top) 
@@ -164,8 +174,8 @@ static int tq_bubble_up(h2_task_queue *q, int i, int top,
     return i;
 }
 
-static int tq_bubble_down(h2_task_queue *q, int i, int bottom, 
-                          h2_tq_cmp *cmp, void *ctx)
+static int tq_bubble_down(h2_int_queue *q, int i, int bottom, 
+                          h2_iq_cmp *cmp, void *ctx)
 {
     int next;
     while (((next = (q->nalloc + i + 1) % q->nalloc), i != bottom) 

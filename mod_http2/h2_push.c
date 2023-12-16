@@ -289,14 +289,36 @@ static int set_push_header(void *ctx, const char *key, const char *value)
     return 1;
 }
 
+static int has_param(link_ctx *ctx, const char *param)
+{
+    const char *p = apr_table_get(ctx->params, param);
+    return !!p;
+}
+
+static int has_relation(link_ctx *ctx, const char *rel)
+{
+    const char *s, *val = apr_table_get(ctx->params, "rel");
+    if (val) {
+        if (!strcmp(rel, val)) {
+            return 1;
+        }
+        s = ap_strstr_c(val, rel);
+        if (s && (s == val || s[-1] == ' ')) {
+            s += strlen(rel);
+            if (!*s || *s == ' ') {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
 
 static int add_push(link_ctx *ctx)
 {
     /* so, we have read a Link header and need to decide
      * if we transform it into a push.
      */
-    const char *rel = apr_table_get(ctx->params, "rel");
-    if (rel && !strcmp("preload", rel)) {
+    if (has_relation(ctx, "preload") && !has_param(ctx, "nopush")) {
         apr_uri_t uri;
         if (apr_uri_parse(ctx->pool, ctx->link, &uri) == APR_SUCCESS) {
             if (uri.path && same_authority(ctx->req, &uri)) {
@@ -313,9 +335,7 @@ static int add_push(link_ctx *ctx)
                  * TLS (if any) parameters.
                  */
                 path = apr_uri_unparse(ctx->pool, &uri, APR_URI_UNP_OMITSITEPART);
-                
                 push = apr_pcalloc(ctx->pool, sizeof(*push));
-                
                 switch (ctx->req->push_policy) {
                     case H2_PUSH_HEAD:
                         method = "HEAD";
@@ -326,10 +346,9 @@ static int add_push(link_ctx *ctx)
                 }
                 headers = apr_table_make(ctx->pool, 5);
                 apr_table_do(set_push_header, headers, ctx->req->headers, NULL);
-                req = h2_request_createn(0, ctx->pool, ctx->req->config, 
-                                         method, ctx->req->scheme,
-                                         ctx->req->authority, 
-                                         path, headers);
+                req = h2_request_createn(0, ctx->pool, method, ctx->req->scheme,
+                                         ctx->req->authority, path, headers,
+                                         ctx->req->serialize);
                 /* atm, we do not push on pushes */
                 h2_request_end_headers(req, ctx->pool, 1, 0);
                 push->req = req;
@@ -437,38 +456,30 @@ apr_array_header_t *h2_push_collect(apr_pool_t *p, const h2_request *req,
     return NULL;
 }
 
-void h2_push_policy_determine(struct h2_request *req, apr_pool_t *p, int push_enabled)
-{
-    h2_push_policy policy = H2_PUSH_NONE;
-    if (push_enabled) {
-        const char *val = apr_table_get(req->headers, "accept-push-policy");
-        if (val) {
-            if (ap_find_token(p, val, "fast-load")) {
-                policy = H2_PUSH_FAST_LOAD;
-            }
-            else if (ap_find_token(p, val, "head")) {
-                policy = H2_PUSH_HEAD;
-            }
-            else if (ap_find_token(p, val, "default")) {
-                policy = H2_PUSH_DEFAULT;
-            }
-            else if (ap_find_token(p, val, "none")) {
-                policy = H2_PUSH_NONE;
-            }
-            else {
-                /* nothing known found in this header, go by default */
-                policy = H2_PUSH_DEFAULT;
-            }
-        }
-        else {
-            policy = H2_PUSH_DEFAULT;
-        }
-    }
-    req->push_policy = policy;
-}
-
 /*******************************************************************************
  * push diary 
+ *
+ * - The push diary keeps track of resources already PUSHed via HTTP/2 on this
+ *   connection. It records a hash value from the absolute URL of the resource
+ *   pushed.
+ * - Lacking openssl, it uses 'apr_hashfunc_default' for the value
+ * - with openssl, it uses SHA256 to calculate the hash value
+ * - whatever the method to generate the hash, the diary keeps a maximum of 64
+ *   bits per hash, limiting the memory consumption to about 
+ *      H2PushDiarySize * 8 
+ *   bytes. Entries are sorted by most recently used and oldest entries are
+ *   forgotten first.
+ * - Clients can initialize/replace the push diary by sending a 'Cache-Digest'
+ *   header. Currently, this is the base64url encoded value of the cache digest
+ *   as specified in https://datatracker.ietf.org/doc/draft-kazuho-h2-cache-digest/
+ *   This draft can be expected to evolve and the definition of the header
+ *   will be added there and refined.
+ * - The cache digest header is a Golomb Coded Set of hash values, but it may
+ *   limit the amount of bits per hash value even further. For a good description
+ *   of GCS, read here:
+ *      http://giovanni.bajo.it/post/47119962313/golomb-coded-sets-smaller-than-bloom-filters
+ * - The means that the push diary might be initialized with hash values of much
+ *   less than 64 bits, leading to more false positives, but smaller digest size.
  ******************************************************************************/
  
  
@@ -627,6 +638,7 @@ static void h2_push_diary_append(h2_push_diary *diary, h2_push_diary_entry *e)
         ne = move_to_last(diary, 0);
         *ne = *e;
     }
+    /* Intentional no APLOGNO */
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, diary->entries->pool,
                   "push_diary_append: %"APR_UINT64_T_HEX_FMT, ne->hash);
 }
@@ -647,11 +659,13 @@ apr_array_header_t *h2_push_diary_update(h2_session *session, apr_array_header_t
             session->push_diary->dcalc(session->push_diary, &e.hash, push);
             idx = h2_push_diary_find(session->push_diary, e.hash);
             if (idx >= 0) {
+                /* Intentional no APLOGNO */
                 ap_log_cerror(APLOG_MARK, GCSLOG_LEVEL, 0, session->c,
                               "push_diary_update: already there PUSH %s", push->req->path);
                 move_to_last(session->push_diary, idx);
             }
             else {
+                /* Intentional no APLOGNO */
                 ap_log_cerror(APLOG_MARK, GCSLOG_LEVEL, 0, session->c,
                               "push_diary_update: adding PUSH %s", push->req->path);
                 if (!npushes) {
@@ -679,42 +693,13 @@ apr_array_header_t *h2_push_collect_update(h2_stream *stream,
                                             cache_digest, stream->pool);
         if (status != APR_SUCCESS) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+                          APLOGNO(03057)
                           "h2_session(%ld): push diary set from Cache-Digest: %s", 
                           session->id, cache_digest);
         }
     }
     pushes = h2_push_collect(stream->pool, req, res);
     return h2_push_diary_update(stream->session, pushes);
-}
-
-/* h2_log2(n) iff n is a power of 2 */
-static unsigned char h2_log2(apr_uint32_t n)
-{
-    int lz = 0;
-    if (!n) {
-        return 0;
-    }
-    if (!(n & 0xffff0000u)) {
-        lz += 16;
-        n = (n << 16);
-    }
-    if (!(n & 0xff000000u)) {
-        lz += 8;
-        n = (n << 8);
-    }
-    if (!(n & 0xf0000000u)) {
-        lz += 4;
-        n = (n << 4);
-    }
-    if (!(n & 0xc0000000u)) {
-        lz += 2;
-        n = (n << 2);
-    }
-    if (!(n & 0x80000000u)) {
-        lz += 1;
-    }
-    
-    return 31 - lz;
 }
 
 static apr_int32_t h2_log2inv(unsigned char log2)
@@ -790,10 +775,11 @@ static apr_status_t gset_encode_next(gset_encoder *encoder, apr_uint64_t pval)
     delta = pval - encoder->last;
     encoder->last = pval;
     flex_bits = (delta >> encoder->fixed_bits);
+    /* Intentional no APLOGNO */
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, encoder->pool,
                   "h2_push_diary_enc: val=%"APR_UINT64_T_HEX_FMT", delta=%"
                   APR_UINT64_T_HEX_FMT" flex_bits=%"APR_UINT64_T_FMT", "
-                  "fixed_bits=%d, fixed_val=%"APR_UINT64_T_HEX_FMT, 
+                  ", fixed_bits=%d, fixed_val=%"APR_UINT64_T_HEX_FMT, 
                   pval, delta, flex_bits, encoder->fixed_bits, delta&encoder->fixed_mask);
     for (; flex_bits != 0; --flex_bits) {
         status = gset_encode_bit(encoder, 1);
@@ -868,6 +854,7 @@ apr_status_t h2_push_diary_digest_get(h2_push_diary *diary, apr_pool_t *pool,
     encoder.bit = 8;
     encoder.last = 0;
     
+    /* Intentional no APLOGNO */
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, pool,
                   "h2_push_diary_digest_get: %d entries, N=%d, log2n=%d, "
                   "mask_bits=%d, enc.mask_bits=%d, delta_bits=%d, enc.log2p=%d, authority=%s", 
@@ -890,6 +877,7 @@ apr_status_t h2_push_diary_digest_get(h2_push_diary *diary, apr_pool_t *pool,
                 gset_encode_next(&encoder, hashes[i]);
             }
         }
+        /* Intentional no APLOGNO */
         ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, pool,
                       "h2_push_diary_digest_get: golomb compressed hashes, %d bytes",
                       (int)encoder.offset + 1);
@@ -954,6 +942,7 @@ static apr_status_t gset_decode_next(gset_decoder *decoder, apr_uint64_t *phash)
     *phash = delta + decoder->last_val;
     decoder->last_val = *phash;
     
+    /* Intentional no APLOGNO */
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, decoder->pool,
                   "h2_push_diary_digest_dec: val=%"APR_UINT64_T_HEX_FMT", delta=%"
                   APR_UINT64_T_HEX_FMT", flex=%d, fixed=%"APR_UINT64_T_HEX_FMT, 
@@ -1028,6 +1017,7 @@ apr_status_t h2_push_diary_digest_set(h2_push_diary *diary, const char *authorit
         diary->N = diary->NMax;
     }
     
+    /* Intentional no APLOGNO */
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, pool,
                   "h2_push_diary_digest_set: N=%d, log2n=%d, "
                   "diary->mask_bits=%d, dec.log2p=%d", 
@@ -1042,6 +1032,7 @@ apr_status_t h2_push_diary_digest_set(h2_push_diary *diary, const char *authorit
         h2_push_diary_append(diary, &e);
     }
     
+    /* Intentional no APLOGNO */
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, pool,
                   "h2_push_diary_digest_set: diary now with %d entries, mask_bits=%d", 
                   (int)diary->entries->nelts, diary->mask_bits);
@@ -1053,6 +1044,7 @@ apr_status_t h2_push_diary_digest64_set(h2_push_diary *diary, const char *author
 {
     const char *data;
     apr_size_t len = h2_util_base64url_decode(&data, data64url, pool);
+    /* Intentional no APLOGNO */
     ap_log_perror(APLOG_MARK, GCSLOG_LEVEL, 0, pool,
                   "h2_push_diary_digest64_set: digest=%s, dlen=%d", 
                   data64url, (int)len);

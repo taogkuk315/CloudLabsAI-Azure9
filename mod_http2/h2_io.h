@@ -20,6 +20,7 @@ struct h2_response;
 struct apr_thread_cond_t;
 struct h2_mplx;
 struct h2_request;
+struct h2_task;
 
 
 typedef apr_status_t h2_io_data_cb(void *ctx, const char *data, apr_off_t len);
@@ -30,37 +31,44 @@ typedef enum {
     H2_IO_READ,
     H2_IO_WRITE,
     H2_IO_ANY,
-}
-h2_io_op;
+} h2_io_op;
 
 typedef struct h2_io h2_io;
 
 struct h2_io {
     int id;                          /* stream identifier */
-    apr_pool_t *pool;                /* stream pool */
+     apr_pool_t *pool;                /* stream pool */
     apr_bucket_alloc_t *bucket_alloc;
     
     const struct h2_request *request;/* request on this io */
     struct h2_response *response;    /* response to request */
     int rst_error;                   /* h2 related stream abort error */
 
+    apr_bucket *eor;                 /* the EOR bucket, set aside */
+    struct h2_task *task;            /* the task once started */
+    
     apr_bucket_brigade *bbin;        /* input data for stream */
     apr_bucket_brigade *bbout;       /* output data from stream */
-    apr_bucket_brigade *tmp;         /* temporary data for chunking */
+    apr_bucket_brigade *bbtmp;       /* temporary data for chunking */
 
     unsigned int orphaned       : 1; /* h2_stream is gone for this io */    
     unsigned int worker_started : 1; /* h2_worker started processing for this io */
     unsigned int worker_done    : 1; /* h2_worker finished for this io */
+    unsigned int submitted      : 1; /* response has been submitted to client */
     unsigned int request_body   : 1; /* iff request has body */
     unsigned int eos_in         : 1; /* input eos has been seen */
     unsigned int eos_in_written : 1; /* input eos has been forwarded */
-    unsigned int eos_out        : 1; /* output eos has been seen */
+    unsigned int eos_out        : 1; /* output eos is present */
+    unsigned int eos_out_read   : 1; /* output eos has been forwarded */
     
     h2_io_op timed_op;               /* which operation is waited on, if any */
     struct apr_thread_cond_t *timed_cond; /* condition to wait on, maybe NULL */
     apr_time_t timeout_at;           /* when IO wait will time out */
     
+    apr_time_t started_at;           /* when processing started */
+    apr_time_t done_at;              /* when processing was done */
     apr_size_t input_consumed;       /* how many bytes have been read */
+    apr_size_t output_consumed;      /* how many bytes have been written out */
         
     int files_handles_owned;
 };
@@ -72,12 +80,9 @@ struct h2_io {
 /**
  * Creates a new h2_io for the given stream id. 
  */
-h2_io *h2_io_create(int id, apr_pool_t *pool);
-
-/**
- * Frees any resources hold by the h2_io instance. 
- */
-void h2_io_destroy(h2_io *io);
+h2_io *h2_io_create(int id, apr_pool_t *pool, 
+                    apr_bucket_alloc_t *bucket_alloc, 
+                    const struct h2_request *request);
 
 /**
  * Set the response of this stream.
@@ -89,11 +94,9 @@ void h2_io_set_response(h2_io *io, struct h2_response *response);
  */
 void h2_io_rst(h2_io *io, int error);
 
-/**
- * The input data is completely queued. Blocked reads will return immediately
- * and give either data or EOF.
- */
-int h2_io_in_has_eos_for(h2_io *io);
+int h2_io_is_repeatable(h2_io *io);
+void h2_io_redo(h2_io *io);
+
 /**
  * Output data is available.
  */
@@ -120,7 +123,7 @@ apr_status_t h2_io_in_read(h2_io *io, apr_bucket_brigade *bb,
 /**
  * Appends given bucket to the input.
  */
-apr_status_t h2_io_in_write(h2_io *io, apr_bucket_brigade *bb);
+apr_status_t h2_io_in_write(h2_io *io, const char *d, apr_size_t len, int eos);
 
 /**
  * Closes the input. After existing data has been read, APR_EOF will
@@ -148,23 +151,19 @@ apr_status_t h2_io_in_shutdown(h2_io *io);
  * @param plen the requested max len, set to amount of data on return
  * @param peos != 0 iff the end of stream has been reached
  */
-apr_status_t h2_io_out_readx(h2_io *io,  
-                             h2_io_data_cb *cb, void *ctx, 
-                             apr_off_t *plen, int *peos);
-
-apr_status_t h2_io_out_read_to(h2_io *io, 
-                               apr_bucket_brigade *bb, 
-                               apr_off_t *plen, int *peos);
+apr_status_t h2_io_out_get_brigade(h2_io *io, 
+                                   apr_bucket_brigade *bb, 
+                                   apr_off_t len);
 
 apr_status_t h2_io_out_write(h2_io *io, apr_bucket_brigade *bb, 
-                             apr_size_t maxlen, apr_table_t *trailers,
+                             apr_size_t maxlen, 
                              apr_size_t *pfile_buckets_allowed);
 
 /**
  * Closes the input. After existing data has been read, APR_EOF will
  * be returned.
  */
-apr_status_t h2_io_out_close(h2_io *io, apr_table_t *trailers);
+apr_status_t h2_io_out_close(h2_io *io);
 
 /**
  * Gives the overall length of the data that is currently queued for

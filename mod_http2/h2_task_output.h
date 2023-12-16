@@ -26,32 +26,25 @@ struct h2_mplx;
 struct h2_task;
 struct h2_from_h1;
 
-typedef enum {
-    H2_TASK_OUT_INIT,
-    H2_TASK_OUT_STARTED,
-    H2_TASK_OUT_DONE,
-} h2_task_output_state_t;
-
 typedef struct h2_task_output h2_task_output;
 
 struct h2_task_output {
-    conn_rec *c;
     struct h2_task *task;
-    h2_task_output_state_t state;
     struct h2_from_h1 *from_h1;
-    unsigned int trailers_passed : 1;
+    
+    unsigned int response_open : 1;
+
+    apr_off_t written;
+    apr_bucket_brigade *bb;
 };
 
 h2_task_output *h2_task_output_create(struct h2_task *task, conn_rec *c);
-
-void h2_task_output_destroy(h2_task_output *output);
 
 apr_status_t h2_task_output_write(h2_task_output *output,
                                   ap_filter_t* filter,
                                   apr_bucket_brigade* brigade);
 
-void h2_task_output_close(h2_task_output *output);
-
-int h2_task_output_has_started(h2_task_output *output);
+apr_status_t h2_task_output_freeze(h2_task_output *output);
+apr_status_t h2_task_output_thaw(h2_task_output *output);
 
 #endif /* defined(__mod_h2__h2_task_output__) */
