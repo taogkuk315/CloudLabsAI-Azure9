@@ -1,3 +1,10 @@
+v1.4.7
+-------------------------------------------------------------------------------- 
+ * disabling file mmap handling as this leads to segmentation faults when files
+   are truncates while being streamed out. 
+ * Some additional trace1 logging when connections give unexpected errors, e.g.
+   clients close connection without final GOAWAY frame. 
+ 
 v1.4.6 (as released in Apache httpd 2.4.20)
 -------------------------------------------------------------------------------- 
  * incrementing keepalives on each request started so that logging %k gives 
