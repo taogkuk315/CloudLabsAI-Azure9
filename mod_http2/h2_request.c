@@ -235,7 +235,8 @@ apr_status_t h2_request_end_headers(h2_request *req, apr_pool_t *pool,
     const char *s;
     
     if (req->eoh) {
-        return APR_EINVAL;
+        /* already done */
+        return APR_SUCCESS;
     }
 
     /* rfc7540, ch. 8.1.2.3:
@@ -337,59 +338,39 @@ apr_status_t h2_request_add_trailer(h2_request *req, apr_pool_t *pool,
     return add_h1_trailer(req, pool, name, nlen, value, vlen);
 }
 
-#define OPT_COPY(p, s)  ((s)? apr_pstrdup(p, s) : NULL)
-
-void h2_request_copy(apr_pool_t *p, h2_request *dst, const h2_request *src)
-{
-    /* keep the dst id */
-    dst->initiated_on   = src->initiated_on;
-    dst->method         = OPT_COPY(p, src->method);
-    dst->scheme         = OPT_COPY(p, src->scheme);
-    dst->authority      = OPT_COPY(p, src->authority);
-    dst->path           = OPT_COPY(p, src->path);
-    dst->headers        = apr_table_clone(p, src->headers);
-    if (src->trailers) {
-        dst->trailers   = apr_table_clone(p, src->trailers);
-    }
-    else {
-        dst->trailers   = NULL;
-    }
-    dst->content_length = src->content_length;
-    dst->chunked        = src->chunked;
-    dst->eoh            = src->eoh;
-    dst->body           = src->body;
-    dst->serialize      = src->serialize;
-    dst->push_policy    = src->push_policy;
-}
-
 h2_request *h2_request_clone(apr_pool_t *p, const h2_request *src)
 {
-    h2_request *nreq = apr_pcalloc(p, sizeof(*nreq));
-    memcpy(nreq, src, sizeof(*nreq));
-    h2_request_copy(p, nreq, src);
-    return nreq;
+    h2_request *dst = apr_pmemdup(p, src, sizeof(*dst));
+    dst->method       = apr_pstrdup(p, src->method);
+    dst->scheme       = apr_pstrdup(p, src->scheme);
+    dst->authority    = apr_pstrdup(p, src->authority);
+    dst->path         = apr_pstrdup(p, src->path);
+    dst->headers      = apr_table_clone(p, src->headers);
+    if (src->trailers) {
+        dst->trailers = apr_table_clone(p, src->trailers);
+    }
+    return dst;
 }
 
-request_rec *h2_request_create_rec(const h2_request *req, conn_rec *conn)
+static request_rec *create_request(conn_rec *c, apr_table_t *headers) 
 {
     request_rec *r;
     apr_pool_t *p;
-    int access_status = HTTP_OK;    
-    
-    apr_pool_create(&p, conn->pool);
+
+    apr_pool_create(&p, c->pool);
     apr_pool_tag(p, "request");
     r = apr_pcalloc(p, sizeof(request_rec));
     AP_READ_REQUEST_ENTRY((intptr_t)r, (uintptr_t)conn);
     r->pool            = p;
-    r->connection      = conn;
-    r->server          = conn->base_server;
+    r->connection      = c;
+    r->server          = c->base_server;
     
     r->user            = NULL;
     r->ap_auth_type    = NULL;
     
     r->allowed_methods = ap_make_method_list(p, 2);
     
-    r->headers_in      = apr_table_clone(r->pool, req->headers);
+    r->headers_in      = apr_table_clone(r->pool, headers);
     r->trailers_in     = apr_table_make(r->pool, 5);
     r->subprocess_env  = apr_table_make(r->pool, 25);
     r->headers_out     = apr_table_make(r->pool, 12);
@@ -400,9 +381,9 @@ request_rec *h2_request_create_rec(const h2_request *req, conn_rec *conn)
     r->request_config  = ap_create_request_config(r->pool);
     /* Must be set before we run create request hook */
     
-    r->proto_output_filters = conn->output_filters;
+    r->proto_output_filters = c->output_filters;
     r->output_filters  = r->proto_output_filters;
-    r->proto_input_filters = conn->input_filters;
+    r->proto_input_filters = c->input_filters;
     r->input_filters   = r->proto_input_filters;
     ap_run_create_request(r);
     r->per_dir_config  = r->server->lookup_defaults;
@@ -421,10 +402,18 @@ request_rec *h2_request_create_rec(const h2_request *req, conn_rec *conn)
      */
     r->used_path_info = AP_REQ_DEFAULT_PATH_INFO;
     
-    r->useragent_addr = conn->client_addr;
-    r->useragent_ip = conn->client_ip;
+    r->useragent_addr = c->client_addr;
+    r->useragent_ip = c->client_ip;
+    return r;
+}
+
+request_rec *h2_request_create_rec(const h2_request *req, conn_rec *c)
+{
+    int access_status = HTTP_OK;    
     
-    ap_run_pre_read_request(r, conn);
+    request_rec *r = create_request(c, req->headers);
+
+    ap_run_pre_read_request(r, c);
     
     /* Time to populate r with the data we have. */
     r->request_time = req->request_time;
@@ -467,11 +456,11 @@ request_rec *h2_request_create_rec(const h2_request *req, conn_rec *conn)
         /* Request check post hooks failed. An example of this would be a
          * request for a vhost where h2 is disabled --> 421.
          */
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, conn, APLOGNO()
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(03367)
                       "h2_request(%d): access_status=%d, request_create failed",
                       req->id, access_status);
         ap_die(access_status, r);
-        ap_update_child_status(conn->sbh, SERVER_BUSY_LOG, r);
+        ap_update_child_status(c->sbh, SERVER_BUSY_LOG, r);
         ap_run_log_transaction(r);
         r = NULL;
         goto traceout;
