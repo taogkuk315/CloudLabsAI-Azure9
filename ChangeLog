@@ -1,3 +1,10 @@
+v1.5.0
+-------------------------------------------------------------------------------- 
+ * new "bucket beam" technology to transport buckets across threads without 
+   buffer copy. 
+ * delaying response start until flush or enough body data has been accumulated.
+ * all fixed up to and including 1.4.7
+     
 v1.4.7
 -------------------------------------------------------------------------------- 
  * disabling file mmap handling as this leads to segmentation faults when files
