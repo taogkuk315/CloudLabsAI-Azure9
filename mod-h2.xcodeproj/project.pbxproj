@@ -20,6 +20,10 @@
 		B25096C21CC4E66F002E8B04 /* h2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2.h; sourceTree = "<group>"; };
 		B25096C41CC4F132002E8B04 /* h2_bucket_beam.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_bucket_beam.c; sourceTree = "<group>"; };
 		B25096C51CC4F132002E8B04 /* h2_bucket_beam.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_bucket_beam.h; sourceTree = "<group>"; };
+		B25096C61CC65E27002E8B04 /* h2_proxy_session.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_proxy_session.c; sourceTree = "<group>"; };
+		B25096C71CC65E27002E8B04 /* h2_proxy_session.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_proxy_session.h; sourceTree = "<group>"; };
+		B25096C81CC65E27002E8B04 /* mod_proxy_http2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mod_proxy_http2.c; sourceTree = "<group>"; };
+		B25096C91CC65E27002E8B04 /* mod_proxy_http2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mod_proxy_http2.h; sourceTree = "<group>"; };
 		B25574691BEB6EFC0058F97B /* config.h.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = config.h.in; sourceTree = "<group>"; };
 		B255746A1BEB6EFC0058F97B /* h2_alt_svc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_alt_svc.c; sourceTree = "<group>"; };
 		B255746B1BEB6EFC0058F97B /* h2_alt_svc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_alt_svc.h; sourceTree = "<group>"; };
@@ -138,6 +142,8 @@
 				B25096C01CC4E66F002E8B04 /* h2_ngn_shed.c */,
 				B25096C11CC4E66F002E8B04 /* h2_ngn_shed.h */,
 				B25574821BEB6EFC0058F97B /* h2_private.h */,
+				B25096C61CC65E27002E8B04 /* h2_proxy_session.c */,
+				B25096C71CC65E27002E8B04 /* h2_proxy_session.h */,
 				B2AB9AB91C2ADBE100908DD6 /* h2_push.c */,
 				B2AB9ABA1C2ADBE100908DD6 /* h2_push.h */,
 				B25574831BEB6EFC0058F97B /* h2_request.c */,
@@ -167,6 +173,8 @@
 				B25574A41BEB6EFC0058F97B /* Makefile.am */,
 				B25574A71BEB6EFC0058F97B /* mod_http2.c */,
 				B2AB9ABC1C2ADBE100908DD6 /* mod_http2.h */,
+				B25096C81CC65E27002E8B04 /* mod_proxy_http2.c */,
+				B25096C91CC65E27002E8B04 /* mod_proxy_http2.h */,
 			);
 			path = mod_http2;
 			sourceTree = "<group>";

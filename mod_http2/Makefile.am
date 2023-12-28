@@ -16,10 +16,14 @@ SUBDIRS =
 
 ACLOCAL_AMFLAGS = -I m4
 
-lib_LTLIBRARIES    = mod_http2.la
+lib_LTLIBRARIES    = mod_http2.la \
+    mod_proxy_http2.la
 
 mod_http2_la_CPPFLAGS = -std=c99 -D_GNU_SOURCE -Werror
 mod_http2_la_LDFLAGS  = -module
+
+mod_proxy_http2_la_CPPFLAGS = -std=c99 -D_GNU_SOURCE -Werror
+mod_proxy_http2_la_LDFLAGS  = -module
 
 OBJECTS = \
     h2_alt_svc.c \
@@ -82,16 +86,32 @@ HFILES = \
     h2_workers.h \
     mod_http2.h
 
+PROXY_HFILES = \
+    h2.h \
+    h2_proxy_session.h \
+    h2_request.h \
+    h2_util.h \
+    mod_proxy_http2.h
+
+PROXY_OBJECTS = \
+    h2_proxy_session.c \
+    h2_request.c \
+    h2_util.c \
+    mod_proxy_http2.c
 
 mod_http2_la_SOURCES = $(HFILES) $(OBJECTS)
 
-all: mod_http2.la
+mod_proxy_http2_la_SOURCES = $(PROXY_HFILES) $(PROXY_OBJECTS)
+
+all: mod_http2.la \
+    mod_proxy_http2.la
 
 install-libLTLIBRARIES:
 	@: # override
 
-install-exec-local: mod_http2.la
+install-exec-local: mod_http2.la mod_proxy_http2.la
 	$(MKDIR_P) $(DESTDIR)/@LIBEXEC_DIR@
 	$(APXS) -i -S LIBEXECDIR=$(DESTDIR)/@LIBEXEC_DIR@ -n h2 mod_http2.la
+	$(APXS) -i -S LIBEXECDIR=$(DESTDIR)/@LIBEXEC_DIR@ -n h2 mod_proxy_http2.la
 
 

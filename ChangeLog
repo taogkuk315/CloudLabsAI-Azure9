@@ -1,5 +1,6 @@
 v1.5.0
 -------------------------------------------------------------------------------- 
+ * mod_proxy_http2 for backend HTTP/2 connections, currently cleartext only
  * new "bucket beam" technology to transport buckets across threads without 
    buffer copy. 
  * delaying response start until flush or enough body data has been accumulated.

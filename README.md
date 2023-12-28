@@ -3,10 +3,10 @@
 
 Copyright (C) 2015, 2016 greenbytes GmbH
 
-This repository contains the `mod_h[ttp]2` from Apache httpd as a standalone build. 
+This repository contains `mod_h[ttp]2` and `mod_proxy_h[ttp]2` from Apache httpd as a standalone build. 
 
 ##Status
-**An official Apache httpd module**, first released in 2.4.17. See [Apache downloads](https://httpd.apache.org/download.cgi) to get a released version.
+**`mod_h[ttp]2` is an official Apache httpd module**, first released in 2.4.17. See [Apache downloads](https://httpd.apache.org/download.cgi) to get a released version. `mod_proxy_h[ttp]2` is part of Apache httpd development, but has not been released yet.
 
 What you find here are **early experience versions** for people who like living on the edge and want to help me test not yet released changes.
 
@@ -38,6 +38,46 @@ If you do not have that or don't know how to get it, look at google, stackoverfl
 
 See ```ChangeLog``` for details.
 
+##`mod_proxy_http2`
+
+This module is part of the Apache httpd proxy architecture and functions similar to `mod_proxy_http` 
+and friends. To configure it, you need to use ```h2:``` or ```h2c:``` in the proxy URL. Example:
+(***Important***: against httpd 2.4.20, only ```h2c:``` connections will work!)
+```
+<Proxy "balancer://h2-local">
+    BalancerMember "h2://test.example.org:SUBST_PORT_HTTPS_SUBST"
+</Proxy>
+<Proxy "balancer://h2c-local">
+    BalancerMember "h2c://test.example.org:SUBST_PORT_HTTP_SUBST"
+</Proxy>
+
+<IfModule proxy_http2_module>
+    ProxyPass "/h2proxy" "balancer://h2-local"
+    ProxyPassReverse "/h2proxy" "balancer://h2-local"
+    ProxyPass "/h2cproxy" "balancer://h2c-local"
+    ProxyPassReverse "/h2cproxy" "balancer://h2c-local"
+</IfModule>
+```
+This will only work under the following conditions:
+* the backend speaks HTTP/2, the module will not fallback to HTTP/1.1
+* the backend supports HTTP/2 direct mode (see also ```H2Direct``` directive of ```mod_http2```)
+
+All other commond httpd ```proxy``` directives also apply.
+
+What it will ***not*** do and what is ***untested***:
+* fallback to HTTP/1.1
+* support TLS backend connections with Apache httpd 2.4.20 (some necessary changes for ALPN negotiation were not backported)
+* be very smart when the number of concurrent streams in the backend differs from the local settings
+* load balance between open connections dynamically
+* forward any HTTP/2 priority information
+* support HTTP/2 PUSH from the backend
+
+What it ***will*** do:
+* work with frontend HTTP/1.1 connections
+* reuse open HTTP/2 connections from the balancer
+* with a frontent HTTP/2 connection, all streams against the same backend will be handled in a single thread.
+
+
 ##Documenation
 There is the official [Apache documentation](https://httpd.apache.org/docs/2.4/en/mod/mod_http2.html) of the module, which you will not find here.
 
@@ -67,7 +107,7 @@ SPDY protocol. And without Tatsuhiro Tsujikawa excellent nghttp2 work, this
 would not have been possible.
 
 
-Münster, 18.04.2016,
+Münster, 19.04.2016,
 
 Stefan Eissing, greenbytes GmbH
 
