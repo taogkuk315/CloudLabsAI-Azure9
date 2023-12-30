@@ -62,7 +62,7 @@ This will only work under the following conditions:
 * the backend speaks HTTP/2, the module will not fallback to HTTP/1.1
 * the backend supports HTTP/2 direct mode (see also ```H2Direct``` directive of ```mod_http2```)
 
-All other commond httpd ```proxy``` directives also apply.
+All other common httpd ```proxy``` directives also apply.
 
 What it will ***not*** do and what is ***untested***:
 * fallback to HTTP/1.1
