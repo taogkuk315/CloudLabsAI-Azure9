@@ -103,7 +103,7 @@ static apr_bucket *h2_beam_bucket_create(h2_bucket_beam *beam,
     return h2_beam_bucket_make(b, beam, bred);
 }
 
-APU_DECLARE_DATA const apr_bucket_type_t h2_bucket_type_beam = {
+extern const apr_bucket_type_t h2_bucket_type_beam = {
     "BEAM", 5, APR_BUCKET_DATA,
     beam_bucket_destroy,
     beam_bucket_read,
