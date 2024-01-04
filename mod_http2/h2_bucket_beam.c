@@ -33,7 +33,7 @@ static void h2_beam_emitted(h2_bucket_beam *beam, apr_bucket *bred);
  * beam bucket with reference to beam and bucket it represents
  ******************************************************************************/
 
-extern const apr_bucket_type_t h2_bucket_type_beam;
+const apr_bucket_type_t h2_bucket_type_beam;
 
 #define H2_BUCKET_IS_BEAM(e)     (e->type == &h2_bucket_type_beam)
 
@@ -103,7 +103,7 @@ static apr_bucket *h2_beam_bucket_create(h2_bucket_beam *beam,
     return h2_beam_bucket_make(b, beam, bred);
 }
 
-extern const apr_bucket_type_t h2_bucket_type_beam = {
+const apr_bucket_type_t h2_bucket_type_beam = {
     "BEAM", 5, APR_BUCKET_DATA,
     beam_bucket_destroy,
     beam_bucket_read,
