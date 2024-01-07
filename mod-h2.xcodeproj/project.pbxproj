@@ -43,10 +43,6 @@
 		B25574791BEB6EFC0058F97B /* h2_from_h1.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_from_h1.h; sourceTree = "<group>"; };
 		B255747A1BEB6EFC0058F97B /* h2_h2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_h2.c; sourceTree = "<group>"; };
 		B255747B1BEB6EFC0058F97B /* h2_h2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_h2.h; sourceTree = "<group>"; };
-		B255747C1BEB6EFC0058F97B /* h2_io.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_io.c; sourceTree = "<group>"; };
-		B255747D1BEB6EFC0058F97B /* h2_io.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_io.h; sourceTree = "<group>"; };
-		B255747E1BEB6EFC0058F97B /* h2_io_set.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_io_set.c; sourceTree = "<group>"; };
-		B255747F1BEB6EFC0058F97B /* h2_io_set.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_io_set.h; sourceTree = "<group>"; };
 		B25574801BEB6EFC0058F97B /* h2_mplx.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_mplx.c; sourceTree = "<group>"; };
 		B25574811BEB6EFC0058F97B /* h2_mplx.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_mplx.h; sourceTree = "<group>"; };
 		B25574821BEB6EFC0058F97B /* h2_private.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_private.h; sourceTree = "<group>"; };
@@ -133,10 +129,6 @@
 				B25574791BEB6EFC0058F97B /* h2_from_h1.h */,
 				B255747A1BEB6EFC0058F97B /* h2_h2.c */,
 				B255747B1BEB6EFC0058F97B /* h2_h2.h */,
-				B255747E1BEB6EFC0058F97B /* h2_io_set.c */,
-				B255747F1BEB6EFC0058F97B /* h2_io_set.h */,
-				B255747C1BEB6EFC0058F97B /* h2_io.c */,
-				B255747D1BEB6EFC0058F97B /* h2_io.h */,
 				B25574801BEB6EFC0058F97B /* h2_mplx.c */,
 				B25574811BEB6EFC0058F97B /* h2_mplx.h */,
 				B25096C01CC4E66F002E8B04 /* h2_ngn_shed.c */,

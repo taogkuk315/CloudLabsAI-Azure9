@@ -28,6 +28,7 @@
 #include <scoreboard.h>
 
 #include "h2_private.h"
+#include "h2.h"
 #include "h2_bucket_eoc.h"
 #include "h2_bucket_eos.h"
 #include "h2_config.h"
@@ -311,8 +312,9 @@ static apr_status_t stream_release(h2_session *session,
                                    h2_stream *stream,
                                    uint32_t error_code) 
 {
+    conn_rec *c = session->c;
     if (!error_code) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "h2_stream(%ld-%d): handled, closing", 
                       session->id, (int)stream->id);
         if (H2_STREAM_CLIENT_INITIATED(stream->id)) {
@@ -322,7 +324,7 @@ static apr_status_t stream_release(h2_session *session,
         }
     }
     else {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03065)
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(03065)
                       "h2_stream(%ld-%d): closing with err=%d %s", 
                       session->id, (int)stream->id, (int)error_code,
                       h2_h2_err_description(error_code));
@@ -330,8 +332,7 @@ static apr_status_t stream_release(h2_session *session,
     }
     
     return h2_conn_io_writeb(&session->io,
-                             h2_bucket_eos_create(session->c->bucket_alloc, 
-                                                  stream));
+                             h2_bucket_eos_create(c->bucket_alloc, stream), 1);
 }
 
 static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
@@ -617,7 +618,7 @@ static int on_send_data_cb(nghttp2_session *ngh2,
         if (status == APR_SUCCESS && padlen) {
             b = apr_bucket_immortal_create(immortal_zeros, padlen, 
                                            session->c->bucket_alloc);
-            status = h2_conn_io_writeb(&session->io, b);
+            status = h2_conn_io_writeb(&session->io, b, 1);
         }
     }
     
@@ -1136,7 +1137,7 @@ static int resume_on_data(void *ctx, void *val)
 static int h2_session_resume_streams_with_data(h2_session *session)
 {
     AP_DEBUG_ASSERT(session);
-    if (!h2_ihash_is_empty(session->streams)
+    if (!h2_ihash_empty(session->streams)
         && session->mplx && !session->mplx->aborted) {
         resume_ctx ctx;
         
@@ -1519,11 +1520,7 @@ apr_status_t h2_session_stream_done(h2_session *session, h2_stream *stream)
     }
     
     h2_stream_cleanup(stream);
-    /* this may be called while the session has already freed
-     * some internal structures or even when the mplx is locked. */
-    if (session->mplx) {
-        h2_mplx_stream_done(session->mplx, stream_id, rst_error);
-    }
+    h2_mplx_stream_done(session->mplx, stream_id, rst_error);
     h2_stream_destroy(stream);
     
     if (pool) {
@@ -1884,7 +1881,7 @@ static void h2_session_ev_no_io(h2_session *session, int arg, const char *msg)
             if (h2_conn_io_flush(&session->io) != APR_SUCCESS) {
                 dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
             }
-            if (h2_ihash_is_empty(session->streams)) {
+            if (h2_ihash_empty(session->streams)) {
                 if (!is_accepting_streams(session)) {
                     /* We are no longer accepting new streams and have
                      * finished processing existing ones. Time to leave. */
@@ -2107,7 +2104,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                 break;
                 
             case H2_SESSION_ST_IDLE:
-                no_streams = h2_ihash_is_empty(session->streams);
+                no_streams = h2_ihash_empty(session->streams);
                 update_child_status(session, (no_streams? SERVER_BUSY_KEEPALIVE
                                               : SERVER_BUSY_READ), "idle");
                 /* make certain, the client receives everything before we idle */
@@ -2210,7 +2207,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                     }
                 }
                 
-                if (!h2_ihash_is_empty(session->streams)) {
+                if (!h2_ihash_empty(session->streams)) {
                     /* resume any streams for which data is available again */
                     h2_session_resume_streams_with_data(session);
                     /* Submit any responses/push_promises that are ready */

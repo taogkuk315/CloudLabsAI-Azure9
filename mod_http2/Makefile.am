@@ -37,8 +37,6 @@ OBJECTS = \
     h2_filter.c \
     h2_from_h1.c \
     h2_h2.c \
-    h2_io.c \
-    h2_io_set.c \
     h2_mplx.c \
     h2_ngn_shed.c \
     h2_push.c \
@@ -67,8 +65,6 @@ HFILES = \
     h2_filter.h \
     h2_from_h1.h \
     h2_h2.h \
-    h2_io.h \
-    h2_io_set.h \
     h2_mplx.h \
     h2_ngn_shed.h \
     h2_private.h \
