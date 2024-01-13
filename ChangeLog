@@ -1,3 +1,12 @@
+v1.5.2
+-------------------------------------------------------------------------------- 
+ * fixed connection shutdown deadlock on linux when client closed early
+ * beam shutdown does now wait on endpoint to finish using buckets in flight,
+   hopefully addressing crash issues completely 
+ * Since 1.5.1 the internal HTTP/2 protocol is reported as "HTTP/2.0" for
+   better compatibility and since CGI's SERVER_PROTOCOL seems to require this
+   format
+    
 v1.5.1
 -------------------------------------------------------------------------------- 
  * fixed segmentation fault when connections where aborted by client in new
