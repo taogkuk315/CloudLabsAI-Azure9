@@ -1,3 +1,14 @@
+v1.5.5
+-------------------------------------------------------------------------------- 
+ * Fix async write issue that sometimes led to selection of wrong timeout
+   vs. keepalive timeout selection for idle sessions.
+ * Checking LimitRequestLine, LimitRequestFields and 
+   LimitRequestFieldSize configurated values for incoming streams. Returning
+   HTTP status 431 for too long/many headers fields and 414 for a too long
+   pseudo header.
+ * Tracking conn_rec->current_thread on slave connections, so
+   that mod_lua finds the correct one. Fixes PR 59542.
+
 v1.5.3
 -------------------------------------------------------------------------------- 
  * slave connections have conn_rec->aborted flag set when a stream

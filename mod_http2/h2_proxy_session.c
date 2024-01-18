@@ -336,10 +336,10 @@ static int on_data_chunk_recv(nghttp2_session *ngh2, uint8_t flags,
     
     stream = nghttp2_session_get_stream_user_data(ngh2, stream_id);
     if (!stream) {
-        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, stream->r, APLOGNO(03358)
-                      "h2_proxy_session(%s): recv data chunk for "
-                      "unknown stream %d, ignored", 
-                      session->id, stream_id);
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, ap_server_conf, APLOGNO(03358)
+                     "h2_proxy_session(%s): recv data chunk for "
+                     "unknown stream %d, ignored", 
+                     session->id, stream_id);
         return 0;
     }
     
@@ -422,9 +422,9 @@ static ssize_t stream_data_read(nghttp2_session *ngh2, int32_t stream_id,
     *data_flags = 0;
     stream = nghttp2_session_get_stream_user_data(ngh2, stream_id);
     if (!stream) {
-        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, stream->r, APLOGNO(03361)
-                      "h2_proxy_stream(%s): data_read, stream %d not found", 
-                      stream->session->id, stream_id);
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, ap_server_conf, APLOGNO(03361)
+                     "h2_proxy_stream(%s): data_read, stream %d not found", 
+                     stream->session->id, stream_id);
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     
@@ -581,6 +581,7 @@ static apr_status_t open_stream(h2_proxy_session *session, const char *url,
     h2_proxy_stream *stream;
     apr_uri_t puri;
     const char *authority, *scheme, *path;
+    apr_status_t status;
 
     stream = apr_pcalloc(r->pool, sizeof(*stream));
 
@@ -595,7 +596,10 @@ static apr_status_t open_stream(h2_proxy_session *session, const char *url,
     
     stream->req = h2_req_create(1, stream->pool, 0);
 
-    apr_uri_parse(stream->pool, url, &puri);
+    status = apr_uri_parse(stream->pool, url, &puri);
+    if (status != APR_SUCCESS)
+        return status;
+
     scheme = (strcmp(puri.scheme, "h2")? "http" : "https");
     authority = puri.hostname;
     if (!ap_strchr_c(authority, ':') && puri.port
@@ -763,7 +767,7 @@ apr_status_t h2_proxy_session_submit(h2_proxy_session *session,
     apr_status_t status;
     
     status = open_stream(session, url, r, &stream);
-    if (status == OK) {
+    if (status == APR_SUCCESS) {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(03381)
                       "process stream(%d): %s %s%s, original: %s", 
                       stream->id, stream->req->method, 
