@@ -1,3 +1,15 @@
+v1.5.7
+--------------------------------------------------------------------------------
+ * fixed read after free on certain conditions when clients abort connections
+ * fixed connection shutdown when stream tasks block on reads
+
+v1.5.6
+--------------------------------------------------------------------------------
+ * fixed possible null pointer reference in new bucket beams during read on an 
+   aborted beam
+ * improved event handling on master connection (idle/submit/wait) to increase 
+   performance
+ 
 v1.5.5
 -------------------------------------------------------------------------------- 
  * Fix async write issue that sometimes led to selection of wrong timeout
