@@ -1,3 +1,13 @@
+v1.5.9
+--------------------------------------------------------------------------------
+ * more strict error handling and logging in DATA frame assembly.
+
+v1.5.8
+--------------------------------------------------------------------------------
+ * mod_http2: improved cleanup of connection/streams/tasks to always
+   have deterministic order regardless of event initiating it. Addresses
+   reported crashes due to memory read after free issues. 
+  
 v1.5.7
 --------------------------------------------------------------------------------
  * fixed read after free on certain conditions when clients abort connections
