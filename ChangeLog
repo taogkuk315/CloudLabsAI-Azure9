@@ -1,3 +1,7 @@
+v1.5.10
+--------------------------------------------------------------------------------
+ * fixed bug in error handling when passing DATA frames.
+
 v1.5.9
 --------------------------------------------------------------------------------
  * more strict error handling and logging in DATA frame assembly.
