@@ -15,6 +15,8 @@
 		B24C59831B8C66930003DF74 /* ltsugar.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ltsugar.m4; sourceTree = "<group>"; };
 		B24C59841B8C66930003DF74 /* ltversion.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ltversion.m4; sourceTree = "<group>"; };
 		B24C59851B8C66930003DF74 /* lt~obsolete.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "lt~obsolete.m4"; sourceTree = "<group>"; };
+		B24DBCC21D3298D300C80369 /* h2_proxy_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_proxy_util.c; sourceTree = "<group>"; };
+		B24DBCC31D3298D300C80369 /* h2_proxy_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_proxy_util.h; sourceTree = "<group>"; };
 		B25096C01CC4E66F002E8B04 /* h2_ngn_shed.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_ngn_shed.c; sourceTree = "<group>"; };
 		B25096C11CC4E66F002E8B04 /* h2_ngn_shed.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_ngn_shed.h; sourceTree = "<group>"; };
 		B25096C21CC4E66F002E8B04 /* h2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2.h; sourceTree = "<group>"; };
@@ -136,6 +138,8 @@
 				B25574821BEB6EFC0058F97B /* h2_private.h */,
 				B25096C61CC65E27002E8B04 /* h2_proxy_session.c */,
 				B25096C71CC65E27002E8B04 /* h2_proxy_session.h */,
+				B24DBCC21D3298D300C80369 /* h2_proxy_util.c */,
+				B24DBCC31D3298D300C80369 /* h2_proxy_util.h */,
 				B2AB9AB91C2ADBE100908DD6 /* h2_push.c */,
 				B2AB9ABA1C2ADBE100908DD6 /* h2_push.h */,
 				B25574831BEB6EFC0058F97B /* h2_request.c */,

@@ -22,7 +22,7 @@
 
 #include "mod_proxy_http2.h"
 #include "h2_request.h"
-#include "h2_util.h"
+#include "h2_proxy_util.h"
 #include "h2_version.h"
 #include "h2_proxy_session.h"
 
@@ -125,12 +125,12 @@ static int proxy_http2_canon(request_rec *r, char *url)
     apr_port_t port, def_port;
 
     /* ap_port_of_scheme() */
-    if (h2_casecmpstrn(url, "h2c:", 4) == 0) {
+    if (ap_cstr_casecmpn(url, "h2c:", 4) == 0) {
         url += 4;
         scheme = "h2c";
         http_scheme = "http";
     }
-    else if (h2_casecmpstrn(url, "h2:", 3) == 0) {
+    else if (ap_cstr_casecmpn(url, "h2:", 3) == 0) {
         url += 3;
         scheme = "h2";
         http_scheme = "https";
@@ -258,7 +258,7 @@ static apr_status_t add_request(h2_proxy_session *session, request_rec *r)
     url = apr_table_get(r->notes, H2_PROXY_REQ_URL_NOTE);
     apr_table_setn(r->notes, "proxy-source-port", apr_psprintf(r->pool, "%hu",
                    ctx->p_conn->connection->local_addr->port));
-    status = h2_proxy_session_submit(session, url, r);
+    status = h2_proxy_session_submit(session, url, r, ctx->standalone);
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, status, r->connection, APLOGNO(03351)
                       "pass request body failed to %pI (%s) from %s (%s)",
@@ -324,8 +324,9 @@ static apr_status_t next_request(h2_proxy_ctx *ctx, int before_leave)
                                  APR_BLOCK_READ: APR_NONBLOCK_READ, 
                                  ctx->capacity, &ctx->next);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, ctx->owner, 
-                      "h2_proxy_engine(%s): pulled request %s", 
+                      "h2_proxy_engine(%s): pulled request (%s) %s", 
                       ctx->engine_id, 
+                      before_leave? "before leave" : "regular", 
                       (ctx->next? ctx->next->the_request : "NULL"));
         return APR_STATUS_IS_EAGAIN(status)? APR_SUCCESS : status;
     }
@@ -384,8 +385,8 @@ static apr_status_t proxy_engine_run(h2_proxy_ctx *ctx) {
         else {
             /* end of processing, maybe error */
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, ctx->owner, 
-                          APLOGNO(03375) "eng(%s): end of session run", 
-                          ctx->engine_id);
+                          APLOGNO(03375) "eng(%s): end of session %s", 
+                          ctx->engine_id, ctx->session->id);
             /*
              * Any open stream of that session needs to
              * a) be reopened on the new session iff safe to do so
@@ -519,11 +520,20 @@ run_connect:
     }
 
     ctx->p_conn->is_ssl = ctx->is_ssl;
-    if (ctx->is_ssl) {
-        /* If there is still some data on an existing ssl connection, now
-         * would be a good timne to get rid of it. */
-        ap_proxy_ssl_connection_cleanup(ctx->p_conn, ctx->rbase);
-    }
+    if (ctx->is_ssl && ctx->p_conn->connection) {
+        /* If there are some metadata on the connection (e.g. TLS alert),
+         * let mod_ssl detect them, and create a new connection below.
+         */ 
+        apr_bucket_brigade *tmp_bb;
+        tmp_bb = apr_brigade_create(ctx->rbase->pool, 
+                                    ctx->rbase->connection->bucket_alloc);
+        status = ap_get_brigade(ctx->p_conn->connection->input_filters, tmp_bb,
+                                AP_MODE_SPECULATIVE, APR_NONBLOCK_READ, 1);
+        if (status != APR_SUCCESS && !APR_STATUS_IS_EAGAIN(status)) {
+            ctx->p_conn->close = 1;
+        }
+        apr_brigade_cleanup(tmp_bb);
+    }   
 
     /* Step One: Determine the URL to connect to (might be a proxy),
      * initialize the backend accordingly and determine the server 

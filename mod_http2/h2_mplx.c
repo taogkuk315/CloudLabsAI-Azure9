@@ -436,6 +436,9 @@ static void stream_done(h2_mplx *m, h2_stream *stream, int rst_error)
     if (stream->input) {
         m->tx_handles_reserved += h2_beam_get_files_beamed(stream->input);
         h2_beam_on_consumed(stream->input, NULL, NULL);
+        /* Let anyone blocked reading know that there is no more to come */
+        h2_beam_abort(stream->input);
+        /* Remove mutex after, so that abort still finds cond to signal */
         h2_beam_mutex_set(stream->input, NULL, NULL, NULL);
     }
     h2_stream_cleanup(stream);
@@ -736,7 +739,7 @@ static apr_status_t out_close(h2_mplx *m, h2_task *task)
         h2_response *r = h2_response_die(task->stream_id, 500, 
                                          task->request, m->pool);
         status = out_open(m, task->stream_id, r);
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, m->c, APLOGNO(03393)
                       "h2_mplx(%s): close, no response, no rst", task->id);
     }
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, m->c,

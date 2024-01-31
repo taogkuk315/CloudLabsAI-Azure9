@@ -23,7 +23,7 @@
 
 #include "mod_http2.h"
 #include "h2.h"
-#include "h2_util.h"
+#include "h2_proxy_util.h"
 #include "h2_proxy_session.h"
 
 APLOG_USE_MODULE(proxy_http2);
@@ -36,10 +36,13 @@ typedef struct h2_proxy_stream {
     const char *url;
     request_rec *r;
     h2_request *req;
+    int standalone;
 
     h2_stream_state_t state;
     unsigned int suspended : 1;
+    unsigned int data_sent : 1;
     unsigned int data_received : 1;
+    uint32_t error_code;
 
     apr_bucket_brigade *input;
     apr_bucket_brigade *output;
@@ -157,14 +160,6 @@ static int on_frame_recv(nghttp2_session *ngh2, const nghttp2_frame *frame,
              * that it has started processing. */
             session->last_stream_id = frame->goaway.last_stream_id;
             dispatch_event(session, H2_PROXYS_EV_REMOTE_GOAWAY, 0, NULL);
-            if (APLOGcinfo(session->c)) {
-                char buffer[256];
-                
-                h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03342)
-                              "h2_proxy_session(%s): recv FRAME[%s]",
-                              session->id, buffer);
-            }
             break;
         default:
             break;
@@ -210,7 +205,7 @@ static void process_proxy_header(request_rec *r, const char *n, const char *v)
     int i;
     
     for (i = 0; transform_hdrs[i].name; ++i) {
-        if (!h2_casecmpstr(transform_hdrs[i].name, n)) {
+        if (!ap_cstr_casecmp(transform_hdrs[i].name, n)) {
             dconf = ap_get_module_config(r->per_dir_config, &proxy_module);
             apr_table_add(r->headers_out, n,
                           (*transform_hdrs[i].func)(r, dconf, v));
@@ -370,6 +365,12 @@ static int on_data_chunk_recv(nghttp2_session *ngh2, uint8_t flags,
                                   stream_id, NGHTTP2_STREAM_CLOSED);
         return NGHTTP2_ERR_STREAM_CLOSING;
     }
+    if (stream->standalone) {
+        nghttp2_session_consume(ngh2, stream_id, len);
+        ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, stream->r,
+                      "h2_proxy_session(%s): stream %d, win_update %d bytes",
+                      session->id, stream_id, (int)len);
+    }
     return 0;
 }
 
@@ -377,10 +378,15 @@ static int on_stream_close(nghttp2_session *ngh2, int32_t stream_id,
                            uint32_t error_code, void *user_data) 
 {
     h2_proxy_session *session = user_data;
+    h2_proxy_stream *stream;
     if (!session->aborted) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03360)
                       "h2_proxy_session(%s): stream=%d, closed, err=%d", 
                       session->id, stream_id, error_code);
+        stream = h2_ihash_get(session->streams, stream_id);
+        if (stream) {
+            stream->error_code = error_code;
+        }
         dispatch_event(session, H2_PROXYS_EV_STREAM_DONE, stream_id, NULL);
     }
     return 0;
@@ -473,6 +479,7 @@ static ssize_t stream_data_read(nghttp2_session *ngh2, int32_t stream_id,
         ap_log_rerror(APLOG_MARK, APLOG_TRACE2, status, stream->r, 
                       "h2_proxy_stream(%d): request body read %ld bytes, flags=%d", 
                       stream->id, (long)readlen, (int)*data_flags);
+        stream->data_sent = 1;
         return readlen;
     }
     else if (APR_STATUS_IS_EAGAIN(status)) {
@@ -576,7 +583,8 @@ static apr_status_t session_start(h2_proxy_session *session)
 }
 
 static apr_status_t open_stream(h2_proxy_session *session, const char *url,
-                                request_rec *r, h2_proxy_stream **pstream)
+                                request_rec *r, int standalone,
+                                h2_proxy_stream **pstream)
 {
     h2_proxy_stream *stream;
     apr_uri_t puri;
@@ -588,6 +596,7 @@ static apr_status_t open_stream(h2_proxy_session *session, const char *url,
     stream->pool = r->pool;
     stream->url = url;
     stream->r = r;
+    stream->standalone = standalone;
     stream->session = session;
     stream->state = H2_STREAM_ST_IDLE;
     
@@ -761,12 +770,13 @@ static apr_status_t h2_proxy_session_read(h2_proxy_session *session, int block,
 }
 
 apr_status_t h2_proxy_session_submit(h2_proxy_session *session, 
-                                     const char *url, request_rec *r)
+                                     const char *url, request_rec *r,
+                                     int standalone)
 {
     h2_proxy_stream *stream;
     apr_status_t status;
     
-    status = open_stream(session, url, r, &stream);
+    status = open_stream(session, url, r, standalone, &stream);
     if (status == APR_SUCCESS) {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(03381)
                       "process stream(%d): %s %s%s, original: %s", 
@@ -1037,11 +1047,15 @@ static void ev_stream_done(h2_proxy_session *session, int stream_id,
     
     stream = nghttp2_session_get_stream_user_data(session->ngh2, stream_id);
     if (stream) {
+        int touched = (stream->data_sent || 
+                       stream_id <= session->last_stream_id);
+        int complete = (stream->error_code == 0);
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03364)
-                      "h2_proxy_sesssion(%s): stream(%d) closed", 
-                      session->id, stream_id);
+                      "h2_proxy_sesssion(%s): stream(%d) closed "
+                      "(complete=%d, touched=%d)", 
+                      session->id, stream_id, complete, touched);
         
-        if (!stream->data_received) {
+        if (complete && !stream->data_received) {
             apr_bucket *b;
             /* if the response had no body, this is the time to flush
              * an empty brigade which will also "write" the resonse
@@ -1059,7 +1073,7 @@ static void ev_stream_done(h2_proxy_session *session, int stream_id,
         h2_ihash_remove(session->streams, stream_id);
         h2_iq_remove(session->suspended, stream_id);
         if (session->done) {
-            session->done(session, stream->r, 1, 1);
+            session->done(session, stream->r, complete, touched);
         }
     }
     

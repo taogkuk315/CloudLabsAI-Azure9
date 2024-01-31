@@ -17,13 +17,13 @@ The versions here are **early experience versions**, based on Apache httpd 2-.4.
 
 ##Install
 
-You need a built Apache httpd 2.4.20, including apxs and headers to compile and 
+You need a built Apache httpd 2.4.23, including apxs and headers to compile and 
 run this module. Additionally, you need an installed libnghttp2, at least in version
 1.3.0. And additionally, you want an installed OpenSSL 1.0.2.
 
 tl;dr
 
-**You need an installed Apache 2.4.20 which already runs ```mod_http2``` in it.**
+**You need an installed Apache 2.4.23 which already runs ```mod_http2``` in it.**
 
 If you do not have that or don't know how to get it, look at google, stackoverflow, Apache mailing lists or your Linux distro. Not here!
 
@@ -43,7 +43,6 @@ See ```ChangeLog``` for details.
 
 This module is part of the Apache httpd proxy architecture and functions similar to `mod_proxy_http` 
 and friends. To configure it, you need to use ```h2:``` or ```h2c:``` in the proxy URL. Example:
-(***Important***: against httpd 2.4.20, only ```h2c:``` connections will work!)
 ```
 <Proxy "balancer://h2-local">
     BalancerMember "h2://test.example.org:SUBST_PORT_HTTPS_SUBST"
@@ -67,7 +66,6 @@ All other common httpd ```proxy``` directives also apply.
 
 What it will ***not*** do and what is ***untested***:
 * fallback to HTTP/1.1
-* support TLS backend connections with Apache httpd 2.4.20 (some necessary changes for ALPN negotiation were not backported)
 * be very smart when the number of concurrent streams in the backend differs from the local settings
 * load balance between open connections dynamically
 * forward any HTTP/2 priority information

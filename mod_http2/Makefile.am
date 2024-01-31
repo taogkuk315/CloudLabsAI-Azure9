@@ -86,13 +86,13 @@ PROXY_HFILES = \
     h2.h \
     h2_proxy_session.h \
     h2_request.h \
-    h2_util.h \
+    h2_proxy_util.h \
     mod_proxy_http2.h
 
 PROXY_OBJECTS = \
     h2_proxy_session.c \
     h2_request.c \
-    h2_util.c \
+    h2_proxy_util.c \
     mod_proxy_http2.c
 
 mod_http2_la_SOURCES = $(HFILES) $(OBJECTS)

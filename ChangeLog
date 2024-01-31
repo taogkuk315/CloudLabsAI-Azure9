@@ -1,3 +1,10 @@
+v1.5.12
+--------------------------------------------------------------------------------
+ * fixed connection flushing when handling SETTINGS and no stream is open.
+ * fix for request abort when connections drops, introduced in 1.5.8
+ * more rigid error handling in DATA frame assembly, leading
+   to deterministic connection errors if assembly fails.
+
 v1.5.10
 --------------------------------------------------------------------------------
  * fixed bug in error handling when passing DATA frames.
