@@ -13,7 +13,7 @@ What you find here are **early experience versions** for people who like living 
 If you want HTTP/2 in your production environment, please head over to the official releases at Apache and grab one of those or wait until the various OS distributions have assembled one for you. 
 
 ##Current Version
-The versions here are **early experience versions**, based on Apache httpd 2-.4.20. There is no guarantee that thises will be released unchanged by Apache. But you are welcome to test it and give feedback.
+The versions here are **early experience versions**, based on Apache httpd 2.4.23. There is no guarantee that these will be released unchanged by Apache. But you are welcome to test it and give feedback.
 
 ##Install
 
