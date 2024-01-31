@@ -1,3 +1,14 @@
+v1.6.0
+--------------------------------------------------------------------------------
+ * handling graceful shutdown gracefully, e.g. processing existing streams to the end.
+ * h2 status resource follows latest draft, see
+   http://www.ietf.org/id/draft-benfield-http2-debug-state-01.txt
+   Configure it as
+   <Location "/.well-known/h2/state">
+        SetHandler http2-status
+    </Location>
+ * support for 'Expect: 100-continue' handling
+
 v1.5.13
 --------------------------------------------------------------------------------
  * new H2CopyFiles directive that changes treatment of file handles in 
