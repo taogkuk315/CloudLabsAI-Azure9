@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.6.0], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.6.1], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -129,6 +129,9 @@ AC_CHECK_FUNCS([nghttp2_stream_get_weight],
 # nghttp2 >= 1.5.0: changing stream priorities
 AC_CHECK_FUNCS([nghttp2_session_change_stream_priority], 
         [CPPFLAGS="$CPPFLAGS -DH2_NG2_CHANGE_PRIO"], [])
+# nghttp2 >= 1.14.0: invalid header callback
+AC_CHECK_FUNCS([nghttp2_session_callbacks_set_on_invalid_header_callback], 
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_INVALID_HEADER_CB"], [])
 
 
 AC_CHECK_LIB([crypto], [SHA256_Init], [

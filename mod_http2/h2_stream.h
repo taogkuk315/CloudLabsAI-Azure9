@@ -56,7 +56,6 @@ struct h2_stream {
     struct h2_response *last_sent;
     struct h2_bucket_beam *output;
     apr_bucket_brigade *buffer;
-    apr_bucket_brigade *tmp;
     apr_array_header_t *files;  /* apr_file_t* we collected during I/O */
 
     int rst_error;              /* stream error for RST_STREAM */
@@ -162,13 +161,13 @@ void h2_stream_rst(h2_stream *stream, int error_code);
 
 /**
  * Schedule the stream for execution. All header information must be
- * present. Use the given priority comparision callback to determine 
+ * present. Use the given priority comparison callback to determine 
  * order in queued streams.
  * 
  * @param stream the stream to schedule
  * @param eos    != 0 iff no more input will arrive
- * @param cmp    priority comparision
- * @param ctx    context for comparision
+ * @param cmp    priority comparison
+ * @param ctx    context for comparison
  */
 apr_status_t h2_stream_schedule(h2_stream *stream, int eos, int push_enabled,
                                 h2_stream_pri_cmp *cmp, void *ctx);
