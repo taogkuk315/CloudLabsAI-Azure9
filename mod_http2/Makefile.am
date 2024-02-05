@@ -44,7 +44,6 @@ OBJECTS = \
     h2_response.c \
     h2_session.c \
     h2_stream.c \
-    h2_stream_set.c \
     h2_switch.c \
     h2_task.c \
     h2_util.c \
@@ -73,7 +72,6 @@ HFILES = \
     h2_response.h \
     h2_session.h \
     h2_stream.h \
-    h2_stream_set.h \
     h2_switch.h \
     h2_task.h \
     h2_util.h \

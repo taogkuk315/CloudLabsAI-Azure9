@@ -1,3 +1,7 @@
+v1.6.2
+--------------------------------------------------------------------------------
+  * fixes a race that led to output blocking (stream not finishing)
+
 v1.6.1
 --------------------------------------------------------------------------------
   * if configured with nghttp2 1.14.0 and onward, invalid request
