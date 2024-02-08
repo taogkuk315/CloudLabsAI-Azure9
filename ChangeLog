@@ -1,3 +1,14 @@
+v1.7.0
+--------------------------------------------------------------------------------
+  * rewrite of how responses and trailers are transferred between master and 
+    slave connections.
+  * Reduction of internal states for tasks and streams, reducing complexity
+    for increased stability. 
+  * Heuristic id generation for slave connections to better keep promise of 
+    connection ids unique at given point in time. This fixes problems with
+    mod_cgid in high load situtations. 
+  * Fix for handling of incoming trailers when no request body is sent.
+
 v1.6.2
 --------------------------------------------------------------------------------
   * fixes a race that led to output blocking (stream not finishing)
