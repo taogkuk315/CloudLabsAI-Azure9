@@ -1,3 +1,7 @@
+v1.7.2
+--------------------------------------------------------------------------------
+  * fixes compilation error on 32 bit systems when generating slave connection id.
+
 v1.7.1
 --------------------------------------------------------------------------------
   * fix for build issues on Windows platforms
