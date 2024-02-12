@@ -1,3 +1,7 @@
+v1.7.1
+--------------------------------------------------------------------------------
+  * fix for build issues on Windows platforms
+
 v1.7.0
 --------------------------------------------------------------------------------
   * rewrite of how responses and trailers are transferred between master and 
