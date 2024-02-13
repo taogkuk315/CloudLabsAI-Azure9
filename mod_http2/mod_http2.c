@@ -160,7 +160,7 @@ static apr_status_t http2_req_engine_push(const char *ngn_type,
 
 static apr_status_t http2_req_engine_pull(h2_req_engine *ngn, 
                                           apr_read_type_e block, 
-                                          apr_uint32_t capacity, 
+                                          int capacity, 
                                           request_rec **pr)
 {
     return h2_mplx_req_engine_pull(ngn, block, capacity, pr);
@@ -343,7 +343,7 @@ static char *http2_var_lookup(apr_pool_t *p, server_rec *s,
             return (char *)vdef->lookup(p, s, c, r, ctx);
         }
     }
-    return "";
+    return (char*)"";
 }
 
 static int h2_h2_fixups(request_rec *r)

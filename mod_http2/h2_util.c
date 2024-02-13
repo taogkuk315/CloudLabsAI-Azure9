@@ -27,7 +27,7 @@
 #include "h2_util.h"
 
 /* h2_log2(n) iff n is a power of 2 */
-unsigned char h2_log2(apr_uint32_t n)
+unsigned char h2_log2(int n)
 {
     int lz = 0;
     if (!n) {
@@ -618,7 +618,7 @@ static apr_status_t last_not_included(apr_bucket_brigade *bb,
 {
     apr_bucket *b;
     apr_status_t status = APR_SUCCESS;
-    int files_allowed = pfile_buckets_allowed? *pfile_buckets_allowed : 0;
+    int files_allowed = pfile_buckets_allowed? (int)*pfile_buckets_allowed : 0;
     
     if (maxlen >= 0) {
         /* Find the bucket, up to which we reach maxlen/mem bytes */

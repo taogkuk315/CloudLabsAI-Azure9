@@ -45,7 +45,7 @@
 #include "h2_util.h"
 
 
-static void h2_beam_log(h2_bucket_beam *beam, apr_uint32_t id, const char *msg, 
+static void h2_beam_log(h2_bucket_beam *beam, int id, const char *msg, 
                         conn_rec *c, int level)
 {
     if (beam && APLOG_C_IS_LEVEL(c,level)) {
@@ -319,7 +319,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent,
     return m;
 }
 
-apr_uint32_t h2_mplx_shutdown(h2_mplx *m)
+int h2_mplx_shutdown(h2_mplx *m)
 {
     int acquired, max_stream_started = 0;
     
@@ -702,7 +702,7 @@ apr_status_t h2_mplx_stream_done(h2_mplx *m, h2_stream *stream)
     return status;
 }
 
-h2_stream *h2_mplx_stream_get(h2_mplx *m, apr_uint32_t id)
+h2_stream *h2_mplx_stream_get(h2_mplx *m, int id)
 {
     h2_stream *s = NULL;
     int acquired;
@@ -1195,7 +1195,7 @@ static apr_status_t unschedule_slow_tasks(h2_mplx *m)
     /* Try to get rid of streams that occupy workers. Look for safe requests
      * that are repeatable. If none found, fail the connection.
      */
-    n = (m->workers_busy - m->workers_limit - h2_ihash_count(m->redo_tasks));
+    n = (m->workers_busy - m->workers_limit - (int)h2_ihash_count(m->redo_tasks));
     while (n > 0 && (task = get_latest_repeatable_unsubmitted_task(m))) {
         h2_task_rst(task, H2_ERR_CANCEL);
         h2_ihash_add(m->redo_tasks, task);
@@ -1330,7 +1330,7 @@ apr_status_t h2_mplx_req_engine_push(const char *ngn_type,
 
 apr_status_t h2_mplx_req_engine_pull(h2_req_engine *ngn, 
                                      apr_read_type_e block, 
-                                     apr_uint32_t capacity, 
+                                     int capacity, 
                                      request_rec **pr)
 {   
     h2_ngn_shed *shed = h2_ngn_shed_get_shed(ngn);
@@ -1429,7 +1429,7 @@ apr_status_t h2_mplx_dispatch_master_events(h2_mplx *m,
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c, 
                               "h2_mplx(%ld-%d): on_resume", 
                               m->id, stream->id);
-                on_resume(on_ctx, stream->id);
+                on_resume(on_ctx, stream);
             }
         }
         
@@ -1438,7 +1438,7 @@ apr_status_t h2_mplx_dispatch_master_events(h2_mplx *m,
     return status;
 }
 
-apr_status_t h2_mplx_keep_active(h2_mplx *m, apr_uint32_t stream_id)
+apr_status_t h2_mplx_keep_active(h2_mplx *m, int stream_id)
 {
     apr_status_t status;
     int acquired;

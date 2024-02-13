@@ -1288,9 +1288,9 @@ apr_status_t h2_session_set_prio(h2_session *session, h2_stream *stream,
     s_parent = nghttp2_stream_get_parent(s);
     if (s_parent) {
         nghttp2_priority_spec ps;
-        apr_uint32_t id_parent, id_grandpa, w_parent, w;
+        int id_parent, id_grandpa, w_parent, w;
         int rv = 0;
-        char *ptype = "AFTER";
+        const char *ptype = "AFTER";
         h2_dependency dep = prio->dependency;
         
         id_parent = nghttp2_stream_get_stream_id(s_parent);
@@ -1546,43 +1546,41 @@ leave:
 }
 
 /**
- * A stream was resumed as new output data arrived.
+ * A stream was resumed as new response/output data arrived.
  */
-static apr_status_t on_stream_resume(void *ctx, int stream_id)
+static apr_status_t on_stream_resume(void *ctx, h2_stream *stream)
 {
     h2_session *session = ctx;
-    h2_stream *stream = get_stream(session, stream_id);
     apr_status_t status = APR_EAGAIN;
     int rv;
+    apr_off_t len = 0;
+    int eos = 0;
+    h2_headers *headers = NULL;
     
+    ap_assert(stream);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c, 
-                  "h2_stream(%ld-%d): on_resume", session->id, stream_id);
-    if (stream) {
-        apr_off_t len = 0;
-        int eos = 0;
-        h2_headers *headers = NULL;
+                  "h2_stream(%ld-%d): on_resume", session->id, stream->id);
         
-        send_headers:
-        status = h2_stream_out_prepare(stream, &len, &eos, &headers);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, session->c, 
-                      "h2_stream(%ld-%d): prepared len=%ld, eos=%d", 
-                      session->id, stream_id, (long)len, eos);
-        if (headers) {
-            status = on_stream_headers(session, stream, headers, len, eos);
-            if (status != APR_SUCCESS) {
-                return status;
-            }
-            goto send_headers;
+send_headers:
+    status = h2_stream_out_prepare(stream, &len, &eos, &headers);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, session->c, 
+                  "h2_stream(%ld-%d): prepared len=%ld, eos=%d", 
+                  session->id, stream->id, (long)len, eos);
+    if (headers) {
+        status = on_stream_headers(session, stream, headers, len, eos);
+        if (status != APR_SUCCESS) {
+            return status;
         }
-        else if (status != APR_EAGAIN) {
-            rv = nghttp2_session_resume_data(session->ngh2, stream_id);
-            session->have_written = 1;
-            ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
-                          APLOG_ERR : APLOG_DEBUG, 0, session->c,
-                          APLOGNO(02936) 
-                          "h2_stream(%ld-%d): resuming %s",
-                          session->id, stream->id, rv? nghttp2_strerror(rv) : "");
-        }
+        goto send_headers;
+    }
+    else if (status != APR_EAGAIN) {
+        rv = nghttp2_session_resume_data(session->ngh2, stream->id);
+        session->have_written = 1;
+        ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
+                      APLOG_ERR : APLOG_DEBUG, 0, session->c,
+                      APLOGNO(02936) 
+                      "h2_stream(%ld-%d): resuming %s",
+                      session->id, stream->id, rv? nghttp2_strerror(rv) : "");
     }
     return status;
 }
@@ -1600,7 +1598,7 @@ static apr_status_t h2_session_receive(void *ctx, const char *data,
         n = nghttp2_session_mem_recv(session->ngh2, (const uint8_t *)data, len);
         if (n < 0) {
             if (nghttp2_is_fatal((int)n)) {
-                dispatch_event(session, H2_SESSION_EV_PROTO_ERROR, (int)n, nghttp2_strerror(n));
+                dispatch_event(session, H2_SESSION_EV_PROTO_ERROR, (int)n, nghttp2_strerror((int)n));
                 return APR_EGENERAL;
             }
         }

@@ -49,7 +49,8 @@
 #include "h2_worker.h"
 #include "h2_util.h"
 
-static void H2_TASK_OUT_LOG(int lvl, h2_task *task, apr_bucket_brigade *bb, char *tag)
+static void H2_TASK_OUT_LOG(int lvl, h2_task *task, apr_bucket_brigade *bb, 
+                            const char *tag)
 {
     if (APLOG_C_IS_LEVEL(task->c, lvl)) {
         conn_rec *c = task->c;
@@ -526,7 +527,7 @@ static int h2_task_pre_conn(conn_rec* c, void *arg)
     return OK;
 }
 
-h2_task *h2_task_create(conn_rec *c, apr_uint32_t stream_id,
+h2_task *h2_task_create(conn_rec *c, int stream_id,
                         const h2_request *req, h2_bucket_beam *input, 
                         h2_mplx *mplx)
 {

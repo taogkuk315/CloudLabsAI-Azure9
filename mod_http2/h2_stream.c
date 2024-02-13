@@ -54,7 +54,7 @@ static int state_transition[][7] = {
 /*CL*/{  1, 1, 0, 0, 1, 1, 1 },
 };
 
-static void H2_STREAM_OUT_LOG(int lvl, h2_stream *s, char *tag)
+static void H2_STREAM_OUT_LOG(int lvl, h2_stream *s, const char *tag)
 {
     if (APLOG_C_IS_LEVEL(s->session->c, lvl)) {
         conn_rec *c = s->session->c;
@@ -192,7 +192,7 @@ static apr_status_t stream_pool_cleanup(void *ctx)
     return APR_SUCCESS;
 }
 
-h2_stream *h2_stream_open(apr_uint32_t id, apr_pool_t *pool, h2_session *session,
+h2_stream *h2_stream_open(int id, apr_pool_t *pool, h2_session *session,
                           int initiated_on)
 {
     h2_stream *stream = apr_pcalloc(pool, sizeof(h2_stream));
