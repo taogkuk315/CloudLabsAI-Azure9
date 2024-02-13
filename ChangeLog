@@ -1,3 +1,12 @@
+v1.7.5
+--------------------------------------------------------------------------------
+  * properly implemented 100-continue handling for proxy setups, be it
+    mod_proxy_http or mod_proxy_http2
+  * reusing backend HTTP/2 connections more than a second old will hold back
+    request bodies until a PING response is received. Headers are still sent
+    right away since those are repeatable on a new connection.
+  
+  
 v1.7.3
 --------------------------------------------------------------------------------
   * reverts some int -> apr_uint32_t changes made in 1.7.0 to address possible

@@ -14,9 +14,7 @@
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1049"
-            endingLineNumber = "1049"
-            landmarkName = "ev_stream_done()"
-            landmarkType = "9">
+            endingLineNumber = "1049">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>
