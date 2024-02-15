@@ -517,7 +517,8 @@ static ssize_t stream_request_data(nghttp2_session *ngh2, int32_t stream_id,
 
         stream->data_sent += readlen;
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, status, stream->r, APLOGNO(03468) 
-                      "h2_proxy_stream(%d): request DATA %ld, %ld total, flags=%d", 
+                      "h2_proxy_stream(%d): request DATA %ld, %ld"
+                      " total, flags=%d", 
                       stream->id, (long)readlen, (long)stream->data_sent,
                       (int)*data_flags);
         return readlen;

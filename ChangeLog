@@ -1,3 +1,7 @@
+v1.7.6
+--------------------------------------------------------------------------------
+  * fixed crash in beam memory handling introduced in 1.7.x changes
+
 v1.7.5
 --------------------------------------------------------------------------------
   * properly implemented 100-continue handling for proxy setups, be it
