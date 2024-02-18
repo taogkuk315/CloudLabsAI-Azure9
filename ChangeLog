@@ -1,3 +1,7 @@
+v1.7.9
+--------------------------------------------------------------------------------
+  * fixed a crash in stream shutdown introduced in 1.7.8
+
 v1.7.8
 --------------------------------------------------------------------------------
   * unannounced and multiple interim responses (status code < 200)
