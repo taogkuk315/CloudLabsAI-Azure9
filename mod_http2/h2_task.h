@@ -60,7 +60,6 @@ struct h2_task {
     
     struct {
         struct h2_bucket_beam *beam;
-        unsigned int chunked : 1;
         unsigned int eos : 1;
         apr_bucket_brigade *bb;
         apr_bucket_brigade *bbchunk;
@@ -71,7 +70,6 @@ struct h2_task {
         unsigned int opened : 1;
         unsigned int sent_response : 1;
         unsigned int copy_files : 1;
-        unsigned int parse_response : 1;
         struct h2_response_parser *rparser;
         apr_bucket_brigade *bb;
     } output;

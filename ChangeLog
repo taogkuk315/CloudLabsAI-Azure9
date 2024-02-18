@@ -1,3 +1,12 @@
+v1.7.8
+--------------------------------------------------------------------------------
+  * unannounced and multiple interim responses (status code < 200)
+    are parsed and forwarded to client until a final response arrives.
+  * mod_proxy_http2: improved robustness when main connection is closed early
+    by resetting all ongoing streams against the backend.
+  * mod_http2: allocators from slave connections are released earlier, resulting
+    in less overall memory use on busy, long lived connections.
+
 v1.7.6
 --------------------------------------------------------------------------------
   * fixed crash in beam memory handling introduced in 1.7.x changes
