@@ -1,3 +1,11 @@
+v1.8.2
+--------------------------------------------------------------------------------
+  * new directive 'H2EarlyHints' to enable sending of HTTP status 103 interim
+    responses. Off by default since some browser still choke on them.
+  * mod_proxy_http2 will, when used on top of a HTTP/1.x connection, only 
+    forward 100 responses from the backend if the client expects them. All
+    other responses in the 100 range are filtered.
+
 v1.8.0
 --------------------------------------------------------------------------------
   * mod_http2: new directive 'H2PushResource' to enable early pushes before 
