@@ -6,7 +6,7 @@ Copyright (C) 2015, 2016 greenbytes GmbH
 This repository contains `mod_h[ttp]2` and `mod_proxy_h[ttp]2` from Apache httpd as a standalone build. 
 
 ##Status
-**`mod_h[ttp]2` is an official Apache httpd module**, first released in 2.4.17. See [Apache downloads](https://httpd.apache.org/download.cgi) to get a released version. `mod_proxy_h[ttp]2` is part of Apache httpd development, but has not been released yet.
+**`mod_h[ttp]2` is an official Apache httpd module**, first released in 2.4.17. See [Apache downloads](https://httpd.apache.org/download.cgi) to get a released version. `mod_proxy_h[ttp]2` has been realeased in 2.4.23.
 
 What you find here are **early experience versions** for people who like living on the edge and want to help me test not yet released changes.
 
@@ -19,7 +19,7 @@ The versions here are **early experience versions**, based on Apache httpd 2.4.2
 
 You need a built Apache httpd 2.4.23, including apxs and headers to compile and 
 run this module. Additionally, you need an installed libnghttp2, at least in version
-1.3.0. And additionally, you want an installed OpenSSL 1.0.2.
+1.7.0. And additionally, you want an installed OpenSSL 1.0.2.
 
 tl;dr
 
