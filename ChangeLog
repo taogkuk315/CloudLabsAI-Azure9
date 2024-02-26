@@ -1,3 +1,11 @@
+v1.8.3
+--------------------------------------------------------------------------------
+  * CVE-2016-8740: Mitigate DoS memory exhaustion via endless
+    CONTINUATION frames. Reported by Naveen Tiwari <naveen.tiwari@asu.edu> and 
+    CDF/SEFCOM at Arizona State University
+  * Removing some warning when streams are cleaned up that were never scheduled
+
+
 v1.8.2
 --------------------------------------------------------------------------------
   * new directive 'H2EarlyHints' to enable sending of HTTP status 103 interim
