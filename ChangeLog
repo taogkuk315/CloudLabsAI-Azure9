@@ -1,3 +1,10 @@
+v1.8.4
+--------------------------------------------------------------------------------
+  * Cleanup beamer registry on server reload, Fixes Apache bugzilla PR60510.
+    Patch by Pavel Mateja <pavel@verotel.cz>
+  * Fixes #126 e.g. beam bucket lifetime handling when data is sent 
+    over temporary pools.
+
 v1.8.3
 --------------------------------------------------------------------------------
   * CVE-2016-8740: Mitigate DoS memory exhaustion via endless
