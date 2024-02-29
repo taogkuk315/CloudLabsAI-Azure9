@@ -13,17 +13,17 @@ What you find here are **early experience versions** for people who like living 
 If you want HTTP/2 in your production environment, please head over to the official releases at Apache and grab one of those or wait until the various OS distributions have assembled one for you. 
 
 ##Current Version
-The versions here are **early experience versions**, based on Apache httpd 2.4.23. There is no guarantee that these will be released unchanged by Apache. But you are welcome to test it and give feedback.
+The versions here are **early experience versions**, based on Apache httpd 2.4.25. There is no guarantee that these will be released unchanged by Apache. But you are welcome to test it and give feedback.
 
 ##Install
 
-You need a built Apache httpd 2.4.23, including apxs and headers to compile and 
+You need a built Apache httpd 2.4.25, including apxs and headers to compile and 
 run this module. Additionally, you need an installed libnghttp2, at least in version
 1.7.0. And additionally, you want an installed OpenSSL 1.0.2.
 
 tl;dr
 
-**You need an installed Apache 2.4.23 which already runs ```mod_http2``` in it.**
+**You need an installed Apache 2.4.25 which already runs ```mod_http2``` in it.**
 
 If you do not have that or don't know how to get it, look at google, stackoverflow, Apache mailing lists or your Linux distro. Not here!
 
