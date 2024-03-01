@@ -1,3 +1,7 @@
+v1.8.5
+--------------------------------------------------------------------------------
+  * Removed debug log statements left over in 1.8.4 release.
+  
 v1.8.4
 --------------------------------------------------------------------------------
   * Cleanup beamer registry on server reload, Fixes Apache bugzilla PR60510.
