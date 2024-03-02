@@ -1,3 +1,9 @@
+v1.8.6
+--------------------------------------------------------------------------------
+  * adding support for MergeTrailers directive. 
+  * limiting DATA frame sizes by TLS record sizes in use on the     
+    connection. Flushing outgoing frames earlier.
+
 v1.8.5
 --------------------------------------------------------------------------------
   * Removed debug log statements left over in 1.8.4 release.
