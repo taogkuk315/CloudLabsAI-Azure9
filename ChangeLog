@@ -1,3 +1,10 @@
+v1.8.7
+--------------------------------------------------------------------------------
+  * fix for possible page fault when stream is resumed during session shutdown. 
+    (Patch by sidney-j-r-m, github)
+  * fix for h2 session ignoring new responses while already
+    open streams continue to have data available.
+     
 v1.8.6
 --------------------------------------------------------------------------------
   * adding support for MergeTrailers directive. 
