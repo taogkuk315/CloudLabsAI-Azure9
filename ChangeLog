@@ -1,3 +1,8 @@
+v1.8.8
+--------------------------------------------------------------------------------
+  * streaming of request output now reacts timely to data
+    from other streams becoming available. Same for new incoming requests.
+ 
 v1.8.7
 --------------------------------------------------------------------------------
   * fix for possible page fault when stream is resumed during session shutdown. 

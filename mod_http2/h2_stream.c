@@ -201,7 +201,7 @@ h2_stream *h2_stream_open(int id, apr_pool_t *pool, h2_session *session,
     stream->pool         = pool;
     stream->session      = session;
     stream->can_be_cleaned = 1;
-    
+
     h2_beam_create(&stream->input, pool, id, "input", H2_BEAM_OWNER_SEND, 0);
     h2_beam_send_from(stream->input, stream->pool);
     h2_beam_create(&stream->output, pool, id, "output", H2_BEAM_OWNER_RECV, 0);
@@ -419,7 +419,7 @@ apr_status_t h2_stream_schedule(h2_stream *stream, int eos, int push_enabled,
                 stream->request = stream->rtmp;
                 stream->rtmp = NULL;
                 stream->scheduled = 1;
-                
+
                 stream->push_policy = h2_push_policy_determine(stream->request->headers, 
                                                                stream->pool, push_enabled);
             
@@ -481,6 +481,7 @@ apr_status_t h2_stream_close_input(h2_stream *stream)
     APR_BRIGADE_INSERT_TAIL(tmp, b);
     status = h2_beam_send(stream->input, tmp, APR_BLOCK_READ);
     apr_brigade_destroy(tmp);
+    h2_beam_close(stream->input);
     return status;
 }
 
