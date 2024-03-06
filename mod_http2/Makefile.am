@@ -28,7 +28,6 @@ mod_proxy_http2_la_LDFLAGS  = -module
 OBJECTS = \
     h2_alt_svc.c \
     h2_bucket_beam.c \
-    h2_bucket_eoc.c \
     h2_bucket_eos.c \
     h2_config.c \
     h2_conn.c \

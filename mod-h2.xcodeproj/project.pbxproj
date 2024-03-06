@@ -29,8 +29,6 @@
 		B25574691BEB6EFC0058F97B /* config.h.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = config.h.in; sourceTree = "<group>"; };
 		B255746A1BEB6EFC0058F97B /* h2_alt_svc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_alt_svc.c; sourceTree = "<group>"; };
 		B255746B1BEB6EFC0058F97B /* h2_alt_svc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_alt_svc.h; sourceTree = "<group>"; };
-		B255746C1BEB6EFC0058F97B /* h2_bucket_eoc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_bucket_eoc.c; sourceTree = "<group>"; };
-		B255746D1BEB6EFC0058F97B /* h2_bucket_eoc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_bucket_eoc.h; sourceTree = "<group>"; };
 		B255746E1BEB6EFC0058F97B /* h2_bucket_eos.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_bucket_eos.c; sourceTree = "<group>"; };
 		B255746F1BEB6EFC0058F97B /* h2_bucket_eos.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_bucket_eos.h; sourceTree = "<group>"; };
 		B25574701BEB6EFC0058F97B /* h2_config.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_config.c; sourceTree = "<group>"; };
@@ -111,8 +109,6 @@
 				B255746B1BEB6EFC0058F97B /* h2_alt_svc.h */,
 				B25096C41CC4F132002E8B04 /* h2_bucket_beam.c */,
 				B25096C51CC4F132002E8B04 /* h2_bucket_beam.h */,
-				B255746C1BEB6EFC0058F97B /* h2_bucket_eoc.c */,
-				B255746D1BEB6EFC0058F97B /* h2_bucket_eoc.h */,
 				B255746E1BEB6EFC0058F97B /* h2_bucket_eos.c */,
 				B255746F1BEB6EFC0058F97B /* h2_bucket_eos.h */,
 				B25574701BEB6EFC0058F97B /* h2_config.c */,

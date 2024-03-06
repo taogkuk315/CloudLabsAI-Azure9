@@ -1,5 +1,13 @@
 v1.8.8
 --------------------------------------------------------------------------------
+  * rework of stream resource cleanup to avoid a crash in a close
+    of a lingering connection. Prohibit special file bucket beaming for
+    shared buckets. Files sent in stream output now use the stream pool
+    as read buffer, reducing memory footprint of connections.
+    (much help from Yann Ylavic)
+
+v1.8.8
+--------------------------------------------------------------------------------
   * streaming of request output now reacts timely to data
     from other streams becoming available. Same for new incoming requests.
  
