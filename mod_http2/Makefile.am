@@ -54,7 +54,6 @@ HFILES = \
     h2.h \
     h2_alt_svc.h \
     h2_bucket_beam.h \
-    h2_bucket_eoc.h \
     h2_bucket_eos.h \
     h2_config.h \
     h2_conn.h \
