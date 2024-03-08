@@ -1,4 +1,9 @@
-v1.8.8
+v1.8.10
+--------------------------------------------------------------------------------
+  * fixes bugzilla PR60599, sending proper response for conditional requests
+    answered by mod_cache. (orignal patch by Jeff Wheelhouse)
+
+v1.8.9
 --------------------------------------------------------------------------------
   * rework of stream resource cleanup to avoid a crash in a close
     of a lingering connection. Prohibit special file bucket beaming for
