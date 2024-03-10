@@ -1,3 +1,10 @@
+v1.8.11
+--------------------------------------------------------------------------------
+  * regression fix on bugzilla PR 59348, on graceful restart, ongoing 
+    streams are finished normally before the final GOAWAY is sent.
+  * do not attempt to generated a response on an already aborted slave connection
+  * fix potential double cleanup of bucket beam memory
+
 v1.8.10
 --------------------------------------------------------------------------------
   * fixes bugzilla PR60599, sending proper response for conditional requests
