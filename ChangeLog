@@ -1,3 +1,7 @@
+v1.9.1
+--------------------------------------------------------------------------------
+  * mod_proxy_http2: support for ProxyPreserveHost directive
+
 v1.9.0
 --------------------------------------------------------------------------------
   * not counting file buckets again stream max buffer limits. 
