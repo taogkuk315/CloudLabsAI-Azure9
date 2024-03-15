@@ -1,3 +1,8 @@
+v1.9.2
+--------------------------------------------------------------------------------
+  * mod_http2: adding allocator mutex to session pool due to reports of rare
+    crashes.
+    
 v1.9.1
 --------------------------------------------------------------------------------
   * mod_proxy_http2: support for ProxyPreserveHost directive
