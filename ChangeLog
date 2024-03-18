@@ -1,3 +1,15 @@
+v1.9.3
+--------------------------------------------------------------------------------
+  * moving session cleanup to pre_close hook to avoid races with
+    modules already shut down and slave connections still operating.
+  * stream timeouts now change to vhost values once the request
+    is parsed and processing starts. Initial values are taken from base
+    server or SNI host as before. [Stefan Eissing]
+  * fixed retry behaviour for http2 proxy connections when frontend 
+    connection uses http/1.1.     
+  * separate mutex instances for each bucket beam, resulting in 
+    less lock contention. input beams only created when necessary.
+
 v1.9.2
 --------------------------------------------------------------------------------
   * mod_http2: adding allocator mutex to session pool due to reports of rare
