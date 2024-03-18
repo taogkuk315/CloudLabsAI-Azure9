@@ -46,7 +46,6 @@ OBJECTS = \
     h2_switch.c \
     h2_task.c \
     h2_util.c \
-    h2_worker.c \
     h2_workers.c \
     mod_http2.c
 
@@ -74,7 +73,6 @@ HFILES = \
     h2_task.h \
     h2_util.h \
     h2_version.h \
-    h2_worker.h \
     h2_workers.h \
     mod_http2.h
 
