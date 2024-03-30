@@ -1,7 +1,7 @@
 
 # mod_h[ttp]2 - http/2 for Apache httpd
 
-Copyright (C) 2015, 2016 greenbytes GmbH
+Copyright 2015-2017 greenbytes GmbH
 
 This repository contains `mod_h[ttp]2` and `mod_proxy_h[ttp]2` from Apache httpd as a standalone build. 
 
@@ -15,7 +15,7 @@ If you want HTTP/2 in your production environment, please head over to the offic
 
 ## Current Version
 
-The versions here are **early experience versions**, based on Apache httpd 2.4.25. There is no guarantee that these will be released unchanged by Apache. But you are welcome to test it and give feedback.
+The versions here are based on Apache httpd 2.4.25. There is no guarantee that these will be released unchanged by Apache. But you are welcome to test it and give feedback.
 
 ## Install
 
@@ -32,9 +32,9 @@ If you do not have that or don't know how to get it, look at google, stackoverfl
 ## Apache 2.4.x Packages
 
 * **Ubuntu**: [ppa by ondrej](https://launchpad.net/~ondrej/+archive/ubuntu/apache2) for Ubuntu 14.04 and others
-* **Fedora**: [Rawhide includes httpd 2.4.17](http://rpmfind.net/linux/rpm2html/search.php?query=httpd)
-* **Debian** sid (unstable) includes httpd 2.4.17. See [how to install debian sid](https://wiki.debian.org/InstallFAQ#Q._How_do_I_install_.22unstable.22_.28.22sid.22.29.3F)
-* **Gentoo**: [latest stable includes httpd 2.4.17+](https://packages.gentoo.org/packages/www-servers/apache)
+* **Fedora**: [Rawhide](http://rpmfind.net/linux/rpm2html/search.php?query=httpd)
+* **Debian** sid (unstable) [how to install debian sid](https://wiki.debian.org/InstallFAQ#Q._How_do_I_install_.22unstable.22_.28.22sid.22.29.3F)
+* **Gentoo**: [latest stable](https://packages.gentoo.org/packages/www-servers/apache)
 * **FreeBSD**: [Apache 2.4 port includes mod_http2](http://www.freshports.org/www/apache24/) / [mod_http2-devel port in review](https://reviews.freebsd.org/D5220)
 
 ## Changes
