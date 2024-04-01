@@ -1,3 +1,11 @@
+v1.10.1
+--------------------------------------------------------------------------------
+  * Fixed bug in re-attempting proxy requests after connection error. 
+    Reliability of reconnect handling improved.
+  * Fixed two rare deadlocks with new non-nested mutex use.
+  * No longer mapping Link: header urls in proxy requests when preserve host
+    is set.
+
 v1.10.0
 --------------------------------------------------------------------------------
   * better performance, eliminated need for nested locks and
