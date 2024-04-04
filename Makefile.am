@@ -18,7 +18,7 @@ DIST_SUBDIRS    = mod_http2
 ACLOCAL_AMFLAGS = -I m4
 
 
-dist_doc_DATA   = README README.md
+dist_doc_DATA   = README README.md LICENSE
 
 
 .PHONY: test loadtest start stop restart
