@@ -1,3 +1,9 @@
+v1.10.3
+--------------------------------------------------------------------------------
+  * fixed possible deadlock that could occur when connections were 
+     terminated early with ongoing streams. Fixed possible hanger with timeout
+     on race when connection considers itself idle. 
+
 v1.10.2
 --------------------------------------------------------------------------------
   * MaxKeepAliveRequests now limits the number of times a 
