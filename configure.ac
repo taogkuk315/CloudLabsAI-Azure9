@@ -135,6 +135,9 @@ AC_CHECK_FUNCS([nghttp2_session_change_stream_priority],
 # nghttp2 >= 1.14.0: invalid header callback
 AC_CHECK_FUNCS([nghttp2_session_callbacks_set_on_invalid_header_callback], 
         [CPPFLAGS="$CPPFLAGS -DH2_NG2_INVALID_HEADER_CB"], [])
+dnl # nghttp2 >= 1.15.0: get/set stream window sizes
+AC_CHECK_FUNCS([nghttp2_session_get_stream_local_window_size], 
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_LOCAL_WIN_SIZE"], [])
 
 
 AC_CHECK_LIB([crypto], [SHA256_Init], [
