@@ -1,3 +1,7 @@
+v1.10.4
+--------------------------------------------------------------------------------
+  * mod_proxy_http2: adding support for Reverse Proxy Request headers.
+
 v1.10.3
 --------------------------------------------------------------------------------
   * fixed possible deadlock that could occur when connections were 
