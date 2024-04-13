@@ -20,10 +20,10 @@ lib_LTLIBRARIES    = mod_http2.la \
     mod_proxy_http2.la
 
 mod_http2_la_CPPFLAGS = -std=c99 -D_GNU_SOURCE -Werror
-mod_http2_la_LDFLAGS  = -module
+mod_http2_la_LDFLAGS  = -module -export-symbols-regex http2_module
 
 mod_proxy_http2_la_CPPFLAGS = -std=c99 -D_GNU_SOURCE -Werror
-mod_proxy_http2_la_LDFLAGS  = -module
+mod_proxy_http2_la_LDFLAGS  = -module -export-symbols-regex proxy_http2_module
 
 OBJECTS = \
     h2_alt_svc.c \
