@@ -7,7 +7,7 @@ This repository contains `mod_h[ttp]2` and `mod_proxy_h[ttp]2` from Apache httpd
 
 ## Status
 
-**`mod_h[ttp]2` is an official Apache httpd module**, first released in 2.4.17. See [Apache downloads](https://httpd.apache.org/download.cgi) to get a released version. `mod_proxy_h[ttp]2` has been realeased in 2.4.23.
+**`mod_h[ttp]2` is an official Apache httpd module**, first released in 2.4.17. See [Apache downloads](https://httpd.apache.org/download.cgi) to get a released version. `mod_proxy_h[ttp]2` has been released in 2.4.23.
 
 What you find here are **early experience versions** for people who like living on the edge and want to help me test not yet released changes.
 
@@ -32,7 +32,7 @@ If you do not have that or don't know how to get it, look at google, stackoverfl
 ## Apache 2.4.x Packages
 
 * **Ubuntu**: [ppa by ondrej](https://launchpad.net/~ondrej/+archive/ubuntu/apache2) for Ubuntu 14.04 and others
-* **Fedora**: [Rawhide](http://rpmfind.net/linux/rpm2html/search.php?query=httpd)
+* **Fedora**: [shipped in Fedora 23 and later](https://bodhi.fedoraproject.org/updates/?packages=httpd)
 * **Debian** sid (unstable) [how to install debian sid](https://wiki.debian.org/InstallFAQ#Q._How_do_I_install_.22unstable.22_.28.22sid.22.29.3F)
 * **Gentoo**: [latest stable](https://packages.gentoo.org/packages/www-servers/apache)
 * **FreeBSD**: [Apache 2.4 port includes mod_http2](http://www.freshports.org/www/apache24/) / [mod_http2-devel port in review](https://reviews.freebsd.org/D5220)
