@@ -1,3 +1,8 @@
+v1.10.6
+--------------------------------------------------------------------------------
+  * Fix for possible CPU busy loop introduced in v1.10.3 where a stream may keep
+    the session in continuous check for state changes that never happen.
+
 v1.10.5
 --------------------------------------------------------------------------------
   * fail requests without ERROR log in case we need to read interim
