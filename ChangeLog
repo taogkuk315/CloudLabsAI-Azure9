@@ -1,3 +1,9 @@
+v1.10.7
+--------------------------------------------------------------------------------
+  * disable and give warning when mpm_prefork is encountered. The server will
+    continue to work, but HTTP/2 will no longer be negotiated.
+  * improved implementation of ready queue.
+
 v1.10.6
 --------------------------------------------------------------------------------
   * Fix for possible CPU busy loop introduced in v1.10.3 where a stream may keep

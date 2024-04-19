@@ -69,7 +69,7 @@ struct h2_mplx {
     struct h2_ihash_t *spurge;      /* all streams done, ready for destroy */
     
     struct h2_iqueue *q;            /* all stream ids that need to be started */
-    struct h2_fifo *readyq;         /* all streams ready for output */
+    struct h2_ififo *readyq;        /* all stream ids ready for output */
         
     struct h2_ihash_t *redo_tasks;  /* all tasks that need to be redone */
     
@@ -124,7 +124,7 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *master,
  */ 
 void h2_mplx_release_and_join(h2_mplx *m, struct apr_thread_cond_t *wait);
 
-struct h2_task *h2_mplx_pop_task(h2_mplx *mplx, int *has_more);
+apr_status_t h2_mplx_pop_task(h2_mplx *m, struct h2_task **ptask);
 
 void h2_mplx_task_done(h2_mplx *m, struct h2_task *task, struct h2_task **ptask);
 
