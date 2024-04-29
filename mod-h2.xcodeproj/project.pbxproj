@@ -76,6 +76,7 @@
 		B2AB9ABA1C2ADBE100908DD6 /* h2_push.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_push.h; sourceTree = "<group>"; };
 		B2AB9ABB1C2ADBE100908DD6 /* h2_version.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_version.h; sourceTree = "<group>"; };
 		B2AB9ABC1C2ADBE100908DD6 /* mod_http2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mod_http2.h; sourceTree = "<group>"; };
+		B2B330511F3C601800579179 /* mod_h2-v1.10.10-apache-2.4.x.diff */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2-v1.10.10-apache-2.4.x.diff"; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D7861AAF1F4D001FD280 /* AUTHORS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = AUTHORS; sourceTree = "<group>"; };
@@ -185,9 +186,18 @@
 				B2E5D7851AAF1D87001FD280 /* Makefile.am */,
 				B255740A1BEB6EFC0058F97B /* mod_http2 */,
 				B2E5D7891AAF1F4D001FD280 /* NEWS */,
+				B2B330501F3C601800579179 /* patches */,
 				B27BBD2D1A6575C200C58A41 /* README */,
 				B256C4BA1ADD5FF10042C760 /* README.md */,
 			);
+			sourceTree = "<group>";
+		};
+		B2B330501F3C601800579179 /* patches */ = {
+			isa = PBXGroup;
+			children = (
+				B2B330511F3C601800579179 /* mod_h2-v1.10.10-apache-2.4.x.diff */,
+			);
+			path = patches;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

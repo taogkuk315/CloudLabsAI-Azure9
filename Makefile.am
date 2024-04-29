@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 SUBDIRS         = @BUILD_SUBDIRS@
-DIST_SUBDIRS    = mod_http2
+DIST_SUBDIRS    = mod_http2 patches
 
 ACLOCAL_AMFLAGS = -I m4
 
