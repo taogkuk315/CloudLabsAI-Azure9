@@ -1,3 +1,7 @@
+v1.10.10
+--------------------------------------------------------------------------------
+  * adding signalling of data available before waiting on beam buffer to drain. Missing this causes suspended streams to stall and time out.
+
 v1.10.9
 --------------------------------------------------------------------------------
   * cleanup of bucket beam change signaling to track down issue #143
