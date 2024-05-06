@@ -1,3 +1,8 @@
+v1.10.11
+--------------------------------------------------------------------------------
+  * DoS flow control protection is less agressive as long as active tasks stay
+    below worker capacity. Intended to fix problems with media streaming.
+
 v1.10.10
 --------------------------------------------------------------------------------
   * adding signalling of data available before waiting on beam buffer to drain. Missing this causes suspended streams to stall and time out.
