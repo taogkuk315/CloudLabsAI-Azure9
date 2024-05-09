@@ -1,3 +1,8 @@
+v1.10.12
+--------------------------------------------------------------------------------
+  * Reverting 1.10.11 change since showed no effect on issue #120
+  * Fixes a race condition on request body handling.
+
 v1.10.11
 --------------------------------------------------------------------------------
   * DoS flow control protection is less agressive as long as active tasks stay
