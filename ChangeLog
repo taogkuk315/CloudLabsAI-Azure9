@@ -1,3 +1,9 @@
+v1.10.13
+--------------------------------------------------------------------------------
+  * avoid unnecessary data retrieval for a trace log. Allow certain
+    information retrievals on null bucket beams where it makes sense.
+  * Fixed configure to check first for libs and then add compiler flags
+
 v1.10.12
 --------------------------------------------------------------------------------
   * Reverting 1.10.11 change since showed no effect on issue #120

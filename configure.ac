@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.10.12], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.10.13], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -59,6 +59,60 @@ AC_ARG_WITH([apxs], [AS_HELP_STRING([--with-apxs],
 AC_PROG_CC
 AC_PROG_CC_STDC
 
+# extern, we need to find where the apxs is. which then
+# can tell us the various directories we need.
+#
+if test x"$request_apxs" = "xcheck"; then
+    AC_PATH_PROG([APXS], [apxs])
+    if test "x${APXS}" = "x"; then
+        AC_MSG_ERROR("no APXS installation found")
+    fi
+else
+    APXS="$request_apxs"
+    AC_MSG_NOTICE("using APXS=$APXS as configured")
+fi
+
+export BUILD_SUBDIRS="mod_http2"
+
+prefix="$($APXS -q prefix)"
+LDFLAGS="-L$($APXS -q libdir) $LDFLAGS"
+CPPFLAGS="-I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR) $CPPFLAGS"
+export SYSCONF_DIR="$($APXS -q sysconfdir)"
+export LIBEXEC_DIR="$($APXS -q LIBEXECDIR)"
+
+HTTPD_VERSION="$($APXS -q HTTPD_VERSION)"
+
+# We need nghttp2 to be in our link path, check for it.
+#
+AC_CHECK_LIB([nghttp2], [nghttp2_session_server_new2], ,
+[AC_MSG_ERROR("library nghttp2 not found")])
+
+AC_CHECK_HEADERS([nghttp2/nghttp2.h])
+# nghttp2 >= 1.3.0: access to stream weights
+AC_CHECK_FUNCS([nghttp2_stream_get_weight], 
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_STREAM_API"], [])
+# nghttp2 >= 1.5.0: changing stream priorities
+AC_CHECK_FUNCS([nghttp2_session_change_stream_priority], 
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_CHANGE_PRIO"], [])
+# nghttp2 >= 1.14.0: invalid header callback
+AC_CHECK_FUNCS([nghttp2_session_callbacks_set_on_invalid_header_callback], 
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_INVALID_HEADER_CB"], [])
+dnl # nghttp2 >= 1.15.0: get/set stream window sizes
+AC_CHECK_FUNCS([nghttp2_session_get_stream_local_window_size], 
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_LOCAL_WIN_SIZE"], [])
+
+
+AC_CHECK_LIB([crypto], [SHA256_Init], [
+CPPFLAGS="$CPPFLAGS -DH2_OPENSSL"
+LIBS="$LIBS -lcrypto"],
+[AC_MSG_ERROR("libcrypto not found")])
+
+# Checks for header files.
+AC_CHECK_HEADERS([ \
+    assert.h \
+    stddef.h \
+])
+
 if test "x$werror" != "xno"; then
     AX_CHECK_COMPILE_FLAG([-Wall], [CFLAGS="$CFLAGS -Wall"])
     AX_CHECK_COMPILE_FLAG([-Wextra], [CFLAGS="$CFLAGS -Wextra"])
@@ -95,61 +149,6 @@ if test "x$werror" != "xno"; then
     AX_CHECK_COMPILE_FLAG(["-std=c89"], [CFLAGS="$CFLAGS -std=c89"])
     AX_CHECK_COMPILE_FLAG([-Wdeclaration-after-statement], [CFLAGS="$CFLAGS -Wdeclaration-after-statement"])
 fi
-
-
-# extern, we need to find where the apxs is. which then
-# can tell us the various directories we need.
-#
-if test x"$request_apxs" = "xcheck"; then
-    AC_PATH_PROG([APXS], [apxs])
-    if test "x${APXS}" = "x"; then
-        AC_MSG_ERROR("no APXS installation found")
-    fi
-else
-    APXS="$request_apxs"
-    AC_MSG_NOTICE("using APXS=$APXS as configured")
-fi
-
-export BUILD_SUBDIRS="mod_http2"
-
-prefix="$($APXS -q prefix)"
-LDFLAGS="$LDFLAGS -L$($APXS -q libdir)"
-CPPFLAGS="$CPPFLAGS -I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR)"
-export SYSCONF_DIR="$($APXS -q sysconfdir)"
-export LIBEXEC_DIR="$($APXS -q LIBEXECDIR)"
-
-HTTPD_VERSION="$($APXS -q HTTPD_VERSION)"
-
-# We need nghttp2 to be in our link path, check for it.
-#
-AC_CHECK_LIB([nghttp2], [nghttp2_session_server_new2], ,
-[AC_MSG_ERROR("library nghttp2 not found")])
-
-AC_CHECK_HEADERS([nghttp2/nghttp2.h])
-# nghttp2 >= 1.3.0: access to stream weights
-AC_CHECK_FUNCS([nghttp2_stream_get_weight], 
-        [CPPFLAGS="$CPPFLAGS -DH2_NG2_STREAM_API"], [])
-# nghttp2 >= 1.5.0: changing stream priorities
-AC_CHECK_FUNCS([nghttp2_session_change_stream_priority], 
-        [CPPFLAGS="$CPPFLAGS -DH2_NG2_CHANGE_PRIO"], [])
-# nghttp2 >= 1.14.0: invalid header callback
-AC_CHECK_FUNCS([nghttp2_session_callbacks_set_on_invalid_header_callback], 
-        [CPPFLAGS="$CPPFLAGS -DH2_NG2_INVALID_HEADER_CB"], [])
-dnl # nghttp2 >= 1.15.0: get/set stream window sizes
-AC_CHECK_FUNCS([nghttp2_session_get_stream_local_window_size], 
-        [CPPFLAGS="$CPPFLAGS -DH2_NG2_LOCAL_WIN_SIZE"], [])
-
-
-AC_CHECK_LIB([crypto], [SHA256_Init], [
-CPPFLAGS="$CPPFLAGS -DH2_OPENSSL"
-LIBS="$LIBS -lcrypto"],
-[AC_MSG_ERROR("libcrypto not found")])
-
-# Checks for header files.
-AC_CHECK_HEADERS([ \
-    assert.h \
-    stddef.h \
-])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_INT32_T
