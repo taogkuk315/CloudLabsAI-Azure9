@@ -1,3 +1,8 @@
+v1.10.14
+--------------------------------------------------------------------------------
+  * fixed unfair scheduling when number of active connections
+     exceeded the scheduling fifo capacity.
+
 v1.10.13
 --------------------------------------------------------------------------------
   * avoid unnecessary data retrieval for a trace log. Allow certain
