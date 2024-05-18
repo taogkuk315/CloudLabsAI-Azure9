@@ -1,3 +1,9 @@
+v1.10.16
+--------------------------------------------------------------------------------
+ * Removed no longer used code in stream cleanup, disabled beam events
+   during pool shutdown, discouraged content-encoding filter from applying
+   themselves to http2_status responses.
+
 v1.10.15
 --------------------------------------------------------------------------------
  * discourage gzip/brotli content encoding on http2-status responses as
