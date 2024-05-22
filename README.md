@@ -79,7 +79,7 @@ What it ***will*** do:
 * with a frontent HTTP/2 connection, all streams against the same backend will be handled in a single thread.
 
 
-## Documenation
+## Documentation
 
 There is the official [Apache documentation](https://httpd.apache.org/docs/2.4/en/mod/mod_http2.html) of the module, which you will not find here.
 
