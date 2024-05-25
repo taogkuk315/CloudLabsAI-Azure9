@@ -1,3 +1,10 @@
+v1.10.17
+--------------------------------------------------------------------------------
+ * accurate reporting of h2 data input/output per request via mod_logio. Fixes
+   an issue where output sizes where counted n-times on reused slave connections. See #158.
+ * normalized connection prefix logging when trace2 is enabled for direct h2 connection
+   detection.
+
 v1.10.16
 --------------------------------------------------------------------------------
  * Removed no longer used code in stream cleanup, disabled beam events
