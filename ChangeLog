@@ -1,3 +1,7 @@
+v1.10.18
+--------------------------------------------------------------------------------
+ * fixes a race condition where aborting streams triggers an unnecessary timeout.
+
 v1.10.17
 --------------------------------------------------------------------------------
  * accurate reporting of h2 data input/output per request via mod_logio. Fixes
