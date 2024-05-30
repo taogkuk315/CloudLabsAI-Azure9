@@ -1,3 +1,9 @@
+v1.10.19
+--------------------------------------------------------------------------------
+ * adding regular memory cleanup when transferring large response bodies. This
+   reduces memory footprint and avoids memory exhaustion when transferring large files
+   on 32-bit architectures.
+
 v1.10.18
 --------------------------------------------------------------------------------
  * fixes a race condition where aborting streams triggers an unnecessary timeout.
