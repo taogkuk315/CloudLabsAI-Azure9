@@ -1,3 +1,8 @@
+v1.10.21
+--------------------------------------------------------------------------------
+ * Code cleanups from Apache subversion
+ * New optional function to query the number of h2 workers from Apache branch
+
 v1.10.20
 --------------------------------------------------------------------------------
  * Restore keepalive handling of v1.10.16. Idle connections are kept open
