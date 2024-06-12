@@ -750,7 +750,7 @@ static int h2_h2_late_fixups(request_rec *r)
         struct h2_task *task = h2_ctx_get_task(ctx);
         if (task) {
             /* check if we copy vs. setaside files in this location */
-            task->output.copy_files = h2_config_geti(h2_config_rget(r), 
+            task->output.copy_files = !!h2_config_geti(h2_config_rget(r), 
                                                      H2_CONF_COPY_FILES);
             if (task->output.copy_files) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, task->c,

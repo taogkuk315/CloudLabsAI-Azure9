@@ -1,0 +1,19 @@
+
+Include "conf/global.conf"
+
+Listen @HTTPS_PORT@
+
+<VirtualHost *:@HTTPS_PORT@>
+    ServerName not-forbidden.org
+    ServerAlias www.not-forbidden.org
+    
+    DocumentRoot "@SERVER_DIR@/htdocs"
+    
+    SSLEngine on
+    SSLCertificateFile conf/ssl/valid_cert.pem
+    SSLCertificateKeyFile conf/ssl/valid_pkey.pem
+
+</VirtualHost>
+
+Include "conf/test.conf"
+

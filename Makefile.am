@@ -21,28 +21,7 @@ ACLOCAL_AMFLAGS = -I m4
 dist_doc_DATA   = README README.md LICENSE
 
 
-.PHONY: test loadtest start stop restart
-
-start:
-	make -C sandbox start
-
-restart:
-	make -C sandbox restart
-
-stop:
-	make -C sandbox stop
+.PHONY: test
 
 test:
-	make -C sandbox test
-
-loadtest:
-	make -C sandbox loadtest
-
-mpm_worker:
-	make -C sandbox mpm_worker
-
-mpm_event:
-	make -C sandbox mpm_event
-
-mpm_prefork:
-	make -C sandbox mpm_prefork
+	$(MAKE) -C test/ test

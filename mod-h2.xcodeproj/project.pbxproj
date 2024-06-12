@@ -65,6 +65,8 @@
 		B25574A41BEB6EFC0058F97B /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B25574A71BEB6EFC0058F97B /* mod_http2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mod_http2.c; sourceTree = "<group>"; };
 		B256C4BA1ADD5FF10042C760 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		B2583B0E2110907B0061E89A /* config.ini.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = config.ini.in; sourceTree = "<group>"; };
+		B2583B0F2110921C0061E89A /* TestEnv.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = TestEnv.py; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B2990D411DA28DD900F2B9BA /* h2_headers.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_headers.c; sourceTree = "<group>"; };
 		B2990D421DA28DD900F2B9BA /* h2_headers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_headers.h; sourceTree = "<group>"; };
@@ -76,6 +78,19 @@
 		B2AB9ABA1C2ADBE100908DD6 /* h2_push.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_push.h; sourceTree = "<group>"; };
 		B2AB9ABB1C2ADBE100908DD6 /* h2_version.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_version.h; sourceTree = "<group>"; };
 		B2AB9ABC1C2ADBE100908DD6 /* mod_http2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mod_http2.h; sourceTree = "<group>"; };
+		B2AEB19C21186E1A0034C7CB /* test_001_curl_get.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_001_curl_get.py; sourceTree = "<group>"; };
+		B2AEB19D21186ED60034C7CB /* Makefile.am */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
+		B2AEB19F211872D20034C7CB /* test.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = test.conf; sourceTree = "<group>"; };
+		B2AEB1A0211872D20034C7CB /* modules.conf.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = modules.conf.in; sourceTree = "<group>"; };
+		B2AEB1A1211872D20034C7CB /* global.conf.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = global.conf.in; sourceTree = "<group>"; };
+		B2AEB1A2211872D20034C7CB /* httpd.conf.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = httpd.conf.in; sourceTree = "<group>"; };
+		B2AEB1A3211872D20034C7CB /* mime.types */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mime.types; sourceTree = "<group>"; };
+		B2AEB1A52118745F0034C7CB /* test_common.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = test_common.h; sourceTree = "<group>"; };
+		B2AEB1A62118745F0034C7CB /* test_h2_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = test_h2_util.c; sourceTree = "<group>"; };
+		B2AEB1A72118745F0034C7CB /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		B2AEB1A9211876AF0034C7CB /* req_exts.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = req_exts.conf; sourceTree = "<group>"; };
+		B2AEB1AA211876AF0034C7CB /* req_template.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = req_template.conf; sourceTree = "<group>"; };
+		B2AEB1AC211877540034C7CB /* index.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
 		B2B330511F3C601800579179 /* mod_h2-v1.10.10-apache-2.4.x.diff */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2-v1.10.10-apache-2.4.x.diff"; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
@@ -172,6 +187,39 @@
 			path = m4;
 			sourceTree = "<group>";
 		};
+		B2583B0B21108FC40061E89A /* test */ = {
+			isa = PBXGroup;
+			children = (
+				B2583B0D21108FC40061E89A /* e2e */,
+				B2AEB19D21186ED60034C7CB /* Makefile.am */,
+				B2583B0C21108FC40061E89A /* unit */,
+			);
+			path = test;
+			sourceTree = "<group>";
+		};
+		B2583B0C21108FC40061E89A /* unit */ = {
+			isa = PBXGroup;
+			children = (
+				B2AEB1A72118745F0034C7CB /* main.c */,
+				B2AEB1A52118745F0034C7CB /* test_common.h */,
+				B2AEB1A62118745F0034C7CB /* test_h2_util.c */,
+			);
+			path = unit;
+			sourceTree = "<group>";
+		};
+		B2583B0D21108FC40061E89A /* e2e */ = {
+			isa = PBXGroup;
+			children = (
+				B2AEB19E211872D20034C7CB /* conf */,
+				B2583B0E2110907B0061E89A /* config.ini.in */,
+				B2AEB1AB211877540034C7CB /* htdocs */,
+				B2AEB1A8211876AF0034C7CB /* ssl */,
+				B2AEB19C21186E1A0034C7CB /* test_001_curl_get.py */,
+				B2583B0F2110921C0061E89A /* TestEnv.py */,
+			);
+			path = e2e;
+			sourceTree = "<group>";
+		};
 		B27BBD1F1A65757700C58A41 = {
 			isa = PBXGroup;
 			children = (
@@ -189,7 +237,37 @@
 				B2B330501F3C601800579179 /* patches */,
 				B27BBD2D1A6575C200C58A41 /* README */,
 				B256C4BA1ADD5FF10042C760 /* README.md */,
+				B2583B0B21108FC40061E89A /* test */,
 			);
+			sourceTree = "<group>";
+		};
+		B2AEB19E211872D20034C7CB /* conf */ = {
+			isa = PBXGroup;
+			children = (
+				B2AEB19F211872D20034C7CB /* test.conf */,
+				B2AEB1A0211872D20034C7CB /* modules.conf.in */,
+				B2AEB1A1211872D20034C7CB /* global.conf.in */,
+				B2AEB1A2211872D20034C7CB /* httpd.conf.in */,
+				B2AEB1A3211872D20034C7CB /* mime.types */,
+			);
+			path = conf;
+			sourceTree = "<group>";
+		};
+		B2AEB1A8211876AF0034C7CB /* ssl */ = {
+			isa = PBXGroup;
+			children = (
+				B2AEB1A9211876AF0034C7CB /* req_exts.conf */,
+				B2AEB1AA211876AF0034C7CB /* req_template.conf */,
+			);
+			path = ssl;
+			sourceTree = "<group>";
+		};
+		B2AEB1AB211877540034C7CB /* htdocs */ = {
+			isa = PBXGroup;
+			children = (
+				B2AEB1AC211877540034C7CB /* index.html */,
+			);
+			path = htdocs;
 			sourceTree = "<group>";
 		};
 		B2B330501F3C601800579179 /* patches */ = {
@@ -223,7 +301,7 @@
 		B27BBD201A65757700C58A41 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0800;
+				LastUpgradeCheck = 0940;
 				TargetAttributes = {
 					B2546D8A1A7F76FA0033A875 = {
 						CreatedOnToolsVersion = 6.0;
@@ -333,12 +411,20 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BuildMake = "";
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
@@ -360,12 +446,20 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BuildMake = "";
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;

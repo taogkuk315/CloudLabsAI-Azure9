@@ -2126,7 +2126,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                             ap_log_cerror(APLOG_MARK, APLOG_TRACE3, status, c,
                                           H2_SSSN_MSG(session, 
                                           "keepalive, %f sec left"),
-                                          (session->idle_until - now) / 1000000.0f);
+                                          (session->idle_until - now) / 1000000.0);
                         }
                         /* continue reading handling */
                     }

@@ -100,6 +100,7 @@ apr_bucket *h2_bucket_headers_beam(struct h2_bucket_beam *beam,
                                     apr_bucket_brigade *dest,
                                     const apr_bucket *src)
 {
+    (void)beam;
     if (H2_BUCKET_IS_HEADERS(src)) {
         h2_headers *r = ((h2_bucket_headers *)src->data)->headers;
         apr_bucket *b = h2_bucket_headers_create(dest->bucket_alloc, r);
@@ -115,6 +116,7 @@ h2_headers *h2_headers_create(int status, apr_table_t *headers_in,
                                 apr_pool_t *pool)
 {
     h2_headers *headers = apr_pcalloc(pool, sizeof(h2_headers));
+    (void)raw_bytes;
     headers->status    = status;
     headers->headers   = (headers_in? apr_table_copy(pool, headers_in)
                            : apr_table_make(pool, 5));

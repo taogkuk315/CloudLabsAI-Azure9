@@ -1,0 +1,9 @@
+# configuration for h2 tests
+
+[global]
+gen_dir = gen
+
+[httpd]
+http_port = @HTTP_PORT@
+https_port = @HTTPS_PORT@
+test_domain = @TEST_DOMAIN@

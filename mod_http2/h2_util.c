@@ -244,7 +244,7 @@ h2_ihash_t *h2_ihash_create(apr_pool_t *pool, size_t offset_of_int)
     return ih;
 }
 
-size_t h2_ihash_count(h2_ihash_t *ih)
+apr_uint32_t h2_ihash_count(h2_ihash_t *ih)
 {
     return apr_hash_count(ih->hash);
 }
@@ -345,7 +345,7 @@ static int iq_bubble_up(h2_iqueue *q, int i, int top,
 static int iq_bubble_down(h2_iqueue *q, int i, int bottom, 
                           h2_iq_cmp *cmp, void *ctx);
 
-h2_iqueue *h2_iq_create(apr_pool_t *pool, int capacity)
+h2_iqueue *h2_iq_create(apr_pool_t *pool, apr_uint32_t capacity)
 {
     h2_iqueue *q = apr_pcalloc(pool, sizeof(h2_iqueue));
     if (q) {
@@ -932,7 +932,7 @@ apr_status_t h2_ififo_create(h2_ififo **pfifo, apr_pool_t *pool, int capacity)
     return icreate_int(pfifo, pool, capacity, 0);
 }
 
-apr_status_t h2_ififo_set_create(h2_ififo **pfifo, apr_pool_t *pool, int capacity)
+apr_status_t h2_ififo_set_create(h2_ififo **pfifo, apr_pool_t *pool, apr_uint32_t capacity)
 {
     return icreate_int(pfifo, pool, capacity, 1);
 }

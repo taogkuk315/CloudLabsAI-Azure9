@@ -250,6 +250,8 @@ apr_status_t h2_conn_run(struct h2_ctx *ctx, conn_rec *c)
 apr_status_t h2_conn_pre_close(struct h2_ctx *ctx, conn_rec *c)
 {
     h2_session *session = h2_ctx_session_get(ctx);
+    
+    (void)c;
     if (session) {
         apr_status_t status = h2_session_pre_close(session, async_mpm);
         return (status == APR_SUCCESS)? DONE : status;
@@ -306,8 +308,6 @@ conn_rec *h2_slave_create(conn_rec *master, int slave_id, apr_pool_t *parent)
     c->input_filters          = NULL;
     c->output_filters         = NULL;
     c->bucket_alloc           = apr_bucket_alloc_create(pool);
-    c->data_in_input_filters  = 0;
-    c->data_in_output_filters = 0;
     /* prevent mpm_event from making wrong assumptions about this connection,
      * like e.g. using its socket for an async read check. */
     c->clogging_input_filters = 1;

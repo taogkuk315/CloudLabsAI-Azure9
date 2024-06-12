@@ -33,3 +33,15 @@ Makefile
 mod_h2-*.tar.gz
 mod_http2-*.tar.gz
 m4
+mod-h2.xcodeproj/project.xcworkspace/xcuserdata/
+mod-h2.xcodeproj/xcuserdata/sei.xcuserdatad/*
+mod-h2.xcodeproj/xcuserdata/sei.xcuserdatad/*/*
+mod-h2.xcodeproj/xcuserdata/sei.xcuserdatad/*/*/*
+mod_http2/.dirstamp
+test-driver
+test/.cache/
+test/e2e/.cache/
+test/e2e/TestEnv.pyc
+test/e2e/__pycache__/
+test/gen/
+

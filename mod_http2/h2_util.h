@@ -49,7 +49,7 @@ typedef int h2_ihash_iter_t(void *ctx, void *val);
  */
 h2_ihash_t *h2_ihash_create(apr_pool_t *pool, size_t offset_of_int);
 
-size_t h2_ihash_count(h2_ihash_t *ih);
+apr_uint32_t h2_ihash_count(h2_ihash_t *ih);
 int h2_ihash_empty(h2_ihash_t *ih);
 void *h2_ihash_get(h2_ihash_t *ih, int id);
 
@@ -99,7 +99,7 @@ typedef int h2_iq_cmp(int i1, int i2, void *ctx);
  * @param id the identifier of the queue
  * @param pool the memory pool
  */
-h2_iqueue *h2_iq_create(apr_pool_t *pool, int capacity);
+h2_iqueue *h2_iq_create(apr_pool_t *pool, apr_uint32_t capacity);
 
 /**
  * Return != 0 iff there are no tasks in the queue.
@@ -277,7 +277,7 @@ apr_status_t h2_ififo_create(h2_ififo **pfifo, apr_pool_t *pool, int capacity);
  * appear once. Pushing an int already present does not change the
  * queue and is successful.
  */
-apr_status_t h2_ififo_set_create(h2_ififo **pfifo, apr_pool_t *pool, int capacity);
+apr_status_t h2_ififo_set_create(h2_ififo **pfifo, apr_pool_t *pool, apr_uint32_t capacity);
 
 apr_status_t h2_ififo_term(h2_ififo *fifo);
 apr_status_t h2_ififo_interrupt(h2_ififo *fifo);

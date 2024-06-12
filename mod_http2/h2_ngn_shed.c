@@ -80,7 +80,7 @@ struct h2_req_engine {
     unsigned int done : 1;     /* engine has finished */
 
     APR_RING_HEAD(h2_req_entries, h2_ngn_entry) entries;
-    int capacity;     /* maximum concurrent requests */
+    apr_uint32_t capacity;     /* maximum concurrent requests */
     int no_assigned;  /* # of assigned requests */
     int no_live;      /* # of live */
     int no_finished;  /* # of finished */
@@ -108,7 +108,7 @@ void h2_req_engine_out_consumed(h2_req_engine *engine, conn_rec *c,
 }
 
 h2_ngn_shed *h2_ngn_shed_create(apr_pool_t *pool, conn_rec *c,
-                                int default_capacity, 
+                                apr_uint32_t default_capacity, 
                                 apr_size_t req_buffer_size)
 {
     h2_ngn_shed *shed;
@@ -258,7 +258,7 @@ static h2_ngn_entry *pop_detached(h2_req_engine *ngn)
 
 apr_status_t h2_ngn_shed_pull_request(h2_ngn_shed *shed, 
                                       h2_req_engine *ngn, 
-                                      int capacity, 
+                                      apr_uint32_t capacity, 
                                       int want_shutdown,
                                       request_rec **pr)
 {   
@@ -311,7 +311,7 @@ apr_status_t h2_ngn_shed_pull_request(h2_ngn_shed *shed,
     }
     
     if (1) {
-        h2_ngn_entry *entry = H2_REQ_ENTRIES_FIRST(&ngn->entries);
+        entry = H2_REQ_ENTRIES_FIRST(&ngn->entries);
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, shed->c, APLOGNO(03399)
                       "h2_ngn_shed(%ld): pull task, nothing, first task %s", 
                       shed->c->id, entry->task->id);

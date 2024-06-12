@@ -58,6 +58,8 @@ typedef struct {
 
 apr_status_t h2_mplx_child_init(apr_pool_t *pool, server_rec *s)
 {
+    (void)pool;
+    (void)s;
     return APR_SUCCESS;
 }
 
@@ -86,6 +88,7 @@ static void stream_output_consumed(void *ctx,
     h2_stream *stream = ctx;
     h2_task *task = stream->task;
     
+    (void)beam;
     if (length > 0 && task && task->assigned) {
         h2_req_engine_out_consumed(task->assigned, task->c, length); 
     }
@@ -95,11 +98,13 @@ static void stream_input_ev(void *ctx, h2_bucket_beam *beam)
 {
     h2_stream *stream = ctx;
     h2_mplx *m = stream->session->mplx;
+    (void)beam;
     apr_atomic_set32(&m->event_pending, 1); 
 }
 
 static void stream_input_consumed(void *ctx, h2_bucket_beam *beam, apr_off_t length)
 {
+    (void)beam;
     h2_stream_in_consumed(ctx, length);
 }
 
@@ -210,8 +215,8 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent,
             return NULL;
         }
     
-        m->max_streams = h2_config_geti(conf, H2_CONF_MAX_STREAMS);
-        m->stream_max_mem = h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM);
+        m->max_streams = (apr_uint32_t)h2_config_geti(conf, H2_CONF_MAX_STREAMS);
+        m->stream_max_mem = (apr_size_t)h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM);
 
         m->streams = h2_ihash_create(m->pool, offsetof(h2_stream,id));
         m->sredo = h2_ihash_create(m->pool, offsetof(h2_stream,id));
@@ -240,11 +245,11 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent,
     return m;
 }
 
-int h2_mplx_shutdown(h2_mplx *m)
+apr_uint32_t h2_mplx_shutdown(h2_mplx *m)
 {
-    int max_stream_started = 0;
+    apr_uint32_t max_stream_started = 0;
     
-    H2_MPLX_ENTER(m);
+    H2_MPLX_ENTER_ALWAYS(m);
 
     max_stream_started = m->max_stream_started;
     /* Clear schedule queue, disabling existing streams from starting */ 
@@ -256,6 +261,7 @@ int h2_mplx_shutdown(h2_mplx *m)
 
 static int input_consumed_signal(h2_mplx *m, h2_stream *stream)
 {
+    (void)m;
     if (stream->input) {
         return h2_beam_report_consumption(stream->input);
     }
@@ -280,6 +286,7 @@ static int report_consumption_iter(void *ctx, void *val)
 
 static int output_consumed_signal(h2_mplx *m, h2_task *task)
 {
+    (void)m;
     if (task->output.beam) {
         return h2_beam_report_consumption(task->output.beam);
     }
@@ -323,7 +330,7 @@ static int stream_destroy_iter(void *ctx, void *val)
             }
         
             if (m->s->keep_alive_max == 0 || slave->keepalives < m->s->keep_alive_max) {
-                reuse_slave = ((m->spare_slaves->nelts < (m->limit_active * 3 / 2))
+                reuse_slave = ((m->spare_slaves->nelts < (int)(m->limit_active * 3 / 2))
                                && !task->rst_error);
             }
             
@@ -521,7 +528,8 @@ static void output_produced(void *ctx, h2_bucket_beam *beam, apr_off_t bytes)
 {
     h2_stream *stream = ctx;
     h2_mplx *m = stream->session->mplx;
-    
+    (void)beam;
+    (void)bytes;
     check_data_for(m, stream, 1);
 }
 
@@ -710,11 +718,11 @@ apr_status_t h2_mplx_process(h2_mplx *m, struct h2_stream *stream,
 static h2_task *next_stream_task(h2_mplx *m)
 {
     h2_stream *stream;
-    int sid;
+    apr_uint32_t sid;
     while (!m->aborted && (m->tasks_active < m->limit_active)
-           && (sid = h2_iq_shift(m->q)) > 0) {
+           && (sid = (apr_uint32_t)h2_iq_shift(m->q)) > 0) {
         
-        stream = h2_ihash_get(m->streams, sid);
+        stream = h2_ihash_get(m->streams, (int)sid);
         if (stream) {
             conn_rec *slave, **pslave;
 
@@ -966,12 +974,12 @@ static h2_stream *get_timed_out_busy_stream(h2_mplx *m)
 static apr_status_t unschedule_slow_tasks(h2_mplx *m) 
 {
     h2_stream *stream;
-    int n;
+    long n;
     
     /* Try to get rid of streams that occupy workers. Look for safe requests
      * that are repeatable. If none found, fail the connection.
      */
-    n = (m->tasks_active - m->limit_active - (int)h2_ihash_count(m->sredo));
+    n = (m->tasks_active - m->limit_active - h2_ihash_count(m->sredo));
     while (n > 0 && (stream = get_latest_repeatable_unsubmitted_stream(m))) {
         h2_task_rst(stream->task, H2_ERR_CANCEL);
         h2_ihash_add(m->sredo, stream);
@@ -979,7 +987,7 @@ static apr_status_t unschedule_slow_tasks(h2_mplx *m)
     }
     
     if ((m->tasks_active - h2_ihash_count(m->sredo)) > m->limit_active) {
-        h2_stream *stream = get_timed_out_busy_stream(m);
+        stream = get_timed_out_busy_stream(m);
         if (stream) {
             /* Too many busy workers, unable to cancel enough streams
              * and with a busy, timed out stream, we tell the client
@@ -1144,7 +1152,7 @@ apr_status_t h2_mplx_req_engine_push(const char *ngn_type,
 
 apr_status_t h2_mplx_req_engine_pull(h2_req_engine *ngn, 
                                      apr_read_type_e block, 
-                                     int capacity, 
+                                     apr_uint32_t capacity, 
                                      request_rec **pr)
 {   
     h2_ngn_shed *shed = h2_ngn_shed_get_shed(ngn);
