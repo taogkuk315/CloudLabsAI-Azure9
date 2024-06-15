@@ -2,8 +2,11 @@
 
 [global]
 gen_dir = gen
+prefix = @PREFIX@
+server_dir = @SERVER_DIR@
+curl_bin = @CURL_BIN@
 
 [httpd]
 http_port = @HTTP_PORT@
 https_port = @HTTPS_PORT@
-test_domain = @TEST_DOMAIN@
+http_tld = @HTTP_TLD@

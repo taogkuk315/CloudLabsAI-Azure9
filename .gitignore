@@ -44,4 +44,6 @@ test/e2e/.cache/
 test/e2e/TestEnv.pyc
 test/e2e/__pycache__/
 test/gen/
+test/e2e/.pytest_cache/
+test/e2e/gen/
 

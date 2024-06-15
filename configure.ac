@@ -184,17 +184,21 @@ AC_SUBST(BUILD_SUBDIRS)
 AC_SUBST(SYSCONF_DIR)
 AC_SUBST(LIBEXEC_DIR)
 
-HTTP_PORT      = 12345
-HTTPS_PORT     = 12346
-TEST_DOMAIN    = example.org
+HTTP_PORT=12345
+HTTPS_PORT=12346
+HTTP_TLD="tests.httpd.apache.org"
 
+AC_SUBST(PREFIX)
 AC_SUBST(HTTP_PORT)
 AC_SUBST(HTTPS_PORT)
-AC_SUBST(TEST_DOMAIN)
+AC_SUBST(HTTP_TLD)
 
 AC_ARG_WITH([serverdir], [AS_HELP_STRING([--with-serverdir],
     [Use serverdir directory for setup [default=gen/apache]])],
     [request_serverdir=$withval], [request_serverdir=$PWD/test/gen/apache])
+
+AC_ARG_WITH([curl], [AS_HELP_STRING([--with-curl], [Use curl from this prefix])],
+    [request_curl=$withval], [request_curl=check])
 
 SERVER_NAME=$(hostname -f)
 AC_SUBST(SERVER_NAME)
@@ -217,6 +221,35 @@ AC_SUBST(HTTPD_USER)
 MODULE_SRC="$PWD/mod_http2"
 AC_SUBST(MODULE_SRC)
 
+# we need curl for testing
+#
+if test x"$request_curl" = "xcheck"; then
+    AC_CHECK_LIB([curl], [curl_global_init], , [AC_MSG_ERROR("libcurl not found")])
+    curl_config="curl-config"
+    AC_CHECK_PROG([CURL_CONFIG],[$curl_config],[yes],[no])
+    if  test "x$CURL_CONFIG" = xno; then
+        curl_config="${prefix}/bin/curl-config"
+        AC_CHECK_PROG([CURL_CONFIG],[$curl_config],[yes],[no])
+    fi
+else
+    curl_config="$request_curl/bin/curl-config"
+    AC_PATH_PROG([CURL_CONFIG],[$curl_config],[yes],[no])
+fi
+
+AM_CONDITIONAL([FOUND_CURL_CONFIG], [test "x$CURL_CONFIG" = xyes])
+AM_COND_IF([FOUND_CURL_CONFIG],,[AC_MSG_ERROR([required program 'curl-config' not found.])])
+
+# $curl_config is available. Does it offer HTTP/2?
+curl_ssl=$( $curl_config --features | fgrep HTTP2 )
+if test "x$curl_ssl" = "x"; then
+    AC_MSG_WARN([curl from $curl_config does not support HTTP/2. Tests will not work.])
+elif test x"$curl_config" = "xcurl-config"; then
+    CURL_BIN="curl"
+else
+    CURL_BIN=$( dirname $curl_config)/curl
+fi
+AC_SUBST(CURL_BIN)
+
 # Do we have a pkg-config?
 AC_ARG_VAR([PKGCONFIG], [pkg-config executable])
 AC_PATH_PROG([PKGCONFIG], [pkg-config])
@@ -228,7 +261,6 @@ AC_CONFIG_FILES([
     mod_http2/h2_version.h
     test/Makefile
     test/e2e/config.ini
-    test/e2e/conf/global.conf
     test/e2e/conf/httpd.conf
     test/e2e/conf/modules.conf
 ])
@@ -248,4 +280,5 @@ AC_MSG_NOTICE([summary of build options:
     LDFLAGS:        ${LDFLAGS}
     LIBS:           ${LIBS}
     CPPFLAGS:       ${CPPFLAGS}
+    curl            ${CURL_BIN:--}
 ])

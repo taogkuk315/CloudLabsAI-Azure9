@@ -1,13 +1,58 @@
+User @HTTPD_USER@
 
-Include "conf/global.conf"
+ServerName @SERVER_NAME@
+ServerRoot "@SERVER_DIR@"
 
+Include "conf/modules.conf"
+
+DocumentRoot "@SERVER_DIR@/htdocs"
+
+<IfModule log_config_module>
+    LogFormat "%h %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\" %k" combined
+    LogFormat "%h %l %u %t \"%r\" %>s %b" common
+    CustomLog "logs/access_log" combined
+    
+</IfModule>
+
+Listen @HTTP_PORT@
 Listen @HTTPS_PORT@
+
+<VirtualHost *:@HTTP_PORT@>
+    ServerName localhost
+    
+    DocumentRoot "@SERVER_DIR@/htdocs"
+    
+</VirtualHost>
 
 <VirtualHost *:@HTTPS_PORT@>
     ServerName not-forbidden.org
     ServerAlias www.not-forbidden.org
     
     DocumentRoot "@SERVER_DIR@/htdocs"
+    
+    SSLEngine on
+    SSLCertificateFile conf/ssl/valid_cert.pem
+    SSLCertificateKeyFile conf/ssl/valid_pkey.pem
+
+</VirtualHost>
+
+<VirtualHost *:@HTTP_PORT@>
+    ServerName test1.@HTTP_TLD@
+    ServerAlias www1.@HTTP_TLD@
+    
+    DocumentRoot "@SERVER_DIR@/htdocs/test1"
+    
+    SSLEngine on
+    SSLCertificateFile conf/ssl/valid_cert.pem
+    SSLCertificateKeyFile conf/ssl/valid_pkey.pem
+
+</VirtualHost>
+
+<VirtualHost *:@HTTPS_PORT@>
+    ServerName test1.@HTTP_TLD@
+    ServerAlias www1.@HTTP_TLD@
+    
+    DocumentRoot "@SERVER_DIR@/htdocs/test1"
     
     SSLEngine on
     SSLCertificateFile conf/ssl/valid_cert.pem

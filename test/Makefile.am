@@ -37,16 +37,19 @@ $(SERVER_DIR)/conf/ssl/valid_cert.pem: \
 		-out $(SERVER_DIR)/conf/ssl/valid_cert.pem \
 		-extfile e2e/ssl/req_exts.conf -extensions v3_req_ext
 
-$(SERVER_DIR)/htdocs/index.html: e2e/htdocs/index.html
+$(SERVER_DIR)/htdocs/.copied: \ 
+            $(wildcard $(SERVER_DIR)/htdocs/*.*) \
+            $(wildcard $(SERVER_DIR)/htdocs/*/*.*)
 	@mkdir -p $(SERVER_DIR)/htdocs
-	@cp e2e/htdocs/*.* $(SERVER_DIR)/htdocs 
+	@cp -r e2e/htdocs/* $(SERVER_DIR)/htdocs 
 
-$(SERVER_DIR)/.test-setup: e2e/conf/* \
-		$(SERVER_DIR)/htdocs/index.html \
+$(SERVER_DIR)/.test-setup: \
+                $(wildcard e2e/conf/*) \
+                $(SERVER_DIR)/htdocs/.copied \
 		$(SERVER_DIR)/conf/ssl/valid_cert.pem
 	@mkdir -p $(SERVER_DIR)/conf/ssl
 	@mkdir -p $(SERVER_DIR)/logs
-	rsync -a --exclude="httpd*" --exclude="*.in" e2e/conf/*.* $(SERVER_DIR)/conf
+	rsync -a --exclude="*.in" e2e/conf/*.* $(SERVER_DIR)/conf
 	@touch $(SERVER_DIR)/.test-setup
 
 
