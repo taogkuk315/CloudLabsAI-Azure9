@@ -25,3 +25,6 @@ dist_doc_DATA   = README README.md LICENSE
 
 test:
 	$(MAKE) -C test/ test
+
+clean-local:
+	$(MAKE) -C test/ clean

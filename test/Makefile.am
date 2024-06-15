@@ -42,6 +42,7 @@ $(SERVER_DIR)/htdocs/.copied: \
             $(wildcard $(SERVER_DIR)/htdocs/*/*.*)
 	@mkdir -p $(SERVER_DIR)/htdocs
 	@cp -r e2e/htdocs/* $(SERVER_DIR)/htdocs 
+	@chmod +x $(SERVER_DIR)/htdocs/cgi/*.* 
 
 $(SERVER_DIR)/.test-setup: \
                 $(wildcard e2e/conf/*) \
@@ -57,6 +58,5 @@ test: $(SERVER_DIR)/.test-setup
 	cd e2e && py.test
 
 clean-local:
-	rm -f $(SERVER_DIR)/conf/ssl/*
 	rm -rf *.pyc __pycache__
-	rm -rf $(SERVER_DIR)
+	rm -rf $(GEN)

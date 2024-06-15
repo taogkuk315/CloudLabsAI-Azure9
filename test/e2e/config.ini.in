@@ -1,10 +1,11 @@
 # configuration for h2 tests
 
 [global]
-gen_dir = gen
+gen_dir = @GEN_DIR@
 prefix = @PREFIX@
 server_dir = @SERVER_DIR@
 curl_bin = @CURL_BIN@
+test_dir = @TEST_DIR@
 
 [httpd]
 http_port = @HTTP_PORT@

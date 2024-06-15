@@ -24,6 +24,18 @@ Listen @HTTPS_PORT@
     
 </VirtualHost>
 
+<VirtualHost *:@HTTP_PORT@>
+    ServerName test1.@HTTP_TLD@
+    ServerAlias www1.@HTTP_TLD@
+    Protocols h2c http/1.1
+    DocumentRoot "@SERVER_DIR@/htdocs/test1"
+    
+    SSLEngine on
+</VirtualHost>
+
+SSLCertificateFile conf/ssl/valid_cert.pem
+SSLCertificateKeyFile conf/ssl/valid_pkey.pem
+
 <VirtualHost *:@HTTPS_PORT@>
     ServerName not-forbidden.org
     ServerAlias www.not-forbidden.org
@@ -31,34 +43,38 @@ Listen @HTTPS_PORT@
     DocumentRoot "@SERVER_DIR@/htdocs"
     
     SSLEngine on
-    SSLCertificateFile conf/ssl/valid_cert.pem
-    SSLCertificateKeyFile conf/ssl/valid_pkey.pem
-
-</VirtualHost>
-
-<VirtualHost *:@HTTP_PORT@>
-    ServerName test1.@HTTP_TLD@
-    ServerAlias www1.@HTTP_TLD@
-    
-    DocumentRoot "@SERVER_DIR@/htdocs/test1"
-    
-    SSLEngine on
-    SSLCertificateFile conf/ssl/valid_cert.pem
-    SSLCertificateKeyFile conf/ssl/valid_pkey.pem
-
 </VirtualHost>
 
 <VirtualHost *:@HTTPS_PORT@>
     ServerName test1.@HTTP_TLD@
     ServerAlias www1.@HTTP_TLD@
+    Protocols h2 http/1.1
     
     DocumentRoot "@SERVER_DIR@/htdocs/test1"
     
     SSLEngine on
-    SSLCertificateFile conf/ssl/valid_cert.pem
-    SSLCertificateKeyFile conf/ssl/valid_pkey.pem
-
 </VirtualHost>
+
+<VirtualHost *:@HTTPS_PORT@>
+    ServerName test2.@HTTP_TLD@
+    ServerAlias www2.@HTTP_TLD@
+    Protocols http/1.1 h2
+    
+    DocumentRoot "@SERVER_DIR@/htdocs/test2"
+    
+    SSLEngine on
+</VirtualHost>
+
+<Directory "@SERVER_DIR@/htdocs/cgi">
+    Options Indexes FollowSymLinks
+    AllowOverride None
+    Require all granted
+
+    AddHandler cgi-script .py
+    AddHandler cgi-script .cgi
+    Options +ExecCGI
+</Directory>
+
 
 Include "conf/test.conf"
 

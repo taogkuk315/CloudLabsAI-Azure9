@@ -203,6 +203,9 @@ AC_ARG_WITH([curl], [AS_HELP_STRING([--with-curl], [Use curl from this prefix])]
 SERVER_NAME=$(hostname -f)
 AC_SUBST(SERVER_NAME)
 
+TEST_DIR="$PWD/test"
+AC_SUBST(TEST_DIR)
+
 GEN_DIR="$PWD/test/gen"
 AC_SUBST(GEN_DIR)
 

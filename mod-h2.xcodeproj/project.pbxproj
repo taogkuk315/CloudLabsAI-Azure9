@@ -89,11 +89,14 @@
 		B2AEB1A72118745F0034C7CB /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
 		B2AEB1A9211876AF0034C7CB /* req_exts.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = req_exts.conf; sourceTree = "<group>"; };
 		B2AEB1AA211876AF0034C7CB /* req_template.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = req_template.conf; sourceTree = "<group>"; };
-		B2AEB1AC211877540034C7CB /* index.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
 		B2B330511F3C601800579179 /* mod_h2-v1.10.10-apache-2.4.x.diff */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mod_h2-v1.10.10-apache-2.4.x.diff"; sourceTree = "<group>"; };
 		B2D2D1DE2134419A00D8F6B7 /* alive.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = alive.json; sourceTree = "<group>"; };
 		B2D2D1DF2135424D00D8F6B7 /* test_002_curl_basics.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_002_curl_basics.py; sourceTree = "<group>"; };
 		B2D2D1E1213553C600D8F6B7 /* alive.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = alive.json; sourceTree = "<group>"; };
+		B2D2D1E32135615500D8F6B7 /* alive.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = alive.json; sourceTree = "<group>"; };
+		B2D2D1E521356A5300D8F6B7 /* hello.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = hello.py; sourceTree = "<group>"; };
+		B2D2D1E621356EEE00D8F6B7 /* test_003_curl_get.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_003_curl_get.py; sourceTree = "<group>"; };
+		B2D2D1E721357B4500D8F6B7 /* index.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D7861AAF1F4D001FD280 /* AUTHORS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = AUTHORS; sourceTree = "<group>"; };
@@ -218,6 +221,7 @@
 				B2AEB1A8211876AF0034C7CB /* ssl */,
 				B2AEB19C21186E1A0034C7CB /* test_001_httpd_alive.py */,
 				B2D2D1DF2135424D00D8F6B7 /* test_002_curl_basics.py */,
+				B2D2D1E621356EEE00D8F6B7 /* test_003_curl_get.py */,
 				B2583B0F2110921C0061E89A /* TestEnv.py */,
 			);
 			path = e2e;
@@ -267,9 +271,10 @@
 		B2AEB1AB211877540034C7CB /* htdocs */ = {
 			isa = PBXGroup;
 			children = (
-				B2D2D1E0213553BA00D8F6B7 /* test1 */,
-				B2AEB1AC211877540034C7CB /* index.html */,
+				B2D2D1E421356A1A00D8F6B7 /* cgi */,
 				B2D2D1DE2134419A00D8F6B7 /* alive.json */,
+				B2D2D1E0213553BA00D8F6B7 /* test1 */,
+				B2D2D1E22135614600D8F6B7 /* test2 */,
 			);
 			path = htdocs;
 			sourceTree = "<group>";
@@ -286,8 +291,25 @@
 			isa = PBXGroup;
 			children = (
 				B2D2D1E1213553C600D8F6B7 /* alive.json */,
+				B2D2D1E721357B4500D8F6B7 /* index.html */,
 			);
 			path = test1;
+			sourceTree = "<group>";
+		};
+		B2D2D1E22135614600D8F6B7 /* test2 */ = {
+			isa = PBXGroup;
+			children = (
+				B2D2D1E32135615500D8F6B7 /* alive.json */,
+			);
+			path = test2;
+			sourceTree = "<group>";
+		};
+		B2D2D1E421356A1A00D8F6B7 /* cgi */ = {
+			isa = PBXGroup;
+			children = (
+				B2D2D1E521356A5300D8F6B7 /* hello.py */,
+			);
+			path = cgi;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

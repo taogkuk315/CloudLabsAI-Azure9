@@ -18,6 +18,7 @@ from datetime import datetime
 from datetime import tzinfo
 from datetime import timedelta
 from ConfigParser import SafeConfigParser
+from shutil import copyfile
 from urlparse import urlparse
 
 class TestEnv:
@@ -31,48 +32,37 @@ class TestEnv:
         cls.GEN_DIR     = cls.config.get('global', 'gen_dir')
         cls.WEBROOT     = cls.config.get('global', 'server_dir')
         cls.CURL        = cls.config.get('global', 'curl_bin')
+        cls.TEST_DIR    = cls.config.get('global', 'test_dir')
 
         cls.HTTP_PORT   = cls.config.get('httpd', 'http_port')
         cls.HTTPS_PORT  = cls.config.get('httpd', 'https_port')
         cls.HTTP_TLD    = cls.config.get('httpd', 'http_tld')
 
-        cls.APACHECTL = os.path.join(cls.PREFIX, 'bin', 'apachectl')
+        cls.APACHECTL  = os.path.join(cls.PREFIX, 'bin', 'apachectl')
 
         cls.HTTPD_ADDR = "127.0.0.1"
-        cls.HTTP_URL = "http://" + cls.HTTPD_ADDR + ":" + cls.HTTP_PORT
-        cls.HTTPS_URL = "https://" + cls.HTTPD_ADDR + ":" + cls.HTTPS_PORT
+        cls.HTTP_URL   = "http://" + cls.HTTPD_ADDR + ":" + cls.HTTP_PORT
+        cls.HTTPS_URL  = "https://" + cls.HTTPD_ADDR + ":" + cls.HTTPS_PORT
+        
+        cls.HTTPD_CONF_DIR = os.path.join(cls.WEBROOT, "conf")
+        cls.HTTPD_TEST_CONF = os.path.join(cls.HTTPD_CONF_DIR, "test.conf")
+        cls.E2E_DIR    = os.path.join(cls.TEST_DIR, "e2e")
 
         cls.VERIFY_CERTIFICATES = False
         
         if not os.path.exists(cls.GEN_DIR):
             os.makedirs(cls.GEN_DIR)
 
-
+###################################################################################################
+# path construction
+#
     @classmethod
-    def is_up( cls, url, timeout ) :
-        u = urlparse(url)
-        try_until = time.time() + timeout
-        print("checking reachability of %s" % url)
-        while time.time() < try_until:
-            try:
-                c = HTTPConnection(u.hostname, u.port, timeout=timeout)
-                c.request('HEAD', u.path)
-                resp = c.getresponse()
-                c.close()
-                return True
-            except IOError:
-                print ("connect error: %s" % sys.exc_info()[0])
-                time.sleep(.2)
-            except:
-                print ("Unexpected error: %s" % sys.exc_info()[0])
-                time.sleep(.2)
-        print ("Unable to contact server after %d sec" % timeout)
-        return False
+    def e2e_src( cls, path ) :
+        return os.path.join(cls.E2E_DIR, path)
 
-    @classmethod
-    def httpd_is_up( cls, timeout ) :
-        return cls.is_up( "http://test.%s:%d" % (cls.TEST_DOMAIN, cls.HTTP_PORT), timeout )
-
+###################################################################################################
+# command execution
+#
     @classmethod
     def run( cls, args, input=None ) :
         print ("execute: %s" % " ".join(args))
@@ -205,6 +195,16 @@ class TestEnv:
             return 0 if cls.is_dead(cls.HTTPD_CHECK_URL, 5) else -1
         return rv
         
+    @classmethod
+    def install_test_conf( cls, conf=None) :
+        if conf is None:
+            conf_src = os.path.join("conf", "test.conf")
+        elif os.path.isabs(conf):
+            conf_src = conf
+        else:
+            conf_src = os.path.join("data", conf + ".conf")
+        copyfile(conf_src, cls.HTTPD_TEST_CONF)
+
 ###################################################################################################
 # curl
 #
@@ -213,15 +213,18 @@ class TestEnv:
         return cls.run( [ cls.CURL ] + args )
 
     @classmethod
-    def curl_get( cls, url, timeout=5 ) :
+    def curl_get( cls, url, timeout=5, add_options=None ) :
         u = urlparse(url)
         headerfile = ("%s/curl.headers" % cls.GEN_DIR)
-        r = cls.curl_raw([ 
+        args = [ 
             "-ks", "-D", headerfile, 
             "--resolve", ("%s:%s:%s" % (u.hostname, u.port, cls.HTTPD_ADDR)),
-            "--connect-timeout", ("%d" % timeout), 
-            url 
-        ])
+            "--connect-timeout", ("%d" % timeout) 
+        ]
+        if add_options:
+            args.extend(add_options)
+        args.append( url )
+        r = cls.curl_raw( args )
         if r["rv"] == 0:
             lines = open(headerfile).readlines()
             m = re.match(r'(\S+) (\d+) (.*)', lines[0])
@@ -232,6 +235,51 @@ class TestEnv:
                     "description" : m.group(3),
                     "body"        : r["out"]["text"]
                 }
+                header = {}
+                for line in lines[1:]:
+                    m = re.match(r'([^:]+):\s*([^\r]*)\r?', line)
+                    if m:
+                        header[ m.group(1).lower() ] = m.group(2)
+                r["response"]["header"] = header
                 if r["out"]["json"]:
                     r["response"]["json"] = r["out"]["json"] 
         return r
+
+
+###################################################################################################
+# write apache config file
+#
+class HttpdConf(object):
+
+    def __init__(self, path=None):
+        if path:
+            self.path = path
+        else:
+            self.path = os.path.join(TestEnv.GEN_DIR, "auto.conf")
+        if os.path.isfile(self.path):
+            os.remove(self.path)
+        open(self.path, "a").write("")
+
+    def add_line(self, line):
+        open(self.path, "a").write(line + "\n")
+
+    def add_vhost(self, port, name, aliasList, docRoot="htdocs", withSSL=True):
+        self.start_vhost(port, name, aliasList, docRoot, withSSL)
+        self.end_vhost()
+
+    def start_vhost(self, port, name, aliasList, docRoot="htdocs", withSSL=True):
+        f = open(self.path, "a") 
+        f.write("<VirtualHost *:%s>\n" % port)
+        f.write("    ServerName %s.%s\n" % (name, TestEnv.HTTP_TLD) )
+        if len(aliasList) > 0:
+            for alias in aliasList:
+                f.write("    ServerAlias %s.%s\n" % (alias, TestEnv.HTTP_TLD) )
+        f.write("    DocumentRoot %s\n\n" % docRoot)
+        if withSSL:
+            f.write("    SSLEngine on\n")
+                  
+    def end_vhost(self):
+        self.add_line("</VirtualHost>\n\n")
+
+    def install(self):
+        TestEnv.install_test_conf(self.path)
