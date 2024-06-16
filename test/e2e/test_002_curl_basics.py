@@ -15,19 +15,19 @@ from TestEnv import TestEnv
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
+    assert TestEnv.apache_start() == 0
         
 def teardown_module(module):
     print("teardown_module: %s" % module.__name__)
+    assert TestEnv.apache_stop() == 0
 
 class TestStore:
 
     def setup_method(self, method):
         print("setup_method: %s" % method.__name__)
-        assert TestEnv.apache_start() == 0
 
     def teardown_method(self, method):
         print("teardown_method: %s" % method.__name__)
-        assert TestEnv.apache_stop() == 0
     
     # check that we see the correct documents when using the test1 server name over http:
     def test_002_01(self):

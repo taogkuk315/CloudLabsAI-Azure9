@@ -53,6 +53,11 @@ SSLCertificateKeyFile conf/ssl/valid_pkey.pem
     DocumentRoot "@SERVER_DIR@/htdocs/test1"
     
     SSLEngine on
+
+    <Location /006>
+        Options +Indexes
+        HeaderName /006/header.html
+    </Location>
 </VirtualHost>
 
 <VirtualHost *:@HTTPS_PORT@>
