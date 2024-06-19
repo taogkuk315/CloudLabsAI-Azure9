@@ -310,6 +310,9 @@
 		B2D2D2BF213583E900D8F6B7 /* gophertiles_027.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = gophertiles_027.jpg; sourceTree = "<group>"; };
 		B2D2D2C0213583E900D8F6B7 /* gophertiles_147.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = gophertiles_147.jpg; sourceTree = "<group>"; };
 		B2D2D2C1213583E900D8F6B7 /* gophertiles_153.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = gophertiles_153.jpg; sourceTree = "<group>"; };
+		B2D2D2C22136A35A00D8F6B7 /* test_004_curl_post.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_004_curl_post.py; sourceTree = "<group>"; };
+		B2D2D2C32136A3C100D8F6B7 /* upload.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = upload.py; sourceTree = "<group>"; };
+		B2D2D2C52136C48300D8F6B7 /* empty.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = empty.txt; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B2E5D7861AAF1F4D001FD280 /* AUTHORS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = AUTHORS; sourceTree = "<group>"; };
@@ -435,6 +438,7 @@
 				B2AEB19C21186E1A0034C7CB /* test_001_httpd_alive.py */,
 				B2D2D1DF2135424D00D8F6B7 /* test_002_curl_basics.py */,
 				B2D2D1E621356EEE00D8F6B7 /* test_003_curl_get.py */,
+				B2D2D2C22136A35A00D8F6B7 /* test_004_curl_post.py */,
 				B2583B0F2110921C0061E89A /* TestEnv.py */,
 			);
 			path = e2e;
@@ -534,8 +538,10 @@
 		B2D2D1E421356A1A00D8F6B7 /* cgi */ = {
 			isa = PBXGroup;
 			children = (
+				B2D2D2C42136C48300D8F6B7 /* files */,
 				B2D2D1E521356A5300D8F6B7 /* hello.py */,
 				B2D2D1E821357E2900D8F6B7 /* necho.py */,
+				B2D2D2C32136A3C100D8F6B7 /* upload.py */,
 			);
 			path = cgi;
 			sourceTree = "<group>";
@@ -776,6 +782,14 @@
 				B2D2D2C1213583E900D8F6B7 /* gophertiles_153.jpg */,
 			);
 			path = 004;
+			sourceTree = "<group>";
+		};
+		B2D2D2C42136C48300D8F6B7 /* files */ = {
+			isa = PBXGroup;
+			children = (
+				B2D2D2C52136C48300D8F6B7 /* empty.txt */,
+			);
+			path = files;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

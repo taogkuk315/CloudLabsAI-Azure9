@@ -209,42 +209,76 @@ class TestEnv:
 # curl
 #
     @classmethod
-    def curl_raw( cls, args ) :
-        return cls.run( [ cls.CURL ] + args )
-
-    @classmethod
-    def curl_get( cls, url, timeout=5, add_options=None ) :
+    def curl_raw( cls, url, timeout, options ) :
         u = urlparse(url)
         headerfile = ("%s/curl.headers" % cls.GEN_DIR)
+        if os.path.isfile(headerfile):
+            os.remove(headerfile)
+
         args = [ 
+            cls.CURL,
             "-ks", "-D", headerfile, 
             "--resolve", ("%s:%s:%s" % (u.hostname, u.port, cls.HTTPD_ADDR)),
             "--connect-timeout", ("%d" % timeout) 
         ]
-        if add_options:
-            args.extend(add_options)
+        if options:
+            args.extend(options)
         args.append( url )
-        r = cls.curl_raw( args )
+        r = cls.run( args )
         if r["rv"] == 0:
             lines = open(headerfile).readlines()
-            m = re.match(r'(\S+) (\d+) (.*)', lines[0])
-            if m:
-                r["response"] = {
-                    "protocol"    : m.group(1), 
-                    "status"      : int(m.group(2)), 
-                    "description" : m.group(3),
-                    "body"        : r["out"]["text"]
-                }
-                header = {}
-                for line in lines[1:]:
-                    m = re.match(r'([^:]+):\s*([^\r]*)\r?', line)
-                    if m:
-                        header[ m.group(1).lower() ] = m.group(2)
-                r["response"]["header"] = header
-                if r["out"]["json"]:
-                    r["response"]["json"] = r["out"]["json"] 
+            exp_stat = True
+            header = {}
+            for line in lines:
+                if exp_stat:
+                    m = re.match(r'(\S+) (\d+) (.*)\r\n', line)
+                    assert m
+                    r["response"] = {
+                        "protocol"    : m.group(1), 
+                        "status"      : int(m.group(2)), 
+                        "description" : m.group(3),
+                        "body"        : r["out"]["text"]
+                    }
+                    exp_stat = False
+                    header = {}
+                elif line == "\r\n":
+                    exp_stat = True
+                else:
+                    m = re.match(r'([^:]+):\s*(.*)\r\n', line)
+                    assert m
+                    header[ m.group(1).lower() ] = m.group(2)
+            r["response"]["header"] = header
+            if r["out"]["json"]:
+                r["response"]["json"] = r["out"]["json"] 
         return r
 
+    @classmethod
+    def curl_get( cls, url, timeout=5, options=None ) :
+        return cls.curl_raw( url, timeout=timeout, options=options )
+
+    @classmethod
+    def curl_upload( cls, url, fpath, timeout=5, options=None ) :
+        fname = os.path.basename(fpath)
+        if not options:
+            options = []
+        options.extend([
+            "--form", ("file=@%s" % (fpath))
+        ])
+        return cls.curl_raw( url, timeout, options )
+        
+###################################################################################################
+# some standard config setups
+#
+    @classmethod
+    def vhost_cgi_install( cls ) :
+        conf = HttpdConf()
+        conf.start_vhost( TestEnv.HTTPS_PORT, "cgi", aliasList=[], docRoot="htdocs/cgi", withSSL=True)
+        conf.add_line("      Protocols h2 http/1.1")
+        conf.add_line("      SSLOptions +StdEnvVars")
+        conf.add_line("      AddHandler cgi-script .py")
+        conf.end_vhost()
+        conf.install()
+    
 
 ###################################################################################################
 # write apache config file

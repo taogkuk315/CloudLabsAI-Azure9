@@ -38,8 +38,9 @@ $(SERVER_DIR)/conf/ssl/valid_cert.pem: \
 		-extfile e2e/ssl/req_exts.conf -extensions v3_req_ext
 
 $(SERVER_DIR)/htdocs/.copied: \ 
-            $(wildcard $(SERVER_DIR)/htdocs/*.*) \
-            $(wildcard $(SERVER_DIR)/htdocs/*/*.*)
+            $(wildcard $(SERVER_DIR)/htdocs/*) \
+            $(wildcard $(SERVER_DIR)/htdocs/*/*) \
+            $(wildcard $(SERVER_DIR)/htdocs/*/*/*)
 	@mkdir -p $(SERVER_DIR)/htdocs
 	@cp -r e2e/htdocs/* $(SERVER_DIR)/htdocs 
 	@chmod +x $(SERVER_DIR)/htdocs/cgi/*.* 

@@ -16,14 +16,7 @@ from TestEnv import HttpdConf
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
-    # add config for cgi vhost, activate
-    conf = HttpdConf()
-    conf.start_vhost( TestEnv.HTTPS_PORT, "cgi", aliasList=[], docRoot="htdocs/cgi", withSSL=True)
-    conf.add_line("      Protocols h2 http/1.1")
-    conf.add_line("      SSLOptions +StdEnvVars")
-    conf.add_line("      AddHandler cgi-script .py")
-    conf.end_vhost()
-    conf.install()
+    TestEnv.vhost_cgi_install()
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):
