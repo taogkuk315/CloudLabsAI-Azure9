@@ -17,6 +17,16 @@ DocumentRoot "@SERVER_DIR@/htdocs"
 Listen @HTTP_PORT@
 Listen @HTTPS_PORT@
 
+# Insert our test specific configuration before the first vhost,
+# so that its vhosts can be the default one. This is relevant in
+# certain behaviours, such as protocol selection during SSL ALPN 
+# negotiation.
+#
+Include "conf/test.conf"
+
+SSLCertificateFile conf/ssl/not-forbidden.org_cert.pem
+SSLCertificateKeyFile conf/ssl/cert.pkey
+
 <VirtualHost *:@HTTP_PORT@>
     ServerName localhost
     
@@ -32,9 +42,6 @@ Listen @HTTPS_PORT@
     
     SSLEngine on
 </VirtualHost>
-
-SSLCertificateFile conf/ssl/valid_cert.pem
-SSLCertificateKeyFile conf/ssl/valid_pkey.pem
 
 <VirtualHost *:@HTTPS_PORT@>
     ServerName not-forbidden.org
@@ -80,6 +87,4 @@ SSLCertificateKeyFile conf/ssl/valid_pkey.pem
     Options +ExecCGI
 </Directory>
 
-
-Include "conf/test.conf"
 

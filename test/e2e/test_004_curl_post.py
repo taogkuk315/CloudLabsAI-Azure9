@@ -18,7 +18,7 @@ def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
     setup_data()
-    TestEnv.vhost_cgi_install()
+    HttpdConf().add_vhost_cgi().install()
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):

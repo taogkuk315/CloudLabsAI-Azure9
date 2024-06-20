@@ -17,27 +17,24 @@ SERVER_DIR     = @SERVER_DIR@
 GEN            = gen
 
 
-$(SERVER_DIR)/conf/ssl/valid_pkey.pem:
+$(SERVER_DIR)/conf/ssl/cert.pkey:
 	@mkdir -p $(SERVER_DIR)/conf/ssl
-	openssl genrsa -out $(SERVER_DIR)/conf/ssl/valid_pkey.pem 2048
+	@openssl genrsa -out $@ 2048
 
-$(SERVER_DIR)/conf/ssl/valid_cert.req: \
-		$(SERVER_DIR)/conf/ssl/valid_pkey.pem \
-		e2e/ssl/req_template.conf
-	openssl req -new -key $(SERVER_DIR)/conf/ssl/valid_pkey.pem \
-		-out $(SERVER_DIR)/conf/ssl/valid_cert.req \
-		-config e2e/ssl/req_template.conf
+CERTIFICATES=\
+    $(SERVER_DIR)/conf/ssl/not-forbidden.org_cert.pem \
+    $(SERVER_DIR)/conf/ssl/noh2.@HTTP_TLD@_cert.pem
 
-$(SERVER_DIR)/conf/ssl/valid_cert.pem: \
-		$(SERVER_DIR)/conf/ssl/valid_pkey.pem \
-		$(SERVER_DIR)/conf/ssl/valid_cert.req
-	openssl x509 -req -sha256 -days 1095 \
-		-signkey $(SERVER_DIR)/conf/ssl/valid_pkey.pem \
-		-in $(SERVER_DIR)/conf/ssl/valid_cert.req \
-		-out $(SERVER_DIR)/conf/ssl/valid_cert.pem \
-		-extfile e2e/ssl/req_exts.conf -extensions v3_req_ext
-
-$(SERVER_DIR)/htdocs/.copied: \ 
+$(CERTIFICATES): %_cert.pem: $(SERVER_DIR)/conf/ssl/cert.pkey
+	@openssl req -new -key $< -out $@.req -config e2e/ssl/req_template.conf
+	@cp e2e/ssl/req_exts.conf $@.extensions
+	DOMAIN=`basename $@ _cert.pem`; \
+ 	    echo "subjectAltName = DNS:$$DOMAIN,DNS:www.$$DOMAIN,DNS:mail.$$DOMAIN" >>$@.extensions
+	@openssl x509 -req -sha256 -days 1095 \
+            -signkey $(SERVER_DIR)/conf/ssl/cert.pkey \
+            -in $@.req -out $@ -extfile $@.extensions -extensions v3_req_ext
+         
+$(SERVER_DIR)/htdocs/.copied: \
             $(wildcard $(SERVER_DIR)/htdocs/*) \
             $(wildcard $(SERVER_DIR)/htdocs/*/*) \
             $(wildcard $(SERVER_DIR)/htdocs/*/*/*)
@@ -48,7 +45,7 @@ $(SERVER_DIR)/htdocs/.copied: \
 $(SERVER_DIR)/.test-setup: \
                 $(wildcard e2e/conf/*) \
                 $(SERVER_DIR)/htdocs/.copied \
-		$(SERVER_DIR)/conf/ssl/valid_cert.pem
+		$(CERTIFICATES)
 	@mkdir -p $(SERVER_DIR)/conf/ssl
 	@mkdir -p $(SERVER_DIR)/logs
 	rsync -a --exclude="*.in" e2e/conf/*.* $(SERVER_DIR)/conf

@@ -1,3 +1,4 @@
+ * pytest suite now covers some basic tests on h2 selection, GET and POST
  * started to add pytest suite from existing bash tests
 
 v1.10.21

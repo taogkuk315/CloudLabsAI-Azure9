@@ -265,19 +265,23 @@ class TestEnv:
             "--form", ("file=@%s" % (fpath))
         ])
         return cls.curl_raw( url, timeout, options )
+
+    @classmethod
+    def curl_protocol_version( cls, url, timeout=5, options=None ) :
+        if not options:
+            options = []
+        options.extend([ "-w", "%{http_version}\n", "-o", "/dev/null" ])
+        r = cls.curl_raw( url, timeout=timeout, options=options )
+        if r["rv"] == 0 and "response" in r:
+            return r["response"]["body"].rstrip()
+        return -1
         
 ###################################################################################################
 # some standard config setups
 #
     @classmethod
     def vhost_cgi_install( cls ) :
-        conf = HttpdConf()
-        conf.start_vhost( TestEnv.HTTPS_PORT, "cgi", aliasList=[], docRoot="htdocs/cgi", withSSL=True)
-        conf.add_line("      Protocols h2 http/1.1")
-        conf.add_line("      SSLOptions +StdEnvVars")
-        conf.add_line("      AddHandler cgi-script .py")
-        conf.end_vhost()
-        conf.install()
+        conf = HttpdConf().add_vhost_cgi().install()
     
 
 ###################################################################################################
@@ -317,3 +321,21 @@ class HttpdConf(object):
 
     def install(self):
         TestEnv.install_test_conf(self.path)
+
+    def add_vhost_cgi( self ) :
+        self.start_vhost( TestEnv.HTTPS_PORT, "cgi", aliasList=[ "cgi-alias" ], docRoot="htdocs/cgi", withSSL=True)
+        self.add_line("      Protocols h2 http/1.1")
+        self.add_line("      SSLOptions +StdEnvVars")
+        self.add_line("      AddHandler cgi-script .py")
+        self.end_vhost()
+        return self
+
+    def add_vhost_noh2( self ) :
+        self.start_vhost( TestEnv.HTTPS_PORT, "noh2", aliasList=[ "noh2-alias" ], docRoot="htdocs/cgi", withSSL=True)
+        self.add_line("      Protocols http/1.1")
+        self.add_line("      SSLCertificateKeyFile conf/ssl/cert.pkey")
+        self.add_line("      SSLCertificateFile conf/ssl/noh2.%s_cert.pem" % TestEnv.HTTP_TLD)
+        self.add_line("      SSLOptions +StdEnvVars")
+        self.add_line("      AddHandler cgi-script .py")
+        self.end_vhost()
+        return self
