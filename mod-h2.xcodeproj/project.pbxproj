@@ -89,7 +89,6 @@
 		B2D2D2D52136D5CE00D8F6B7 /* TestEnv.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = TestEnv.py; sourceTree = "<group>"; };
 		B2D2D2D62136D5CE00D8F6B7 /* config.ini.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = config.ini.in; sourceTree = "<group>"; };
 		B2D2D2E22136D5CE00D8F6B7 /* test_002_curl_basics.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = test_002_curl_basics.py; sourceTree = "<group>"; };
-		B2D2D2E32136D5CE00D8F6B7 /* config.ini */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = config.ini; sourceTree = "<group>"; };
 		B2D2D2E62136D5CE00D8F6B7 /* 002.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = 002.jpg; sourceTree = "<group>"; };
 		B2D2D2E72136D5CE00D8F6B7 /* 004.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = 004.html; sourceTree = "<group>"; };
 		B2D2D2E82136D5CE00D8F6B7 /* index.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
@@ -313,10 +312,8 @@
 		B2D2D3CA2136D5CE00D8F6B7 /* test_003_curl_get.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = test_003_curl_get.py; sourceTree = "<group>"; };
 		B2D2D3CC2136D5CE00D8F6B7 /* test.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = test.conf; sourceTree = "<group>"; };
 		B2D2D3CD2136D5CE00D8F6B7 /* modules.conf.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = modules.conf.in; sourceTree = "<group>"; };
-		B2D2D3CE2136D5CE00D8F6B7 /* httpd.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = httpd.conf; sourceTree = "<group>"; };
 		B2D2D3CF2136D5CE00D8F6B7 /* httpd.conf.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = httpd.conf.in; sourceTree = "<group>"; };
 		B2D2D3D02136D5CE00D8F6B7 /* mime.types */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mime.types; sourceTree = "<group>"; };
-		B2D2D3D12136D5CE00D8F6B7 /* modules.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = modules.conf; sourceTree = "<group>"; };
 		B2D2D3D52136D5CE00D8F6B7 /* lastfailed */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = lastfailed; sourceTree = "<group>"; };
 		B2E5D7841AAEEF8C001FD280 /* configure.ac */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = configure.ac; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.sh; };
 		B2E5D7851AAF1D87001FD280 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
@@ -467,7 +464,6 @@
 			children = (
 				B2D2D3D22136D5CE00D8F6B7 /* .cache */,
 				B2D2D3CB2136D5CE00D8F6B7 /* conf */,
-				B2D2D2E32136D5CE00D8F6B7 /* config.ini */,
 				B2D2D2D62136D5CE00D8F6B7 /* config.ini.in */,
 				B2D2D2E42136D5CE00D8F6B7 /* htdocs */,
 				B2D2D2C92136D5CE00D8F6B7 /* ssl */,
@@ -794,10 +790,8 @@
 			children = (
 				B2D2D3CC2136D5CE00D8F6B7 /* test.conf */,
 				B2D2D3CD2136D5CE00D8F6B7 /* modules.conf.in */,
-				B2D2D3CE2136D5CE00D8F6B7 /* httpd.conf */,
 				B2D2D3CF2136D5CE00D8F6B7 /* httpd.conf.in */,
 				B2D2D3D02136D5CE00D8F6B7 /* mime.types */,
-				B2D2D3D12136D5CE00D8F6B7 /* modules.conf */,
 			);
 			path = conf;
 			sourceTree = "<group>";
