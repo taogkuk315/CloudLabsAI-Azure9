@@ -1,9 +1,9 @@
 
 # mod_h[ttp]2 - http/2 for Apache httpd
 
-Copyright 2015-2017 greenbytes GmbH
+Copyright 2015-2018 greenbytes GmbH
 
-This repository contains `mod_h[ttp]2` and `mod_proxy_h[ttp]2` from Apache httpd as a standalone build. 
+This repository contains `mod_h[ttp]2` and `mod_proxy_h[ttp]2` from Apache httpd as a standalone build. It servers as early access to features and fixes before being shipped in the next Apache release. It has **alpha status** and features might be removed again.
 
 ## Status
 
@@ -15,17 +15,17 @@ If you want HTTP/2 in your production environment, please head over to the offic
 
 ## Current Version
 
-The versions here are based on Apache httpd 2.4.25. There is no guarantee that these will be released unchanged by Apache. But you are welcome to test it and give feedback.
+The versions here are _based_ on the lastest Apache httpd 2.4.x release. There is no guarantee that these will be released unchanged by Apache. But you are welcome to test it and give feedback.
 
 ## Install
 
-You need a built Apache httpd 2.4.25, including apxs and headers to compile and 
+You need a built Apache httpd 2.4.34, including apxs and headers to compile and 
 run this module. Additionally, you need an installed libnghttp2, at least in version
-1.7.0. And additionally, you want an installed OpenSSL 1.0.2.
+1.7.0. And additionally, you want an installed OpenSSL 1.0.2 or later.
 
 tl;dr
 
-**You need an installed Apache 2.4.25 which already runs ```mod_http2``` in it.**
+**You need an installed recent Apache 2.4.x**
 
 If you do not have that or don't know how to get it, look at google, stackoverflow, Apache mailing lists or your Linux distro. Not here!
 
@@ -41,7 +41,23 @@ If you do not have that or don't know how to get it, look at google, stackoverfl
 
 See ```ChangeLog``` for details.
 
+## Tests
+
+I decided to make the test suite part of this repository again. The existing suite resides
+in test Apache httpd test repository and is a set of shell scripts. It works, but I miss
+features that professional test frameworks bring. The tests included here use ```pytest``` which I think is an excellent way to do tests. I use it also in my Let's Encrypt module ```mod_md```. 
+
+You can build the module without having the test prerequisites. If you want to run them, however, you need ```pytest```, ```python``` and a ```curl``` with http2 support. Then you can
+
+```
+> make
+> make test
+```
+
+
 ## `mod_proxy_http2`
+
+(Disclaimer: the HTTP/2 proxy module is experimental. It can not be considered production ready.)
 
 This module is part of the Apache httpd proxy architecture and functions similar to `mod_proxy_http` 
 and friends. To configure it, you need to use ```h2:``` or ```h2c:``` in the proxy URL. Example:
