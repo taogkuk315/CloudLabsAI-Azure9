@@ -46,4 +46,7 @@ test/e2e/__pycache__/
 test/gen/
 test/e2e/.pytest_cache/
 test/e2e/gen/
+test/e2e/conf/httpd.conf
+test/e2e/conf/modules.conf
+test/e2e/config.ini
 

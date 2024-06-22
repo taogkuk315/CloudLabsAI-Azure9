@@ -16,7 +16,6 @@
 SERVER_DIR     = @SERVER_DIR@
 GEN            = gen
 
-
 $(SERVER_DIR)/conf/ssl/cert.pkey:
 	@mkdir -p $(SERVER_DIR)/conf/ssl
 	@openssl genrsa -out $@ 2048

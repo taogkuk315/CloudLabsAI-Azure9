@@ -17,9 +17,20 @@ DIST_SUBDIRS    = mod_http2
 
 ACLOCAL_AMFLAGS = -I m4
 
+EXTRA_DIST     = test/e2e test/unit
+
 
 dist_doc_DATA   = README README.md LICENSE
 
+dist-hook:
+	@rm -rf $(distdir)/test/unit/.deps \
+            $(distdir)/test/unit/.py* \
+            `find $(distdir) -name __pycache__` \
+            `find $(distdir) -name .deps` \
+            `find $(distdir) -name .libs` \
+            `find $(distdir) -name .dirstamp` \
+            `find $(distdir) -name .pytest_cache` \
+            `find $(distdir) -name "*.o"`
 
 .PHONY: test
 
