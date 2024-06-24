@@ -70,6 +70,13 @@ class TestStore:
         r = TestEnv.curl_get(url, 5, [ "-HHost:%s" % hostname ])
         assert 421 == r["response"]["status"]
 
+    # access an unknown vhost, after using ServerName in SNI
+    def test_100_05(self):
+        url = TestEnv.mkurl("https", "cgi", "/hello.py")
+        hostname = ("unknown.%s" % TestEnv.HTTP_TLD)
+        r = TestEnv.curl_get(url, 5, [ "-HHost:%s" % hostname ])
+        assert 421 == r["response"]["status"]
+
 
 
 

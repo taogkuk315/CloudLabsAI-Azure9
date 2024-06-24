@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.11.0], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.11.1], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -102,6 +102,27 @@ AC_CHECK_FUNCS([nghttp2_session_callbacks_set_on_invalid_header_callback],
 dnl # nghttp2 >= 1.15.0: get/set stream window sizes
 AC_CHECK_FUNCS([nghttp2_session_get_stream_local_window_size], 
         [CPPFLAGS="$CPPFLAGS -DH2_NG2_LOCAL_WIN_SIZE"], [])
+
+AC_PATH_PROG([NGHTTP], [nghttp])
+if test "x${NGHTTP}" = "x"; then
+    if test -x "${prefix}/bin/nghttp"; then
+        NGHTTP="${prefix}/bin/nghttp"
+    else
+        AC_MSG_WARN("no nghttp found, test coverage will be incomplete")
+    fi
+fi
+AC_SUBST(NGHTTP)
+
+AC_PATH_PROG([H2LOAD], [h2load])
+if test "x${H2LOAD}" = "x"; then
+    if test -x "${prefix}/bin/h2load"; then
+        H2LOAD="${prefix}/bin/h2load"
+    else
+        AC_MSG_WARN("no h2laod found, test coverage will be incomplete")
+    fi
+fi
+AC_SUBST(H2LOAD)
+
 
 
 AC_CHECK_LIB([crypto], [SHA256_Init], [
@@ -284,4 +305,6 @@ AC_MSG_NOTICE([summary of build options:
     LIBS:           ${LIBS}
     CPPFLAGS:       ${CPPFLAGS}
     curl            ${CURL_BIN:--}
+    nghttp          ${NGHTTP:--}
+    h2load          ${H2LOAD:--}
 ])

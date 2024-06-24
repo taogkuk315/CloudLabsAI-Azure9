@@ -33,6 +33,8 @@ class TestEnv:
         cls.WEBROOT     = cls.config.get('global', 'server_dir')
         cls.CURL        = cls.config.get('global', 'curl_bin')
         cls.TEST_DIR    = cls.config.get('global', 'test_dir')
+        cls.NGHTTP      = cls.config.get('global', 'nghttp')
+        cls.H2LOAD      = cls.config.get('global', 'h2load')
 
         cls.HTTP_PORT   = cls.config.get('httpd', 'http_port')
         cls.HTTPS_PORT  = cls.config.get('httpd', 'https_port')
@@ -56,6 +58,12 @@ class TestEnv:
 ###################################################################################################
 # path construction
 #
+    @classmethod
+    def mkpath( cls, path ) :
+        if not os.path.exists(path):
+            return os.makedirs(path)
+
+
     @classmethod
     def e2e_src( cls, path ) :
         return os.path.join(cls.E2E_DIR, path)
@@ -277,6 +285,32 @@ class TestEnv:
         return -1
         
 ###################################################################################################
+# h2load
+#
+    @classmethod
+    def h2load_status( cls, run ) :
+        m = re.search(r'requests: (\d+) total, (\d+) started, (\d+) done, (\d+) succeeded, (\d+) failed, (\d+) errored, (\d+) timeout', run["out"]["text"])
+        if m:
+            run["h2load"] = {
+                "requests" : {
+                    "total" : int(m.group(1)),
+                    "started" : int(m.group(2)),
+                    "done" : int(m.group(3)),
+                    "succeeded" : int(m.group(4)) 
+                }
+            }
+            m = re.search(r'status codes: (\d+) 2xx, (\d+) 3xx, (\d+) 4xx, (\d+) 5xx', run["out"]["text"])
+            if m:
+                run["h2load"]["status"] = {
+                    "2xx" : int(m.group(1)),
+                    "3xx" : int(m.group(2)),
+                    "4xx" : int(m.group(3)),
+                    "5xx" : int(m.group(4))
+                }
+        return run
+
+
+###################################################################################################
 # some standard config setups
 #
     @classmethod
@@ -300,12 +334,14 @@ class HttpdConf(object):
 
     def add_line(self, line):
         open(self.path, "a").write(line + "\n")
+        return self
 
-    def add_vhost(self, port, name, aliasList, docRoot="htdocs", withSSL=True):
+    def add_vhost(self, port, name, aliasList=[], docRoot="htdocs", withSSL=True):
         self.start_vhost(port, name, aliasList, docRoot, withSSL)
         self.end_vhost()
+        return self
 
-    def start_vhost(self, port, name, aliasList, docRoot="htdocs", withSSL=True):
+    def start_vhost(self, port, name, aliasList=[], docRoot="htdocs", withSSL=True):
         f = open(self.path, "a") 
         f.write("<VirtualHost *:%s>\n" % port)
         f.write("    ServerName %s.%s\n" % (name, TestEnv.HTTP_TLD) )
@@ -315,9 +351,11 @@ class HttpdConf(object):
         f.write("    DocumentRoot %s\n\n" % docRoot)
         if withSSL:
             f.write("    SSLEngine on\n")
+        return self
                   
     def end_vhost(self):
         self.add_line("</VirtualHost>\n\n")
+        return self
 
     def install(self):
         TestEnv.install_test_conf(self.path)

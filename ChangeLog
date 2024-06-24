@@ -1,3 +1,5 @@
+ * added ssl renegotiation tests
+
 v1.11.0
 --------------------------------------------------------------------------------
  * connection IO event handling reworked. Instead of reacting on incoming bytes, the
