@@ -17,7 +17,7 @@ from TestEnv import HttpdConf
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
-    HttpdConf().add_vhost_noh2().add_vhost_cgi().install()
+    HttpdConf().add_vhost_noh2().add_vhost_test1().add_vhost_cgi().install()
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):
@@ -48,7 +48,7 @@ class TestStore:
     def test_100_02(self):
         url = TestEnv.mkurl("https", "cgi", "/hello.py")
         hostname = ("cgi-alias.%s" % TestEnv.HTTP_TLD)
-        r = TestEnv.curl_get(url, 5, [ "-HHost:%s" % hostname ])
+        r = TestEnv.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
         assert 200 == r["response"]["status"]
         assert "HTTP/2" == r["response"]["protocol"]
         assert hostname == r["response"]["json"]["host"]
@@ -57,7 +57,7 @@ class TestStore:
     def test_100_03(self):
         url = TestEnv.mkurl("https", "cgi", "/")
         hostname = ("test1.%s" % TestEnv.HTTP_TLD)
-        r = TestEnv.curl_get(url, 5, [ "-HHost:%s" % hostname ])
+        r = TestEnv.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
         assert 200 == r["response"]["status"]
         assert "HTTP/2" == r["response"]["protocol"]
         assert "text/html" == r["response"]["header"]["content-type"]
@@ -67,14 +67,14 @@ class TestStore:
     def test_100_04(self):
         url = TestEnv.mkurl("https", "cgi", "/hello.py")
         hostname = ("noh2.%s" % TestEnv.HTTP_TLD)
-        r = TestEnv.curl_get(url, 5, [ "-HHost:%s" % hostname ])
+        r = TestEnv.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
         assert 421 == r["response"]["status"]
 
     # access an unknown vhost, after using ServerName in SNI
     def test_100_05(self):
         url = TestEnv.mkurl("https", "cgi", "/hello.py")
         hostname = ("unknown.%s" % TestEnv.HTTP_TLD)
-        r = TestEnv.curl_get(url, 5, [ "-HHost:%s" % hostname ])
+        r = TestEnv.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
         assert 421 == r["response"]["status"]
 
 

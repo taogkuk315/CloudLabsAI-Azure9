@@ -275,6 +275,13 @@ class TestEnv:
         return cls.curl_raw( url, timeout, options )
 
     @classmethod
+    def curl_post_data( cls, url, data="", timeout=5, options=None ) :
+        if not options:
+            options = []
+        options.extend([ "--data", "%s" % data ])
+        return cls.curl_raw( url, timeout, options )
+
+    @classmethod
     def curl_protocol_version( cls, url, timeout=5, options=None ) :
         if not options:
             options = []
@@ -360,6 +367,32 @@ class HttpdConf(object):
     def install(self):
         TestEnv.install_test_conf(self.path)
 
+    def add_vhost_test1( self ) :
+        self.start_vhost( TestEnv.HTTP_PORT, "test1", aliasList=[ "www1" ], docRoot="htdocs/test1", withSSL=False
+        ).add_line("      Protocols h2c http/1.1"
+        ).end_vhost()
+        self.start_vhost( TestEnv.HTTPS_PORT, "test1", aliasList=[ "www1" ], docRoot="htdocs/test1", withSSL=True
+        ).add_line("      Protocols h2 http/1.1"
+        ).add_line("      <Location /006>"
+        ).add_line("        Options +Indexes"
+        ).add_line("        HeaderName /006/header.html"
+        ).add_line("      </Location>"
+        ).end_vhost()
+        return self
+        
+    def add_vhost_test2( self ) :
+        self.start_vhost( TestEnv.HTTP_PORT, "test2", aliasList=[ "www2" ], docRoot="htdocs/test2", withSSL=False
+        ).add_line("      Protocols http/1.1 h2c"
+        ).end_vhost()
+        self.start_vhost( TestEnv.HTTPS_PORT, "test2", aliasList=[ "www2" ], docRoot="htdocs/test2", withSSL=True
+        ).add_line("      Protocols http/1.1 h2"
+        ).add_line("      <Location /006>"
+        ).add_line("        Options +Indexes"
+        ).add_line("        HeaderName /006/header.html"
+        ).add_line("      </Location>"
+        ).end_vhost()
+        return self
+
     def add_vhost_cgi( self ) :
         self.start_vhost( TestEnv.HTTPS_PORT, "cgi", aliasList=[ "cgi-alias" ], docRoot="htdocs/cgi", withSSL=True)
         self.add_line("      Protocols h2 http/1.1")
@@ -369,11 +402,14 @@ class HttpdConf(object):
         return self
 
     def add_vhost_noh2( self ) :
-        self.start_vhost( TestEnv.HTTPS_PORT, "noh2", aliasList=[ "noh2-alias" ], docRoot="htdocs/cgi", withSSL=True)
+        self.start_vhost( TestEnv.HTTPS_PORT, "noh2", aliasList=[ "noh2-alias" ], docRoot="htdocs/noh2", withSSL=True)
         self.add_line("      Protocols http/1.1")
         self.add_line("      SSLCertificateKeyFile conf/ssl/cert.pkey")
         self.add_line("      SSLCertificateFile conf/ssl/noh2.%s_cert.pem" % TestEnv.HTTP_TLD)
         self.add_line("      SSLOptions +StdEnvVars")
-        self.add_line("      AddHandler cgi-script .py")
+        self.end_vhost()
+        self.start_vhost( TestEnv.HTTP_PORT, "noh2", aliasList=[ "noh2-alias" ], docRoot="htdocs/noh2", withSSL=False)
+        self.add_line("      Protocols http/1.1")
+        self.add_line("      SSLOptions +StdEnvVars")
         self.end_vhost()
         return self

@@ -1,3 +1,5 @@
+ * added tests for invalid characters in response header
+ * added Upgrade: response header tests
  * added vars require configuration tests
  * added ssl renegotiation tests
 

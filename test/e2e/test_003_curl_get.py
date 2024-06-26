@@ -16,7 +16,7 @@ from TestEnv import HttpdConf
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
-    HttpdConf().add_vhost_cgi().install()
+    HttpdConf().add_vhost_cgi().add_vhost_test1().install()
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):

@@ -17,6 +17,9 @@ DocumentRoot "@SERVER_DIR@/htdocs"
 Listen @HTTP_PORT@
 Listen @HTTPS_PORT@
 
+SSLCertificateFile conf/ssl/not-forbidden.org_cert.pem
+SSLCertificateKeyFile conf/ssl/cert.pkey
+
 # Insert our test specific configuration before the first vhost,
 # so that its vhosts can be the default one. This is relevant in
 # certain behaviours, such as protocol selection during SSL ALPN 
@@ -24,23 +27,11 @@ Listen @HTTPS_PORT@
 #
 Include "conf/test.conf"
 
-SSLCertificateFile conf/ssl/not-forbidden.org_cert.pem
-SSLCertificateKeyFile conf/ssl/cert.pkey
-
 <VirtualHost *:@HTTP_PORT@>
-    ServerName localhost
+    ServerName not-forbidden.org
+    ServerAlias www.not-forbidden.org
     
     DocumentRoot "@SERVER_DIR@/htdocs"
-    
-</VirtualHost>
-
-<VirtualHost *:@HTTP_PORT@>
-    ServerName test1.@HTTP_TLD@
-    ServerAlias www1.@HTTP_TLD@
-    Protocols h2c http/1.1
-    DocumentRoot "@SERVER_DIR@/htdocs/test1"
-    
-    SSLEngine on
 </VirtualHost>
 
 <VirtualHost *:@HTTPS_PORT@>
@@ -48,31 +39,6 @@ SSLCertificateKeyFile conf/ssl/cert.pkey
     ServerAlias www.not-forbidden.org
     
     DocumentRoot "@SERVER_DIR@/htdocs"
-    
-    SSLEngine on
-</VirtualHost>
-
-<VirtualHost *:@HTTPS_PORT@>
-    ServerName test1.@HTTP_TLD@
-    ServerAlias www1.@HTTP_TLD@
-    Protocols h2 http/1.1
-    
-    DocumentRoot "@SERVER_DIR@/htdocs/test1"
-    
-    SSLEngine on
-
-    <Location /006>
-        Options +Indexes
-        HeaderName /006/header.html
-    </Location>
-</VirtualHost>
-
-<VirtualHost *:@HTTPS_PORT@>
-    ServerName test2.@HTTP_TLD@
-    ServerAlias www2.@HTTP_TLD@
-    Protocols http/1.1 h2
-    
-    DocumentRoot "@SERVER_DIR@/htdocs/test2"
     
     SSLEngine on
 </VirtualHost>

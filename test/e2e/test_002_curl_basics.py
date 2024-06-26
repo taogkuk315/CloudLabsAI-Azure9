@@ -11,10 +11,12 @@ import pytest
 
 from datetime import datetime
 from TestEnv import TestEnv
+from TestEnv import HttpdConf
 
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
+    HttpdConf().add_vhost_test1().add_vhost_test2().install()
     assert TestEnv.apache_start() == 0
         
 def teardown_module(module):

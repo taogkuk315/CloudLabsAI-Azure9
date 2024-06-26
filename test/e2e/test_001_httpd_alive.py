@@ -11,10 +11,12 @@ import pytest
 
 from datetime import datetime
 from TestEnv import TestEnv
+from TestEnv import HttpdConf
 
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
+    #HttpdConf().add_vhost_test1().install()
         
 def teardown_module(module):
     print("teardown_module: %s" % module.__name__)
@@ -33,13 +35,13 @@ class TestStore:
     def test_001_01(self):
         data = TestEnv.get_json(TestEnv.HTTP_URL + "/alive.json", 5)
         assert data
-        assert data["alive"] == True
-        assert data["host"] == "generic"
+        assert True == data["alive"]
+        assert "generic" == data["host"] 
 
     # we expect to see the document from the generic server
     def test_001_02(self):
         data = TestEnv.get_json(TestEnv.HTTPS_URL + "/alive.json", 5)
         assert data
-        assert data["alive"] == True
-        assert data["host"] == "generic"
+        assert True == data["alive"]
+        assert "generic" == data["host"] 
 
