@@ -66,6 +66,7 @@
 		B25574A71BEB6EFC0058F97B /* mod_http2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mod_http2.c; sourceTree = "<group>"; };
 		B256C4BA1ADD5FF10042C760 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
+		B297A7BC213D6AAD0096F0D7 /* test_102_require.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_102_require.py; sourceTree = "<group>"; };
 		B2990D411DA28DD900F2B9BA /* h2_headers.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_headers.c; sourceTree = "<group>"; };
 		B2990D421DA28DD900F2B9BA /* h2_headers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_headers.h; sourceTree = "<group>"; };
 		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
@@ -474,6 +475,7 @@
 				B2D2D2D42136D5CE00D8F6B7 /* test_004_curl_post.py */,
 				B2D2D2D32136D5CE00D8F6B7 /* test_100_conn_reuse.py */,
 				B2D2D5DF21395D6900D8F6B7 /* test_101_ssl_reneg.py */,
+				B297A7BC213D6AAD0096F0D7 /* test_102_require.py */,
 				B2D2D2D52136D5CE00D8F6B7 /* TestEnv.py */,
 			);
 			path = e2e;
