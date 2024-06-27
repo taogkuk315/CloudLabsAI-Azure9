@@ -1,3 +1,6 @@
+ * added tests for 100 interim responses
+ * added tests for trailers
+ * added tests for conditional request header
  * added tests for invalid characters in response header
  * added Upgrade: response header tests
  * added vars require configuration tests

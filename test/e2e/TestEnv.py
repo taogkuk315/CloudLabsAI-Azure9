@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+import string
 import time
 import requests
 
@@ -241,12 +242,15 @@ class TestEnv:
                 if exp_stat:
                     m = re.match(r'(\S+) (\d+) (.*)\r\n', line)
                     assert m
+                    prev = r["response"] if "response" in r else None
                     r["response"] = {
                         "protocol"    : m.group(1), 
                         "status"      : int(m.group(2)), 
                         "description" : m.group(3),
                         "body"        : r["out"]["text"]
                     }
+                    if prev:
+                        r["response"]["previous"] = prev
                     exp_stat = False
                     header = {}
                 elif line == "\r\n":
@@ -291,6 +295,101 @@ class TestEnv:
             return r["response"]["body"].rstrip()
         return -1
         
+###################################################################################################
+# nghttp
+#
+    @classmethod
+    def nghttp_raw( cls, url, timeout, options ) :
+        u = urlparse(url)
+        args = [ 
+            cls.NGHTTP,
+            "-v", "--header=host: %s:%s" % (u.hostname, u.port)
+        ]
+        if options:
+            args.extend(options)
+        nurl = "%s://%s:%s/%s" % (u.scheme, cls.HTTPD_ADDR, u.port, u.path)
+        if u.query:
+            nurl = "%s?%s" % (nurl, u.query)
+        args.append( nurl )
+        r = cls.run( args )
+        if 0 == r["rv"]:
+            # getting meta data and response body out of nghttp's output
+            # is a bit tricky. Without '-v' we just get the body. With '-v' meta
+            # data and timings in both directions are listed. 
+            # We rely on response :status: to be unique and on 
+            # response body not starting with space.
+            # Something not good enough for general purpose, but for these tests.
+            status = 0
+            header = {}
+            header_done = False
+            body = ""
+            prev = None
+            lines = re.findall(r'[^\n]*\n', r["out"]["text"], re.MULTILINE)
+            print "%d lines:" % len(lines)
+            for l in lines:
+                if '[' == l[0] or '\t' == l[0] or ' ' == l[0]:
+                    if 200 > status:
+                        m = re.match(r'.* recv \S+ :status: (\d+)', l)
+                        if m:
+                            if 0 < status:
+                                pprev = prev
+                                prev = {
+                                    "status" : status,
+                                    "header" : header
+                                }
+                                if pprev:
+                                    prev["previous"] = pprev
+                            status = int(m.group(1))
+                            header_done = False
+                    if 0 < status and not header_done:
+                        m = re.match(r'.* recv \S+ (\S+): (.*)', l)
+                        if m:
+                            header[m.group(1)] = m.group(2)
+                        else:
+                            header_done = True
+                elif 0 != status: 
+                    body += l
+            if 0 != status:
+                r["response"] = {
+                    "protocol" : "HTTP/2",
+                    "status" : status,
+                    "description" : "",
+                    "header" : header,
+                    "body" : body
+                }
+                if prev:
+                    r["response"]["previous"] = prev
+
+        return r
+
+    @classmethod
+    def nghttp_get( cls, url, timeout=5, options=None ) :
+        return cls.nghttp_raw( url, timeout, options )
+
+    @classmethod
+    def nghttp_post_name( cls, url, name, timeout=5, options=None ) :
+        reqbody = ("%s/nghttp.req.body" % cls.GEN_DIR)
+        with open(reqbody, 'w') as f:
+            f.write("--DSAJKcd9876\n")
+            f.write("Content-Disposition: form-data; name=\"value\"; filename=\"xxxxx\"\n")
+            f.write("Content-Type: text/plain\n")
+            f.write("\n%s\n" % name)
+            f.write("--DSAJKcd9876\n")
+        if not options:
+            options = []
+        options.extend([ "--data=%s" % reqbody ])
+        return cls.nghttp_raw( url, timeout, options )
+
+    @classmethod
+    def nghttp_upload( cls, url, fpath, timeout=5, options=None ) :
+        fname = os.path.basename(fpath)
+        if not options:
+            options = []
+        options.extend([ "--data=%s" % fpath ])
+        return cls.nghttp_raw( url, timeout, options )
+
+
+
 ###################################################################################################
 # h2load
 #
