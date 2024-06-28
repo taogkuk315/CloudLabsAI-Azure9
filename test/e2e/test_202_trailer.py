@@ -31,6 +31,9 @@ def setup_data():
         for i in range(10):
             f.write(s100)
 
+# The trailer tests depend on "nghttp" as no other client seems to be able to send those
+# rare things.
+@pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
 class TestStore:
 
     def setup_method(self, method):
@@ -41,8 +44,6 @@ class TestStore:
 
     # check if the server survices a trailer or two
     def test_202_01(self):
-        if not TestEnv.NGHTTP:
-            return
         url = TestEnv.mkurl("https", "cgi", "/echo.py")
         fpath = os.path.join(TestEnv.GEN_DIR, "data-1k")
         r = TestEnv.nghttp_upload(url, fpath, options=[ "--trailer", "test: 1" ])
@@ -55,8 +56,6 @@ class TestStore:
 
     # check if the server survices a trailer without content-length
     def test_202_02(self):
-        if not TestEnv.NGHTTP:
-            return
         url = TestEnv.mkurl("https", "cgi", "/echo.py")
         fpath = os.path.join(TestEnv.GEN_DIR, "data-1k")
         r = TestEnv.nghttp_upload(url, fpath, options=[ "--trailer", "test: 2", "--no-content-length" ])
@@ -65,8 +64,6 @@ class TestStore:
 
     # check if echoing request headers in response from GET works
     def test_202_03(self):
-        if not TestEnv.NGHTTP:
-            return
         url = TestEnv.mkurl("https", "cgi", "/echohd.py?name=X")
         r = TestEnv.nghttp_get(url, options=[ "--header", "X: 3" ])
         assert 300 > r["response"]["status"]
@@ -74,8 +71,6 @@ class TestStore:
 
     # check if echoing request headers in response from POST works
     def test_202_03(self):
-        if not TestEnv.NGHTTP:
-            return
         url = TestEnv.mkurl("https", "cgi", "/echohd.py?name=X")
         r = TestEnv.nghttp_post_name(url, "Y", options=[ "--header", "X: 3b" ])
         assert 300 > r["response"]["status"]
@@ -84,13 +79,8 @@ class TestStore:
     # check if echoing request headers in response from POST works, but trailers are not seen
     # This is the way CGI invocation works.
     def test_202_04(self):
-        if not TestEnv.NGHTTP:
-            return
         url = TestEnv.mkurl("https", "cgi", "/echohd.py?name=X")
         r = TestEnv.nghttp_post_name(url, "Y", options=[ "--header", "X: 4a", "--trailer", "X: 4b" ])
         assert 300 > r["response"]["status"]
         assert "X: 4a\n" == r["response"]["body"]
-
-
-
 

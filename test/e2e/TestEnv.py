@@ -24,8 +24,12 @@ from urlparse import urlparse
 
 class TestEnv:
 
+    initialized = False
+    
     @classmethod
     def init( cls ) :
+        if TestEnv.initialized:
+            return
         cls.config = SafeConfigParser()
         cls.config.read('config.ini')
         
@@ -55,6 +59,21 @@ class TestEnv:
         
         if not os.path.exists(cls.GEN_DIR):
             os.makedirs(cls.GEN_DIR)
+        
+        TestEnv.initialized = True
+
+###################################################################################################
+# check features
+    @classmethod
+    def has_h2load( cls ) :
+        cls.init()
+        return cls.H2LOAD != ""
+
+    @classmethod
+    def has_nghttp( cls ) :
+        cls.init()
+        return cls.NGHTTP != ""
+
 
 ###################################################################################################
 # path construction

@@ -18,6 +18,7 @@ def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
     HttpdConf(
+    ).add_line("      SSLCipherSuite ECDHE-RSA-AES256-GCM-SHA384"
     ).add_line("      <Directory \"%s/htdocs/ssl-client-verify\">" % TestEnv.WEBROOT
     ).add_line("        Require all granted"
     ).add_line("        SSLVerifyClient require"
@@ -25,11 +26,9 @@ def setup_module(module):
     ).add_line("      </Directory>"
     ).start_vhost( TestEnv.HTTPS_PORT, "ssl", withSSL=True
     ).add_line("      Protocols h2 http/1.1"
-    ).add_line("      SSLOptions +StdEnvVars"
-    ).add_line("      AddHandler cgi-script .py"
     ).add_line("      "
     ).add_line("      <Location /renegotiate/cipher>"
-    ).add_line("          SSLCipherSuite ECDHE-RSA-AES128-SHA256"
+    ).add_line("          SSLCipherSuite ECDHE-RSA-CHACHA20-POLY1305"
     ).add_line("      </Location>"
     ).add_line("      <Location /renegotiate/verify>"
     ).add_line("          SSLVerifyClient require"
@@ -38,6 +37,7 @@ def setup_module(module):
     ).install()
     # the dir needs to exists for the configuration to have effect
     TestEnv.mkpath("%s/htdocs/ssl-client-verify" % TestEnv.WEBROOT)
+    TestEnv.mkpath("%s/htdocs/renegotiate/cipher" % TestEnv.WEBROOT)
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):
@@ -53,13 +53,12 @@ class TestStore:
         print("teardown_method: %s" % method.__name__)
 
     # access a resource with SSL renegotiation, using HTTP/1.1
-    @pytest.mark.skip(reason="this fails for a curl+libressl combination on MacOS")
     def test_101_01(self):
         url = TestEnv.mkurl("https", "ssl", "/renegotiate/cipher")
         r = TestEnv.curl_get( url, options=[ "-v", "--http1.1" ] )
         assert 0 == r["rv"]
         assert "response" in r
-        assert 404 == r["response"]["status"]
+        assert 403 == r["response"]["status"]
         
     # try to renegotiate the cipher, should fail with correct code
     def test_101_02(self):
@@ -87,10 +86,11 @@ class TestStore:
         assert not "response" in r
         assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
         
-        # make 10 requests on the same connection, none should produce a status code
-        # reported by erki@example.ee
-        if not TestEnv.H2LOAD:
-            return
+    # make 10 requests on the same connection, none should produce a status code
+    # reported by erki@example.ee
+    @pytest.mark.skipif(not TestEnv.has_h2load(), reason="no h2load command available")
+    def test_101_05(self):
+        url = TestEnv.mkurl("https", "ssl", "/ssl-client-verify/index.html")
         r = TestEnv.run( [ TestEnv.H2LOAD, "-n", "10", "-c", "1", "-m", "1", "-vvvv", 
             "https://%s:%s/ssl-client-verify/index.html" % (TestEnv.HTTPD_ADDR, TestEnv.HTTPS_PORT)] )
         assert 0 == r["rv"]
