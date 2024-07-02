@@ -21,6 +21,7 @@ from datetime import timedelta
 from ConfigParser import SafeConfigParser
 from shutil import copyfile
 from urlparse import urlparse
+from TestNghttp import Nghttp
 
 class TestEnv:
 
@@ -318,6 +319,28 @@ class TestEnv:
 # nghttp
 #
     @classmethod
+    def nghttp( cls ) :
+        return Nghttp( cls.NGHTTP, connect_addr=cls.HTTPD_ADDR, tmp_dir=cls.GEN_DIR )
+
+    @classmethod
+    def nghttp_get_stream( cls, streams, sid ) :
+        sid = int(sid)
+        if not sid in streams:
+            streams[sid] = {
+                    "id" : sid,
+                    "header" : {},
+                    "request" : {
+                        "id" : sid,
+                        "body" : "" 
+                    },
+                    "response" : {
+                        "id" : sid, 
+                        "body" : "" 
+                    }
+            }
+        return streams[sid] if sid in streams else None
+
+    @classmethod
     def nghttp_raw( cls, url, timeout, options ) :
         u = urlparse(url)
         args = [ 
@@ -338,47 +361,74 @@ class TestEnv:
             # We rely on response :status: to be unique and on 
             # response body not starting with space.
             # Something not good enough for general purpose, but for these tests.
-            status = 0
-            header = {}
-            header_done = False
             body = ""
-            prev = None
+            stream = 0
+            streams = {}
             lines = re.findall(r'[^\n]*\n', r["out"]["text"], re.MULTILINE)
             print "%d lines:" % len(lines)
             for l in lines:
-                if '[' == l[0] or '\t' == l[0] or ' ' == l[0]:
-                    if 200 > status:
-                        m = re.match(r'.* recv \S+ :status: (\d+)', l)
-                        if m:
-                            if 0 < status:
-                                pprev = prev
-                                prev = {
-                                    "status" : status,
-                                    "header" : header
-                                }
-                                if pprev:
-                                    prev["previous"] = pprev
-                            status = int(m.group(1))
-                            header_done = False
-                    if 0 < status and not header_done:
-                        m = re.match(r'.* recv \S+ (\S+): (.*)', l)
-                        if m:
-                            header[m.group(1)] = m.group(2)
-                        else:
-                            header_done = True
-                elif 0 != status: 
-                    body += l
-            if 0 != status:
-                r["response"] = {
-                    "protocol" : "HTTP/2",
-                    "status" : status,
-                    "description" : "",
-                    "header" : header,
-                    "body" : body
-                }
-                if prev:
-                    r["response"]["previous"] = prev
+                m = re.match(r'\[.*\] recv \(stream_id=(\d+)\) (\S+): (\S*)', l)
+                if m:
+                    s = cls.nghttp_get_stream( streams, m.group(1) )
+                    hname = m.group(2)
+                    hval = m.group(3)
+                    print ("stream %d header %s: %s" % (s["id"], hname, hval))
+                    header = s["header"]
+                    if hname in header: 
+                        header[hname] += ", %s" % hval
+                    else:
+                        header[hname] = hval
+                    body = ""
+                    continue
 
+                m = re.match(r'\[.*\] recv HEADERS frame <.* stream_id=(\d+)>', l)
+                if m:
+                    s = cls.nghttp_get_stream( streams, m.group(1) )
+                    if s:
+                        print "stream %d: recv %d header" % (s["id"], len(s["header"])) 
+                        response = s["response"]
+                        if "header" in response:
+                            prev = {
+                                "header" : response["header"]
+                            }
+                            if "previous" in response:
+                                prev["previous"] = response["previous"]
+                            response["previous"] = prev
+                        response["header"] = s["header"]
+                        s["header"] = {} 
+                    body = ""
+                    continue
+                
+                m = re.match(r'(.*)\[.*\] recv DATA frame <length=(\d+), .*stream_id=(\d+)>', l)
+                if m:
+                    s = cls.nghttp_get_stream( streams, m.group(3) )
+                    body += m.group(1)
+                    blen = int(m.group(2))
+                    if s:
+                        print "stream %d: %d DATA bytes added" % (s["id"], blen) 
+                        s["response"]["body"] += body[-blen:]
+                    body = ""
+                    continue
+                    
+                m = re.match(r'\[.*\] recv PUSH_PROMISE frame <.* stream_id=(\d+)>', l)
+                if m:
+                    s = cls.nghttp_get_stream( streams, m.group(1) )
+                    if s:
+                        # headers we have are request headers for the PUSHed stream
+                        # TODO: store them
+                        print "stream %d: %d PUSH_PROMISE header" % (s["id"], len(s["header"])) 
+                        s["header"] = {} 
+                    continue
+                        
+                if "[" != l[0]: 
+                    body += l
+                    
+            for sid in streams:
+                s = streams[sid]
+                s["response"]["status"] = int(s["response"]["header"][":status"])
+            r["streams"] = streams
+            if 13 in streams:
+                r["response"] = streams[13]["response"]
         return r
 
     @classmethod

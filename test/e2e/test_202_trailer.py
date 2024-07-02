@@ -13,6 +13,7 @@ import pytest
 from datetime import datetime
 from TestEnv import TestEnv
 from TestEnv import HttpdConf
+from TestNghttp import Nghttp
 
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
@@ -46,7 +47,7 @@ class TestStore:
     def test_202_01(self):
         url = TestEnv.mkurl("https", "cgi", "/echo.py")
         fpath = os.path.join(TestEnv.GEN_DIR, "data-1k")
-        r = TestEnv.nghttp_upload(url, fpath, options=[ "--trailer", "test: 1" ])
+        r = TestEnv.nghttp().upload(url, fpath, options=[ "--trailer", "test: 1" ])
         assert 300 > r["response"]["status"]
         assert 1000 == len(r["response"]["body"])
 
@@ -58,21 +59,21 @@ class TestStore:
     def test_202_02(self):
         url = TestEnv.mkurl("https", "cgi", "/echo.py")
         fpath = os.path.join(TestEnv.GEN_DIR, "data-1k")
-        r = TestEnv.nghttp_upload(url, fpath, options=[ "--trailer", "test: 2", "--no-content-length" ])
+        r = TestEnv.nghttp().upload(url, fpath, options=[ "--trailer", "test: 2", "--no-content-length" ])
         assert 300 > r["response"]["status"]
         assert 1000 == len(r["response"]["body"])
 
     # check if echoing request headers in response from GET works
     def test_202_03(self):
         url = TestEnv.mkurl("https", "cgi", "/echohd.py?name=X")
-        r = TestEnv.nghttp_get(url, options=[ "--header", "X: 3" ])
+        r = TestEnv.nghttp().get(url, options=[ "--header", "X: 3" ])
         assert 300 > r["response"]["status"]
         assert "X: 3\n" == r["response"]["body"]
 
     # check if echoing request headers in response from POST works
     def test_202_03(self):
         url = TestEnv.mkurl("https", "cgi", "/echohd.py?name=X")
-        r = TestEnv.nghttp_post_name(url, "Y", options=[ "--header", "X: 3b" ])
+        r = TestEnv.nghttp().post_name(url, "Y", options=[ "--header", "X: 3b" ])
         assert 300 > r["response"]["status"]
         assert "X: 3b\n" == r["response"]["body"]
 
@@ -80,7 +81,7 @@ class TestStore:
     # This is the way CGI invocation works.
     def test_202_04(self):
         url = TestEnv.mkurl("https", "cgi", "/echohd.py?name=X")
-        r = TestEnv.nghttp_post_name(url, "Y", options=[ "--header", "X: 4a", "--trailer", "X: 4b" ])
+        r = TestEnv.nghttp().post_name(url, "Y", options=[ "--header", "X: 4a", "--trailer", "X: 4b" ])
         assert 300 > r["response"]["status"]
         assert "X: 4a\n" == r["response"]["body"]
 
