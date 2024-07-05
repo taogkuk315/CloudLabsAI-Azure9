@@ -1,3 +1,4 @@
+ * added  -avoid-version to the linker flags (thanks to Oden Erikson, @odeneriksson)
  * added tests for 100 interim responses
  * added tests for trailers
  * added tests for conditional request header
