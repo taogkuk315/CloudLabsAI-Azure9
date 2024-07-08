@@ -1,3 +1,7 @@
+v1.11.1
+--------------------------------------------------------------------------------
+ * added test/Makefile.in to the release tar ball, so that peopl just need
+   automake to build (reported in #169 by @uhliarik, fix proposed by @notroj)
  * added  -avoid-version to the linker flags (thanks to Oden Erikson, @odeneriksson)
  * added tests for 100 interim responses
  * added tests for trailers

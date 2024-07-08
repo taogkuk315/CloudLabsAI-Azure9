@@ -453,18 +453,10 @@
 				B2E5D7851AAF1D87001FD280 /* Makefile.am */,
 				B255740A1BEB6EFC0058F97B /* mod_http2 */,
 				B2E5D7891AAF1F4D001FD280 /* NEWS */,
-				B2B330501F3C601800579179 /* patches */,
 				B27BBD2D1A6575C200C58A41 /* README */,
 				B256C4BA1ADD5FF10042C760 /* README.md */,
 				B2583B0B21108FC40061E89A /* test */,
 			);
-			sourceTree = "<group>";
-		};
-		B2B330501F3C601800579179 /* patches */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = patches;
 			sourceTree = "<group>";
 		};
 		B2D2D2C82136D5CE00D8F6B7 /* e2e */ = {
