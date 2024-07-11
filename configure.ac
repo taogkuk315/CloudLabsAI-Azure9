@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.11.1], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.11.2], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -247,32 +247,31 @@ AC_SUBST(MODULE_SRC)
 
 # we need curl for testing
 #
-if test x"$request_curl" = "xcheck"; then
-    AC_CHECK_LIB([curl], [curl_global_init], , [AC_MSG_ERROR("libcurl not found")])
-    curl_config="curl-config"
-    AC_CHECK_PROG([CURL_CONFIG],[$curl_config],[yes],[no])
-    if  test "x$CURL_CONFIG" = xno; then
-        curl_config="${prefix}/bin/curl-config"
-        AC_CHECK_PROG([CURL_CONFIG],[$curl_config],[yes],[no])
+curl_bin="curl"
+if test "x$request_curl" != "xcheck"; then
+    curl_bin="$request_curl/bin/curl"
+    AC_PATH_PROG([CURL_BIN],[$curl_bin]m, "-")
+else
+    AC_PATH_PROG([CURL_BIN],[$curl_bin], "-")
+    if test "x$CURL_BIN" = "x"; then
+        curl_bin="${prefix}/bin/curl"
+        AC_PATH_PROG([CURL_BIN],[$curl_bin], "-")
     fi
-else
-    curl_config="$request_curl/bin/curl-config"
-    AC_PATH_PROG([CURL_CONFIG],[$curl_config],[yes],[no])
 fi
 
-AM_CONDITIONAL([FOUND_CURL_CONFIG], [test "x$CURL_CONFIG" = xyes])
-AM_COND_IF([FOUND_CURL_CONFIG],,[AC_MSG_ERROR([required program 'curl-config' not found.])])
-
-# $curl_config is available. Does it offer HTTP/2?
-curl_ssl=$( $curl_config --features | fgrep HTTP2 )
-if test "x$curl_ssl" = "x"; then
-    AC_MSG_WARN([curl from $curl_config does not support HTTP/2. Tests will not work.])
-elif test x"$curl_config" = "xcurl-config"; then
-    CURL_BIN="curl"
+if test "x$CURL_BIN" = "x-"; then
+    CURL_MSG="$curl_bin was not found. Tests will not work."
+    AC_MSG_WARN([$CURL_MSG])
 else
-    CURL_BIN=$( dirname $curl_config)/curl
+    CURL_MSG="$CURL_BIN"
+    AC_SUBST(CURL_BIN)
+
+    curl_h2=$( $CURL_BIN -V | fgrep 'HTTP2' )
+    if test "x$curl_h2" = "x"; then
+        CURL_MSG="$CURL_BIN does not support HTTP/2. Tests will not work."
+        AC_MSG_WARN([$CURL_MSG])
+    fi
 fi
-AC_SUBST(CURL_BIN)
 
 # Do we have a pkg-config?
 AC_ARG_VAR([PKGCONFIG], [pkg-config executable])
@@ -304,7 +303,7 @@ AC_MSG_NOTICE([summary of build options:
     LDFLAGS:        ${LDFLAGS}
     LIBS:           ${LIBS}
     CPPFLAGS:       ${CPPFLAGS}
-    curl            ${CURL_BIN:--}
+    curl            ${CURL_MSG}
     nghttp          ${NGHTTP:--}
     h2load          ${H2LOAD:--}
 ])

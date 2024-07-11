@@ -1,3 +1,8 @@
+v1.11.2
+--------------------------------------------------------------------------------
+ * Fixed configure to no longer require ```libcurl-devel```, but only the ```curl```
+   command with h2 support for testing.
+
 v1.11.1
 --------------------------------------------------------------------------------
  * added test/Makefile.in to the release tar ball, so that peopl just need
