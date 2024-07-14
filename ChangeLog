@@ -1,3 +1,8 @@
+v1.11.3
+--------------------------------------------------------------------------------
+ * Adding defensive code for stream EOS handling, in case the request handler somehow
+   missed to signal it the normal way. Should address #167 and #170. 
+ 
 v1.11.2
 --------------------------------------------------------------------------------
  * Fixed configure to no longer require ```libcurl-devel```, but only the ```curl```
