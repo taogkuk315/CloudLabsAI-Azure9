@@ -694,7 +694,7 @@ static void check_push(request_rec *r, const char *tag)
                       tag, conf->push_list->nelts);
         for (i = 0; i < conf->push_list->nelts; ++i) {
             h2_push_res *push = &APR_ARRAY_IDX(conf->push_list, i, h2_push_res);
-            apr_table_addn(r->headers_out, "Link", 
+            apr_table_add(r->headers_out, "Link", 
                            apr_psprintf(r->pool, "<%s>; rel=preload%s", 
                                         push->uri_ref, push->critical? "; critical" : ""));
         }
@@ -750,7 +750,7 @@ static int h2_h2_late_fixups(request_rec *r)
         struct h2_task *task = h2_ctx_get_task(ctx);
         if (task) {
             /* check if we copy vs. setaside files in this location */
-            task->output.copy_files = !!h2_config_geti(h2_config_rget(r), 
+            task->output.copy_files = h2_config_geti(h2_config_rget(r), 
                                                      H2_CONF_COPY_FILES);
             if (task->output.copy_files) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, task->c,
