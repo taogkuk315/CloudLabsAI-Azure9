@@ -54,7 +54,7 @@ class TestStore:
 
     # access a resource with SSL renegotiation, using HTTP/1.1
     def test_101_01(self):
-        url = TestEnv.mkurl("https", "ssl", "/renegotiate/cipher")
+        url = TestEnv.mkurl("https", "ssl", "/renegotiate/cipher/")
         r = TestEnv.curl_get( url, options=[ "-v", "--http1.1" ] )
         assert 0 == r["rv"]
         assert "response" in r
@@ -62,7 +62,7 @@ class TestStore:
         
     # try to renegotiate the cipher, should fail with correct code
     def test_101_02(self):
-        url = TestEnv.mkurl("https", "ssl", "/renegotiate/cipher")
+        url = TestEnv.mkurl("https", "ssl", "/renegotiate/cipher/")
         r = TestEnv.curl_get( url, options=[ "-vvv" ] )
         assert 0 != r["rv"]
         assert not "response" in r
@@ -71,7 +71,7 @@ class TestStore:
     # try to renegotiate a client certificate from Location 
     # needs to fail with correct code
     def test_101_03(self):
-        url = TestEnv.mkurl("https", "ssl", "/renegotiate/verify")
+        url = TestEnv.mkurl("https", "ssl", "/renegotiate/verify/")
         r = TestEnv.curl_get( url, options=[ "-vvv" ] )
         assert 0 != r["rv"]
         assert not "response" in r
