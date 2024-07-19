@@ -1,3 +1,5 @@
+ * Adding an mpm check so that mod_http2 also compiles against Apache httpd trunk.
+
 v1.11.3
 --------------------------------------------------------------------------------
  * Adding defensive code for stream EOS handling, in case the request handler somehow
