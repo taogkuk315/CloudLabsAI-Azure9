@@ -17,7 +17,7 @@ from TestEnv import HttpdConf
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
-    HttpdConf().add_vhost_test1().install()
+    HttpdConf().add_vhost_test1().add_vhost_cgi().install()
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):
@@ -41,7 +41,7 @@ class TestStore:
 
     # check that we see an interim response when we ask for it
     def test_300_02(self):
-        url = TestEnv.mkurl("https", "test1", "/index.html")
+        url = TestEnv.mkurl("https", "cgi", "/echo.py")
         r = TestEnv.curl_post_data(url, 'XYZ', options=[ "-H", "expect: 100-continue" ])
         assert 200 == r["response"]["status"]
         assert "previous" in r["response"]
@@ -49,7 +49,7 @@ class TestStore:
 
     # check proper answer on unexpected
     def test_300_03(self):
-        url = TestEnv.mkurl("https", "test1", "/index.html")
+        url = TestEnv.mkurl("https", "cgi", "/echo.py")
         r = TestEnv.curl_post_data(url, 'XYZ', options=[ "-H", "expect: the-unexpected" ])
         assert 417 == r["response"]["status"]
         assert not "previous" in r["response"]
