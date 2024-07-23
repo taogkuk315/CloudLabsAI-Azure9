@@ -33,11 +33,19 @@ def setup_module(module):
     ).add_line("      <Location /renegotiate/verify>"
     ).add_line("          SSLVerifyClient require"
     ).add_line("      </Location>"
+    ).add_line("      <Directory \"%s/htdocs/sslrequire\">" % TestEnv.WEBROOT
+    ).add_line("          SSLRequireSSL"
+    ).add_line("      </Directory>"
+    ).add_line("      <Directory \"%s/htdocs/requiressl\">" % TestEnv.WEBROOT
+    ).add_line("          Require ssl"
+    ).add_line("      </Directory>"
     ).end_vhost(
     ).install()
     # the dir needs to exists for the configuration to have effect
     TestEnv.mkpath("%s/htdocs/ssl-client-verify" % TestEnv.WEBROOT)
     TestEnv.mkpath("%s/htdocs/renegotiate/cipher" % TestEnv.WEBROOT)
+    TestEnv.mkpath("%s/htdocs/sslrequire" % TestEnv.WEBROOT)
+    TestEnv.mkpath("%s/htdocs/requiressl" % TestEnv.WEBROOT)
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):
@@ -103,3 +111,22 @@ class TestStore:
         assert 0 == r["h2load"]["status"]["3xx"]
         assert 0 == r["h2load"]["status"]["4xx"]
         assert 0 == r["h2load"]["status"]["5xx"]
+
+    # Check that "SSLRequireSSL" works on h2 connections
+    # See <https://bz.apache.org/bugzilla/show_bug.cgi?id=62654>
+    def test_101_10a(self):
+        url = TestEnv.mkurl("https", "ssl", "/sslrequire/index.html")
+        r = TestEnv.curl_get( url )
+        assert 0 == r["rv"]
+        assert "response" in r
+        assert 404 == r["response"]["status"]
+
+    # Check that "require ssl" works on h2 connections
+    # See <https://bz.apache.org/bugzilla/show_bug.cgi?id=62654>
+    def test_101_10b(self):
+        url = TestEnv.mkurl("https", "ssl", "/requiressl/index.html")
+        r = TestEnv.curl_get( url )
+        assert 0 == r["rv"]
+        assert "response" in r
+        assert 404 == r["response"]["status"]
+        

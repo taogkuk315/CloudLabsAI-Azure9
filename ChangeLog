@@ -1,3 +1,4 @@
+ * Added test case for <https://bz.apache.org/bugzilla/show_bug.cgi?id=62654>
  * Adding an mpm check so that mod_http2 also compiles against Apache httpd trunk.
 
 v1.11.3
