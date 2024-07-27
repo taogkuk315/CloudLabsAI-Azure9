@@ -151,25 +151,19 @@ static void stream_cleanup(h2_mplx *m, h2_stream *stream)
  *   their HTTP/1 cousins, the separate allocator seems to work better
  *   than protecting a shared h2_session one with an own lock.
  */
-h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent, 
-                        const h2_config *conf, 
+h2_mplx *h2_mplx_create(conn_rec *c, server_rec *s, apr_pool_t *parent, 
                         h2_workers *workers)
 {
     apr_status_t status = APR_SUCCESS;
     apr_allocator_t *allocator;
     apr_thread_mutex_t *mutex;
     h2_mplx *m;
-    h2_ctx *ctx = h2_ctx_get(c, 0);
-    ap_assert(conf);
     
     m = apr_pcalloc(parent, sizeof(h2_mplx));
     if (m) {
         m->id = c->id;
         m->c = c;
-        m->s = (ctx? h2_ctx_server_get(ctx) : NULL);
-        if (!m->s) {
-            m->s = c->base_server;
-        }
+        m->s = s;
         
         /* We create a pool with its own allocator to be used for
          * processing slave connections. This is the only way to have the
@@ -210,8 +204,8 @@ h2_mplx *h2_mplx_create(conn_rec *c, apr_pool_t *parent,
             return NULL;
         }
     
-        m->max_streams = h2_config_geti(conf, H2_CONF_MAX_STREAMS);
-        m->stream_max_mem = h2_config_geti(conf, H2_CONF_STREAM_MAX_MEM);
+        m->max_streams = h2_config_sgeti(s, H2_CONF_MAX_STREAMS);
+        m->stream_max_mem = h2_config_sgeti(s, H2_CONF_STREAM_MAX_MEM);
 
         m->streams = h2_ihash_create(m->pool, offsetof(h2_stream,id));
         m->sredo = h2_ihash_create(m->pool, offsetof(h2_stream,id));
@@ -1126,7 +1120,7 @@ apr_status_t h2_mplx_req_engine_push(const char *ngn_type,
     h2_task *task;
     h2_stream *stream;
     
-    task = h2_ctx_rget_task(r);
+    task = h2_ctx_get_task(r->connection);
     if (!task) {
         return APR_ECONNABORTED;
     }
@@ -1190,7 +1184,7 @@ apr_status_t h2_mplx_req_engine_pull(h2_req_engine *ngn,
 void h2_mplx_req_engine_done(h2_req_engine *ngn, conn_rec *r_conn,
                              apr_status_t status)
 {
-    h2_task *task = h2_ctx_cget_task(r_conn);
+    h2_task *task = h2_ctx_get_task(r_conn);
     
     if (task) {
         h2_mplx *m = task->mplx;

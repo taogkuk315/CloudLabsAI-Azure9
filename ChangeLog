@@ -1,3 +1,5 @@
+ * Configuration rework to open up several directives for use in locations and directories
+   and .htaccess files.
  * Merging changes from httpd/trunk + httpd/branches/2.4.x to have a unified source again.
 
 v1.11.4
