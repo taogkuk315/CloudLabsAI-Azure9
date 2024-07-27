@@ -1,3 +1,5 @@
+ * Merging changes from httpd/trunk + httpd/branches/2.4.x to have a unified source again.
+
 v1.11.4
 --------------------------------------------------------------------------------
  * Changed cleanup strategy for slave connections.

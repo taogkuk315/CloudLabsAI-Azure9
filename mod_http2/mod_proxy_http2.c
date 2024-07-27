@@ -16,13 +16,14 @@
  
 #include <nghttp2/nghttp2.h>
 
+#include <ap_mmn.h>
 #include <httpd.h>
 #include <mod_proxy.h>
 #include "mod_http2.h"
 
 
 #include "mod_proxy_http2.h"
-#include "h2_request.h"
+#include "h2.h"
 #include "h2_proxy_util.h"
 #include "h2_version.h"
 #include "h2_proxy_session.h"
@@ -530,20 +531,6 @@ run_connect:
     }
 
     ctx->p_conn->is_ssl = ctx->is_ssl;
-    if (ctx->is_ssl && ctx->p_conn->connection) {
-        /* If there are some metadata on the connection (e.g. TLS alert),
-         * let mod_ssl detect them, and create a new connection below.
-         */ 
-        apr_bucket_brigade *tmp_bb;
-        tmp_bb = apr_brigade_create(ctx->rbase->pool, 
-                                    ctx->rbase->connection->bucket_alloc);
-        status = ap_get_brigade(ctx->p_conn->connection->input_filters, tmp_bb,
-                                AP_MODE_SPECULATIVE, APR_NONBLOCK_READ, 1);
-        if (status != APR_SUCCESS && !APR_STATUS_IS_EAGAIN(status)) {
-            ctx->p_conn->close = 1;
-        }
-        apr_brigade_cleanup(tmp_bb);
-    }   
 
     /* Step One: Determine the URL to connect to (might be a proxy),
      * initialize the backend accordingly and determine the server 
@@ -590,21 +577,12 @@ run_connect:
             goto reconnect;
         }
         
-        if (!ctx->p_conn->data) {
-            /* New conection: set a note on the connection what CN is
-             * requested and what protocol we want */
-            if (ctx->p_conn->ssl_hostname) {
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, ctx->owner, 
-                              "set SNI to %s for (%s)", 
-                              ctx->p_conn->ssl_hostname, 
-                              ctx->p_conn->hostname);
-                apr_table_setn(ctx->p_conn->connection->notes,
-                               "proxy-request-hostname", ctx->p_conn->ssl_hostname);
-            }
-            if (ctx->is_ssl) {
-                apr_table_setn(ctx->p_conn->connection->notes,
-                               "proxy-request-alpn-protos", "h2");
-            }
+        if (!ctx->p_conn->data && ctx->is_ssl) {
+            /* New SSL connection: set a note on the connection about what
+             * protocol we want.
+             */
+            apr_table_setn(ctx->p_conn->connection->notes,
+                           "proxy-request-alpn-protos", "h2");
         }
     }
 
@@ -627,8 +605,9 @@ reconnect:
         /* Still more to do, tear down old conn and start over */
         if (ctx->p_conn) {
             ctx->p_conn->close = 1;
-            /*only in trunk so far */
-            /*proxy_run_detach_backend(r, ctx->p_conn);*/
+#if AP_MODULE_MAGIC_AT_LEAST(20140207, 2)
+            proxy_run_detach_backend(r, ctx->p_conn);
+#endif
             ap_proxy_release_connection(ctx->proxy_func, ctx->p_conn, ctx->server);
             ctx->p_conn = NULL;
         }
@@ -647,8 +626,9 @@ cleanup:
             /* close socket when errors happened or session shut down (EOF) */
             ctx->p_conn->close = 1;
         }
-        /*only in trunk so far */
-        /*proxy_run_detach_backend(ctx->rbase, ctx->p_conn);*/
+#if AP_MODULE_MAGIC_AT_LEAST(20140207, 2)
+        proxy_run_detach_backend(ctx->rbase, ctx->p_conn);
+#endif
         ap_proxy_release_connection(ctx->proxy_func, ctx->p_conn, ctx->server);
         ctx->p_conn = NULL;
     }

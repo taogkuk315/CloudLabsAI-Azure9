@@ -260,6 +260,13 @@ apr_status_t h2_conn_pre_close(struct h2_ctx *ctx, conn_rec *c)
     return DONE;
 }
 
+/* APR callback invoked if allocation fails. */
+static int abort_on_oom(int retcode)
+{
+    ap_abort_on_oom();
+    return retcode; /* unreachable, hopefully. */
+}
+
 conn_rec *h2_slave_create(conn_rec *master, int slave_id, apr_pool_t *parent)
 {
     apr_allocator_t *allocator;
@@ -289,8 +296,9 @@ conn_rec *h2_slave_create(conn_rec *master, int slave_id, apr_pool_t *parent)
         return NULL;
     }
     apr_allocator_owner_set(allocator, pool);
+    apr_pool_abort_set(abort_on_oom, pool);
     apr_pool_tag(pool, "h2_slave_conn");
- 
+
     c = (conn_rec *) apr_palloc(pool, sizeof(conn_rec));
     if (c == NULL) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOMEM, master, 
@@ -308,6 +316,9 @@ conn_rec *h2_slave_create(conn_rec *master, int slave_id, apr_pool_t *parent)
     c->notes                  = apr_table_make(pool, 5);
     c->input_filters          = NULL;
     c->output_filters         = NULL;
+#if AP_MODULE_MAGIC_AT_LEAST(20180903, 1)
+    c->filter_conn_ctx        = NULL;
+#endif
     c->bucket_alloc           = apr_bucket_alloc_create(pool);
 #if !AP_MODULE_MAGIC_AT_LEAST(20180720, 1)
     c->data_in_input_filters  = 0;

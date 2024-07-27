@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.11.4], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.12.0], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -78,7 +78,7 @@ prefix="$($APXS -q prefix)"
 prefix="${prefix:-/usr}"
 export PREFIX="${prefix}"
 LDFLAGS="-L$($APXS -q libdir) $LDFLAGS"
-CPPFLAGS="-I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR) $CPPFLAGS"
+CPPFLAGS="-I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR) $($APXS -q EXTRA_CPPFLAGS) $CPPFLAGS"
 export SYSCONF_DIR="$($APXS -q sysconfdir)"
 export LIBEXEC_DIR="$($APXS -q LIBEXECDIR)"
 

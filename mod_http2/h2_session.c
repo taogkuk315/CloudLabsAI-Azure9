@@ -73,7 +73,7 @@ static int h2_session_status_from_apr_status(apr_status_t rv)
     return NGHTTP2_ERR_PROTO;
 }
 
-h2_stream *h2_session_stream_get(h2_session *session, int stream_id)
+static h2_stream *get_stream(h2_session *session, int stream_id)
 {
     return nghttp2_session_get_stream_user_data(session->ngh2, stream_id);
 }
@@ -232,7 +232,7 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
     h2_stream * stream;
     int rv = 0;
     
-    stream = h2_session_stream_get(session, stream_id);
+    stream = get_stream(session, stream_id);
     if (stream) {
         status = h2_stream_recv_DATA(stream, flags, data, len);
         dispatch_event(session, H2_SESSION_EV_STREAM_CHANGE, 0, "stream data rcvd");
@@ -258,7 +258,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
     h2_stream *stream;
     
     (void)ngh2;
-    stream = h2_session_stream_get(session, stream_id);
+    stream = get_stream(session, stream_id);
     if (stream) {
         if (error_code) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
@@ -280,7 +280,7 @@ static int on_begin_headers_cb(nghttp2_session *ngh2,
     /* We may see HEADERs at the start of a stream or after all DATA
      * streams to carry trailers. */
     (void)ngh2;
-    s = h2_session_stream_get(session, frame->hd.stream_id);
+    s = get_stream(session, frame->hd.stream_id);
     if (s) {
         /* nop */
     }
@@ -301,7 +301,7 @@ static int on_header_cb(nghttp2_session *ngh2, const nghttp2_frame *frame,
     apr_status_t status;
     
     (void)flags;
-    stream = h2_session_stream_get(session, frame->hd.stream_id);
+    stream = get_stream(session, frame->hd.stream_id);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(02920) 
                       "h2_stream(%ld-%d): on_header unknown stream",
@@ -347,14 +347,14 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             /* This can be HEADERS for a new stream, defining the request,
              * or HEADER may come after DATA at the end of a stream as in
              * trailers */
-            stream = h2_session_stream_get(session, frame->hd.stream_id);
+            stream = get_stream(session, frame->hd.stream_id);
             if (stream) {
                 rv = h2_stream_recv_frame(stream, NGHTTP2_HEADERS, frame->hd.flags, 
                     frame->hd.length + H2_FRAME_HDR_LEN);
             }
             break;
         case NGHTTP2_DATA:
-            stream = h2_session_stream_get(session, frame->hd.stream_id);
+            stream = get_stream(session, frame->hd.stream_id);
             if (stream) {
                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,  
                               H2_STRM_LOG(APLOGNO(02923), stream, 
@@ -388,7 +388,7 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                           "h2_stream(%ld-%d): RST_STREAM by client, errror=%d",
                           session->id, (int)frame->hd.stream_id,
                           (int)frame->rst_stream.error_code);
-            stream = h2_session_stream_get(session, frame->hd.stream_id);
+            stream = get_stream(session, frame->hd.stream_id);
             if (stream && stream->initiated_on) {
                 ++session->pushes_reset;
             }
@@ -500,7 +500,7 @@ static int on_send_data_cb(nghttp2_session *ngh2,
     }
     padlen = (unsigned char)frame->data.padlen;
     
-    stream = h2_session_stream_get(session, stream_id);
+    stream = get_stream(session, stream_id);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_NOTFOUND, session->c,
                       APLOGNO(02924) 
@@ -589,7 +589,7 @@ static int on_frame_send_cb(nghttp2_session *ngh2,
                      (long)session->frames_sent);
     }
     
-    stream = h2_session_stream_get(session, stream_id);
+    stream = get_stream(session, stream_id);
     if (stream) {
         h2_stream_send_frame(stream, frame->hd.type, frame->hd.flags, 
             frame->hd.length + H2_FRAME_HDR_LEN);
@@ -614,7 +614,7 @@ static int on_invalid_header_cb(nghttp2_session *ngh2,
                       apr_pstrndup(session->pool, (const char *)name, namelen),
                       apr_pstrndup(session->pool, (const char *)value, valuelen));
     }
-    stream = h2_session_stream_get(session, frame->hd.stream_id);
+    stream = get_stream(session, frame->hd.stream_id);
     if (stream) {
         h2_stream_rst(stream, NGHTTP2_PROTOCOL_ERROR);
     }
@@ -1076,7 +1076,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     (void)ng2s;
     (void)buf;
     (void)source;
-    stream = h2_session_stream_get(session, stream_id);
+    stream = get_stream(session, stream_id);
     if (!stream) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
                       APLOGNO(02937) 
@@ -1262,7 +1262,7 @@ apr_status_t h2_session_set_prio(h2_session *session, h2_stream *stream,
 
         rv = nghttp2_session_change_stream_priority(session->ngh2, stream->id, &ps);
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 
-                      ""H2_STRM_LOG(APLOGNO(03203), stream, 
+                      H2_STRM_LOG(APLOGNO(03203), stream, 
                       "PUSH %s, weight=%d, depends=%d, returned=%d"),
                       ptype, ps.weight, ps.stream_id, rv);
         status = (rv < 0)? APR_EGENERAL : APR_SUCCESS;
@@ -1520,7 +1520,7 @@ static void h2_session_in_flush(h2_session *session)
     int id;
     
     while ((id = h2_iq_shift(session->in_process)) > 0) {
-        h2_stream *stream = h2_session_stream_get(session, id);
+        h2_stream *stream = get_stream(session, id);
         if (stream) {
             ap_assert(!stream->scheduled);
             if (h2_stream_prep_processing(stream) == APR_SUCCESS) {
@@ -1533,7 +1533,7 @@ static void h2_session_in_flush(h2_session *session)
     }
 
     while ((id = h2_iq_shift(session->in_pending)) > 0) {
-        h2_stream *stream = h2_session_stream_get(session, id);
+        h2_stream *stream = get_stream(session, id);
         if (stream) {
             h2_stream_flush_input(stream);
         }
