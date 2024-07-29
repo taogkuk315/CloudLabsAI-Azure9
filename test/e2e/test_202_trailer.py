@@ -51,7 +51,7 @@ class TestStore:
         assert 300 > r["response"]["status"]
         assert 1000 == len(r["response"]["body"])
 
-        r = TestEnv.nghttp_upload(url, fpath, options=[ "--trailer", "test: 1b", "--trailer", "XXX: test" ])
+        r = TestEnv.nghttp().upload(url, fpath, options=[ "--trailer", "test: 1b", "--trailer", "XXX: test" ])
         assert 300 > r["response"]["status"]
         assert 1000 == len(r["response"]["body"])
 

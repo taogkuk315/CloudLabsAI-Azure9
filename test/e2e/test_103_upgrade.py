@@ -22,6 +22,13 @@ def setup_module(module):
     ).add_line("      Protocols h2 http/1.1"
     ).add_line("      Header unset Upgrade"
     ).end_vhost(
+    ).start_vhost( TestEnv.HTTP_PORT, "test1b", docRoot="htdocs/test1", withSSL=False
+    ).add_line("      Protocols h2c http/1.1"
+    ).add_line("      H2Upgrade off"
+    ).add_line("      <Location /006.html>"
+    ).add_line("        H2Upgrade on"
+    ).add_line("      </Location>"
+    ).end_vhost(
     ).install()
         
     # the dir needs to exists for the configuration to have effect
@@ -99,3 +106,39 @@ class TestStore:
         assert not "upgrade" in r["response"]["header"]
         
 
+    # upgrade to h2c for a request, where h2c is preferred
+    @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
+    def test_103_20(self):
+        url = TestEnv.mkurl("http", "test1", "/index.html")
+        r = TestEnv.nghttp().get(url, options=[ "-u" ])
+        assert 200 == r["response"]["status"]
+
+    # upgrade to h2c for a request where http/1.1 is preferred, but the clients upgrade
+    # wish is honored nevertheless
+    @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
+    def test_103_21(self):
+        url = TestEnv.mkurl("http", "test2", "/index.html")
+        r = TestEnv.nghttp().get(url, options=[ "-u" ])
+        assert 404 == r["response"]["status"]
+
+    # ugrade to h2c on a host where h2c is not enabled will fail
+    @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
+    def test_103_22(self):
+        url = TestEnv.mkurl("http", "noh2", "/index.html")
+        r = TestEnv.nghttp().get(url, options=[ "-u" ])
+        assert not "response" in r
+
+    # ugrade to h2c on a host where h2c is preferred, but Upgrade is disabled
+    @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
+    def test_103_23(self):
+        url = TestEnv.mkurl("http", "test1b", "/index.html")
+        r = TestEnv.nghttp().get(url, options=[ "-u" ])
+        assert not "response" in r
+
+    # ugrade to h2c on a host where h2c is preferred, but Upgrade is disabled on the server,
+    # but allowed for a specific location
+    @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
+    def test_103_23(self):
+        url = TestEnv.mkurl("http", "test1b", "/006.html")
+        r = TestEnv.nghttp().get(url, options=[ "-u" ])
+        assert 200 == r["response"]["status"]

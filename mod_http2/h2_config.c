@@ -86,8 +86,6 @@ typedef struct h2_dir_config {
     int h2_push;                  /* if HTTP/2 server push is enabled */
     apr_array_header_t *push_list;/* list of h2_push_res configurations */
     int early_hints;              /* support status code 103 */
-    int serialize_headers;        /* Use serialized HTTP/1.1 headers for 
-                                     processing, better compatibility */
 } h2_dir_config;
 
 
@@ -123,7 +121,6 @@ static h2_dir_config defdconf = {
     1,                      /* HTTP/2 server push enabled */
     NULL,                   /* push list */
     -1,                     /* early hints, http status 103 */
-    -1,                     /* serialize headers */
 };
 
 void h2_config_init(apr_pool_t *pool)
@@ -216,7 +213,6 @@ void *h2_config_create_dir(apr_pool_t *pool, char *x)
     conf->h2_upgrade           = DEF_VAL;
     conf->h2_push              = DEF_VAL;
     conf->early_hints          = DEF_VAL;
-    conf->serialize_headers    = DEF_VAL;
     return conf;
 }
 
@@ -238,7 +234,6 @@ void *h2_config_merge_dir(apr_pool_t *pool, void *basev, void *addv)
         n->push_list        = add->push_list? add->push_list : base->push_list;
     }
     n->early_hints          = H2_CONFIG_GET(add, base, early_hints);
-    n->serialize_headers    = H2_CONFIG_GET(add, base, serialize_headers);
     return n;
 }
 
@@ -382,8 +377,6 @@ static apr_int64_t h2_dir_config_geti64(const h2_dir_config *conf, h2_config_var
             return H2_CONFIG_GET(conf, &defdconf, h2_push);
         case H2_CONF_EARLY_HINTS:
             return H2_CONFIG_GET(conf, &defdconf, early_hints);
-        case H2_CONF_SER_HEADERS:
-            return H2_CONFIG_GET(conf, &defdconf, serialize_headers);
 
         default:
             return DEF_VAL;
@@ -406,9 +399,6 @@ static void h2_config_seti(h2_dir_config *dconf, h2_config *conf, h2_config_var_
                 break;
             case H2_CONF_EARLY_HINTS:
                 H2_CONFIG_SET(dconf, early_hints, val);
-                break;
-            case H2_CONF_SER_HEADERS:
-                H2_CONFIG_SET(dconf, serialize_headers, val);
                 break;
             default:
                 /* not handled in dir_conf */
@@ -670,8 +660,8 @@ static const char *h2_conf_set_push(cmd_parms *cmd, void *dirconf, const char *v
     }
     else if (!strcasecmp(value, "Off")) {
         CONFIG_CMD_SET(cmd, dirconf, H2_CONF_PUSH, 0);
+        return NULL;
     }
-
     return "value must be On or Off";
 }
 
@@ -908,11 +898,11 @@ const command_rec h2_cmds[] = {
     AP_INIT_TAKE1("H2StreamMaxMemSize", h2_conf_set_stream_max_mem_size, NULL,
                   RSRC_CONF, "maximum number of bytes buffered in memory for a stream"),
     AP_INIT_TAKE1("H2AltSvc", h2_add_alt_svc, NULL,
-                  RSRC_CONF|OR_AUTHCFG, "adds an Alt-Svc for this server"),
-    AP_INIT_TAKE1("H2AltSvcMaxAge|OR_AUTHCFG", h2_conf_set_alt_svc_max_age, NULL,
-                  RSRC_CONF|OR_AUTHCFG, "set the maximum age (in seconds) that client can rely on alt-svc information"),
+                  RSRC_CONF, "adds an Alt-Svc for this server"),
+    AP_INIT_TAKE1("H2AltSvcMaxAge", h2_conf_set_alt_svc_max_age, NULL,
+                  RSRC_CONF, "set the maximum age (in seconds) that client can rely on alt-svc information"),
     AP_INIT_TAKE1("H2SerializeHeaders", h2_conf_set_serialize_headers, NULL,
-                  RSRC_CONF|OR_AUTHCFG, "on to enable header serialization for compatibility"),
+                  RSRC_CONF, "on to enable header serialization for compatibility"),
     AP_INIT_TAKE1("H2ModernTLSOnly", h2_conf_set_modern_tls_only, NULL,
                   RSRC_CONF, "off to not impose RFC 7540 restrictions on TLS"),
     AP_INIT_TAKE1("H2Upgrade", h2_conf_set_upgrade, NULL,
@@ -936,7 +926,7 @@ const command_rec h2_cmds[] = {
     AP_INIT_TAKE123("H2PushResource", h2_conf_add_push_res, NULL,
                    OR_FILEINFO|OR_AUTHCFG, "add a resource to be pushed in this location/on this server."),
     AP_INIT_TAKE1("H2EarlyHints", h2_conf_set_early_hints, NULL,
-                  RSRC_CONF|OR_AUTHCFG, "on to enable interim status 103 responses"),
+                  RSRC_CONF, "on to enable interim status 103 responses"),
     AP_END_CMD
 };
 

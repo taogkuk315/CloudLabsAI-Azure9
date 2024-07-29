@@ -42,7 +42,8 @@ class Nghttp:
                     "response" : {
                         "id" : sid, 
                         "body" : "" 
-                    }
+                    },
+                    "promises" : []
             }
         return streams[sid] if sid in streams else None
 
@@ -72,9 +73,10 @@ class Nghttp:
             body = ""
             stream = 0
             streams = {}
+            skip_indents = True
             lines = re.findall(r'[^\n]*\n', r["out"]["text"], re.MULTILINE)
             print "%d lines:" % len(lines)
-            for l in lines:
+            for lidx, l in enumerate(lines):
                 m = re.match(r'\[.*\] recv \(stream_id=(\d+)\) (\S+): (\S*)', l)
                 if m:
                     s = self.get_stream( streams, m.group(1) )
@@ -116,6 +118,7 @@ class Nghttp:
                         print "stream %d: %d DATA bytes added" % (s["id"], blen) 
                         s["response"]["body"] += body[-blen:]
                     body = ""
+                    skip_indents = True
                     continue
                     
                 m = re.match(r'\[.*\] recv PUSH_PROMISE frame <.* stream_id=(\d+)>', l)
@@ -123,20 +126,36 @@ class Nghttp:
                     s = self.get_stream( streams, m.group(1) )
                     if s:
                         # headers we have are request headers for the PUSHed stream
-                        # TODO: store them
-                        print "stream %d: %d PUSH_PROMISE header" % (s["id"], len(s["header"])) 
+                        # these have been received on the originating stream, the promised
+                        # stream id it mentioned in the following lines
+                        print "stream %d: %d PUSH_PROMISE header" % (s["id"], len(s["header"]))
+                        if len(lines) > lidx+2:
+                            m2 = re.match(r'\s+\(.*promised_stream_id=(\d+)\)', lines[lidx+2])
+                            if m2:
+                                s2 = self.get_stream( streams, m2.group(1) )
+                                s2["request"]["header"] = s["header"]
+                                s["promises"].append(s2)
                         s["header"] = {} 
                     continue
                         
-                if "[" != l[0]: 
+                if skip_indents and l.startswith('      '):
+                    continue
+                if "[" != l[0]:
+                    skip_indents = None
                     body += l
                     
+            # the main request is done on the lowest odd numbered id
+            main_stream = 99999999999
             for sid in streams:
                 s = streams[sid]
                 s["response"]["status"] = int(s["response"]["header"][":status"])
+                if (sid % 2) == 1 and sid < main_stream:
+                    main_stream = sid
+            
             r["streams"] = streams
-            if 13 in streams:
-                r["response"] = streams[13]["response"]
+            
+            if main_stream in streams:
+                r["response"] = streams[main_stream]["response"]
         return r
 
     def get( self, url, timeout=5, options=None ) :

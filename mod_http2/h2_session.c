@@ -1304,6 +1304,7 @@ static apr_status_t on_stream_headers(h2_session *session, h2_stream *stream,
                                       int eos)
 {
     apr_status_t status = APR_SUCCESS;
+    const char *s;
     int rv = 0;
 
     ap_assert(session);
@@ -1371,8 +1372,12 @@ static apr_status_t on_stream_headers(h2_session *session, h2_stream *stream,
             && (headers->status < 400)
             && (headers->status != 304)
             && h2_session_push_enabled(session)) {
-            
-            h2_stream_submit_pushes(stream, headers);
+            /* PUSH is possibe and enabled on server, unless the request
+             * denies it, submit resources to push */
+            s = apr_table_get(headers->notes, H2_PUSH_MODE_NOTE);
+            if (!s || strcmp(s, "0")) {
+                h2_stream_submit_pushes(stream, headers);
+            }
         }
         
         if (!stream->pref_priority) {
