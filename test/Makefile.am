@@ -1,4 +1,4 @@
-# Copyright 2018 greenbytes GmbH (https://www.greenbytes.de)
+# Copyright 2019 greenbytes GmbH (https://www.greenbytes.de)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

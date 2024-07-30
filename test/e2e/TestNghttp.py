@@ -1,7 +1,7 @@
 ###################################################################################################
 # Utility class for calling and analysing nghttp calls
 #
-# (c) 2018 greenbytes GmbH, Stefan Eissing
+# (c) 2019 greenbytes GmbH, Stefan Eissing
 ###################################################################################################
 
 import json

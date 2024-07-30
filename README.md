@@ -1,9 +1,9 @@
 
 # mod_h[ttp]2 - http/2 for Apache httpd
 
-Copyright 2015-2018 greenbytes GmbH
+Copyright 2015-2019 greenbytes GmbH
 
-This repository contains `mod_h[ttp]2` and `mod_proxy_h[ttp]2` from Apache httpd as a standalone build. It servers as early access to features and fixes before being shipped in the next Apache release. It has **alpha status** and features might be removed again.
+This repository contains `mod_h[ttp]2` and `mod_proxy_h[ttp]2` from Apache httpd as a standalone build. It servers as early access to features and fixes before being shipped in the next Apache release.  `mod_proxy_h[ttp]2` has **alpha status** and features might be removed again. While `mod_h[ttp]2` is **production ready** and stable as shipped by the Apache project, the versions here in github may contain changes for early experimentation.
 
 ## Status
 
@@ -128,7 +128,7 @@ SPDY protocol. And without Tatsuhiro Tsujikawa excellent nghttp2 work, this
 would not have been possible.
 
 
-Münster, 19.04.2016,
+Münster, 07.01.2019,
 
 Stefan Eissing, greenbytes GmbH
 
