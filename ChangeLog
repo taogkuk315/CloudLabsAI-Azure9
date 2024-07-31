@@ -1,5 +1,7 @@
 v1.12.1
 --------------------------------------------------------------------------------
+ * Fixed Bug introduce in v1.12.0 where mod_proxy_http2 no longer set the server name
+   on new backend connections.
  * Fixed issue where mod_proxy_http2 would trigger an invalid internal state when retrying requests.
  * applied patch for #167 provided by Michael Kaufmann (@mkauf) about errors on
    HEAD requests (h2 streams not closed cleanly), for example those served by mod_cgid.

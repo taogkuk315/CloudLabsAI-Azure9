@@ -276,7 +276,7 @@ static void request_done(h2_proxy_ctx *ctx, request_rec *r,
         if (!touched) {
             /* untouched request, need rescheduling */
             status = h2_proxy_fifo_push(ctx->requests, r);
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, status, r->connection, 
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, r->connection, 
                           APLOGNO(03369)
                           "h2_proxy_session(%s): rescheduled request %s",
                           ctx->engine_id, task_id);
@@ -583,6 +583,14 @@ run_connect:
              */
             apr_table_setn(ctx->p_conn->connection->notes,
                            "proxy-request-alpn-protos", "h2");
+            if (ctx->p_conn->ssl_hostname) {
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, ctx->owner, 
+                              "set SNI to %s for (%s)", 
+                              ctx->p_conn->ssl_hostname, 
+                              ctx->p_conn->hostname);
+                apr_table_setn(ctx->p_conn->connection->notes,
+                               "proxy-request-hostname", ctx->p_conn->ssl_hostname);
+            }
         }
     }
 
