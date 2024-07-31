@@ -118,7 +118,7 @@ static h2_dir_config defdconf = {
     NULL,                   /* no alt-svcs */
     -1,                     /* alt-svc max age */
     -1,                     /* HTTP/1 Upgrade support */
-    1,                      /* HTTP/2 server push enabled */
+    -1,                     /* HTTP/2 server push enabled */
     NULL,                   /* push list */
     -1,                     /* early hints, http status 103 */
 };
@@ -261,7 +261,8 @@ static apr_int64_t h2_srv_config_geti64(const h2_config *conf, h2_config_var_t v
         case H2_CONF_UPGRADE:
             return H2_CONFIG_GET(conf, &defconf, h2_upgrade);
         case H2_CONF_DIRECT:
-            return H2_CONFIG_GET(conf, &defconf, h2_direct);
+            return 1;
+            /*return H2_CONFIG_GET(conf, &defconf, h2_direct);*/
         case H2_CONF_TLS_WARMUP_SIZE:
             return H2_CONFIG_GET(conf, &defconf, tls_warmup_size);
         case H2_CONF_TLS_COOLDOWN_SECS:
@@ -429,6 +430,33 @@ static void h2_config_seti64(h2_dir_config *dconf, h2_config *conf, h2_config_va
     }
 }
 
+static const h2_config *h2_config_get(conn_rec *c)
+{
+    h2_ctx *ctx = h2_ctx_get(c, 0);
+    
+    if (ctx) {
+        if (ctx->config) {
+            return ctx->config;
+        }
+        else if (ctx->server) {
+            ctx->config = h2_config_sget(ctx->server);
+            return ctx->config;
+        }
+    }
+    
+    return h2_config_sget(c->base_server);
+}
+
+int h2_config_cgeti(conn_rec *c, h2_config_var_t var)
+{
+    return (int)h2_srv_config_geti64(h2_config_get(c), var);
+}
+
+apr_int64_t h2_config_cgeti64(conn_rec *c, h2_config_var_t var)
+{
+    return h2_srv_config_geti64(h2_config_get(c), var);
+}
+
 int h2_config_sgeti(server_rec *s, h2_config_var_t var)
 {
     return (int)h2_srv_config_geti64(h2_config_sget(s), var);
@@ -482,23 +510,6 @@ apr_array_header_t *h2_config_alt_svcs(request_rec *r)
     }
     sconf = h2_config_sget(r->server); 
     return sconf? sconf->alt_svcs : NULL;
-}
-
-static const h2_config *h2_config_get(conn_rec *c)
-{
-    h2_ctx *ctx = h2_ctx_get(c, 0);
-    
-    if (ctx) {
-        if (ctx->config) {
-            return ctx->config;
-        }
-        else if (ctx->server) {
-            ctx->config = h2_config_sget(ctx->server);
-            return ctx->config;
-        }
-    }
-    
-    return h2_config_sget(c->base_server);
 }
 
 const struct h2_priority *h2_cconfig_get_priority(conn_rec *c, const char *content_type)
@@ -848,15 +859,18 @@ static const char *h2_conf_add_push_res(cmd_parms *cmd, void *dirconf,
 static const char *h2_conf_set_early_hints(cmd_parms *cmd,
                                            void *dirconf, const char *value)
 {
-    if (!strcasecmp(value, "On")) {
-        CONFIG_CMD_SET(cmd, dirconf, H2_CONF_EARLY_HINTS, 1);
-        return NULL;
+    int val;
+
+    if (!strcasecmp(value, "On")) val = 1;
+    else if (!strcasecmp(value, "Off")) val = 0;
+    else return "value must be On or Off";
+    
+    CONFIG_CMD_SET(cmd, dirconf, H2_CONF_EARLY_HINTS, val);
+    if (cmd->path) {
+        ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, cmd->pool, 
+                            "H2EarlyHints = %d on path %s", val, cmd->path);
     }
-    else if (!strcasecmp(value, "Off")) {
-        CONFIG_CMD_SET(cmd, dirconf, H2_CONF_EARLY_HINTS, 0);
-        return NULL;
-    }
-    return "value must be On or Off";
+    return NULL;
 }
 
 void h2_get_num_workers(server_rec *s, int *minw, int *maxw)

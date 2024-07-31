@@ -57,7 +57,7 @@ void h2_h2_register_hooks(void);
  *    the handshake is still ongoing.
  * @return != 0 iff connection requirements are met
  */
-int h2_is_acceptable_connection(conn_rec *c, request_rec *r, server_rec *s, int require_all);
+int h2_is_acceptable_connection(conn_rec *c, request_rec *r, int require_all);
 
 /**
  * Check if the "Upgrade" HTTP/1.1 mode of protocol switching is enabled

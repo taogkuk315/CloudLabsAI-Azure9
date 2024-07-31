@@ -2074,7 +2074,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
         switch (session->state) {
             case H2_SESSION_ST_INIT:
                 ap_update_child_status_from_conn(c->sbh, SERVER_BUSY_READ, c);
-                if (!h2_is_acceptable_connection(c, session->r, session->s, 1)) {
+                if (!h2_is_acceptable_connection(c, session->r, 1)) {
                     update_child_status(session, SERVER_BUSY_READ, 
                                         "inadequate security");
                     h2_session_shutdown(session, 

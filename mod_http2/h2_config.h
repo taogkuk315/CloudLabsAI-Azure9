@@ -65,6 +65,12 @@ int h2_config_geti(request_rec *r, server_rec *s, h2_config_var_t var);
 apr_int64_t h2_config_geti64(request_rec *r, server_rec *s, h2_config_var_t var);
 
 /** 
+ * Get the configured value for variable <var> at the given connection.
+ */
+int h2_config_cgeti(conn_rec *c, h2_config_var_t var);
+apr_int64_t h2_config_cgeti64(conn_rec *c, h2_config_var_t var);
+
+/** 
  * Get the configured value for variable <var> at the given server.
  */
 int h2_config_sgeti(server_rec *s, h2_config_var_t var);

@@ -786,6 +786,8 @@ static void task_done(h2_mplx *m, h2_task *task, h2_req_engine *ngn)
         /* this task was handed over to an engine for processing 
          * and the original worker has finished. That means the 
          * engine may start processing now. */
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+                      "h2_mplx(%ld): task(%s) done (frozen)", m->id, task->id);
         h2_task_thaw(task);
         apr_thread_cond_broadcast(m->task_thawed);
         return;
@@ -840,18 +842,24 @@ static void task_done(h2_mplx *m, h2_task *task, h2_req_engine *ngn)
                           m->id, m->limit_active);
         }
     }
-    
+
+    ap_assert(task->done_done == 0);
+
     stream = h2_ihash_get(m->streams, task->stream_id);
     if (stream) {
         /* stream not done yet. */
         if (!m->aborted && h2_ihash_get(m->sredo, stream->id)) {
             /* reset and schedule again */
+            task->worker_done = 0;
             h2_task_redo(task);
             h2_ihash_remove(m->sredo, stream->id);
             h2_iq_add(m->q, stream->id, NULL, NULL);
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, m->c,
+                          H2_STRM_MSG(stream, "redo, added to q")); 
         }
         else {
             /* stream not cleaned up, stay around */
+            task->done_done = 1;
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
                           H2_STRM_MSG(stream, "task_done, stream open")); 
             if (stream->input) {
@@ -864,6 +872,7 @@ static void task_done(h2_mplx *m, h2_task *task, h2_req_engine *ngn)
     }
     else if ((stream = h2_ihash_get(m->shold, task->stream_id)) != NULL) {
         /* stream is done, was just waiting for this. */
+        task->done_done = 1;
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
                       H2_STRM_MSG(stream, "task_done, in hold"));
         if (stream->input) {
@@ -1189,6 +1198,7 @@ void h2_mplx_req_engine_done(h2_req_engine *ngn, conn_rec *r_conn,
     if (task) {
         h2_mplx *m = task->mplx;
         h2_stream *stream;
+        int task_hosting_engine = (task->engine != NULL); 
 
         H2_MPLX_ENTER_ALWAYS(m);
 
@@ -1200,13 +1210,13 @@ void h2_mplx_req_engine_done(h2_req_engine *ngn, conn_rec *r_conn,
         if (status != APR_SUCCESS && stream 
             && h2_task_can_redo(task) 
             && !h2_ihash_get(m->sredo, stream->id)) {
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, status, m->c,
+                          "h2_mplx(%ld): task %s added to redo", m->id, task->id);
             h2_ihash_add(m->sredo, stream);
         }
 
-        if (task->engine) { 
-            /* cannot report that as done until engine returns */
-        }
-        else {
+        /* cannot report that until hosted engine returns */
+        if (!task_hosting_engine) { 
             task_done(m, task, ngn);
         }
 

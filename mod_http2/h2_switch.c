@@ -67,7 +67,7 @@ static int h2_protocol_propose(conn_rec *c, request_rec *r,
         return DECLINED;
     }
     
-    if (!h2_is_acceptable_connection(c, r, s, 0)) {
+    if (!h2_is_acceptable_connection(c, r, 0)) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(03084)
                       "protocol propose: connection requirements not met");
         return DECLINED;

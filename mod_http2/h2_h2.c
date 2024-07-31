@@ -463,15 +463,16 @@ int h2_h2_is_tls(conn_rec *c)
     return opt_ssl_is_https && opt_ssl_is_https(c);
 }
 
-int h2_is_acceptable_connection(conn_rec *c, request_rec *r, server_rec *s, int require_all) 
+int h2_is_acceptable_connection(conn_rec *c, request_rec *r, int require_all) 
 {
     int is_tls = h2_h2_is_tls(c);
 
-    if (is_tls && h2_config_sgeti(s, H2_CONF_MODERN_TLS_ONLY) > 0) {
+    if (is_tls && h2_config_cgeti(c, H2_CONF_MODERN_TLS_ONLY) > 0) {
         /* Check TLS connection for modern TLS parameters, as defined in
          * RFC 7540 and https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
          */
         apr_pool_t *pool = c->pool;
+        server_rec *s = c->base_server;
         char *val;
 
         if (!opt_ssl_var_lookup) {
@@ -519,17 +520,16 @@ int h2_is_acceptable_connection(conn_rec *c, request_rec *r, server_rec *s, int 
     return 1;
 }
 
-static int h2_allows_h2_direct(conn_rec *c, server_rec *s)
+static int h2_allows_h2_direct(conn_rec *c)
 {
     int is_tls = h2_h2_is_tls(c);
     const char *needed_protocol = is_tls? "h2" : "h2c";
-    int h2_direct = h2_config_sgeti(s, H2_CONF_DIRECT);
+    int h2_direct = h2_config_cgeti(c, H2_CONF_DIRECT);
     
     if (h2_direct < 0) {
         h2_direct = is_tls? 0 : 1;
     }
-    return (h2_direct 
-            && ap_is_allowed_protocol(c, NULL, NULL, needed_protocol));
+    return (h2_direct && ap_is_allowed_protocol(c, NULL, NULL, needed_protocol));
 }
 
 int h2_allows_h2_upgrade(request_rec *r)
@@ -598,13 +598,13 @@ int h2_h2_process_conn(conn_rec* c)
         if (APLOGctrace1(c)) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "h2_h2, process_conn, "
                           "new connection using protocol '%s', direct=%d, "
-                          "tls acceptable=%d", proto, h2_allows_h2_direct(c, s), 
-                          h2_is_acceptable_connection(c, NULL, s, 1));
+                          "tls acceptable=%d", proto, h2_allows_h2_direct(c), 
+                          h2_is_acceptable_connection(c, NULL, 1));
         }
         
         if (!strcmp(AP_PROTOCOL_HTTP1, proto)
-            && h2_allows_h2_direct(c, s) 
-            && h2_is_acceptable_connection(c, NULL, s, 1)) {
+            && h2_allows_h2_direct(c) 
+            && h2_is_acceptable_connection(c, NULL, 1)) {
             /* Fresh connection still is on http/1.1 and H2Direct is enabled. 
              * Otherwise connection is in a fully acceptable state.
              * -> peek at the first 24 incoming bytes
