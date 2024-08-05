@@ -96,7 +96,7 @@
 		B2D2D2CB2136D5CE00D8F6B7 /* req_template.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = req_template.conf; sourceTree = "<group>"; };
 		B2D2D2D22136D5CE00D8F6B7 /* test_001_httpd_alive.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = test_001_httpd_alive.py; sourceTree = "<group>"; };
 		B2D2D2D32136D5CE00D8F6B7 /* test_100_conn_reuse.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = test_100_conn_reuse.py; sourceTree = "<group>"; };
-		B2D2D2D42136D5CE00D8F6B7 /* test_004_curl_post.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = test_004_curl_post.py; sourceTree = "<group>"; };
+		B2D2D2D42136D5CE00D8F6B7 /* test_004_post.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = test_004_post.py; sourceTree = "<group>"; };
 		B2D2D2D52136D5CE00D8F6B7 /* TestEnv.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = TestEnv.py; sourceTree = "<group>"; };
 		B2D2D2D62136D5CE00D8F6B7 /* config.ini.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = config.ini.in; sourceTree = "<group>"; };
 		B2D2D2E22136D5CE00D8F6B7 /* test_002_curl_basics.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = test_002_curl_basics.py; sourceTree = "<group>"; };
@@ -470,7 +470,7 @@
 				B2D2D2D22136D5CE00D8F6B7 /* test_001_httpd_alive.py */,
 				B2D2D2E22136D5CE00D8F6B7 /* test_002_curl_basics.py */,
 				B2D2D3CA2136D5CE00D8F6B7 /* test_003_curl_get.py */,
-				B2D2D2D42136D5CE00D8F6B7 /* test_004_curl_post.py */,
+				B2D2D2D42136D5CE00D8F6B7 /* test_004_post.py */,
 				B2D2D2D32136D5CE00D8F6B7 /* test_100_conn_reuse.py */,
 				B2D2D5DF21395D6900D8F6B7 /* test_101_ssl_reneg.py */,
 				B297A7BC213D6AAD0096F0D7 /* test_102_require.py */,

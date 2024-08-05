@@ -53,6 +53,7 @@ class TestEnv:
         cls.HTTPS_URL  = "https://" + cls.HTTPD_ADDR + ":" + cls.HTTPS_PORT
         
         cls.HTTPD_CONF_DIR = os.path.join(cls.WEBROOT, "conf")
+        cls.HTTPD_DOCS_DIR = os.path.join(cls.WEBROOT, "htdocs")
         cls.HTTPD_TEST_CONF = os.path.join(cls.HTTPD_CONF_DIR, "test.conf")
         cls.E2E_DIR    = os.path.join(cls.TEST_DIR, "e2e")
 
@@ -350,13 +351,32 @@ class TestEnv:
 
 
 ###################################################################################################
+# generate some test data
+#
+    @classmethod
+    def setup_data_1k_1m( cls ):
+        s100="012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678\n"
+        with open(os.path.join(cls.GEN_DIR, "data-1k"), 'w') as f:
+            for i in range(10):
+                f.write(s100)
+        with open(os.path.join(cls.GEN_DIR, "data-10k"), 'w') as f:
+            for i in range(100):
+                f.write(s100)
+        with open(os.path.join(cls.GEN_DIR, "data-100k"), 'w') as f:
+            for i in range(1000):
+                f.write(s100)
+        with open(os.path.join(cls.GEN_DIR, "data-1m"), 'w') as f:
+            for i in range(10000):
+                f.write(s100)
+        
+
+###################################################################################################
 # some standard config setups
 #
     @classmethod
     def vhost_cgi_install( cls ) :
         conf = HttpdConf().add_vhost_cgi().install()
     
-
 ###################################################################################################
 # write apache config file
 #

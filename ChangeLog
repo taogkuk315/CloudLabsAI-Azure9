@@ -1,3 +1,5 @@
+ * More POST and form upload tests with nghttp client
+
 v1.12.2
 --------------------------------------------------------------------------------
  * Fixed keepalives counter on slave connections.

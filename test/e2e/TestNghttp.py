@@ -175,10 +175,34 @@ class Nghttp:
         return self._raw( url, timeout, options )
 
     def upload( self, url, fpath, timeout=5, options=None ) :
-        fname = os.path.basename(fpath)
         if not options:
             options = []
         options.extend([ "--data=%s" % fpath ])
+        return self._raw( url, timeout, options )
+
+    def upload_file( self, url, fpath, timeout=5, options=None ) :
+        fname = os.path.basename(fpath)
+        reqbody = ("%s/nghttp.req.body" % self.TMP_DIR)
+        with open(fpath, 'rb') as fin:
+            with open(reqbody, 'w') as f:
+                f.write("--DSAJKcd9876\n")
+                f.write("Content-Disposition: form-data; name=\"xxx\"; filename=\"xxxxx\"\n")
+                f.write("Content-Type: text/plain\n")
+                f.write("\n")
+                f.write("testing mod_h2\n")
+                f.write("--DSAJKcd9876\n")
+                f.write("Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\n" % (fname))
+                f.write("Content-Type: application/octet-stream\n")
+                f.write("Content-Transfer-Encoding: binary\n")
+                f.write("\n")
+                f.write(fin.read())
+                f.write("\n")
+                f.write("--DSAJKcd9876\n")
+        if not options:
+            options = []
+        options.extend([ "--data=%s" % reqbody, 
+            "--expect-continue", 
+            "-HContent-Type: multipart/form-data; boundary=DSAJKcd9876" ])
         return self._raw( url, timeout, options )
 
     def _run( self, args, input=None ) :
