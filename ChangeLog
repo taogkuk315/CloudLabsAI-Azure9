@@ -1,4 +1,5 @@
  * More POST and form upload tests with nghttp client
+ * added POST tests in a http: proxied setup
 
 v1.12.2
 --------------------------------------------------------------------------------

@@ -33,8 +33,10 @@ LoadModule rewrite_module       "@PREFIX@/modules/mod_rewrite.so"
 LoadModule watchdog_module      "@PREFIX@/modules/mod_watchdog.so"
 LoadModule proxy_module         "@PREFIX@/modules/mod_proxy.so"
 LoadModule proxy_http_module    "@PREFIX@/modules/mod_proxy_http.so"
-LoadModule proxy_connect_module "@PREFIX@/modules/mod_proxy_connect.so"
+LoadModule proxy_balancer_module "@PREFIX@/modules/mod_proxy_balancer.so"
+LoadModule proxy_hcheck_module  "@PREFIX@/modules/mod_proxy_hcheck.so"
 
+# Do not load the server one, but the local module
 #LoadModule http2_module         "@PREFIX@/modules/mod_http2.so"
 LoadModule http2_module         "@MODULE_SRC@/.libs/mod_http2.so"
 

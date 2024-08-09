@@ -65,6 +65,7 @@
 		B25574A41BEB6EFC0058F97B /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B25574A71BEB6EFC0058F97B /* mod_http2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mod_http2.c; sourceTree = "<group>"; };
 		B256C4BA1ADD5FF10042C760 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		B277B814221310B800A41B44 /* test_500_proxy.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_500_proxy.py; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B297A7BC213D6AAD0096F0D7 /* test_102_require.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_102_require.py; sourceTree = "<group>"; };
 		B297A7BD213D6C830096F0D7 /* test_103_upgrade.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_103_upgrade.py; sourceTree = "<group>"; };
@@ -319,7 +320,7 @@
 		B2D2D3C62136D5CE00D8F6B7 /* empty.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = empty.txt; sourceTree = "<group>"; };
 		B2D2D3C72136D5CE00D8F6B7 /* alive.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alive.json; sourceTree = "<group>"; };
 		B2D2D3C92136D5CE00D8F6B7 /* alive.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alive.json; sourceTree = "<group>"; };
-		B2D2D3CA2136D5CE00D8F6B7 /* test_003_curl_get.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = test_003_curl_get.py; sourceTree = "<group>"; };
+		B2D2D3CA2136D5CE00D8F6B7 /* test_003_get.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = test_003_get.py; sourceTree = "<group>"; };
 		B2D2D3CC2136D5CE00D8F6B7 /* test.conf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = test.conf; sourceTree = "<group>"; };
 		B2D2D3CD2136D5CE00D8F6B7 /* modules.conf.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = modules.conf.in; sourceTree = "<group>"; };
 		B2D2D3CF2136D5CE00D8F6B7 /* httpd.conf.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = httpd.conf.in; sourceTree = "<group>"; };
@@ -469,7 +470,7 @@
 				B2D2D2C92136D5CE00D8F6B7 /* ssl */,
 				B2D2D2D22136D5CE00D8F6B7 /* test_001_httpd_alive.py */,
 				B2D2D2E22136D5CE00D8F6B7 /* test_002_curl_basics.py */,
-				B2D2D3CA2136D5CE00D8F6B7 /* test_003_curl_get.py */,
+				B2D2D3CA2136D5CE00D8F6B7 /* test_003_get.py */,
 				B2D2D2D42136D5CE00D8F6B7 /* test_004_post.py */,
 				B2D2D2D32136D5CE00D8F6B7 /* test_100_conn_reuse.py */,
 				B2D2D5DF21395D6900D8F6B7 /* test_101_ssl_reneg.py */,
@@ -483,6 +484,7 @@
 				B2C1BDF721E38322002EF7B4 /* test_401_early_hints.py */,
 				B2D2D2D52136D5CE00D8F6B7 /* TestEnv.py */,
 				B297A7C721429E8D0096F0D7 /* TestNghttp.py */,
+				B277B814221310B800A41B44 /* test_500_proxy.py */,
 			);
 			path = e2e;
 			sourceTree = "<group>";

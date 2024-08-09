@@ -1,6 +1,6 @@
 #
 # mod-h2 test suite
-# check GET use via curl
+# check GET variations
 #
 
 import copy

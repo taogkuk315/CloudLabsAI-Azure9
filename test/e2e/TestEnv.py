@@ -445,10 +445,20 @@ class HttpdConf(object):
         ).end_vhost()
         return self
 
-    def add_vhost_cgi( self ) :
+    def add_vhost_cgi( self, proxy_self=False ) :
+        if proxy_self:
+            self.add_proxy_setup()
         self.start_vhost( TestEnv.HTTPS_PORT, "cgi", aliasList=[ "cgi-alias" ], docRoot="htdocs/cgi", withSSL=True)
         self.add_line("      Protocols h2 http/1.1")
         self.add_line("      SSLOptions +StdEnvVars")
+        self.add_line("      AddHandler cgi-script .py")
+        if proxy_self:
+            self.add_line("      ProxyPreserveHost on")
+            self.add_line("      ProxyPass \"/proxy\" \"http://127.0.0.1:%s/\"" % (TestEnv.HTTP_PORT))
+            self.add_line("      ProxyPassReverse \"/proxy\" \"http://%s.%s:%s/\"" 
+                % ("cgi", TestEnv.HTTP_TLD, TestEnv.HTTP_PORT))
+        self.end_vhost()
+        self.start_vhost( TestEnv.HTTP_PORT, "cgi", aliasList=[ "cgi-alias" ], docRoot="htdocs/cgi", withSSL=False)
         self.add_line("      AddHandler cgi-script .py")
         self.end_vhost()
         return self
@@ -464,4 +474,11 @@ class HttpdConf(object):
         self.add_line("      Protocols http/1.1")
         self.add_line("      SSLOptions +StdEnvVars")
         self.end_vhost()
+        return self
+
+    def add_proxy_setup( self ) :
+        self.add_line("ProxyStatus on")
+        self.add_line("ProxyTimeout 5")
+        self.add_line("SSLProxyEngine on")
+        self.add_line("SSLProxyVerify none")
         return self
