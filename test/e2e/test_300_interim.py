@@ -12,7 +12,7 @@ import pytest
 
 from datetime import datetime
 from TestEnv import TestEnv
-from TestEnv import HttpdConf
+from TestHttpdConf import HttpdConf
 
 def setup_module(module):
     print("setup_module: %s" % module.__name__)

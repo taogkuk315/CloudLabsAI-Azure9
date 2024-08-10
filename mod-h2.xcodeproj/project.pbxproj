@@ -66,6 +66,8 @@
 		B25574A71BEB6EFC0058F97B /* mod_http2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mod_http2.c; sourceTree = "<group>"; };
 		B256C4BA1ADD5FF10042C760 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		B277B814221310B800A41B44 /* test_500_proxy.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_500_proxy.py; sourceTree = "<group>"; };
+		B277B8162214576300A41B44 /* test_005_status.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_005_status.py; sourceTree = "<group>"; };
+		B277B8172214582600A41B44 /* TestHttpdConf.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = TestHttpdConf.py; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B297A7BC213D6AAD0096F0D7 /* test_102_require.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_102_require.py; sourceTree = "<group>"; };
 		B297A7BD213D6C830096F0D7 /* test_103_upgrade.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_103_upgrade.py; sourceTree = "<group>"; };
@@ -472,6 +474,7 @@
 				B2D2D2E22136D5CE00D8F6B7 /* test_002_curl_basics.py */,
 				B2D2D3CA2136D5CE00D8F6B7 /* test_003_get.py */,
 				B2D2D2D42136D5CE00D8F6B7 /* test_004_post.py */,
+				B277B8162214576300A41B44 /* test_005_status.py */,
 				B2D2D2D32136D5CE00D8F6B7 /* test_100_conn_reuse.py */,
 				B2D2D5DF21395D6900D8F6B7 /* test_101_ssl_reneg.py */,
 				B297A7BC213D6AAD0096F0D7 /* test_102_require.py */,
@@ -482,9 +485,10 @@
 				B297A7C5213EC28D0096F0D7 /* test_300_interim.py */,
 				B297A7C6214285970096F0D7 /* test_400_push.py */,
 				B2C1BDF721E38322002EF7B4 /* test_401_early_hints.py */,
+				B277B814221310B800A41B44 /* test_500_proxy.py */,
 				B2D2D2D52136D5CE00D8F6B7 /* TestEnv.py */,
 				B297A7C721429E8D0096F0D7 /* TestNghttp.py */,
-				B277B814221310B800A41B44 /* test_500_proxy.py */,
+				B277B8172214582600A41B44 /* TestHttpdConf.py */,
 			);
 			path = e2e;
 			sourceTree = "<group>";

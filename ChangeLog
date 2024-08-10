@@ -1,3 +1,4 @@
+ * added Test for the h2 status handler
  * More POST and form upload tests with nghttp client
  * added POST tests in a http: proxied setup
 

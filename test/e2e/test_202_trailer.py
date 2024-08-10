@@ -12,7 +12,7 @@ import pytest
 
 from datetime import datetime
 from TestEnv import TestEnv
-from TestEnv import HttpdConf
+from TestHttpdConf import HttpdConf
 from TestNghttp import Nghttp
 
 def setup_module(module):
