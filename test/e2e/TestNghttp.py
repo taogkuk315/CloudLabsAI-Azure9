@@ -21,7 +21,9 @@ from datetime import timedelta
 from shutil import copyfile
 from urlparse import urlparse
 
-
+def _get_path(x):
+    return x["path"]
+    
 class Nghttp:
 
     def __init__( self, path, connect_addr=None, tmp_dir="/tmp" ) :
@@ -47,9 +49,9 @@ class Nghttp:
             }
         return streams[sid] if sid in streams else None
 
-    def _raw( self, url, timeout, options ) :
+    def _baserun( self, url, timeout, options ) :
         u = urlparse(url)
-        args = [ self.NGHTTP, "-v" ]
+        args = [ self.NGHTTP ]
         if self.CONNECT_ADDR:
             connect_host = self.CONNECT_ADDR
             args.append("--header=host: %s:%s" % (u.hostname, u.port))
@@ -62,7 +64,13 @@ class Nghttp:
         if u.query:
             nurl = "%s?%s" % (nurl, u.query)
         args.append( nurl )
-        r = self._run( args )
+        return self._run( args )
+    
+    def _raw( self, url, timeout, options ) :
+        args = [ "-v" ]
+        if options:
+            args.extend(options)
+        r = self._baserun( url, timeout, args )
         if 0 == r["rv"]:
             # getting meta data and response body out of nghttp's output
             # is a bit tricky. Without '-v' we just get the body. With '-v' meta
@@ -75,7 +83,6 @@ class Nghttp:
             streams = {}
             skip_indents = True
             lines = re.findall(r'[^\n]*\n', r["out"]["text"], re.MULTILINE)
-            print "%d lines:" % len(lines)
             for lidx, l in enumerate(lines):
                 m = re.match(r'\[.*\] recv \(stream_id=(\d+)\) (\S+): (\S*)', l)
                 if m:
@@ -160,6 +167,26 @@ class Nghttp:
 
     def get( self, url, timeout=5, options=None ) :
         return self._raw( url, timeout, options )
+
+    def assets( self, url, timeout=5, options=None ) :
+        if not options:
+            options = []
+        options.extend([ "-ans" ]) 
+        r = self._baserun( url, timeout, options )
+        assets = []
+        if 0 == r["rv"]:
+            lines = re.findall(r'[^\n]*\n', r["out"]["text"], re.MULTILINE)
+            for lidx, l in enumerate(lines):
+                m = re.match(r'\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+/(.*)', l)
+                if m:
+                    assets.append({
+                        "path" : m.group(7),
+                        "status" : int(m.group(5)),
+                        "size" : m.group(6)
+                    })
+        assets.sort(key=_get_path)
+        r["assets"] = assets
+        return r
 
     def post_name( self, url, name, timeout=5, options=None ) :
         reqbody = ("%s/nghttp.req.body" % self.TMP_DIR)
