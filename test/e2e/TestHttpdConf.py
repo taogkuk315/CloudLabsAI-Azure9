@@ -98,8 +98,8 @@ class HttpdConf(object):
         self.add_line("      </Location>")
         if proxy_self:
             self.add_line("      ProxyPreserveHost on")
-            self.add_line("      ProxyPass \"/proxy\" \"http://127.0.0.1:%s/\"" % (TestEnv.HTTP_PORT))
-            self.add_line("      ProxyPassReverse \"/proxy\" \"http://%s.%s:%s/\"" 
+            self.add_line("      ProxyPass \"/proxy/\" \"http://127.0.0.1:%s/\"" % (TestEnv.HTTP_PORT))
+            self.add_line("      ProxyPassReverse \"/proxy/\" \"http://%s.%s:%s/\"" 
                 % ("cgi", TestEnv.HTTP_TLD, TestEnv.HTTP_PORT))
         self.end_vhost()
         self.start_vhost( TestEnv.HTTP_PORT, "cgi", aliasList=[ "cgi-alias" ], docRoot="htdocs/cgi", withSSL=False)

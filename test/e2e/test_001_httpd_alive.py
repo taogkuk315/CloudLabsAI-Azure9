@@ -16,7 +16,7 @@ from TestHttpdConf import HttpdConf
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
-    #HttpdConf().add_vhost_test1().install()
+    HttpdConf().install()
         
 def teardown_module(module):
     print("teardown_module: %s" % module.__name__)
@@ -33,15 +33,17 @@ class TestStore:
     
     # we expect to see the document from the generic server
     def test_001_01(self):
-        data = TestEnv.get_json(TestEnv.HTTP_URL + "/alive.json", 5)
-        assert data
-        assert True == data["alive"]
-        assert "generic" == data["host"] 
+        r = TestEnv.curl_get(TestEnv.HTTP_URL + "/alive.json", 5)
+        assert r["rv"] == 0
+        assert r["response"]["json"]
+        assert True == r["response"]["json"]["alive"]
+        assert "generic" == r["response"]["json"]["host"] 
 
     # we expect to see the document from the generic server
     def test_001_02(self):
-        data = TestEnv.get_json(TestEnv.HTTPS_URL + "/alive.json", 5)
-        assert data
-        assert True == data["alive"]
-        assert "generic" == data["host"] 
+        r = TestEnv.curl_get(TestEnv.HTTPS_URL + "/alive.json", 5)
+        assert r["rv"] == 0
+        assert r["response"]["json"]
+        assert True == r["response"]["json"]["alive"]
+        assert "generic" == r["response"]["json"]["host"] 
 

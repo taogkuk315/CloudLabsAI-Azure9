@@ -158,31 +158,6 @@ class TestEnv:
         print ("Server still responding after %d sec" % timeout)
         return False
 
-    @classmethod
-    def get_json( cls, url, timeout ) :
-        data = cls.get_plain( url, timeout )
-        if data:
-            return json.loads(data)
-        return None
-
-    @classmethod
-    def get_plain( cls, url, timeout ) :
-        s = requests.Session()
-        try_until = time.time() + timeout
-        while time.time() < try_until:
-            try:
-                req = requests.Request('GET', url).prepare()
-                resp = s.send(req, verify=cls.VERIFY_CERTIFICATES, timeout=timeout)
-                return resp.text
-            except IOError:
-                print ("connect error: %s" % sys.exc_info()[0])
-                time.sleep(.1)
-            except:
-                print ("Unexpected error: %s" % sys.exc_info()[0])
-                return None
-        print ("Unable to contact server after %d sec" % timeout)
-        return None
-
 ###################################################################################################
 # apachectl
 #
