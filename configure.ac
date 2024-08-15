@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.12.2], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.12.3], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -247,20 +247,21 @@ AC_SUBST(MODULE_SRC)
 
 # we need curl for testing
 #
-curl_bin="curl"
+curl_check="curl"
+CURL_BIN="-"
 if test "x$request_curl" != "xcheck"; then
-    curl_bin="$request_curl/bin/curl"
-    AC_PATH_PROG([CURL_BIN],[$curl_bin]m, "-")
+    curl_check="$request_curl/bin/curl"
+    test -x $curl_check && CURL_BIN=$curl_check
 else
-    AC_PATH_PROG([CURL_BIN],[$curl_bin], "-")
-    if test "x$CURL_BIN" = "x"; then
-        curl_bin="${prefix}/bin/curl"
-        AC_PATH_PROG([CURL_BIN],[$curl_bin], "-")
+    AC_PATH_PROG([CURL_BIN],["$curl_check"], "-")
+    if test "x$CURL_BIN" = "x-"; then
+        curl_check="${prefix}/bin/curl"
+        test -x $curl_check && CURL_BIN=$curl_check
     fi
 fi
 
 if test "x$CURL_BIN" = "x-"; then
-    CURL_MSG="$curl_bin was not found. Tests will not work."
+    CURL_MSG="$curl_check was not found. Tests will not work."
     AC_MSG_WARN([$CURL_MSG])
 else
     CURL_MSG="$CURL_BIN"

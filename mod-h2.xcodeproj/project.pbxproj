@@ -69,6 +69,10 @@
 		B277B8162214576300A41B44 /* test_005_status.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_005_status.py; sourceTree = "<group>"; };
 		B277B8172214582600A41B44 /* TestHttpdConf.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = TestHttpdConf.py; sourceTree = "<group>"; };
 		B277B81822145FA500A41B44 /* test_006_assets.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_006_assets.py; sourceTree = "<group>"; };
+		B277B8192215867600A41B44 /* test_000_infra.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_000_infra.py; sourceTree = "<group>"; };
+		B277B81B221588C200A41B44 /* nghttp-output-100k-1.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "nghttp-output-100k-1.txt"; sourceTree = "<group>"; };
+		B277B81C22158D2400A41B44 /* nghttp-output-1k-1.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "nghttp-output-1k-1.txt"; sourceTree = "<group>"; };
+		B277B81D22158D9D00A41B44 /* nghttp-output-10k-1.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "nghttp-output-10k-1.txt"; sourceTree = "<group>"; };
 		B27BBD2D1A6575C200C58A41 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		B297A7BC213D6AAD0096F0D7 /* test_102_require.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_102_require.py; sourceTree = "<group>"; };
 		B297A7BD213D6C830096F0D7 /* test_103_upgrade.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_103_upgrade.py; sourceTree = "<group>"; };
@@ -444,6 +448,16 @@
 			path = unit;
 			sourceTree = "<group>";
 		};
+		B277B81A221588C200A41B44 /* data */ = {
+			isa = PBXGroup;
+			children = (
+				B277B81C22158D2400A41B44 /* nghttp-output-1k-1.txt */,
+				B277B81D22158D9D00A41B44 /* nghttp-output-10k-1.txt */,
+				B277B81B221588C200A41B44 /* nghttp-output-100k-1.txt */,
+			);
+			path = data;
+			sourceTree = "<group>";
+		};
 		B27BBD1F1A65757700C58A41 = {
 			isa = PBXGroup;
 			children = (
@@ -469,8 +483,10 @@
 			children = (
 				B2D2D3CB2136D5CE00D8F6B7 /* conf */,
 				B2D2D2D62136D5CE00D8F6B7 /* config.ini.in */,
+				B277B81A221588C200A41B44 /* data */,
 				B2D2D2E42136D5CE00D8F6B7 /* htdocs */,
 				B2D2D2C92136D5CE00D8F6B7 /* ssl */,
+				B277B8192215867600A41B44 /* test_000_infra.py */,
 				B2D2D2D22136D5CE00D8F6B7 /* test_001_httpd_alive.py */,
 				B2D2D2E22136D5CE00D8F6B7 /* test_002_curl_basics.py */,
 				B2D2D3CA2136D5CE00D8F6B7 /* test_003_get.py */,

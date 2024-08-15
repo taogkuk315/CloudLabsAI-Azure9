@@ -66,6 +66,27 @@ class TestStore:
 
 
 
+    # verify that we parse nghttp output correctly
+    def check_nghttp_body(self, ref_input, nghttp_output):
+        with open(TestEnv.e2e_src( os.path.join(TestEnv.GEN_DIR, ref_input) ), mode='rb') as f:
+            refbody = f.read()
+        with open(TestEnv.e2e_src( nghttp_output), mode='rb') as f:
+            text = f.read()
+        o = TestEnv.nghttp().parse_output(text)
+        assert "response" in o
+        assert "body" in o["response"]
+        if refbody != o["response"]["body"]:
+            with open(TestEnv.e2e_src( os.path.join(TestEnv.GEN_DIR, '%s.parsed' % ref_input) ), mode='wb') as f:
+                f.write( o["response"]["body"] )
+        assert len(refbody) == len(o["response"]["body"])
+        assert refbody == o["response"]["body"]
+    
+    def test_004_20(self):
+        self.check_nghttp_body( 'data-1k', 'data/nghttp-output-1k-1.txt') 
+        self.check_nghttp_body( 'data-10k', 'data/nghttp-output-10k-1.txt') 
+        self.check_nghttp_body( 'data-100k', 'data/nghttp-output-100k-1.txt') 
+
+
     # POST some data using nghttp and see it echo'ed properly back
     def nghttp_post_and_verify(self, fname, options=None):
         url = TestEnv.mkurl("https", "cgi", "/echo.py")
@@ -80,14 +101,14 @@ class TestStore:
         assert src == r["response"]["body"]
 
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
-    def test_004_20(self):
+    def test_004_21(self):
         self.nghttp_post_and_verify( "data-1k", [ ] )
         self.nghttp_post_and_verify( "data-10k", [ ] )
         self.nghttp_post_and_verify( "data-100k", [ ] )
         self.nghttp_post_and_verify( "data-1m", [ ] )
 
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
-    def test_004_21(self):
+    def test_004_22(self):
         self.nghttp_post_and_verify( "data-1k", [ "--no-content-length" ] )
         self.nghttp_post_and_verify( "data-10k", [ "--no-content-length" ] )
         self.nghttp_post_and_verify( "data-100k", [ "--no-content-length" ] )
@@ -112,14 +133,14 @@ class TestStore:
         assert src == r2["response"]["body"]
 
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
-    def test_004_22(self):
+    def test_004_23(self):
         self.nghttp_upload_and_verify( "data-1k", [ ] )
         self.nghttp_upload_and_verify( "data-10k", [ ] )
         self.nghttp_upload_and_verify( "data-100k", [ ] )
         self.nghttp_upload_and_verify( "data-1m", [ ] )
 
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
-    def test_004_23(self):
+    def test_004_24(self):
         self.nghttp_upload_and_verify( "data-1k", [ "--no-content-length" ] )
         self.nghttp_upload_and_verify( "data-10k", [  "--no-content-length" ] )
         self.nghttp_upload_and_verify( "data-100k", [  "--no-content-length" ] )

@@ -1,3 +1,10 @@
+v1.12.3
+--------------------------------------------------------------------------------
+ * fixed bug in nghttp output parsing that filters now Frames sent/received inbetween
+   response body DATA. 
+ * added test cases for nghttp output parsing which is screen scraping, so controlled
+   failure make debugging issues easier
+ * fixed an issue with curl detecting when configure --with-curl=path was used.
  * added multi-resource retrieval tests via nghttp -a
  * added Test for the h2 status handler
  * More POST and form upload tests with nghttp client
