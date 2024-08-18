@@ -57,6 +57,7 @@ static void (*req_engine_done)(h2_req_engine *engine, conn_rec *r_conn,
                                apr_status_t status);
                                        
 typedef struct h2_proxy_ctx {
+    conn_rec *master;
     conn_rec *owner;
     apr_pool_t *pool;
     request_rec *rbase;
@@ -363,7 +364,7 @@ static apr_status_t proxy_engine_run(h2_proxy_ctx *ctx) {
     ctx->session->user_data = ctx;
     
     while (1) {
-        if (ctx->owner->aborted) {
+        if (ctx->master->aborted) {
             status = APR_ECONNABORTED;
             goto out;
         }
@@ -416,7 +417,9 @@ out:
         next_request(ctx, 1); 
         h2_proxy_session_cancel_all(ctx->session);
         h2_proxy_session_process(ctx->session);
-        status = ctx->r_status = APR_SUCCESS;
+        if (!ctx->master->aborted) {
+            status = ctx->r_status = APR_SUCCESS;
+        }
     }
     
     ctx->session->user_data = NULL;
@@ -508,6 +511,7 @@ static int proxy_http2_handler(request_rec *r,
     }
     
     ctx = apr_pcalloc(r->pool, sizeof(*ctx));
+    ctx->master     = r->connection->master? r->connection->master : r->connection;
     ctx->owner      = r->connection;
     ctx->pool       = r->pool;
     ctx->rbase      = r;
@@ -529,6 +533,11 @@ static int proxy_http2_handler(request_rec *r,
                   "H2: serving URL %s", url);
     
 run_connect:    
+    if (ctx->master->aborted) {
+        ctx->r_status = APR_ECONNABORTED;
+        goto cleanup;
+    }
+
     /* Get a proxy_conn_rec from the worker, might be a new one, might
      * be one still open from another request, or it might fail if the
      * worker is stopped or in error. */
@@ -602,6 +611,11 @@ run_connect:
     }
 
 run_session:
+    if (ctx->owner->aborted) {
+        ctx->r_status = APR_ECONNABORTED;
+        goto cleanup;
+    }
+
     status = proxy_engine_run(ctx);
     if (status == APR_SUCCESS) {
         /* session and connection still ok */
@@ -616,6 +630,11 @@ run_session:
     }
 
 reconnect:
+    if (ctx->master->aborted) {
+        ctx->r_status = APR_ECONNABORTED;
+        goto cleanup;
+    }
+
     if (next_request(ctx, 1) == APR_SUCCESS) {
         /* Still more to do, tear down old conn and start over */
         if (ctx->p_conn) {
@@ -627,7 +646,7 @@ reconnect:
             ctx->p_conn = NULL;
         }
         ++reconnects;
-        if (reconnects < 5 && !ctx->owner->aborted) {
+        if (reconnects < 5 && !ctx->master->aborted) {
             goto run_connect;
         } 
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, ctx->owner, APLOGNO(10023)

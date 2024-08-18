@@ -1,3 +1,10 @@
+v1.12.5
+--------------------------------------------------------------------------------
+ * Analyzing PR63170 more, mod_proxy_http2 needs to differentiate between its hosting
+   stream gone and its master connection gone. The later is terminal, the former is not.
+ * mod_proxy_http2: ping the other side of an idle connection only when not already
+   waiting on a PING response.
+
 v1.12.4
 --------------------------------------------------------------------------------
  * Fixed an issue where a proxy_http2 handler entered an infinit loop when encountering
