@@ -86,9 +86,12 @@ class HttpdConf(object):
         ).end_vhost()
         return self
 
-    def add_vhost_cgi( self, proxy_self=False ) :
+    def add_vhost_cgi( self, proxy_self=False, h2proxy_self=False  ) :
         if proxy_self:
             self.add_proxy_setup()
+        if h2proxy_self:
+            self.add_line("      SSLProxyEngine on")
+            self.add_line("      SSLProxyCheckPeerName off")
         self.start_vhost( TestEnv.HTTPS_PORT, "cgi", aliasList=[ "cgi-alias" ], docRoot="htdocs/cgi", withSSL=True)
         self.add_line("      Protocols h2 http/1.1")
         self.add_line("      SSLOptions +StdEnvVars")
@@ -96,11 +99,17 @@ class HttpdConf(object):
         self.add_line("      <Location \"/.well-known/h2/state\">")
         self.add_line("          SetHandler http2-status")
         self.add_line("      </Location>")
-        if proxy_self:
+        if proxy_self or h2proxy_self:
             self.add_line("      ProxyPreserveHost on")
+        if proxy_self:
             self.add_line("      ProxyPass \"/proxy/\" \"http://127.0.0.1:%s/\"" % (TestEnv.HTTP_PORT))
             self.add_line("      ProxyPassReverse \"/proxy/\" \"http://%s.%s:%s/\"" 
                 % ("cgi", TestEnv.HTTP_TLD, TestEnv.HTTP_PORT))
+        if h2proxy_self:
+            self.add_line("      LogLevel ssl:trace2 proxy:trace2 proxy_http2:trace2 reqtimeout:trace8")
+            self.add_line("      ProxyPass \"/h2proxy/\" \"h2://127.0.0.1:%s/\"" % (TestEnv.HTTPS_PORT))
+            self.add_line("      ProxyPassReverse \"/h2proxy/\" \"https://%s.%s:%s/\"" 
+                % ("cgi", TestEnv.HTTP_TLD, TestEnv.HTTPS_PORT))
         self.end_vhost()
         self.start_vhost( TestEnv.HTTP_PORT, "cgi", aliasList=[ "cgi-alias" ], docRoot="htdocs/cgi", withSSL=False)
         self.add_line("      AddHandler cgi-script .py")

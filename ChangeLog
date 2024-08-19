@@ -1,3 +1,5 @@
+ * Starting test_600 for mod_proxy_http2 use on server itself
+
 v1.12.5
 --------------------------------------------------------------------------------
  * Analyzing PR63170 more, mod_proxy_http2 needs to differentiate between its hosting
