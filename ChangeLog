@@ -1,3 +1,5 @@
+ * Fixes slave connection input filter to use proper return code on speculative read
+   encountering an EOF.
  * Starting test_600 for mod_proxy_http2 use on server itself
 
 v1.12.5

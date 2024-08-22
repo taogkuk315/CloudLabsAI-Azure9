@@ -27,6 +27,8 @@ SSLCertificateKeyFile conf/ssl/cert.pkey
 #
 Include "conf/test.conf"
 
+RequestReadTimeout handshake=10 header=10 body=10
+
 <VirtualHost *:@HTTP_PORT@>
     ServerName not-forbidden.org
     ServerAlias www.not-forbidden.org

@@ -106,7 +106,6 @@ class HttpdConf(object):
             self.add_line("      ProxyPassReverse \"/proxy/\" \"http://%s.%s:%s/\"" 
                 % ("cgi", TestEnv.HTTP_TLD, TestEnv.HTTP_PORT))
         if h2proxy_self:
-            self.add_line("      LogLevel ssl:trace2 proxy:trace2 proxy_http2:trace2 reqtimeout:trace8")
             self.add_line("      ProxyPass \"/h2proxy/\" \"h2://127.0.0.1:%s/\"" % (TestEnv.HTTPS_PORT))
             self.add_line("      ProxyPassReverse \"/h2proxy/\" \"https://%s.%s:%s/\"" 
                 % ("cgi", TestEnv.HTTP_TLD, TestEnv.HTTPS_PORT))
