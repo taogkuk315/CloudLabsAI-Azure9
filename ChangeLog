@@ -1,3 +1,11 @@
+v1.13.0
+--------------------------------------------------------------------------------
+ * mod_proxy_http2: simplifying implementation and reducing memory use by only
+   running a single request at the time on a h2 backend connection. The previous
+   implementation was just not good enough regarding flow control on the overall
+   server and too complex compared to the performance benefits achieved. The goal
+   with this change is to establish a solid base from which to optimize things
+   again.
  * Fixes slave connection input filter to use proper return code on speculative read
    encountering an EOF.
  * Starting test_600 for mod_proxy_http2 use on server itself
