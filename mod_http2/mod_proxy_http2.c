@@ -358,7 +358,7 @@ static int proxy_http2_handler(request_rec *r,
     ctx->flushall = apr_table_get(r->subprocess_env, "proxy-flushall")? 1 : 0;
     ctx->req_buffer_size = (32*1024);
     ctx->r = r;
-    ctx->r_status = HTTP_SERVICE_UNAVAILABLE;
+    ctx->r_status = status = HTTP_SERVICE_UNAVAILABLE;
     ctx->r_done = 0;
     ctx->r_may_retry =  1;
     
