@@ -47,15 +47,7 @@ AP_DECLARE_MODULE(proxy_http2) = {
 
 /* Optional functions from mod_http2 */
 static int (*is_h2)(conn_rec *c);
-static apr_status_t (*req_engine_push)(const char *name, request_rec *r, 
-                                       http2_req_engine_init *einit);
-static apr_status_t (*req_engine_pull)(h2_req_engine *engine, 
-                                       apr_read_type_e block, 
-                                       int capacity, 
-                                       request_rec **pr);
-static void (*req_engine_done)(h2_req_engine *engine, conn_rec *r_conn,
-                               apr_status_t status);
-                                       
+
 typedef struct h2_proxy_ctx {
     const char *id;
     conn_rec *master;
@@ -103,16 +95,6 @@ static int h2_proxy_post_config(apr_pool_t *p, apr_pool_t *plog,
                  MOD_HTTP2_VERSION, ngh2? ngh2->version_str : "unknown");
     
     is_h2 = APR_RETRIEVE_OPTIONAL_FN(http2_is_h2);
-    req_engine_push = APR_RETRIEVE_OPTIONAL_FN(http2_req_engine_push);
-    req_engine_pull = APR_RETRIEVE_OPTIONAL_FN(http2_req_engine_pull);
-    req_engine_done = APR_RETRIEVE_OPTIONAL_FN(http2_req_engine_done);
-    
-    /* we need all of them */
-    if (!req_engine_push || !req_engine_pull || !req_engine_done) {
-        req_engine_push = NULL;
-        req_engine_pull = NULL;
-        req_engine_done = NULL;
-    }
     
     return status;
 }

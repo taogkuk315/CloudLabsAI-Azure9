@@ -17,8 +17,6 @@
 		B24C59851B8C66930003DF74 /* lt~obsolete.m4 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "lt~obsolete.m4"; sourceTree = "<group>"; };
 		B24DBCC21D3298D300C80369 /* h2_proxy_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_proxy_util.c; sourceTree = "<group>"; };
 		B24DBCC31D3298D300C80369 /* h2_proxy_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_proxy_util.h; sourceTree = "<group>"; };
-		B25096C01CC4E66F002E8B04 /* h2_ngn_shed.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_ngn_shed.c; sourceTree = "<group>"; };
-		B25096C11CC4E66F002E8B04 /* h2_ngn_shed.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_ngn_shed.h; sourceTree = "<group>"; };
 		B25096C21CC4E66F002E8B04 /* h2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2.h; sourceTree = "<group>"; };
 		B25096C41CC4F132002E8B04 /* h2_bucket_beam.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_bucket_beam.c; sourceTree = "<group>"; };
 		B25096C51CC4F132002E8B04 /* h2_bucket_beam.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_bucket_beam.h; sourceTree = "<group>"; };
@@ -385,8 +383,6 @@
 				B2990D421DA28DD900F2B9BA /* h2_headers.h */,
 				B25574801BEB6EFC0058F97B /* h2_mplx.c */,
 				B25574811BEB6EFC0058F97B /* h2_mplx.h */,
-				B25096C01CC4E66F002E8B04 /* h2_ngn_shed.c */,
-				B25096C11CC4E66F002E8B04 /* h2_ngn_shed.h */,
 				B25574821BEB6EFC0058F97B /* h2_private.h */,
 				B25096C61CC65E27002E8B04 /* h2_proxy_session.c */,
 				B25096C71CC65E27002E8B04 /* h2_proxy_session.h */,

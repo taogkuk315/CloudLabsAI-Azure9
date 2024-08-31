@@ -1,3 +1,7 @@
+v1.13.1
+--------------------------------------------------------------------------------
+ * mod_http2: cleanup of the now dead h2_req_engine support, no functional change.
+
 v1.13.0
 --------------------------------------------------------------------------------
  * mod_proxy_http2: simplifying implementation and reducing memory use by only

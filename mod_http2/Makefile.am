@@ -38,7 +38,6 @@ OBJECTS = \
     h2_h2.c \
     h2_headers.c \
     h2_mplx.c \
-    h2_ngn_shed.c \
     h2_push.c \
     h2_request.c \
     h2_session.c \
@@ -63,7 +62,6 @@ HFILES = \
     h2_h2.h \
     h2_headers.h \
     h2_mplx.h \
-    h2_ngn_shed.h \
     h2_private.h \
     h2_push.h \
     h2_request.h \
