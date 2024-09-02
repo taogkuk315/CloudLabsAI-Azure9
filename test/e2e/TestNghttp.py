@@ -45,6 +45,7 @@ class Nghttp:
                         "id" : sid, 
                         "body" : "" 
                     },
+                    "paddings" : [],
                     "promises" : []
             }
         return streams[sid] if sid in streams else None
@@ -118,7 +119,14 @@ class Nghttp:
                 body += m.group(1)
                 blen = int(m.group(2))
                 if s:
-                    print "stream %d: %d DATA bytes added" % (s["id"], blen) 
+                    print "stream %d: %d DATA bytes added" % (s["id"], blen)
+                    padlen = 0
+                    if len(lines) > lidx + 2:
+                        mpad = re.match(r' +\(padlen=(\d+)\)', lines[lidx+2])
+                        if mpad: 
+                            padlen = int(mpad.group(1))
+                    s["paddings"].append(padlen)
+                    blen -= padlen
                     s["response"]["body"] += body[-blen:]
                 body = ""
                 skip_indents = True
@@ -178,6 +186,7 @@ class Nghttp:
         output["streams"] = streams
         if main_stream in streams:
             output["response"] = streams[main_stream]["response"]
+            output["paddings"] = streams[main_stream]["paddings"]
         return output
     
     def _raw( self, url, timeout, options ) :
@@ -213,6 +222,15 @@ class Nghttp:
         assets.sort(key=_get_path)
         r["assets"] = assets
         return r
+
+    def post_data( self, url, data, timeout=5, options=None ) :
+        reqbody = ("%s/nghttp.req.body" % self.TMP_DIR)
+        with open(reqbody, 'wb') as f:
+            f.write(data)
+        if not options:
+            options = []
+        options.extend([ "--data=%s" % reqbody ])
+        return self._raw( url, timeout, options )
 
     def post_name( self, url, name, timeout=5, options=None ) :
         reqbody = ("%s/nghttp.req.body" % self.TMP_DIR)

@@ -338,6 +338,7 @@
 		B2E5D7871AAF1F4D001FD280 /* ChangeLog */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ChangeLog; sourceTree = "<group>"; };
 		B2E5D7881AAF1F4D001FD280 /* COPYING */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = COPYING; sourceTree = "<group>"; };
 		B2E5D7891AAF1F4D001FD280 /* NEWS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = NEWS; sourceTree = "<group>"; };
+		B2FDA580222D495E007BD19C /* test_104_padding.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_104_padding.py; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -494,6 +495,7 @@
 				B2D2D5DF21395D6900D8F6B7 /* test_101_ssl_reneg.py */,
 				B297A7BC213D6AAD0096F0D7 /* test_102_require.py */,
 				B297A7BD213D6C830096F0D7 /* test_103_upgrade.py */,
+				B2FDA580222D495E007BD19C /* test_104_padding.py */,
 				B297A7BE213D7A5B0096F0D7 /* test_200_header_invalid.py */,
 				B297A7C0213EA9BF0096F0D7 /* test_201_header_conditional.py */,
 				B297A7C2213EB14B0096F0D7 /* test_202_trailer.py */,

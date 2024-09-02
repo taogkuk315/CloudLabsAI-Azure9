@@ -45,7 +45,7 @@
  *    - TLS overhead (60-100) 
  * which seems to create less TCP packets overall
  */
-#define WRITE_SIZE_MAX        (TLS_DATA_MAX - 100) 
+#define WRITE_SIZE_MAX        (TLS_DATA_MAX) 
 
 #define BUF_REMAIN            ((apr_size_t)(bmax-off))
 

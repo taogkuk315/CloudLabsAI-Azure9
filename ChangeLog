@@ -1,3 +1,14 @@
+v1.14.0
+--------------------------------------------------------------------------------
+ * new configuration directive:
+    ```H2Padding [ 'prefer' | 'enforce' ] numbits```
+    to control padding of HTTP/2 payload frames. 'numbits' is a number from 0-8,
+    where 0 disables padding and 1-8 is the power of 2 that frame lengths are
+    rounded to. The default is 4 bits, e.g. frames are padded to be a multiple
+    of 16 (2^4).
+    While 'enforce' always applies this to all payload frames, the default 'prefer'
+    option caps frame length at H2TLSWarmUpSize when in effect.
+  
 v1.13.1
 --------------------------------------------------------------------------------
  * mod_http2: cleanup of the now dead h2_req_engine support, no functional change.

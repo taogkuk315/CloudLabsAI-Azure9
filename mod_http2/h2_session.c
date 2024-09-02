@@ -495,9 +495,7 @@ static int on_send_data_cb(nghttp2_session *ngh2,
         return NGHTTP2_ERR_WOULDBLOCK;
     }
 
-    if (frame->data.padlen > H2_MAX_PADLEN) {
-        return NGHTTP2_ERR_PROTO;
-    }
+    ap_assert(frame->data.padlen <= (H2_MAX_PADLEN+1));
     padlen = (unsigned char)frame->data.padlen;
     
     stream = get_stream(session, stream_id);
@@ -513,8 +511,9 @@ static int on_send_data_cb(nghttp2_session *ngh2,
                   H2_STRM_MSG(stream, "send_data_cb for %ld bytes"),
                   (long)length);
                   
-    status = h2_conn_io_write(&session->io, (const char *)framehd, 9);
+    status = h2_conn_io_write(&session->io, (const char *)framehd, H2_FRAME_HDR_LEN);
     if (padlen && status == APR_SUCCESS) {
+        --padlen;
         status = h2_conn_io_write(&session->io, (const char *)&padlen, 1);
     }
     
@@ -622,6 +621,50 @@ static int on_invalid_header_cb(nghttp2_session *ngh2,
 }
 #endif
 
+static ssize_t select_padding_cb(nghttp2_session *ngh2, 
+                                 const nghttp2_frame *frame, 
+                                 size_t max_payloadlen, void *user_data)
+{
+    h2_session *session = user_data;
+    ssize_t frame_len = frame->hd.length + H2_FRAME_HDR_LEN; /* the total length without padding */
+    ssize_t padded_len = frame_len;
+
+    /* Determine # of padding bytes to append to frame. We use different
+     * paddings for payload and meta frames, as the latter ones are usually shorter
+     * and may not contain as sensitive data.
+     * Up to 255 bytes of padding data are possible in HTTP/2.
+     * As a security feature, the usefulness of padding h2 frames depends on the overall
+     * protocol stack. See chapter 10.7 of RFC 7540.
+     * The implementation here is a fixed size approach: 
+     * - specify the number of bits the frame length shall be rounded to. E.g. 2 bits
+     *   makes the effective frame lengths multiples of 4.
+     * - unless padding is configured to happen always:
+     * - When a "write size" limit is in place, cap paddings to it. E.g. when a cap
+     *   of 1300 bytes is in place, do not exceed this by padding.
+     */
+    if (session->padding_mask) {
+        padded_len = H2MIN(max_payloadlen + H2_FRAME_HDR_LEN, 
+                           ((frame_len + session->padding_mask) 
+                            & ~session->padding_mask)); 
+    }
+
+    if (padded_len != frame_len) {
+        if (!session->padding_always && session->io.write_size 
+            && (padded_len > session->io.write_size)
+            && (frame_len <= session->io.write_size)) {
+            padded_len = session->io.write_size;
+        }
+        if (APLOGctrace2(session->c)) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                          "select padding from [%d, %d]: %d (frame length: 0x%04x, write size: %d)", 
+                          (int)frame_len, (int)max_payloadlen+H2_FRAME_HDR_LEN, 
+                          (int)(padded_len - frame_len), (int)padded_len, (int)session->io.write_size);
+        }
+        return padded_len - H2_FRAME_HDR_LEN;
+    }
+    return frame->hd.length;
+}
+
 #define NGH2_SET_CALLBACK(callbacks, name, fn)\
 nghttp2_session_callbacks_set_##name##_callback(callbacks, fn)
 
@@ -647,6 +690,7 @@ static apr_status_t init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
 #ifdef H2_NG2_INVALID_HEADER_CB
     NGH2_SET_CALLBACK(*pcb, on_invalid_header, on_invalid_header_cb);
 #endif
+    NGH2_SET_CALLBACK(*pcb, select_padding, select_padding_cb);
     return APR_SUCCESS;
 }
 
@@ -862,6 +906,11 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     ap_add_input_filter("H2_IN", session->cin, r, c);
     
     h2_conn_io_init(&session->io, c, s);
+    session->padding_mask = h2_config_sgeti(s, H2_CONF_PADDING_BITS);
+    if (session->padding_mask) {
+        session->padding_mask = (0x01 << session->padding_mask) - 1; 
+    }
+    session->padding_always = h2_config_sgeti(s, H2_CONF_PADDING_ALWAYS);
     session->bbtmp = apr_brigade_create(session->pool, c->bucket_alloc);
     
     status = init_callbacks(c, &callbacks);
