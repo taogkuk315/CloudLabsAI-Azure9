@@ -1,3 +1,10 @@
+v1.14.1
+--------------------------------------------------------------------------------
+ * Tweaks to new H2Padding, now simply is of the form:
+    ```H2Padding numbits```
+   and applies a *random* number of padding bytes to each payload frame. The
+   range is from [0, 2^N[. The default is 0, so no padding.
+ 
 v1.14.0
 --------------------------------------------------------------------------------
  * new configuration directive:

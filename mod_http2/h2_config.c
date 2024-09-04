@@ -113,8 +113,8 @@ static h2_config defconf = {
     0,                      /* copy files across threads */
     NULL,                   /* push list */
     0,                      /* early hints, http status 103 */
-    4,                      /* padding bits */
-    0,                      /* padding always */
+    0,                      /* padding bits */
+    1,                      /* padding always */
 };
 
 static h2_dir_config defdconf = {
@@ -891,24 +891,11 @@ static const char *h2_conf_set_early_hints(cmd_parms *cmd,
     return NULL;
 }
 
-static const char *h2_conf_set_padding(cmd_parms *cmd, void *dirconf, 
-                                       const char *v1, const char *v2)
+static const char *h2_conf_set_padding(cmd_parms *cmd, void *dirconf, const char *value)
 {
     int val;
     
-    if (v2) {
-        if (v2 && !strcasecmp(v1, "prefer")) {
-            CONFIG_CMD_SET(cmd, dirconf, H2_CONF_PADDING_ALWAYS, 0);
-        }
-        else if (v2 && !strcasecmp(v1, "enforce")) {
-            CONFIG_CMD_SET(cmd, dirconf, H2_CONF_PADDING_ALWAYS, 1);
-        }
-        else {
-            return "[ 'enforce' | 'prefer' ] numbits";
-        }
-        v1 = v2;
-    }
-    val = (int)apr_atoi64(v1);
+    val = (int)apr_atoi64(value);
     if (val < 0) {
         return "number of bits must be >= 0";
     }
@@ -988,7 +975,7 @@ const command_rec h2_cmds[] = {
                    OR_FILEINFO|OR_AUTHCFG, "add a resource to be pushed in this location/on this server."),
     AP_INIT_TAKE1("H2EarlyHints", h2_conf_set_early_hints, NULL,
                   RSRC_CONF, "on to enable interim status 103 responses"),
-    AP_INIT_TAKE12("H2Padding", h2_conf_set_padding, NULL,
+    AP_INIT_TAKE1("H2Padding", h2_conf_set_padding, NULL,
                   RSRC_CONF, "set payload padding"),
     AP_END_CMD
 };

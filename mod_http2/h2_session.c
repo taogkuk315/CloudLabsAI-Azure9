@@ -629,23 +629,12 @@ static ssize_t select_padding_cb(nghttp2_session *ngh2,
     ssize_t frame_len = frame->hd.length + H2_FRAME_HDR_LEN; /* the total length without padding */
     ssize_t padded_len = frame_len;
 
-    /* Determine # of padding bytes to append to frame. We use different
-     * paddings for payload and meta frames, as the latter ones are usually shorter
-     * and may not contain as sensitive data.
-     * Up to 255 bytes of padding data are possible in HTTP/2.
-     * As a security feature, the usefulness of padding h2 frames depends on the overall
-     * protocol stack. See chapter 10.7 of RFC 7540.
-     * The implementation here is a fixed size approach: 
-     * - specify the number of bits the frame length shall be rounded to. E.g. 2 bits
-     *   makes the effective frame lengths multiples of 4.
-     * - unless padding is configured to happen always:
-     * - When a "write size" limit is in place, cap paddings to it. E.g. when a cap
-     *   of 1300 bytes is in place, do not exceed this by padding.
+    /* Determine # of padding bytes to append to frame. Unless session->padding_always
+     * the number my be capped by the ui.write_size that currently applies. 
      */
-    if (session->padding_mask) {
-        padded_len = H2MIN(max_payloadlen + H2_FRAME_HDR_LEN, 
-                           ((frame_len + session->padding_mask) 
-                            & ~session->padding_mask)); 
+    if (session->padding_max) {
+        int n = ap_random_pick(0, session->padding_max);
+        padded_len = H2MIN(max_payloadlen + H2_FRAME_HDR_LEN, frame_len + n); 
     }
 
     if (padded_len != frame_len) {
@@ -906,9 +895,9 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     ap_add_input_filter("H2_IN", session->cin, r, c);
     
     h2_conn_io_init(&session->io, c, s);
-    session->padding_mask = h2_config_sgeti(s, H2_CONF_PADDING_BITS);
-    if (session->padding_mask) {
-        session->padding_mask = (0x01 << session->padding_mask) - 1; 
+    session->padding_max = h2_config_sgeti(s, H2_CONF_PADDING_BITS);
+    if (session->padding_max) {
+        session->padding_max = (0x01 << session->padding_max) - 1; 
     }
     session->padding_always = h2_config_sgeti(s, H2_CONF_PADDING_ALWAYS);
     session->bbtmp = apr_brigade_create(session->pool, c->bucket_alloc);
