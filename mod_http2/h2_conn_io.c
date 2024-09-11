@@ -41,7 +41,7 @@
 #define WRITE_SIZE_INITIAL    1300
 
 /* The maximum we'd like to write in one chunk is
- * the max size of a TLS record. Then pushing
+ * the max size of a TLS record. When pushing
  * many frames down the h2 connection, this might
  * align differently because of headers and other
  * frames or simply as not sufficient data is
