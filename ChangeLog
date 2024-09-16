@@ -1,3 +1,6 @@
+ * When a TLS renegotiation is denied, configured error documents could prevent
+   the proper HTTP/2 stream reset to happen. Fix by Michael Kaufmann (@mkauf).
+
 v1.14.1
 --------------------------------------------------------------------------------
  * Tweaks to new H2Padding, now simply is of the form:
