@@ -30,6 +30,10 @@ def setup_module(module):
     ).add_line("      <Location /renegotiate/cipher>"
     ).add_line("          SSLCipherSuite ECDHE-RSA-CHACHA20-POLY1305"
     ).add_line("      </Location>"
+    ).add_line("      <Location /renegotiate/err-doc-cipher>"
+    ).add_line("          SSLCipherSuite ECDHE-RSA-CHACHA20-POLY1305"
+    ).add_line("          ErrorDocument 403 /forbidden.html"
+    ).add_line("      </Location>"
     ).add_line("      <Location /renegotiate/verify>"
     ).add_line("          SSLVerifyClient require"
     ).add_line("      </Location>"
@@ -129,4 +133,12 @@ class TestStore:
         assert 0 == r["rv"]
         assert "response" in r
         assert 404 == r["response"]["status"]
+        
+    # Check that status works with ErrorDoc, see pull #174, fixes #172
+    def test_101_11(self):
+        url = TestEnv.mkurl("https", "ssl", "/renegotiate/err-doc-cipher")
+        r = TestEnv.curl_get( url, options=[ "-vvv" ] )
+        assert 0 != r["rv"]
+        assert not "response" in r
+        assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
         

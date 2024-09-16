@@ -339,6 +339,7 @@
 		B2E5D7881AAF1F4D001FD280 /* COPYING */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = COPYING; sourceTree = "<group>"; };
 		B2E5D7891AAF1F4D001FD280 /* NEWS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = NEWS; sourceTree = "<group>"; };
 		B2FDA580222D495E007BD19C /* test_104_padding.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_104_padding.py; sourceTree = "<group>"; };
+		B2FDA5812237AB4A007BD19C /* forbidden.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = forbidden.html; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -527,6 +528,7 @@
 				B2D2D3C12136D5CE00D8F6B7 /* cgi */,
 				B2D2D3C72136D5CE00D8F6B7 /* alive.json */,
 				B2D2D3C82136D5CE00D8F6B7 /* test2 */,
+				B2FDA5812237AB4A007BD19C /* forbidden.html */,
 			);
 			path = htdocs;
 			sourceTree = "<group>";

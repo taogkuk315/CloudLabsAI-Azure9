@@ -1,5 +1,7 @@
+
  * When a TLS renegotiation is denied, configured error documents could prevent
    the proper HTTP/2 stream reset to happen. Fix by Michael Kaufmann (@mkauf).
+ * Added a test case for #172
 
 v1.14.1
 --------------------------------------------------------------------------------
