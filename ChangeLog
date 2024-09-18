@@ -1,4 +1,5 @@
 
+ * Integrated a forgotten request init fix from Apache subversion
  * When a TLS renegotiation is denied, configured error documents could prevent
    the proper HTTP/2 stream reset to happen. Fix by Michael Kaufmann (@mkauf).
  * Added a test case for #172
