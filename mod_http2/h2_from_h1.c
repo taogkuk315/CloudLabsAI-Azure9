@@ -35,6 +35,10 @@
 #include "h2_task.h"
 #include "h2_util.h"
 
+#ifndef AP_STATUS_IS_HEADER_ONLY
+#define AP_STATUS_IS_HEADER_ONLY(x) ((x) == HTTP_NO_CONTENT || \
+                                     (x) == HTTP_NOT_MODIFIED)
+#endif
 
 /* This routine is called by apr_table_do and merges all instances of
  * the passed field values into a single array that will be further
