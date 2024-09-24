@@ -214,8 +214,10 @@ class TestEnv:
 # curl
 #
     @classmethod
-    def curl_raw( cls, url, timeout, options ) :
-        u = urlparse(url)
+    def curl_raw( cls, urls, timeout, options ) :
+        if not isinstance(urls, list):
+            urls = [ urls ]
+        u = urlparse(urls[0])
         headerfile = ("%s/curl.headers" % cls.GEN_DIR)
         if os.path.isfile(headerfile):
             os.remove(headerfile)
@@ -228,7 +230,7 @@ class TestEnv:
         ]
         if options:
             args.extend(options)
-        args.append( url )
+        args += urls
         r = cls.run( args )
         if r["rv"] == 0:
             lines = open(headerfile).readlines()

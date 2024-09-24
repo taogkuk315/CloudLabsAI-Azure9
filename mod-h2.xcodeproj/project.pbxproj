@@ -85,6 +85,10 @@
 		B297A7C721429E8D0096F0D7 /* TestNghttp.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = TestNghttp.py; sourceTree = "<group>"; };
 		B2990D411DA28DD900F2B9BA /* h2_headers.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = h2_headers.c; sourceTree = "<group>"; };
 		B2990D421DA28DD900F2B9BA /* h2_headers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = h2_headers.h; sourceTree = "<group>"; };
+		B2A0C90D2254D15000C8A3FD /* mnot164.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = mnot164.py; sourceTree = "<group>"; };
+		B2A0C90E2254F6AA00C8A3FD /* test_700_load_get.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_700_load_get.py; sourceTree = "<group>"; };
+		B2A0C90F2254FA1000C8A3FD /* test_710_load_post_static.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_710_load_post_static.py; sourceTree = "<group>"; };
+		B2A0C9102254FD9400C8A3FD /* test_711_load_post_cgi.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_711_load_post_cgi.py; sourceTree = "<group>"; };
 		B2A6EF2A1A9E3A93005DFC5B /* INSTALL */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = INSTALL; sourceTree = "<group>"; };
 		B2A6EF2C1A9F2452005DFC5B /* DISCUSS */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = DISCUSS; sourceTree = "<group>"; };
 		B2AAB4D5221D8E3D00DA2601 /* test_600_h2proxy.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_600_h2proxy.py; sourceTree = "<group>"; };
@@ -505,6 +509,9 @@
 				B2C1BDF721E38322002EF7B4 /* test_401_early_hints.py */,
 				B277B814221310B800A41B44 /* test_500_proxy.py */,
 				B2AAB4D5221D8E3D00DA2601 /* test_600_h2proxy.py */,
+				B2A0C90E2254F6AA00C8A3FD /* test_700_load_get.py */,
+				B2A0C90F2254FA1000C8A3FD /* test_710_load_post_static.py */,
+				B2A0C9102254FD9400C8A3FD /* test_711_load_post_cgi.py */,
 				B2D2D2D52136D5CE00D8F6B7 /* TestEnv.py */,
 				B277B8172214582600A41B44 /* TestHttpdConf.py */,
 				B297A7C721429E8D0096F0D7 /* TestNghttp.py */,
@@ -803,6 +810,7 @@
 				B2D2D3C32136D5CE00D8F6B7 /* upload.py */,
 				B297A7C3213EBA780096F0D7 /* echo.py */,
 				B297A7C4213EBC820096F0D7 /* echohd.py */,
+				B2A0C90D2254D15000C8A3FD /* mnot164.py */,
 			);
 			path = cgi;
 			sourceTree = "<group>";
@@ -869,6 +877,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 			);
 			mainGroup = B27BBD1F1A65757700C58A41;

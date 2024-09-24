@@ -146,3 +146,52 @@ content-length: 2007
 content-type: text/html
 
 ''' == s
+
+    # test conditionals: if-modified-since
+    def test_003_30(self):
+        url = TestEnv.mkurl("https", "test1", "/index.html")
+        r = TestEnv.curl_get(url, 5)
+        assert 200 == r["response"]["status"]
+        assert "HTTP/2" == r["response"]["protocol"]
+        h = r["response"]["header"]
+        assert "last-modified" in h
+        lastmod = h["last-modified"]
+        r = TestEnv.curl_get(url, 5, [ '-H', ("if-modified-since: %s" % lastmod) ])
+        assert 304 == r["response"]["status"]
+
+    # test conditionals: if-etag
+    def test_003_31(self):
+        url = TestEnv.mkurl("https", "test1", "/index.html")
+        r = TestEnv.curl_get(url, 5)
+        assert 200 == r["response"]["status"]
+        assert "HTTP/2" == r["response"]["protocol"]
+        h = r["response"]["header"]
+        assert "etag" in h
+        etag = h["etag"]
+        r = TestEnv.curl_get(url, 5, [ '-H', ("if-none-match: %s" % etag) ])
+        assert 304 == r["response"]["status"]
+
+
+    # test various response body lengths to work correctly 
+    def test_003_40(self):
+        n = 1001
+        while n <= 1025024:
+            url = TestEnv.mkurl("https", "cgi", "/mnot164.py?count=%d&text=X" % (n))
+            r = TestEnv.curl_get(url, 5)
+            assert 200 == r["response"]["status"]
+            assert "HTTP/2" == r["response"]["protocol"]
+            assert n == len(r["response"]["body"])
+            n *= 2
+
+    # test various response body lengths to work correctly 
+    @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
+    @pytest.mark.parametrize("n", [
+        0, 1, 1291, 1292, 80000, 80123, 81087, 98452
+    ])
+    def test_003_41(self, n):
+        url = TestEnv.mkurl("https", "cgi", "/mnot164.py?count=%d&text=X" % (n))
+        r = TestEnv.curl_get(url, 5)
+        assert 200 == r["response"]["status"]
+        assert "HTTP/2" == r["response"]["protocol"]
+        assert n == len(r["response"]["body"])
+        

@@ -50,8 +50,14 @@ class Nghttp:
             }
         return streams[sid] if sid in streams else None
 
+    def run( self, urls, timeout, options ) :
+        return self._baserun(urls, timeout, options)
+    
     def _baserun( self, url, timeout, options ) :
-        u = urlparse(url)
+        if not isinstance(url, list):
+            url = [ url ]
+            
+        u = urlparse(url[0])
         args = [ self.NGHTTP ]
         if self.CONNECT_ADDR:
             connect_host = self.CONNECT_ADDR
@@ -61,10 +67,14 @@ class Nghttp:
         
         if options:
             args.extend(options)
-        nurl = "%s://%s:%s/%s" % (u.scheme, connect_host, u.port, u.path)
-        if u.query:
-            nurl = "%s?%s" % (nurl, u.query)
-        args.append( nurl )
+        
+        for xurl in url:
+            xu = urlparse(xurl)
+            nurl = "%s://%s:%s/%s" % (u.scheme, connect_host, xu.port, xu.path)
+            if xu.query:
+                nurl = "%s?%s" % (nurl, xu.query)
+            args.append( nurl )
+            
         return self._run( args )
     
     def parse_output( self, text ):
