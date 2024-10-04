@@ -16,7 +16,7 @@ from TestHttpdConf import HttpdConf
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
-    HttpdConf().add_vhost_cgi().add_vhost_test1().install()
+    HttpdConf().add_vhost_cgi( proxy_self=True, h2proxy_self=True ).add_vhost_test1( proxy_self=True, h2proxy_self=True ).install()
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):
@@ -148,8 +148,11 @@ content-type: text/html
 ''' == s
 
     # test conditionals: if-modified-since
-    def test_003_30(self):
-        url = TestEnv.mkurl("https", "test1", "/index.html")
+    @pytest.mark.parametrize("path", [
+        "/004.html", "/proxy/004.html", "/h2proxy/004.html"
+    ])
+    def test_003_30(self, path):
+        url = TestEnv.mkurl("https", "test1", path)
         r = TestEnv.curl_get(url, 5)
         assert 200 == r["response"]["status"]
         assert "HTTP/2" == r["response"]["protocol"]
@@ -160,8 +163,11 @@ content-type: text/html
         assert 304 == r["response"]["status"]
 
     # test conditionals: if-etag
-    def test_003_31(self):
-        url = TestEnv.mkurl("https", "test1", "/index.html")
+    @pytest.mark.parametrize("path", [
+        "/004.html", "/proxy/004.html", "/h2proxy/004.html"
+    ])
+    def test_003_31(self, path):
+        url = TestEnv.mkurl("https", "test1", path)
         r = TestEnv.curl_get(url, 5)
         assert 200 == r["response"]["status"]
         assert "HTTP/2" == r["response"]["protocol"]
@@ -170,7 +176,6 @@ content-type: text/html
         etag = h["etag"]
         r = TestEnv.curl_get(url, 5, [ '-H', ("if-none-match: %s" % etag) ])
         assert 304 == r["response"]["status"]
-
 
     # test various response body lengths to work correctly 
     def test_003_40(self):
@@ -195,3 +200,26 @@ content-type: text/html
         assert "HTTP/2" == r["response"]["protocol"]
         assert n == len(r["response"]["body"])
         
+    # test ranges
+    @pytest.mark.parametrize("path", [
+        "/004.html", "/proxy/004.html", "/h2proxy/004.html"
+    ])
+    def test_003_50(self, path):
+        # check that the resource supports ranges and we see its raw content-length
+        url = TestEnv.mkurl("https", "test1", path)
+        r = TestEnv.curl_get(url, 5)
+        assert 200 == r["response"]["status"]
+        assert "HTTP/2" == r["response"]["protocol"]
+        h = r["response"]["header"]
+        assert "accept-ranges" in h
+        assert "bytes" == h["accept-ranges"]
+        assert "content-length" in h
+        clen = h["content-length"]
+        # get the first 1024 bytes of the resource, 206 status, but content-length as original
+        r = TestEnv.curl_get(url, 5, options=[ "-H", "range: bytes=0-1023"])
+        assert 206 == r["response"]["status"]
+        assert "HTTP/2" == r["response"]["protocol"]
+        assert 1024 == len(r["response"]["body"])
+        assert "content-length" in h
+        assert clen == h["content-length"]
+
