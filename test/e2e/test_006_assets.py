@@ -34,7 +34,7 @@ class TestStore:
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
     def test_006_01(self):
         url = TestEnv.mkurl("https", "test1", "/001.html")
-        r = TestEnv.nghttp().assets(url)
+        r = TestEnv.nghttp().assets(url,  options=[ "-Haccept-encoding: none" ])
         assert 0 == r["rv"]
         assert 1 == len(r["assets"])
         assert r["assets"] == [
@@ -45,7 +45,7 @@ class TestStore:
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
     def test_006_02(self):
         url = TestEnv.mkurl("https", "test1", "/002.jpg")
-        r = TestEnv.nghttp().assets(url)
+        r = TestEnv.nghttp().assets(url,  options=[ "-Haccept-encoding: none" ])
         assert 0 == r["rv"]
         assert 1 == len(r["assets"])
         assert r["assets"] == [
@@ -56,7 +56,7 @@ class TestStore:
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
     def test_006_03(self):
         url = TestEnv.mkurl("https", "test1", "/004.html")
-        r = TestEnv.nghttp().assets(url)
+        r = TestEnv.nghttp().assets(url, options=[ "-Haccept-encoding: none" ])
         assert 0 == r["rv"]
         assert 181 == len(r["assets"])
         assert r["assets"] == [
@@ -247,7 +247,7 @@ class TestStore:
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
     def test_006_04(self):
         url = TestEnv.mkurl("https", "test1", "/006.html")
-        r = TestEnv.nghttp().assets(url)
+        r = TestEnv.nghttp().assets(url, options=[ "-Haccept-encoding: none" ])
         assert 0 == r["rv"]
         assert 3 == len(r["assets"])
         assert r["assets"] == [
@@ -260,7 +260,7 @@ class TestStore:
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
     def test_006_05(self):
         url = TestEnv.mkurl("https", "test1", "/003.html")
-        r = TestEnv.nghttp().assets(url, options=[ "--window-bits=24" ])
+        r = TestEnv.nghttp().assets(url, options=[ "--window-bits=24", "-Haccept-encoding: none" ])
         assert 0 == r["rv"]
         assert 2 == len(r["assets"])
         assert r["assets"] == [

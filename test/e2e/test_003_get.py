@@ -119,6 +119,7 @@ class TestStore:
         s = re.sub(r'^server:.*\n', '', s, flags=re.MULTILINE)
         s = re.sub(r'^last-modified:.*\n', '', s, flags=re.MULTILINE)
         s = re.sub(r'^etag:.*\n', '', s, flags=re.MULTILINE)
+        s = re.sub(r'^vary:.*\n', '', s, flags=re.MULTILINE)
         return re.sub(r'^accept-ranges:.*\n', '', s, flags=re.MULTILINE)
         
     def test_003_21(self):

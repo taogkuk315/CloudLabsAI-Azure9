@@ -56,5 +56,17 @@ class TestStore:
         r = TestEnv.curl_get(url, options=[ "-H", "if-none-match: dummy"])
         assert 200 == r["response"]["status"]
         
+    @pytest.mark.skipif(True, reason="304 misses the Vary header in trunk and 2.4.x")
+    def test_201_03(self):
+        url = TestEnv.mkurl("https", "test1", "/006.html")
+        r = TestEnv.curl_get(url)
+        assert 200 == r["response"]["status"]
+        lm = r["response"]["header"]["last-modified"]
+        assert lm
+        assert "vary" in r["response"]["header"]
+        
+        r = TestEnv.curl_get(url, options=[ "-H", "if-modified-since: %s" % lm])
+        assert 304 == r["response"]["status"]
+        assert "vary" in r["response"]["header"]
 
 

@@ -94,7 +94,7 @@ class TestStore:
     # 2 link headers configured, only 1 triggers push
     def test_400_01(self):
         url = TestEnv.mkurl("https", "push", "/006-push.html")
-        r = TestEnv.nghttp().get(url)
+        r = TestEnv.nghttp().get(url, options=[ "-Haccept-encoding: none" ])
         assert 200 == r["response"]["status"]
         promises = r["streams"][r["response"]["id"]]["promises"]
         assert 1 == len(promises)

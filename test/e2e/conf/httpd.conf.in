@@ -29,6 +29,13 @@ Include "conf/test.conf"
 
 RequestReadTimeout header=10 body=10
 
+<IfModule deflate_module>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css 
+</IfModule>
+<IfModule brotli_module>
+  AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/xml text/css
+</IfModule>
+
 <VirtualHost *:@HTTP_PORT@>
     ServerName not-forbidden.org
     ServerAlias www.not-forbidden.org
