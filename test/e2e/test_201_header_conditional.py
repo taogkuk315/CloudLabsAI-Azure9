@@ -17,7 +17,10 @@ from TestHttpdConf import HttpdConf
 def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
-    HttpdConf().add_vhost_test1().install()
+    HttpdConf().add_line("KeepAlive on"
+    ).add_line("MaxKeepAliveRequests 30"
+    ).add_line("KeepAliveTimeout 30"
+    ).add_vhost_test1().install()
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):
@@ -59,14 +62,29 @@ class TestStore:
     @pytest.mark.skipif(True, reason="304 misses the Vary header in trunk and 2.4.x")
     def test_201_03(self):
         url = TestEnv.mkurl("https", "test1", "/006.html")
-        r = TestEnv.curl_get(url)
+        r = TestEnv.curl_get(url, options=[ "-H", "Accept-Encoding: gzip"])
         assert 200 == r["response"]["status"]
+        for h in r["response"]["header"]:
+            print "%s: %s" % (h, r["response"]["header"][h])
         lm = r["response"]["header"]["last-modified"]
         assert lm
-        assert "vary" in r["response"]["header"]
+        assert "gzip" == r["response"]["header"]["content-encoding"]
+        assert "Accept-Encoding" in r["response"]["header"]["vary"]
         
-        r = TestEnv.curl_get(url, options=[ "-H", "if-modified-since: %s" % lm])
+        r = TestEnv.curl_get(url, options=[ "-H", "if-modified-since: %s" % lm,  
+            "-H", "Accept-Encoding: gzip"])
         assert 304 == r["response"]["status"]
+        for h in r["response"]["header"]:
+            print "%s: %s" % (h, r["response"]["header"][h])
         assert "vary" in r["response"]["header"]
 
+    # Check if "Keep-Alive" response header is removed in HTTP/2.
+    def test_201_04(self):
+        url = TestEnv.mkurl("https", "test1", "/006.html")
+        r = TestEnv.curl_get(url, options=[ "--http1.1", "-H", "Connection: keep-alive" ])
+        assert 200 == r["response"]["status"]
+        assert "timeout=30, max=30" == r["response"]["header"]["keep-alive"]
+        r = TestEnv.curl_get(url, options=[ "-H", "Connection: keep-alive" ])
+        assert 200 == r["response"]["status"]
+        assert not "keep-alive" in r["response"]["header"]
 
