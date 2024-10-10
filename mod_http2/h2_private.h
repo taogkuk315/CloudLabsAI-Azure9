@@ -21,10 +21,6 @@
 
 #include <nghttp2/nghttp2.h>
 
-#if APR_HAVE_STRING_H
-#include <string.h>
-#endif
-
 extern module AP_MODULE_DECLARE_DATA http2_module;
 
 APLOG_USE_MODULE(http2);
