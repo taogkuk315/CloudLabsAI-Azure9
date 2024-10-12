@@ -1,3 +1,14 @@
+v1.15.0
+--------------------------------------------------------------------------------
+ * Code cleanups and Simplifications:
+   - in stream instance and main connection output handling for a 
+     common strategy in h2/h2c versions of the protocol. Stream instances are
+     kept in one place which will make future optimizations in state handling
+     easier.
+   - Discarding idea of re-using bucket beams and let them live for one request
+     only. Removing design/implementation overhead of never used features.
+   - Making mutexes nested, removing optional lock code no longer necessary.
+    
 v1.14.3
 --------------------------------------------------------------------------------
  * Integrated latest changes from trunk. In particular mod_proxy_http2 connection
