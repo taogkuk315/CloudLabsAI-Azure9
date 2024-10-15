@@ -1,3 +1,11 @@
+v1.15.1
+--------------------------------------------------------------------------------
+ * further copying of passed data to disentangle worker and main connection.
+
+v1.15.0
+--------------------------------------------------------------------------------
+ - reverted as no good.
+
 v1.14.3
 --------------------------------------------------------------------------------
  * Integrated latest changes from trunk. In particular mod_proxy_http2 connection
