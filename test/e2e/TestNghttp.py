@@ -111,14 +111,19 @@ class Nghttp:
                 if s:
                     print "stream %d: recv %d header" % (s["id"], len(s["header"])) 
                     response = s["response"]
+                    hkey = "header"
                     if "header" in response:
-                        prev = {
-                            "header" : response["header"]
-                        }
-                        if "previous" in response:
-                            prev["previous"] = response["previous"]
-                        response["previous"] = prev
-                    response["header"] = s["header"]
+                        h = response["header"]
+                        if ":status" in h and int(h[":status"]) >= 200:
+                            hkey = "trailer"
+                        else:
+                            prev = {
+                                "header" : h
+                            }
+                            if "previous" in response:
+                                prev["previous"] = response["previous"]
+                            response["previous"] = prev
+                    response[hkey] = s["header"]
                     s["header"] = {} 
                 body = ""
                 continue
@@ -189,7 +194,8 @@ class Nghttp:
         main_stream = 99999999999
         for sid in streams:
             s = streams[sid]
-            s["response"]["status"] = int(s["response"]["header"][":status"])
+            if ":status" in s["response"]["header"]:
+                s["response"]["status"] = int(s["response"]["header"][":status"])
             if (sid % 2) == 1 and sid < main_stream:
                 main_stream = sid
         

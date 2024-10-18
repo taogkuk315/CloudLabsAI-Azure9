@@ -1,3 +1,7 @@
+v1.15.2
+--------------------------------------------------------------------------------
+ * fixing mod_proxy_http2 to support trailers in both directions. See PR 63502.
+
 v1.15.1
 --------------------------------------------------------------------------------
  * further copying of passed data to disentangle worker and main connection.

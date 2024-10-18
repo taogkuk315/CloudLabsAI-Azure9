@@ -19,7 +19,7 @@ def setup_module(module):
     print("setup_module: %s" % module.__name__)
     TestEnv.init()
     setup_data()
-    HttpdConf().add_vhost_cgi().install()
+    HttpdConf().add_vhost_cgi(h2proxy_self=True).install()
     assert TestEnv.apache_restart() == 0
         
 def teardown_module(module):
@@ -43,7 +43,7 @@ class TestStore:
     def teardown_method(self, method):
         print("teardown_method: %s" % method.__name__)
 
-    # check if the server survices a trailer or two
+    # check if the server survives a trailer or two
     def test_202_01(self):
         url = TestEnv.mkurl("https", "cgi", "/echo.py")
         fpath = os.path.join(TestEnv.GEN_DIR, "data-1k")
@@ -55,7 +55,7 @@ class TestStore:
         assert 300 > r["response"]["status"]
         assert 1000 == len(r["response"]["body"])
 
-    # check if the server survices a trailer without content-length
+    # check if the server survives a trailer without content-length
     def test_202_02(self):
         url = TestEnv.mkurl("https", "cgi", "/echo.py")
         fpath = os.path.join(TestEnv.GEN_DIR, "data-1k")
@@ -85,3 +85,18 @@ class TestStore:
         assert 300 > r["response"]["status"]
         assert "X: 4a\n" == r["response"]["body"]
 
+    # The h2 status handler echoes a trailer if it sees a trailer
+    def test_202_05(self):
+        url = TestEnv.mkurl("https", "cgi", "/.well-known/h2/state")
+        fpath = os.path.join(TestEnv.GEN_DIR, "data-1k")
+        r = TestEnv.nghttp().upload(url, fpath, options=[ "--trailer", "test: 2" ])
+        assert 200 == r["response"]["status"]
+        assert "1" == r["response"]["trailer"]["h2-trailers-in"]
+
+    # Check that we can send and receive trailers throuh mod_proxy_http2
+    def test_202_06(self):
+        url = TestEnv.mkurl("https", "cgi", "/h2proxy/.well-known/h2/state")
+        fpath = os.path.join(TestEnv.GEN_DIR, "data-1k")
+        r = TestEnv.nghttp().upload(url, fpath, options=[ "--trailer", "test: 2" ])
+        assert 200 == r["response"]["status"]
+        assert "1" == r["response"]["trailer"]["h2-trailers-in"]
