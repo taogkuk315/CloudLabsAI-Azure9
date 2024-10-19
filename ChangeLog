@@ -1,3 +1,14 @@
+v1.15.3
+--------------------------------------------------------------------------------
+ * fixes Timeout vs. KeepAliveTimeout behaviour, see PR 63534 (for trunk now,
+   mpm event backport to 2.4.x up for vote). 
+ * Fixes stream cleanup when connection throttling is in place. 
+ * Counts stream resets by client on streams initiated by client as cause 
+   for connection throttling.
+ * Header length checks are now logged similar to HTTP/1.1 protocol handler (thanks @mkaufmann)
+ * Header length is checked also on the merged value from several header instances
+   and results in a 431 response.
+ 
 v1.15.2
 --------------------------------------------------------------------------------
  * fixing mod_proxy_http2 to support trailers in both directions. See PR 63502.
