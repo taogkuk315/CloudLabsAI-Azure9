@@ -1,3 +1,8 @@
+ * Switched test suite and test cgis to python3. A regression in cgi.Fieldstorage() makes
+   tests skip chunked uploads at the moment. Sad.
+ * Merged PR by @mkaufmann that avoids multiple field lengths violations to be logged
+   on the same request.
+ 
 v1.15.3
 --------------------------------------------------------------------------------
  * fixes Timeout vs. KeepAliveTimeout behaviour, see PR 63534 (for trunk now,

@@ -75,7 +75,7 @@ class TestStore:
         exp = ""
         for i in range(n):
             exp += text + "\n"
-        assert exp == r["response"]["body"]
+        assert exp == r["response"]["body"].decode('utf-8')
     
     def test_003_10(self):
         self.check_necho(10, "0123456789")
@@ -110,7 +110,7 @@ class TestStore:
 <li><a href="header.html"> header.html</a></li>
 </ul>
 </body></html>
-''' == r["response"]["body"]
+''' == r["response"]["body"].decode('utf-8')
 
     # github issue #133
     def clean_header(self, s):
@@ -127,7 +127,7 @@ class TestStore:
         r = TestEnv.curl_get(url, 5, [ "-I" ])
         assert 200 == r["response"]["status"]
         assert "HTTP/2" == r["response"]["protocol"]
-        s = self.clean_header(r["response"]["body"])
+        s = self.clean_header(r["response"]["body"].decode('utf-8'))
         assert '''HTTP/2 200 
 content-length: 2007
 content-type: text/html
@@ -137,7 +137,7 @@ content-type: text/html
         r = TestEnv.curl_get(url, 5, [ "-I", url ])
         assert 200 == r["response"]["status"]
         assert "HTTP/2" == r["response"]["protocol"]
-        s = self.clean_header(r["response"]["body"])
+        s = self.clean_header(r["response"]["body"].decode('utf-8'))
         assert '''HTTP/2 200 
 content-length: 2007
 content-type: text/html

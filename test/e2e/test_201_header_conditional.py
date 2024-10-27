@@ -65,7 +65,7 @@ class TestStore:
         r = TestEnv.curl_get(url, options=[ "-H", "Accept-Encoding: gzip"])
         assert 200 == r["response"]["status"]
         for h in r["response"]["header"]:
-            print "%s: %s" % (h, r["response"]["header"][h])
+            print("%s: %s" % (h, r["response"]["header"][h]))
         lm = r["response"]["header"]["last-modified"]
         assert lm
         assert "gzip" == r["response"]["header"]["content-encoding"]
@@ -75,7 +75,7 @@ class TestStore:
             "-H", "Accept-Encoding: gzip"])
         assert 304 == r["response"]["status"]
         for h in r["response"]["header"]:
-            print "%s: %s" % (h, r["response"]["header"][h])
+            print("%s: %s" % (h, r["response"]["header"][h]))
         assert "vary" in r["response"]["header"]
 
     # Check if "Keep-Alive" response header is removed in HTTP/2.

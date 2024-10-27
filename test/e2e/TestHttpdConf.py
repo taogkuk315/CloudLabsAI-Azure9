@@ -30,7 +30,7 @@ class HttpdConf(object):
             self.path = os.path.join(TestEnv.GEN_DIR, "auto.conf")
         if os.path.isfile(self.path):
             os.remove(self.path)
-        open(self.path, "a").write("")
+        open(self.path, "a").write("LogLevel http2:trace2\n")
 
     def add_line(self, line):
         open(self.path, "a").write(line + "\n")

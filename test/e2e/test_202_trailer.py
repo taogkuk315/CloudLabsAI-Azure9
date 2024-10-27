@@ -68,14 +68,14 @@ class TestStore:
         url = TestEnv.mkurl("https", "cgi", "/echohd.py?name=X")
         r = TestEnv.nghttp().get(url, options=[ "--header", "X: 3" ])
         assert 300 > r["response"]["status"]
-        assert "X: 3\n" == r["response"]["body"]
+        assert b"X: 3\n" == r["response"]["body"]
 
     # check if echoing request headers in response from POST works
-    def test_202_03(self):
+    def test_202_03b(self):
         url = TestEnv.mkurl("https", "cgi", "/echohd.py?name=X")
         r = TestEnv.nghttp().post_name(url, "Y", options=[ "--header", "X: 3b" ])
         assert 300 > r["response"]["status"]
-        assert "X: 3b\n" == r["response"]["body"]
+        assert b"X: 3b\n" == r["response"]["body"]
 
     # check if echoing request headers in response from POST works, but trailers are not seen
     # This is the way CGI invocation works.
@@ -83,7 +83,7 @@ class TestStore:
         url = TestEnv.mkurl("https", "cgi", "/echohd.py?name=X")
         r = TestEnv.nghttp().post_name(url, "Y", options=[ "--header", "X: 4a", "--trailer", "X: 4b" ])
         assert 300 > r["response"]["status"]
-        assert "X: 4a\n" == r["response"]["body"]
+        assert b"X: 4a\n" == r["response"]["body"]
 
     # The h2 status handler echoes a trailer if it sees a trailer
     def test_202_05(self):

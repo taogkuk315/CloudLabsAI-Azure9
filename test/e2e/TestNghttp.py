@@ -19,7 +19,7 @@ from datetime import datetime
 from datetime import tzinfo
 from datetime import timedelta
 from shutil import copyfile
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 def _get_path(x):
     return x["path"]
@@ -39,11 +39,11 @@ class Nghttp:
                     "header" : {},
                     "request" : {
                         "id" : sid,
-                        "body" : "" 
+                        "body" : b'' 
                     },
                     "response" : {
                         "id" : sid, 
-                        "body" : "" 
+                        "body" : b''
                     },
                     "paddings" : [],
                     "promises" : []
@@ -85,31 +85,42 @@ class Nghttp:
         # response body not starting with space.
         # Something not good enough for general purpose, but for these tests.
         output = {}
-        body = ""
+        body = b''
         stream = 0
         streams = {}
         skip_indents = True
-        lines = re.findall(r'[^\n]*\n', text, re.MULTILINE)
+        # take the binary program output and chunk into lines. nghttp mixes text
+        # meta output with bytes from the response body.
+        offset = 0
+        lines = []
+        while True:
+            index = text.find(b'\n', offset)
+            if index < 0: break
+            lines.append(text[offset:(index+1)])
+            offset = index + 1
+        if offset < len(text):
+            lines.append(text[offset:])
+        
         for lidx, l in enumerate(lines):
-            m = re.match(r'\[.*\] recv \(stream_id=(\d+)\) (\S+): (\S*)', l)
+            m = re.match(b'\\[.*\\] recv \\(stream_id=(\\d+)\\) (\\S+): (\\S*)', l)
             if m:
                 s = self.get_stream( streams, m.group(1) )
-                hname = m.group(2)
-                hval = m.group(3)
-                print ("stream %d header %s: %s" % (s["id"], hname, hval))
+                hname = m.group(2).decode('utf-8')
+                hval = m.group(3).decode('utf-8')
+                print("stream %d header %s: %s" % (s["id"], hname, hval))
                 header = s["header"]
                 if hname in header: 
                     header[hname] += ", %s" % hval
                 else:
                     header[hname] = hval
-                body = ""
+                body = b''
                 continue
 
-            m = re.match(r'\[.*\] recv HEADERS frame <.* stream_id=(\d+)>', l)
+            m = re.match(b'\\[.*\\] recv HEADERS frame <.* stream_id=(\\d+)>', l)
             if m:
                 s = self.get_stream( streams, m.group(1) )
                 if s:
-                    print "stream %d: recv %d header" % (s["id"], len(s["header"])) 
+                    print("stream %d: recv %d header" % (s["id"], len(s["header"]))) 
                     response = s["response"]
                     hkey = "header"
                     if "header" in response:
@@ -125,38 +136,38 @@ class Nghttp:
                             response["previous"] = prev
                     response[hkey] = s["header"]
                     s["header"] = {} 
-                body = ""
+                body = b''
                 continue
             
-            m = re.match(r'(.*)\[.*\] recv DATA frame <length=(\d+), .*stream_id=(\d+)>', l)
+            m = re.match(b'(.*)\\[.*\\] recv DATA frame <length=(\\d+), .*stream_id=(\\d+)>', l)
             if m:
                 s = self.get_stream( streams, m.group(3) )
                 body += m.group(1)
                 blen = int(m.group(2))
                 if s:
-                    print "stream %d: %d DATA bytes added" % (s["id"], blen)
+                    print("stream %d: %d DATA bytes added" % (s["id"], blen))
                     padlen = 0
                     if len(lines) > lidx + 2:
-                        mpad = re.match(r' +\(padlen=(\d+)\)', lines[lidx+2])
+                        mpad = re.match(b' +\(padlen=(\d+)\)', lines[lidx+2])
                         if mpad: 
                             padlen = int(mpad.group(1))
                     s["paddings"].append(padlen)
                     blen -= padlen
                     s["response"]["body"] += body[-blen:]
-                body = ""
+                body = b''
                 skip_indents = True
                 continue
                 
-            m = re.match(r'\[.*\] recv PUSH_PROMISE frame <.* stream_id=(\d+)>', l)
+            m = re.match(b'\\[.*\\] recv PUSH_PROMISE frame <.* stream_id=(\\d+)>', l)
             if m:
                 s = self.get_stream( streams, m.group(1) )
                 if s:
                     # headers we have are request headers for the PUSHed stream
                     # these have been received on the originating stream, the promised
                     # stream id it mentioned in the following lines
-                    print "stream %d: %d PUSH_PROMISE header" % (s["id"], len(s["header"]))
+                    print("stream %d: %d PUSH_PROMISE header" % (s["id"], len(s["header"])))
                     if len(lines) > lidx+2:
-                        m2 = re.match(r'\s+\(.*promised_stream_id=(\d+)\)', lines[lidx+2])
+                        m2 = re.match(b'\s+\(.*promised_stream_id=(\d+)\)', lines[lidx+2])
                         if m2:
                             s2 = self.get_stream( streams, m2.group(1) )
                             s2["request"]["header"] = s["header"]
@@ -164,29 +175,24 @@ class Nghttp:
                     s["header"] = {} 
                 continue
                     
-            m = re.match(r'(.*)\[[ \d\.]+\] recv (\S+) frame <length=(\d+), .*stream_id=0>', l)
+            m = re.match(b'(.*)\\[.*\\] recv (\\S+) frame <length=(\\d+), .*stream_id=(\\d+)>', l)
             if m:
-                print "recv frame %s on stream 0" % m.group(2)
+                print("recv frame %s on stream %s" % (m.group(2), m.group(4)))
                 body += m.group(1)
                 skip_indents = True
                 continue
                 
-            if skip_indents and l.startswith('      '):
-                continue
-            if "[" != l[0]:
-                skip_indents = None
-                body += l
-
-            m = re.match(r'(.*)\[[ \d\.]+\] send (\S+) frame <length=(\d+), .*stream_id=0>', l)
+            m = re.match(b'(.*)\\[.*\\] send (\\S+) frame <length=(\\d+), .*stream_id=(\\d+)>', l)
             if m:
-                print "send frame %s on stream 0" % m.group(2)
+                print("send frame %s on stream %s" % (m.group(2), m.group(4)))
                 body += m.group(1)
                 skip_indents = True
                 continue
                 
-            if skip_indents and l.startswith('      '):
+            if skip_indents and l.startswith(b'      '):
                 continue
-            if "[" != l[0]:
+            
+            if b'[' != l[0]:
                 skip_indents = None
                 body += l
                 
@@ -211,7 +217,7 @@ class Nghttp:
             args.extend(options)
         r = self._baserun( url, timeout, args )
         if 0 == r["rv"]:
-            o = self.parse_output(r["out"]["text"])
+            o = self.parse_output(r["out"]["raw"])
             for name in o:
                 r[name] = o[name] 
         return r
@@ -242,7 +248,7 @@ class Nghttp:
     def post_data( self, url, data, timeout=5, options=None ) :
         reqbody = ("%s/nghttp.req.body" % self.TMP_DIR)
         with open(reqbody, 'wb') as f:
-            f.write(data)
+            f.write(data.encode('utf-8'))
         if not options:
             options = []
         options.extend([ "--data=%s" % reqbody ])
@@ -271,43 +277,45 @@ class Nghttp:
         fname = os.path.basename(fpath)
         reqbody = ("%s/nghttp.req.body" % self.TMP_DIR)
         with open(fpath, 'rb') as fin:
-            with open(reqbody, 'w') as f:
-                f.write("--DSAJKcd9876\n")
-                f.write("Content-Disposition: form-data; name=\"xxx\"; filename=\"xxxxx\"\n")
-                f.write("Content-Type: text/plain\n")
-                f.write("\n")
-                f.write("testing mod_h2\n")
-                f.write("--DSAJKcd9876\n")
-                f.write("Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\n" % (fname))
-                f.write("Content-Type: application/octet-stream\n")
-                f.write("Content-Transfer-Encoding: binary\n")
-                f.write("\n")
+            with open(reqbody, 'wb') as f:
+                f.write(("""--DSAJKcd9876
+Content-Disposition: form-data; name="xxx"; filename="xxxxx"
+Content-Type: text/plain
+
+testing mod_h2
+--DSAJKcd9876
+Content-Disposition: form-data; name="file"; filename="%s"
+Content-Type: application/octet-stream
+Content-Transfer-Encoding: binary
+
+""" % (fname)).encode('utf-8'))
                 f.write(fin.read())
-                f.write("\n")
-                f.write("--DSAJKcd9876\n")
+                f.write("""
+--DSAJKcd9876""".encode('utf-8'))
         if not options:
             options = []
-        options.extend([ "--data=%s" % reqbody, 
+        options.extend([ 
+            "--data=%s" % reqbody, 
             "--expect-continue", 
             "-HContent-Type: multipart/form-data; boundary=DSAJKcd9876" ])
         return self._raw( url, timeout, options )
 
     def _run( self, args, input=None ) :
-        print ("execute: %s" % " ".join(args))
-        p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (output, errput) = p.communicate(input)
-        rv = p.wait()
-        print ("stderr: %s" % errput)
+        print(("execute: %s" % " ".join(args)))
+        p = subprocess.run(args, capture_output=True)
+        rv = p.returncode
+        print("stderr: %s" % p.stderr)
         try:
-            jout = json.loads(output)
+            jout = json.loads(p.stdout)
         except:
             jout = None
-            print ("stdout: %s" % output)
+            print("stdout: %s" % p.stdout)
         return { 
             "rv": rv,
             "out" : {
-                "text" : output,
-                "err" : errput,
+                "raw" : p.stdout,
+                "text" : p.stdout.decode('utf-8'),
+                "err" : p.stderr.decode('utf-8'),
                 "json" : jout
             } 
         }

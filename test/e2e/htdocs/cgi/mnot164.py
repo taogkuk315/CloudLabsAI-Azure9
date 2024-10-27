@@ -1,11 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import cgi
 import cgitb; cgitb.enable()
 import os
 import sys
-
-sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 
 try:
     form = cgi.FieldStorage()
@@ -16,8 +14,8 @@ except KeyError:
     count=77784
     
     
-print "Status: 200 OK"
-print "Content-Type: text/html"
-print
+print("Status: 200 OK")
+print("Content-Type: text/html")
+print()
 sys.stdout.write(text*int(count))
 

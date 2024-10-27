@@ -64,6 +64,9 @@ class TestStore:
         self.curl_upload_and_verify( "data-1m", [ "--http1.1" ] )
         self.curl_upload_and_verify( "data-1m", [ "--http2" ] )
 
+    def test_004_05(self):
+        self.curl_upload_and_verify( "data-1k", [ "--http1.1", "-H 'Expect: 100-continue'" ] )
+
 
 
     # verify that we parse nghttp output correctly
@@ -76,7 +79,7 @@ class TestStore:
         assert "response" in o
         assert "body" in o["response"]
         if refbody != o["response"]["body"]:
-            with open(TestEnv.e2e_src( os.path.join(TestEnv.GEN_DIR, '%s.parsed' % ref_input) ), mode='wb') as f:
+            with open(TestEnv.e2e_src( os.path.join(TestEnv.GEN_DIR, '%s.parsed' % ref_input) ), mode='bw') as f:
                 f.write( o["response"]["body"] )
         assert len(refbody) == len(o["response"]["body"])
         assert refbody == o["response"]["body"]
@@ -141,6 +144,11 @@ class TestStore:
 
     @pytest.mark.skipif(not TestEnv.has_nghttp(), reason="no nghttp command available")
     def test_004_24(self):
+        self.nghttp_upload_and_verify( "data-1k", [ "--expect-continue" ] )
+        self.nghttp_upload_and_verify( "data-100k", [ "--expect-continue" ] )
+
+    @pytest.mark.skipif(True, reason="python3 seems to regress in chunked inputs tp cgi")
+    def test_004_25(self):
         self.nghttp_upload_and_verify( "data-1k", [ "--no-content-length" ] )
         self.nghttp_upload_and_verify( "data-10k", [  "--no-content-length" ] )
         self.nghttp_upload_and_verify( "data-100k", [  "--no-content-length" ] )

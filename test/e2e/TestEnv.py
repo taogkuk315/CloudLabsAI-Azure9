@@ -18,9 +18,9 @@ import requests
 from datetime import datetime
 from datetime import tzinfo
 from datetime import timedelta
-from ConfigParser import SafeConfigParser
+from configparser import SafeConfigParser
 from shutil import copyfile
-from urlparse import urlparse
+from urllib.parse import urlparse
 from TestNghttp import Nghttp
 
 class TestEnv:
@@ -95,21 +95,21 @@ class TestEnv:
 #
     @classmethod
     def run( cls, args, input=None ) :
-        print ("execute: %s" % " ".join(args))
-        p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (output, errput) = p.communicate(input)
-        rv = p.wait()
-        print ("stderr: %s" % errput)
+        print("execute: %s" % " ".join(args))
+        p = subprocess.run(args, capture_output=True)
+        rv = p.returncode
+        print("stderr: %s" % p.stderr)
         try:
-            jout = json.loads(output)
+            jout = json.loads(p.stdout)
         except:
             jout = None
-            print ("stdout: %s" % output)
+            print("stdout: %s" % p.stdout)
         return { 
             "rv": rv,
             "out" : {
-                "text" : output,
-                "err" : errput,
+                "raw" : p.stdout,
+                "text" : p.stdout.decode('utf-8'),
+                "err" : p.stderr.decode('utf-8'),
                 "json" : jout
             } 
         }
@@ -133,12 +133,12 @@ class TestEnv:
                 resp = s.send(req, verify=cls.VERIFY_CERTIFICATES, timeout=timeout)
                 return True
             except IOError:
-                print ("connect error: %s" % sys.exc_info()[0])
+                print("connect error: %s" % sys.exc_info()[0])
                 time.sleep(.2)
             except:
-                print ("Unexpected error: %s" % sys.exc_info()[0])
+                print("Unexpected error: %s" % sys.exc_info()[0])
                 time.sleep(.2)
-        print ("Unable to contact '%s' after %d sec" % (url, timeout))
+        print("Unable to contact '%s' after %d sec" % (url, timeout))
         return False
 
     @classmethod
@@ -155,7 +155,7 @@ class TestEnv:
                 return True
             except:
                 return True
-        print ("Server still responding after %d sec" % timeout)
+        print("Server still responding after %d sec" % timeout)
         return False
 
 ###################################################################################################
@@ -166,18 +166,17 @@ class TestEnv:
         if conf:
             cls.install_test_conf(conf)
         args = [cls.APACHECTL, "-d", cls.WEBROOT, "-k", cmd]
-        print ("execute: %s" % " ".join(args))
+        print("execute: %s" % " ".join(args))
         cls.apachectl_stderr = ""
-        p = subprocess.Popen(args, stderr=subprocess.PIPE)
-        (output, cls.apachectl_stderr) = p.communicate()
-        sys.stderr.write(cls.apachectl_stderr)
-        rv = p.wait()
+        p = subprocess.run(args, capture_output=True, text=True)
+        sys.stderr.write(p.stderr)
+        rv = p.returncode
         if rv == 0:
             if check_live:
                 rv = 0 if cls.is_live(cls.HTTP_URL, 10) else -1
             else:
                 rv = 0 if cls.is_dead(cls.HTTP_URL, 10) else -1
-                print ("waited for a apache.is_dead, rv=%d" % rv)
+                print("waited for a apache.is_dead, rv=%d" % rv)
         return rv
 
     @classmethod
@@ -196,7 +195,7 @@ class TestEnv:
     def apache_fail( cls ) :
         rv = cls.apachectl( "graceful", check_live=False )
         if rv != 0:
-            print ("check, if dead: %s" % cls.HTTPD_CHECK_URL)
+            print("check, if dead: %s" % cls.HTTPD_CHECK_URL)
             return 0 if cls.is_dead(cls.HTTPD_CHECK_URL, 5) else -1
         return rv
         
@@ -238,23 +237,25 @@ class TestEnv:
             header = {}
             for line in lines:
                 if exp_stat:
-                    m = re.match(r'(\S+) (\d+) (.*)\r\n', line)
+                    print("reading 1st response line: %s" % line)
+                    m = re.match(r'^(\S+) (\d+) (.*)$', line)
                     assert m
                     prev = r["response"] if "response" in r else None
                     r["response"] = {
                         "protocol"    : m.group(1), 
                         "status"      : int(m.group(2)), 
                         "description" : m.group(3),
-                        "body"        : r["out"]["text"]
+                        "body"        : r["out"]["raw"]
                     }
                     if prev:
                         r["response"]["previous"] = prev
                     exp_stat = False
                     header = {}
-                elif line == "\r\n":
+                elif re.match(r'^$', line):
                     exp_stat = True
                 else:
-                    m = re.match(r'([^:]+):\s*(.*)\r\n', line)
+                    print("reading header line: %s" % line)
+                    m = re.match(r'^([^:]+):\s*(.*)$', line)
                     assert m
                     header[ m.group(1).lower() ] = m.group(2)
             r["response"]["header"] = header
@@ -290,7 +291,7 @@ class TestEnv:
         options.extend([ "-w", "%{http_version}\n", "-o", "/dev/null" ])
         r = cls.curl_raw( url, timeout=timeout, options=options )
         if r["rv"] == 0 and "response" in r:
-            return r["response"]["body"].rstrip()
+            return r["response"]["body"].decode('utf-8').rstrip()
         return -1
         
 ###################################################################################################

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import cgi, os
 import cgitb; cgitb.enable()
 
@@ -13,31 +13,31 @@ try:
     
     # Test if the file was uploaded
     if int(count.value):
-        print "Status: 200"
-        print """\
-Content-Type: text/plain\n"""
+        print("Status: 200")
+        print("""\
+Content-Type: text/plain\n""")
         i = 0;
         for i in range(0, int(count.value)):
-            print """%s""" % (text.value,)
+            print("%s" % (text.value))
 
     else:
-        print "Status: 400 Parameter Missing"
-        print """\
+        print("Status: 400 Parameter Missing")
+        print("""\
 Content-Type: text/html\n
     <html><body>
     <p>No count was specified: %s</p>
-    </body></html>""" % (count.value,)
+    </body></html>""" % (count.value))
 
 except KeyError:
-    print "Status: 200 Ok"
-    print """\
+    print("Status: 200 Ok")
+    print("""\
 Content-Type: text/html\n
     <html><body>
     Echo <form method="POST" enctype="application/x-www-form-urlencoded">
     <input type="text" name="count">
     <input type="text" name="text">
     <button type="submit">Echo</button></form>
-    </body></html>"""
+    </body></html>""")
     pass
 
 

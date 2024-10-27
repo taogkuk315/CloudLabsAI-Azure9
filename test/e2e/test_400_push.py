@@ -222,7 +222,7 @@ class TestStore:
         promises = r["streams"][r["response"]["id"]]["promises"]
         assert 1 == len(promises)
         assert '/006/006.css' == promises[0]["request"]["header"][":path"]
-        assert "" == promises[0]["response"]["body"]
+        assert b"" == promises[0]["response"]["body"]
         assert 0 == len(promises[0]["response"]["body"])
 
     # - fast-load pushes desired

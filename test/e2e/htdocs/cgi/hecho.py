@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import cgi, os
 import cgitb; cgitb.enable()
 
@@ -18,29 +18,29 @@ try:
     
     # Test if a value was given
     if name:
-        print "Status: 200"
-        print """%s: %s""" % (name, value,)
-        print """\
-Content-Type: text/plain\n"""
+        print("Status: 200")
+        print("%s: %s" % (name, value,))
+        print ("""\
+Content-Type: text/plain\n""")
 
     else:
-        print "Status: 400 Parameter Missing"
-        print """\
+        print("Status: 400 Parameter Missing")
+        print("""\
 Content-Type: text/html\n
     <html><body>
     <p>No name and value was specified: %s %s</p>
-    </body></html>""" % (name, value)
+    </body></html>""" % (name, value))
 
 except KeyError:
-    print "Status: 200 Ok"
-    print """\
+    print("Status: 200 Ok")
+    print("""\
 Content-Type: text/html\n
     <html><body>
     Echo <form method="POST" enctype="application/x-www-form-urlencoded">
     <input type="text" name="name">
     <input type="text" name="value">
     <button type="submit">Echo</button></form>
-    </body></html>"""
+    </body></html>""")
     pass
 
 

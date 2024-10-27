@@ -49,7 +49,7 @@ class TestStore:
         print("teardown_method: %s" % method.__name__)
     
     # H2EarlyHints enabled in general, check that it works for H2PushResource
-    def test_400_31(self):
+    def test_401_31(self):
         url = TestEnv.mkurl("https", "hints", "/006-hints.html")
         r = TestEnv.nghttp().get(url)
         assert 200 == r["response"]["status"]
@@ -61,7 +61,7 @@ class TestStore:
         assert early["header"]["link"]
 
     # H2EarlyHints enabled in general, but does not trigger on added response headers
-    def test_400_32(self):
+    def test_401_32(self):
         url = TestEnv.mkurl("https", "hints", "/006-nohints.html")
         r = TestEnv.nghttp().get(url)
         assert 200 == r["response"]["status"]

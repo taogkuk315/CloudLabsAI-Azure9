@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import sys, cgi, os
 
 status = '200 Ok'
@@ -8,7 +8,7 @@ for line in sys.stdin:
     content += line
     
 # Just echo what we get
-print "Status: 200"
-print """Content-Type: application/data\n"""
-print content,
+print("Status: 200")
+print("Content-Type: application/data\n")
+sys.stdout.write(content)
 

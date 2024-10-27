@@ -49,4 +49,5 @@ test/e2e/gen/
 test/e2e/conf/httpd.conf
 test/e2e/conf/modules.conf
 test/e2e/config.ini
+test/.pytest_cache
 
