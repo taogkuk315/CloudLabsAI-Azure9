@@ -65,7 +65,13 @@ class TestStore:
         self.curl_upload_and_verify( "data-1m", [ "--http2" ] )
 
     def test_004_05(self):
-        self.curl_upload_and_verify( "data-1k", [ "--http1.1", "-H 'Expect: 100-continue'" ] )
+        self.curl_upload_and_verify( "data-1k", [ "-v", "--http1.1", "-H", "Expect: 100-continue" ] )
+        self.curl_upload_and_verify( "data-1k", [ "-v", "--http2", "-H", "Expect: 100-continue" ] )
+
+    @pytest.mark.skipif(True, reason="python3 regresses in chunked inputs to cgi")
+    def test_004_06(self):
+        self.curl_upload_and_verify( "data-1k", [ "--http1.1", "-H", "Content-Length: " ] )
+        self.curl_upload_and_verify( "data-1k", [ "--http2", "-H", "Content-Length: " ] )
 
 
 
@@ -147,7 +153,7 @@ class TestStore:
         self.nghttp_upload_and_verify( "data-1k", [ "--expect-continue" ] )
         self.nghttp_upload_and_verify( "data-100k", [ "--expect-continue" ] )
 
-    @pytest.mark.skipif(True, reason="python3 seems to regress in chunked inputs tp cgi")
+    @pytest.mark.skipif(True, reason="python3 regresses in chunked inputs to cgi")
     def test_004_25(self):
         self.nghttp_upload_and_verify( "data-1k", [ "--no-content-length" ] )
         self.nghttp_upload_and_verify( "data-10k", [  "--no-content-length" ] )

@@ -98,12 +98,12 @@ class TestEnv:
         print("execute: %s" % " ".join(args))
         p = subprocess.run(args, capture_output=True)
         rv = p.returncode
-        print("stderr: %s" % p.stderr)
+        print("exit code %d, stderr:\n%s" % (rv, p.stderr.decode('utf-8')))
         try:
             jout = json.loads(p.stdout)
         except:
             jout = None
-            print("stdout: %s" % p.stdout)
+            print("stdout:\n%s" % p.stdout.decode('utf-8'))
         return { 
             "rv": rv,
             "out" : {
