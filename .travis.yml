@@ -17,6 +17,7 @@ addons:
             - libnghttp2-14
             - libnghttp2-dev
 
+# lets see if bionic's apache2 is recent enough
 matrix:
     include:
         - os: linux
