@@ -17,7 +17,7 @@ DIST_SUBDIRS    = mod_http2
 
 ACLOCAL_AMFLAGS = -I m4
 
-EXTRA_DIST     = test/e2e test/unit test/Makefile.in
+EXTRA_DIST     = test/e2e test/unit test/Makefile.in test/Makefile.am
 
 
 dist_doc_DATA   = README README.md LICENSE
