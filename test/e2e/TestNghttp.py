@@ -302,7 +302,7 @@ Content-Transfer-Encoding: binary
 
     def _run( self, args, input=None ) :
         print(("execute: %s" % " ".join(args)))
-        p = subprocess.run(args, capture_output=True)
+        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         rv = p.returncode
         print("stderr: %s" % p.stderr)
         try:
