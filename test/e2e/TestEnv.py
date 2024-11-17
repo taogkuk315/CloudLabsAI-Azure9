@@ -96,7 +96,7 @@ class TestEnv:
     @classmethod
     def run( cls, args, input=None ) :
         print("execute: %s" % " ".join(args))
-        p = subprocess.run(args, capture_output=True)
+        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         rv = p.returncode
         print("exit code %d, stderr:\n%s" % (rv, p.stderr.decode('utf-8')))
         try:
@@ -168,7 +168,7 @@ class TestEnv:
         args = [cls.APACHECTL, "-d", cls.WEBROOT, "-k", cmd]
         print("execute: %s" % " ".join(args))
         cls.apachectl_stderr = ""
-        p = subprocess.run(args, capture_output=True, text=True)
+        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         sys.stderr.write(p.stderr)
         rv = p.returncode
         if rv == 0:
