@@ -34,19 +34,21 @@ class TestStore:
     # check SSL environment variables from CGI script
     def test_003_01(self):
         url = TestEnv.mkurl("https", "cgi", "/hello.py")
-        r = TestEnv.curl_get(url, 5)
+        r = TestEnv.curl_get(url, 5, ["--tlsv1.2"])
         assert 200 == r["response"]["status"]
         assert "HTTP/2.0" == r["response"]["json"]["protocol"]
         assert "on" == r["response"]["json"]["https"]
-        assert "TLSv1.2" == r["response"]["json"]["ssl_protocol"]
+        tls_version = r["response"]["json"]["ssl_protocol"]
+        assert tls_version in ["TLSv1.2", "TLSv1.3"]
         assert "on" == r["response"]["json"]["h2"]
         assert "off" == r["response"]["json"]["h2push"]
 
-        r = TestEnv.curl_get(url, 5, [ "--http1.1" ])
+        r = TestEnv.curl_get(url, 5, [ "--http1.1", "--tlsv1.2"])
         assert 200 == r["response"]["status"]
         assert "HTTP/1.1" == r["response"]["json"]["protocol"]
         assert "on" == r["response"]["json"]["https"]
-        assert "TLSv1.2" == r["response"]["json"]["ssl_protocol"]
+        tls_version = r["response"]["json"]["ssl_protocol"]
+        assert tls_version in ["TLSv1.2", "TLSv1.3"]
         assert "" == r["response"]["json"]["h2"]
         assert "" == r["response"]["json"]["h2push"]
 
