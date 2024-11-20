@@ -18,7 +18,7 @@ import requests
 from datetime import datetime
 from datetime import tzinfo
 from datetime import timedelta
-from configparser import SafeConfigParser
+from configparser import ConfigParser
 from shutil import copyfile
 from urllib.parse import urlparse
 from TestNghttp import Nghttp
@@ -31,7 +31,7 @@ class TestEnv:
     def init( cls ) :
         if TestEnv.initialized:
             return
-        cls.config = SafeConfigParser()
+        cls.config = ConfigParser()
         cls.config.read('config.ini')
         
         cls.PREFIX      = cls.config.get('global', 'prefix')
