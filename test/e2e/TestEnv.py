@@ -168,7 +168,7 @@ class TestEnv:
         args = [cls.APACHECTL, "-d", cls.WEBROOT, "-k", cmd]
         print("execute: %s" % " ".join(args))
         cls.apachectl_stderr = ""
-        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
         sys.stderr.write(p.stderr)
         rv = p.returncode
         if rv == 0:
