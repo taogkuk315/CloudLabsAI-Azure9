@@ -18,7 +18,7 @@ import requests
 from datetime import datetime
 from datetime import tzinfo
 from datetime import timedelta
-from configparser import SafeConfigParser
+from configparser import ConfigParser
 from shutil import copyfile
 from urllib.parse import urlparse
 from TestNghttp import Nghttp
@@ -31,7 +31,7 @@ class TestEnv:
     def init( cls ) :
         if TestEnv.initialized:
             return
-        cls.config = SafeConfigParser()
+        cls.config = ConfigParser()
         cls.config.read('config.ini')
         
         cls.PREFIX      = cls.config.get('global', 'prefix')
@@ -168,7 +168,7 @@ class TestEnv:
         args = [cls.APACHECTL, "-d", cls.WEBROOT, "-k", cmd]
         print("execute: %s" % " ".join(args))
         cls.apachectl_stderr = ""
-        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
         sys.stderr.write(p.stderr)
         rv = p.returncode
         if rv == 0:
