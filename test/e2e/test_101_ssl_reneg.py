@@ -67,7 +67,7 @@ class TestStore:
     # access a resource with SSL renegotiation, using HTTP/1.1
     def test_101_01(self):
         url = TestEnv.mkurl("https", "ssl", "/renegotiate/cipher/")
-        r = TestEnv.curl_get( url, options=[ "-v", "--http1.1" ] )
+        r = TestEnv.curl_get( url, options=[ "-v", "--http1.1", "--tlsv1.2", "--tls-max", "1.2" ] )
         assert 0 == r["rv"]
         assert "response" in r
         assert 403 == r["response"]["status"]
@@ -75,7 +75,7 @@ class TestStore:
     # try to renegotiate the cipher, should fail with correct code
     def test_101_02(self):
         url = TestEnv.mkurl("https", "ssl", "/renegotiate/cipher/")
-        r = TestEnv.curl_get( url, options=[ "-vvv" ] )
+        r = TestEnv.curl_get( url, options=[ "-vvv", "--tlsv1.2", "--tls-max", "1.2" ] )
         assert 0 != r["rv"]
         assert not "response" in r
         assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
@@ -84,7 +84,7 @@ class TestStore:
     # needs to fail with correct code
     def test_101_03(self):
         url = TestEnv.mkurl("https", "ssl", "/renegotiate/verify/")
-        r = TestEnv.curl_get( url, options=[ "-vvv" ] )
+        r = TestEnv.curl_get( url, options=[ "-vvv", "--tlsv1.2", "--tls-max", "1.2" ] )
         assert 0 != r["rv"]
         assert not "response" in r
         assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
@@ -93,7 +93,7 @@ class TestStore:
     # needs to fail with correct code
     def test_101_04(self):
         url = TestEnv.mkurl("https", "ssl", "/ssl-client-verify/index.html")
-        r = TestEnv.curl_get( url, options=[ "-vvv" ] )
+        r = TestEnv.curl_get( url, options=[ "-vvv", "--tlsv1.2", "--tls-max", "1.2" ] )
         assert 0 != r["rv"]
         assert not "response" in r
         assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
@@ -137,7 +137,7 @@ class TestStore:
     # Check that status works with ErrorDoc, see pull #174, fixes #172
     def test_101_11(self):
         url = TestEnv.mkurl("https", "ssl", "/renegotiate/err-doc-cipher")
-        r = TestEnv.curl_get( url, options=[ "-vvv" ] )
+        r = TestEnv.curl_get( url, options=[ "-vvv", "--tlsv1.2", "--tls-max", "1.2" ] )
         assert 0 != r["rv"]
         assert not "response" in r
         assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
