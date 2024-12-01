@@ -1,3 +1,10 @@
+ v1.15.4
+ --------------------------------------------------------------------------------
+ * Fixed interaction with mod_reqtimeout. mod-h2 was knocking it out completely, however
+   it allow configuration of the TLS handshake timeout and that is very useful indeed.
+   Also, fixed a stupid mistake of mine that made `H2Direct` always `on`, irregardless 
+   of configuration. Found and reported by <Armin.Abfalterer@united-security-providers.ch> and
+   <Marcial.Rion@united-security-providers.ch>. Thanks!
  * Switched test suite and test cgis to python3. A regression in cgi.Fieldstorage() makes
    tests skip chunked uploads at the moment. Sad.
  * Merged PR by @mkaufmann that avoids multiple field lengths violations to be logged
