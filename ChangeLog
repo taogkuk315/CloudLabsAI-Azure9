@@ -1,5 +1,10 @@
- v1.15.4
- --------------------------------------------------------------------------------
+v1.15.5
+--------------------------------------------------------------------------------
+ * Fixed rare cases where a h2 worker could deadlock the main connection. All the good
+   bits in this thanks to Yann Ylavic.
+ 
+v1.15.4
+--------------------------------------------------------------------------------
  * Fixed interaction with mod_reqtimeout. mod-h2 was knocking it out completely, however
    it allow configuration of the TLS handshake timeout and that is very useful indeed.
    Also, fixed a stupid mistake of mine that made `H2Direct` always `on`, irregardless 
