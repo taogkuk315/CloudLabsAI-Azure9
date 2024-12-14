@@ -1,3 +1,7 @@
+v1.15.6
+--------------------------------------------------------------------------------
+ * Fix by Joe Orton for a gcc 10 warnings on s390x.
+
 v1.15.5
 --------------------------------------------------------------------------------
  * Fixed rare cases where a h2 worker could deadlock the main connection. All the good
