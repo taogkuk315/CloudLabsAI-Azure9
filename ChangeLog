@@ -1,3 +1,5 @@
+ * Synch with code spell/APLOGNO changes from Apache svn.
+
 v1.15.7
 --------------------------------------------------------------------------------
  * Fixes issue #195 regarding h2 slave connection ids that resulted in duplicate
