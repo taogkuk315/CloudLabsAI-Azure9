@@ -1,3 +1,6 @@
+ * Fixed an unfortunate regression introduced in v1.15.7 that prevented
+   H2_STREAM_ID to be set. Fixes <https://bz.apache.org/bugzilla/show_bug.cgi?id=64330>
+   and Windows crashes reported in <https://www.apachelounge.com/viewtopic.php?p=39012#39012>. 
  * Synch with code spell/APLOGNO changes from Apache svn.
 
 v1.15.7

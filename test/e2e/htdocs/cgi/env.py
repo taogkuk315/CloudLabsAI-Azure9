@@ -6,24 +6,22 @@ status = '200 Ok'
 
 try:
     form = cgi.FieldStorage()
-    
-    count = form['count']
-    text = form['text']
-    
-    if int(count.value):
+    input = form['name']
+
+    # Test if the file was uploaded
+    if input.value is not None:
+        val = os.environ[input.value] if input.value in os.environ else ""
         print("Status: 200")
         print("""\
 Content-Type: text/plain\n""")
-        i = 0;
-        for i in range(0, int(count.value)):
-            print("%s" % (text.value))
+        print("{0}={1}".format(input.value, val))
 
     else:
         print("Status: 400 Parameter Missing")
         print("""\
 Content-Type: text/html\n
     <html><body>
-    <p>No count was specified: %s</p>
+    <p>No name was specified: %s</p>
     </body></html>""" % (count.value))
 
 except KeyError:
@@ -32,10 +30,10 @@ except KeyError:
 Content-Type: text/html\n
     <html><body>
     Echo <form method="POST" enctype="application/x-www-form-urlencoded">
-    <input type="text" name="count">
-    <input type="text" name="text">
-    <button type="submit">Echo</button></form>
+    <input type="text" name="name">
+    <button type="submit">submit</button></form>
     </body></html>""")
     pass
+
 
 

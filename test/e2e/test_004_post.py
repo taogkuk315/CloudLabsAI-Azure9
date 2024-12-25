@@ -73,7 +73,22 @@ class TestStore:
         self.curl_upload_and_verify( "data-1k", [ "--http1.1", "-H", "Content-Length: " ] )
         self.curl_upload_and_verify( "data-1k", [ "--http2", "-H", "Content-Length: " ] )
 
-
+    @pytest.mark.parametrize("name, value", [
+        ( "HTTP2", "on"),
+        ( "H2PUSH", "off"),
+        ( "H2_PUSHED", ""),
+        ( "H2_PUSHED_ON", ""),
+        ( "H2_STREAM_ID", "1"),
+        ( "H2_STREAM_TAG", "\d+-1"),
+    ])
+    def test_004_07(self, name, value):
+        url = TestEnv.mkurl("https", "cgi", "/env.py")
+        r = TestEnv.curl_post_value( url, "name", name )
+        assert r["rv"] == 0
+        assert r["response"]["status"] == 200
+        m = re.match("{0}=(.*)".format(name), r["response"]["body"].decode('utf-8'))
+        assert m
+        assert re.match(value, m.group(1)) 
 
     # verify that we parse nghttp output correctly
     def check_nghttp_body(self, ref_input, nghttp_output):

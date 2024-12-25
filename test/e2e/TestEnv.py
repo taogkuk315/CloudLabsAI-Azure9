@@ -285,6 +285,13 @@ class TestEnv:
         return cls.curl_raw( url, timeout, options )
 
     @classmethod
+    def curl_post_value( cls, url, key, value, timeout=5, options=None ) :
+        if not options:
+            options = []
+        options.extend([ "--form", "{0}={1}".format(key, value) ])
+        return cls.curl_raw( url, timeout, options )
+
+    @classmethod
     def curl_protocol_version( cls, url, timeout=5, options=None ) :
         if not options:
             options = []

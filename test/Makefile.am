@@ -34,9 +34,9 @@ $(CERTIFICATES): %_cert.pem: $(SERVER_DIR)/conf/ssl/cert.pkey
             -in $@.req -out $@ -extfile $@.extensions -extensions v3_req_ext
          
 $(SERVER_DIR)/htdocs/.copied: \
-            $(wildcard $(SERVER_DIR)/htdocs/*) \
-            $(wildcard $(SERVER_DIR)/htdocs/*/*) \
-            $(wildcard $(SERVER_DIR)/htdocs/*/*/*)
+            $(wildcard e2e/htdocs/*) \
+            $(wildcard e2e/htdocs/*/*) \
+            $(wildcard e2e/htdocs/*/*/*)
 	@mkdir -p $(SERVER_DIR)/htdocs
 	@cp -r e2e/htdocs/* $(SERVER_DIR)/htdocs 
 	@chmod +x $(SERVER_DIR)/htdocs/cgi/*.* 
