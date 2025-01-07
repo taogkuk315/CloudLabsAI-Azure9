@@ -85,3 +85,22 @@ class TestStore:
         except Exception as ex:
             print(f"as expected: {ex}")
         sock.close()
+
+    # Check that mod_reqtimeout handshake setting do no longer apply to handshaked 
+    # connections. See <https://github.com/icing/mod_h2/issues/196>.
+    def test_105_03(self):
+        conf = HttpdConf()
+        conf.add_line("""
+            Timeout 10
+            RequestReadTimeout handshake=1 header=5 body=10
+            """)
+        conf.add_vhost_cgi()
+        conf.install()
+        assert TestEnv.apache_restart() == 0
+        url = TestEnv.mkurl("https", "cgi", "/necho.py")
+        r = TestEnv.curl_get(url, 5, [ "-vvv",  
+            "-F", ("count=%d" % (100)), 
+            "-F", ("text=%s" % ("abcdefghijklmnopqrstuvwxyz")),
+            "-F", ("wait1=%f" % (1.5)),
+        ])
+        assert 200 == r["response"]["status"]

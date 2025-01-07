@@ -1,3 +1,9 @@
+  
+ * Since v1.15.4 mod_reqtimeout was enabled for h2 connections. This lead to closing of
+   h2 connections when a handshake timeout was configured, irregardless if the handshake
+   did happen or not. Added a positive test next to the negative one to ensure that 
+   mod_reqtimeout is removed after a successful handshake. Fixes #196 
+
 v1.15.8
 --------------------------------------------------------------------------------
  * Fixed an unfortunate regression introduced in v1.15.7 that prevented
