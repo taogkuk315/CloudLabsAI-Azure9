@@ -99,7 +99,10 @@ class TestStore:
         url = TestEnv.mkurl("https", "test1", "/006/")
         r = TestEnv.curl_get(url, 5)
         assert 200 == r["response"]["status"]
-        assert '''<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+        body = r["response"]["body"].decode('utf-8')
+        # our doctype varies between branches and in time, lets not compare
+        body = re.sub(r'^<!DOCTYPE[^>]+>', '', body)
+        assert '''
 <html>
  <head>
   <title>Index of /006</title>
@@ -112,7 +115,7 @@ class TestStore:
 <li><a href="header.html"> header.html</a></li>
 </ul>
 </body></html>
-''' == r["response"]["body"].decode('utf-8')
+''' == body
 
     # github issue #133
     def clean_header(self, s):
