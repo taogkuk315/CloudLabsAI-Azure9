@@ -1,3 +1,8 @@
+v1.15.10
+--------------------------------------------------------------------------------
+ * mod_proxy_http2: respect ProxyTimeout settings on backend connections
+   while waiting on incoming data. [Ruediger Pluem, Stefan Eissing]
+
 v1.15.9
 --------------------------------------------------------------------------------
  * Since v1.15.4 mod_reqtimeout was enabled for h2 connections. This lead to closing of
