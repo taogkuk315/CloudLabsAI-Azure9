@@ -76,6 +76,22 @@ class TestEnv:
         cls.init()
         return cls.NGHTTP != ""
 
+    @classmethod
+    def has_nghttp_get_assets ( cls ) :
+        cls.init()
+
+        if not TestEnv.has_nghttp():
+            return False
+
+        args = [cls.NGHTTP, "-a"]
+        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        rv = p.returncode
+
+        if rv != 0:
+           return False
+
+        return p.stderr == ""
+
 
 ###################################################################################################
 # path construction
