@@ -31,7 +31,7 @@ class TestStore:
         print("teardown_method: %s" % method.__name__)
     
     # single page without any assets
-    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available")
+    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available or nghttp ignores -a option")
     def test_006_01(self):
         url = TestEnv.mkurl("https", "test1", "/001.html")
         r = TestEnv.nghttp().assets(url,  options=[ "-Haccept-encoding: none" ])
@@ -42,7 +42,7 @@ class TestStore:
         ]
 
     # single image without any assets
-    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available")
+    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available or nghttp ignores -a option")
     def test_006_02(self):
         url = TestEnv.mkurl("https", "test1", "/002.jpg")
         r = TestEnv.nghttp().assets(url,  options=[ "-Haccept-encoding: none" ])
@@ -53,7 +53,7 @@ class TestStore:
         ]
         
     # gophertiles, yea!
-    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available")
+    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available or nghttp ignores -a option")
     def test_006_03(self):
         url = TestEnv.mkurl("https", "test1", "/004.html")
         r = TestEnv.nghttp().assets(url, options=[ "-Haccept-encoding: none" ])
@@ -244,7 +244,7 @@ class TestStore:
         ]            
             
     # page with js and css
-    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available")
+    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available or nghttp ignores -a option")
     def test_006_04(self):
         url = TestEnv.mkurl("https", "test1", "/006.html")
         r = TestEnv.nghttp().assets(url, options=[ "-Haccept-encoding: none" ])
@@ -257,7 +257,7 @@ class TestStore:
         ]
 
     # page with image, try different window size
-    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available")
+    @pytest.mark.skipif(not TestEnv.has_nghttp_get_assets(), reason="no nghttp command available or nghttp ignores -a option")
     def test_006_05(self):
         url = TestEnv.mkurl("https", "test1", "/003.html")
         r = TestEnv.nghttp().assets(url, options=[ "--window-bits=24", "-Haccept-encoding: none" ])
