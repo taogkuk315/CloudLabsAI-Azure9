@@ -38,12 +38,12 @@ LoadModule proxy_balancer_module "@PREFIX@/modules/mod_proxy_balancer.so"
 LoadModule proxy_hcheck_module  "@PREFIX@/modules/mod_proxy_hcheck.so"
 
 # Do not load the server one, but the local module
-#LoadModule http2_module         "@PREFIX@/modules/mod_http2.so"
-LoadModule http2_module         "@MODULE_SRC@/.libs/mod_http2.so"
+LoadModule http2_module         "@PREFIX@/modules/mod_http2.so"
+#LoadModule http2_module         "@MODULE_SRC@/.libs/mod_http2.so"
 
 # Do not load the server one, but the local module
-#LoadModule proxy_http2_module   "@PREFIX@/modules/mod_proxy_http2.so"
-LoadModule proxy_http2_module   "@MODULE_SRC@/.libs/mod_proxy_http2.so"
+LoadModule proxy_http2_module   "@PREFIX@/modules/mod_proxy_http2.so"
+#LoadModule proxy_http2_module   "@MODULE_SRC@/.libs/mod_proxy_http2.so"
 
 LoadModule mpm_event_module     "@PREFIX@/modules/mod_mpm_event.so"
 

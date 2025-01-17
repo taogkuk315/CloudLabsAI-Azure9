@@ -1,3 +1,7 @@
+ * Changed terminology to master/secondary connections in the source.
+ * Test against the installed version of the module. This allows test cases
+   to work with other versions.
+
 v1.15.11
 --------------------------------------------------------------------------------
  * mod_proxy_http2: the "ping" proxy parameter 
