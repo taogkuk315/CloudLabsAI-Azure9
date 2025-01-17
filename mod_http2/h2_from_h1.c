@@ -341,6 +341,63 @@ static apr_status_t parse_header(h2_response_parser *parser, char *line) {
     return APR_SUCCESS;
 }
 
+static apr_status_t split_line(apr_bucket_brigade *bbOut,
+                               apr_bucket_brigade *bbIn,
+                               apr_off_t maxbytes)
+{
+    /* A variant or apr_brigade_split_line() that also works for output brigades...
+     * 
+     */
+    apr_off_t readbytes = 0;
+
+    while (!APR_BRIGADE_EMPTY(bbIn)) {
+        const char *pos;
+        const char *str;
+        apr_size_t len;
+        apr_status_t rv;
+        apr_bucket *e;
+
+        e = APR_BRIGADE_FIRST(bbIn);
+        if (APR_BUCKET_IS_METADATA(e) && !APR_BUCKET_IS_FLUSH(e)) {
+            return APR_EINVAL;
+        }
+        
+        rv = apr_bucket_read(e, &str, &len, APR_BLOCK_READ);
+        if (rv != APR_SUCCESS) {
+            return rv;
+        }
+
+        pos = memchr(str, APR_ASCII_LF, len);
+        /* We found a match. */
+        if (pos != NULL) {
+            apr_bucket_split(e, pos - str + 1);
+            APR_BUCKET_REMOVE(e);
+            APR_BRIGADE_INSERT_TAIL(bbOut, e);
+            return APR_SUCCESS;
+        }
+        APR_BUCKET_REMOVE(e);
+        if (APR_BUCKET_IS_METADATA(e) || len > APR_BUCKET_BUFF_SIZE/4) {
+            APR_BRIGADE_INSERT_TAIL(bbOut, e);
+        }
+        else {
+            if (len > 0) {
+                rv = apr_brigade_write(bbOut, NULL, NULL, str, len);
+                if (rv != APR_SUCCESS) {
+                    return rv;
+                }
+            }
+            apr_bucket_destroy(e);
+        }
+        readbytes += len;
+        /* We didn't find an APR_ASCII_LF within the maximum line length. */
+        if (readbytes >= maxbytes) {
+            break;
+        }
+    }
+
+    return APR_SUCCESS;
+}
+
 static apr_status_t get_line(h2_response_parser *parser, apr_bucket_brigade *bb, 
                              char *line, apr_size_t len)
 {
@@ -350,8 +407,7 @@ static apr_status_t get_line(h2_response_parser *parser, apr_bucket_brigade *bb,
     if (!parser->tmp) {
         parser->tmp = apr_brigade_create(task->pool, task->c->bucket_alloc);
     }
-    status = apr_brigade_split_line(parser->tmp, bb, APR_BLOCK_READ, 
-                                    HUGE_STRING_LEN);
+    status = split_line(parser->tmp, bb, len);
     if (status == APR_SUCCESS) {
         --len;
         status = apr_brigade_flatten(parser->tmp, line, &len);
