@@ -693,6 +693,11 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
         return APR_EINVAL;    
     }
     ++stream->request_headers_added;
+    if (APLOGctrace2(session->c)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                    H2_STRM_LOG("", stream, "adding %d. header, %s: %.*s"), 
+                    stream->request_headers_added, name, (int)vlen, value);
+    }
     if (name[0] == ':') {
         if ((vlen) > session->s->limit_req_line) {
             /* pseudo header: approximation of request line size check */
