@@ -1,3 +1,5 @@
+ * Fixes #201: do not count repeated headers with same name against the field
+   count limit. The are merged internally, as if sent in a single HTTP/1 line.
  * Refrain from detecting (intermediate) responses, when the connection has
    already been aborted or non-flush meta buckets are encountered.
  * Changed terminology to master/secondary connections in the source.

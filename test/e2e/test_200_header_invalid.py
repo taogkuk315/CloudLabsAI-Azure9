@@ -91,20 +91,33 @@ class TestStore:
         for i in range(3): # make a 10000 char string
             val = "%s%s%s%s%s%s%s%s%s%s" % (val, val, val, val, val, val, val, val, val, val)
          # LimitRequestFieldSize 8190 ok, one more char -> 400 in HTTP/1.1
-         # (we send 4000+4188 since they are concatenated by ", "
-        r = TestEnv.curl_get(url, options=[ "-H", "x: %s" % (val[:4000]),  "-H", "x: %s" % (val[:4188]) ])
+         # (we send 4000+4185 since they are concatenated by ", " and start with "x: "
+        r = TestEnv.curl_get(url, options=[ "-H", "x: %s" % (val[:4000]),  "-H", "x: %s" % (val[:4185]) ])
         assert 200 == r["response"]["status"]
         r = TestEnv.curl_get(url, options=[ "--http1.1", "-H", "x: %s" % (val[:4000]),  "-H", "x: %s" % (val[:4189]) ])
         assert 400 == r["response"]["status"]
         r = TestEnv.curl_get(url, options=[ "-H", "x: %s" % (val[:4000]),  "-H", "x: %s" % (val[:4191]) ])
         assert 431 == r["response"]["status"]
 
-    # test header field lengths check, LimitRequestFields (default 100)
+    # test header field count, LimitRequestFields (default 100)
+    # see #201: several headers with same name are mered and count only once
     def test_200_12(self):
         url = TestEnv.mkurl("https", "cgi", "/")
         opt=[]
         for i in range(98): # curl sends 2 headers itself (user-agent and accept)
             opt += [ "-H", "x: 1" ]
+        r = TestEnv.curl_get(url, options=opt)
+        assert 200 == r["response"]["status"]
+        r = TestEnv.curl_get(url, options=(opt + [ "-H", "y: 2" ]))
+        assert 200 == r["response"]["status"]
+
+    # test header field count, LimitRequestFields (default 100)
+    # different header names count each
+    def test_200_13(self):
+        url = TestEnv.mkurl("https", "cgi", "/")
+        opt=[]
+        for i in range(98): # curl sends 2 headers itself (user-agent and accept)
+            opt += [ "-H", "x{0}: 1".format(i) ]
         r = TestEnv.curl_get(url, options=opt)
         assert 200 == r["response"]["status"]
         r = TestEnv.curl_get(url, options=(opt + [ "-H", "y: 2" ]))
