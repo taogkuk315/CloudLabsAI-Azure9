@@ -123,3 +123,32 @@ class TestStore:
         r = TestEnv.curl_get(url, options=(opt + [ "-H", "y: 2" ]))
         assert 431 == r["response"]["status"]
 
+    # test "LimitRequestFields 0" setting, see #200
+    def test_200_14(self):
+        conf = HttpdConf()
+        conf.add_line("""
+            LimitRequestFields 20
+            """)
+        conf.add_vhost_cgi()
+        conf.install()
+        assert TestEnv.apache_restart() == 0
+        url = TestEnv.mkurl("https", "cgi", "/")
+        opt=[]
+        for i in range(21):
+            opt += [ "-H", "x{0}: 1".format(i) ]
+        r = TestEnv.curl_get(url, options=opt)
+        assert 431 == r["response"]["status"]
+        conf = HttpdConf()
+        conf.add_line("""
+            LimitRequestFields 0
+            """)
+        conf.add_vhost_cgi()
+        conf.install()
+        assert TestEnv.apache_restart() == 0
+        url = TestEnv.mkurl("https", "cgi", "/")
+        opt=[]
+        for i in range(100):
+            opt += [ "-H", "x{0}: 1".format(i) ]
+        r = TestEnv.curl_get(url, options=opt)
+        assert 200 == r["response"]["status"]
+
