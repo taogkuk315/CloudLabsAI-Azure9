@@ -1,4 +1,9 @@
+v1.15.13
+--------------------------------------------------------------------------------
  * Fixes #200: "LimitRequestFields 0" now disables the limit, as documented.
+
+v1.15.12
+--------------------------------------------------------------------------------
  * Fixes #201: do not count repeated headers with same name against the field
    count limit. The are merged internally, as if sent in a single HTTP/1 line.
  * Refrain from detecting (intermediate) responses, when the connection has
