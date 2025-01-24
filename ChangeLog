@@ -1,3 +1,6 @@
+
+ * Removing support for abandoned draft of http-wg regarding cache-digests.
+
 v1.15.13
 --------------------------------------------------------------------------------
  * Fixes #200: "LimitRequestFields 0" now disables the limit, as documented.
