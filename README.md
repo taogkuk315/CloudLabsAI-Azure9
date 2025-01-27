@@ -32,7 +32,7 @@ tl;dr
 * **Fedora**: [shipped in Fedora 23 and later](https://bodhi.fedoraproject.org/updates/?packages=httpd)
 * **Debian** sid (unstable) [how to install debian sid](https://wiki.debian.org/InstallFAQ#Q._How_do_I_install_.22unstable.22_.28.22sid.22.29.3F)
 * **Gentoo**: [latest stable](https://packages.gentoo.org/packages/www-servers/apache)
-* **FreeBSD**: [Apache 2.4 port includes mod_http2](http://www.freshports.org/www/apache24/) / [mod_http2-devel port in review](https://reviews.freebsd.org/D5220)
+* **FreeBSD**: [Apache 2.4 port includes mod_http2](http://www.freshports.org/www/apache24/) / [mod_http2 port](http://www.freshports.org/www/mod_http2/)
 
 ## Changes
 
