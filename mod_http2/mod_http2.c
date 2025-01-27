@@ -1,11 +1,12 @@
-/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * http://www.apache.org/licenses/LICENSE-2.0
- 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,6 +16,8 @@
 
 #include <apr_optional.h>
 #include <apr_optional_hooks.h>
+#include <apr_strings.h>
+#include <apr_time.h>
 #include <apr_want.h>
 
 #include <httpd.h>
@@ -34,6 +37,7 @@
 #include "h2_config.h"
 #include "h2_ctx.h"
 #include "h2_h2.h"
+#include "h2_mplx.h"
 #include "h2_push.h"
 #include "h2_request.h"
 #include "h2_switch.h"
@@ -44,15 +48,28 @@ static void h2_hooks(apr_pool_t *pool);
 
 AP_DECLARE_MODULE(http2) = {
     STANDARD20_MODULE_STUFF,
-    NULL,
-    NULL,
+    h2_config_create_dir, /* func to create per dir config */
+    h2_config_merge_dir,  /* func to merge per dir config */
     h2_config_create_svr, /* func to create per server config */
-    h2_config_merge,      /* func to merge per server config */
+    h2_config_merge_svr,  /* func to merge per server config */
     h2_cmds,              /* command handlers */
-    h2_hooks
+    h2_hooks,
+#if defined(AP_MODULE_FLAG_NONE)
+    AP_MODULE_FLAG_ALWAYS_MERGE
+#endif
 };
 
 static int h2_h2_fixups(request_rec *r);
+
+typedef struct {
+    unsigned int change_prio : 1;
+    unsigned int sha256 : 1;
+    unsigned int inv_headers : 1;
+    unsigned int dyn_windows : 1;
+} features;
+
+static features myfeats;
+static int mpm_warned;
 
 /* The module initialization. Called once as apache hook, before any multi
  * processing (threaded or not) happens. It is typically at least called twice, 
@@ -71,14 +88,27 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
                           apr_pool_t *ptemp, server_rec *s)
 {
     void *data = NULL;
-    const char *mod_h2_init_key = "mod_h2_init_counter";
+    const char *mod_h2_init_key = "mod_http2_init_counter";
     nghttp2_info *ngh2;
     apr_status_t status;
+    
     (void)plog;(void)ptemp;
+#ifdef H2_NG2_CHANGE_PRIO
+    myfeats.change_prio = 1;
+#endif
+#ifdef H2_OPENSSL
+    myfeats.sha256 = 1;
+#endif
+#ifdef H2_NG2_INVALID_HEADER_CB
+    myfeats.inv_headers = 1;
+#endif
+#ifdef H2_NG2_LOCAL_WIN_SIZE
+    myfeats.dyn_windows = 1;
+#endif
     
     apr_pool_userdata_get(&data, mod_h2_init_key, s->process->pool);
     if ( data == NULL ) {
-        ap_log_error( APLOG_MARK, APLOG_DEBUG, 0, s,
+        ap_log_error( APLOG_MARK, APLOG_DEBUG, 0, s, APLOGNO(03089)
                      "initializing post config dry run");
         apr_pool_userdata_set((const void *)1, mod_h2_init_key,
                               apr_pool_cleanup_null, s->process->pool);
@@ -86,11 +116,22 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
     }
     
     ngh2 = nghttp2_version(0);
-    ap_log_error( APLOG_MARK, APLOG_INFO, 0, s,
-                 "mod_http2 (v%s, nghttp2 %s), initializing...",
-                 MOD_HTTP2_VERSION, ngh2? ngh2->version_str : "unknown");
+    ap_log_error( APLOG_MARK, APLOG_INFO, 0, s, APLOGNO(03090)
+                 "mod_http2 (v%s, feats=%s%s%s%s, nghttp2 %s), initializing...",
+                 MOD_HTTP2_VERSION, 
+                 myfeats.change_prio? "CHPRIO"  : "", 
+                 myfeats.sha256?      "+SHA256" : "",
+                 myfeats.inv_headers? "+INVHD"  : "",
+                 myfeats.dyn_windows? "+DWINS"  : "",
+                 ngh2?                ngh2->version_str : "unknown");
     
     switch (h2_conn_mpm_type()) {
+        case H2_MPM_SIMPLE:
+        case H2_MPM_MOTORZ:
+        case H2_MPM_NETWARE:
+        case H2_MPM_WINNT:
+            /* not sure we need something extra for those. */
+            break;
         case H2_MPM_EVENT:
         case H2_MPM_WORKER:
             /* all fine, we know these ones */
@@ -100,9 +141,20 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
             break;
         case H2_MPM_UNKNOWN:
             /* ??? */
-            ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
+            ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, APLOGNO(03091)
                          "post_config: mpm type unknown");
             break;
+    }
+    
+    if (!h2_mpm_supported() && !mpm_warned) {
+        mpm_warned = 1;
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, s, APLOGNO(10034)
+                     "The mpm module (%s) is not supported by mod_http2. The mpm determines "
+                     "how things are processed in your server. HTTP/2 has more demands in "
+                     "this regard and the currently selected mpm will just not do. "
+                     "This is an advisory warning. Your server will continue to work, but "
+                     "the HTTP/2 protocol will be inactive.", 
+                     h2_conn_mpm_name());
     }
     
     status = h2_h2_init(p, s);
@@ -120,6 +172,11 @@ static char *http2_var_lookup(apr_pool_t *, server_rec *,
                          conn_rec *, request_rec *, char *name);
 static int http2_is_h2(conn_rec *);
 
+static void http2_get_num_workers(server_rec *s, int *minw, int *maxw)
+{
+    h2_get_num_workers(s, minw, maxw);
+}
+
 /* Runs once per created child process. Perform any process 
  * related initionalization here.
  */
@@ -132,8 +189,6 @@ static void h2_child_init(apr_pool_t *pool, server_rec *s)
                      APLOGNO(02949) "initializing connection handling");
     }
     
-    APR_REGISTER_OPTIONAL_FN(http2_is_h2);
-    APR_REGISTER_OPTIONAL_FN(http2_var_lookup);
 }
 
 /* Install this module into the apache2 infrastructure.
@@ -142,6 +197,10 @@ static void h2_hooks(apr_pool_t *pool)
 {
     static const char *const mod_ssl[] = { "mod_ssl.c", NULL};
     
+    APR_REGISTER_OPTIONAL_FN(http2_is_h2);
+    APR_REGISTER_OPTIONAL_FN(http2_var_lookup);
+    APR_REGISTER_OPTIONAL_FN(http2_get_num_workers);
+
     ap_log_perror(APLOG_MARK, APLOG_TRACE1, 0, pool, "installing hooks");
     
     /* Run once after configuration is set, but before mpm children initialize.
@@ -166,36 +225,84 @@ static void h2_hooks(apr_pool_t *pool)
     ap_hook_handler(h2_filter_h2_status_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
-static char *value_of_HTTP2(apr_pool_t *p, server_rec *s,
-                              conn_rec *c, request_rec *r)
+static const char *val_HTTP2(apr_pool_t *p, server_rec *s,
+                             conn_rec *c, request_rec *r, h2_ctx *ctx)
 {
-    return c && http2_is_h2(c)? "on" : "off";
+    return ctx? "on" : "off";
 }
 
-static char *value_of_H2PUSH(apr_pool_t *p, server_rec *s,
-                             conn_rec *c, request_rec *r)
+static const char *val_H2_PUSH(apr_pool_t *p, server_rec *s,
+                               conn_rec *c, request_rec *r, h2_ctx *ctx)
 {
-    h2_ctx *ctx;
-    if (r) {
-        ctx = h2_ctx_rget(r);
-        if (ctx) {
-            h2_task *task = h2_ctx_get_task(ctx);
-            return (task && task->request->push_policy != H2_PUSH_NONE)? "on" : "off";
+    if (ctx) {
+        if (r) {
+            if (ctx->task) {
+                h2_stream *stream = h2_mplx_t_stream_get(ctx->task->mplx, ctx->task);
+                if (stream && stream->push_policy != H2_PUSH_NONE) {
+                    return "on";
+                }
+            }
+        }
+        else if (c && h2_session_push_enabled(ctx->session)) {
+            return "on";
         }
     }
-    else if (c) {
-        ctx = h2_ctx_get(c, 0);
-        return ctx && h2_session_push_enabled(ctx->session)? "on" : "off";
-    }
     else if (s) {
-        const h2_config *cfg = h2_config_sget(s);
-        return cfg && h2_config_geti(cfg, H2_CONF_PUSH)? "on" : "off";
+        if (h2_config_geti(r, s, H2_CONF_PUSH)) {
+            return "on";
+        }
     }
     return "off";
 }
 
-typedef char *h2_var_lookup(apr_pool_t *p, server_rec *s,
-                             conn_rec *c, request_rec *r);
+static const char *val_H2_PUSHED(apr_pool_t *p, server_rec *s,
+                                 conn_rec *c, request_rec *r, h2_ctx *ctx)
+{
+    if (ctx) {
+        if (ctx->task && !H2_STREAM_CLIENT_INITIATED(ctx->task->stream_id)) {
+            return "PUSHED";
+        }
+    }
+    return "";
+}
+
+static const char *val_H2_PUSHED_ON(apr_pool_t *p, server_rec *s,
+                                    conn_rec *c, request_rec *r, h2_ctx *ctx)
+{
+    if (ctx) {
+        if (ctx->task && !H2_STREAM_CLIENT_INITIATED(ctx->task->stream_id)) {
+            h2_stream *stream = h2_mplx_t_stream_get(ctx->task->mplx, ctx->task);
+            if (stream) {
+                return apr_itoa(p, stream->initiated_on);
+            }
+        }
+    }
+    return "";
+}
+
+static const char *val_H2_STREAM_TAG(apr_pool_t *p, server_rec *s,
+                                     conn_rec *c, request_rec *r, h2_ctx *ctx)
+{
+    if (ctx) {
+        if (ctx->task) {
+            return ctx->task->id;
+        }
+    }
+    return "";
+}
+
+static const char *val_H2_STREAM_ID(apr_pool_t *p, server_rec *s,
+                                    conn_rec *c, request_rec *r, h2_ctx *ctx)
+{
+    const char *cp = val_H2_STREAM_TAG(p, s, c, r, ctx);
+    if (cp && (cp = ap_strchr_c(cp, '-'))) {
+        return ++cp;
+    }
+    return NULL;
+}
+
+typedef const char *h2_var_lookup(apr_pool_t *p, server_rec *s,
+                                  conn_rec *c, request_rec *r, h2_ctx *ctx);
 typedef struct h2_var_def {
     const char *name;
     h2_var_lookup *lookup;
@@ -203,8 +310,13 @@ typedef struct h2_var_def {
 } h2_var_def;
 
 static h2_var_def H2_VARS[] = {
-    { "HTTP2",     value_of_HTTP2,  1 },
-    { "H2PUSH",    value_of_H2PUSH, 1 },
+    { "HTTP2",               val_HTTP2,  1 },
+    { "H2PUSH",              val_H2_PUSH, 1 },
+    { "H2_PUSH",             val_H2_PUSH, 1 },
+    { "H2_PUSHED",           val_H2_PUSHED, 1 },
+    { "H2_PUSHED_ON",        val_H2_PUSHED_ON, 1 },
+    { "H2_STREAM_ID",        val_H2_STREAM_ID, 1 },
+    { "H2_STREAM_TAG",       val_H2_STREAM_TAG, 1 },
 };
 
 #ifndef H2_ALEN
@@ -225,23 +337,26 @@ static char *http2_var_lookup(apr_pool_t *p, server_rec *s,
     for (i = 0; i < H2_ALEN(H2_VARS); ++i) {
         h2_var_def *vdef = &H2_VARS[i];
         if (!strcmp(vdef->name, name)) {
-            return vdef->lookup(p, s, c, r);
+            h2_ctx *ctx = (r? h2_ctx_get(c, 0) : 
+                           h2_ctx_get(c->master? c->master : c, 0));
+            return (char *)vdef->lookup(p, s, c, r, ctx);
         }
     }
-    return "";
+    return (char*)"";
 }
 
 static int h2_h2_fixups(request_rec *r)
 {
     if (r->connection->master) {
-        h2_ctx *ctx = h2_ctx_rget(r);
+        h2_ctx *ctx = h2_ctx_get(r->connection, 0);
         int i;
         
         for (i = 0; ctx && i < H2_ALEN(H2_VARS); ++i) {
             h2_var_def *vdef = &H2_VARS[i];
             if (vdef->subprocess) {
                 apr_table_setn(r->subprocess_env, vdef->name, 
-                               vdef->lookup(r->pool, r->server, r->connection, r));
+                               vdef->lookup(r->pool, r->server, r->connection, 
+                                            r, ctx));
             }
         }
     }

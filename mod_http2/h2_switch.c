@@ -1,18 +1,19 @@
-/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * http://www.apache.org/licenses/LICENSE-2.0
- 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+ 
 #include <assert.h>
 
 #include <apr_strings.h>
@@ -54,17 +55,20 @@ static int h2_protocol_propose(conn_rec *c, request_rec *r,
     int is_tls = h2_h2_is_tls(c);
     const char **protos = is_tls? h2_tls_protos : h2_clear_protos;
     
-    (void)s;
+    if (!h2_mpm_supported()) {
+        return DECLINED;
+    }
+    
     if (strcmp(AP_PROTOCOL_HTTP1, ap_get_protocol(c))) {
         /* We do not know how to switch from anything else but http/1.1.
          */
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(03083)
                       "protocol switch: current proto != http/1.1, declined");
         return DECLINED;
     }
     
-    if (!h2_is_acceptable_connection(c, 0)) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c,
+    if (!h2_is_acceptable_connection(c, r, 0)) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(03084)
                       "protocol propose: connection requirements not met");
         return DECLINED;
     }
@@ -76,20 +80,20 @@ static int h2_protocol_propose(conn_rec *c, request_rec *r,
          */
         const char *p;
         
-        if (!h2_allows_h2_upgrade(c)) {
+        if (!h2_allows_h2_upgrade(r)) {
             return DECLINED;
         }
          
         p = apr_table_get(r->headers_in, "HTTP2-Settings");
         if (!p) {
-            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(03085)
                           "upgrade without HTTP2-Settings declined");
             return DECLINED;
         }
         
         p = apr_table_get(r->headers_in, "Connection");
         if (!ap_find_token(r->pool, p, "http2-settings")) {
-            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(03086)
                           "upgrade without HTTP2-Settings declined");
             return DECLINED;
         }
@@ -98,7 +102,7 @@ static int h2_protocol_propose(conn_rec *c, request_rec *r,
          */
         p = apr_table_get(r->headers_in, "Content-Length");
         if (p && strcmp(p, "0")) {
-            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, APLOGNO(03087)
                           "upgrade with content-length: %s, declined", p);
             return DECLINED;
         }
@@ -127,6 +131,10 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
     const char **p = protos;
     
     (void)s;
+    if (!h2_mpm_supported()) {
+        return DECLINED;
+    }
+
     while (*p) {
         if (!strcmp(*p, protocol)) {
             found = 1;
@@ -141,7 +149,7 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "switching protocol to '%s'", protocol);
         h2_ctx_protocol_set(ctx, protocol);
-        h2_ctx_server_set(ctx, s);
+        h2_ctx_server_update(ctx, s);
         
         if (r != NULL) {
             apr_status_t status;
@@ -151,22 +159,21 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
              * right away.
              */
             ap_remove_input_filter_byhandle(r->input_filters, "http_in");
-            ap_remove_input_filter_byhandle(r->input_filters, "reqtimeout");
             ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
             
             /* Ok, start an h2_conn on this one. */
-            h2_ctx_server_set(ctx, r->server);
-            status = h2_conn_setup(ctx, r->connection, r);
+            status = h2_conn_setup(c, r, s);
+            
             if (status != APR_SUCCESS) {
-                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, status, r,
+                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, status, r, APLOGNO(03088)
                               "session setup");
-                return status;
+                h2_ctx_clear(c);
+                return !OK;
             }
             
-            h2_conn_run(ctx, c);
-            return DONE;
+            h2_conn_run(c);
         }
-        return DONE;
+        return OK;
     }
     
     return DECLINED;

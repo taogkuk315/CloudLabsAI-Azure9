@@ -23,6 +23,7 @@
 #include <http_log.h>
 
 #include "h2_private.h"
+#include "h2.h"
 #include "h2_mplx.h"
 #include "h2_stream.h"
 #include "h2_bucket_eos.h"
@@ -37,10 +38,8 @@ static apr_status_t bucket_cleanup(void *data)
     h2_stream **pstream = data;
 
     if (*pstream) {
-        /*
-         * If bucket_destroy is called after us, this prevents
-         * bucket_destroy from trying to destroy the pool again.
-         */
+        /* If bucket_destroy is called after us, this prevents
+         * bucket_destroy from trying to destroy the stream again. */
         *pstream = NULL;
     }
     return APR_SUCCESS;
@@ -91,10 +90,13 @@ static void bucket_destroy(void *data)
 
     if (apr_bucket_shared_destroy(h)) {
         h2_stream *stream = h->stream;
-        if (stream) {
-            h2_stream_cleanup(stream);
+        if (stream && stream->pool) {
+            apr_pool_cleanup_kill(stream->pool, &h->stream, bucket_cleanup);
         }
         apr_bucket_free(h);
+        if (stream) {
+            h2_stream_dispatch(stream, H2_SEV_EOS_SENT);
+        }
     }
 }
 

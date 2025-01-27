@@ -1,11 +1,12 @@
-/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * http://www.apache.org/licenses/LICENSE-2.0
- 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -31,38 +32,31 @@
  * New incoming HEADER frames are converted into a h2_stream+h2_task instance
  * that both represent a HTTP/2 stream, but may have separate lifetimes. This
  * allows h2_task to be scheduled in other threads without semaphores
- * all over the place. It allows task memory to be freed independant of
+ * all over the place. It allows task memory to be freed independent of
  * session lifetime and sessions may close down while tasks are still running.
  *
  *
  */
+
+#include "h2.h"
 
 struct apr_thread_mutext_t;
 struct apr_thread_cond_t;
 struct h2_ctx;
 struct h2_config;
 struct h2_filter_cin;
+struct h2_ihash_t;
 struct h2_mplx;
 struct h2_priority;
 struct h2_push;
 struct h2_push_diary;
-struct h2_response;
 struct h2_session;
 struct h2_stream;
+struct h2_stream_monitor;
 struct h2_task;
 struct h2_workers;
 
 struct nghttp2_session;
-
-typedef enum {
-    H2_SESSION_ST_INIT,             /* send initial SETTINGS, etc. */
-    H2_SESSION_ST_DONE,             /* finished, connection close */
-    H2_SESSION_ST_IDLE,             /* nothing to write, expecting data inc */
-    H2_SESSION_ST_BUSY,             /* read/write without stop */
-    H2_SESSION_ST_WAIT,             /* waiting for tasks reporting back */
-    H2_SESSION_ST_LOCAL_SHUTDOWN,   /* we announced GOAWAY */
-    H2_SESSION_ST_REMOTE_SHUTDOWN,  /* client announced GOAWAY */
-} h2_session_state;
 
 typedef enum {
     H2_SESSION_EV_INIT,             /* session was initialized */
@@ -72,10 +66,11 @@ typedef enum {
     H2_SESSION_EV_PROTO_ERROR,      /* protocol error */
     H2_SESSION_EV_CONN_TIMEOUT,     /* connection timeout */
     H2_SESSION_EV_NO_IO,            /* nothing has been read or written */
-    H2_SESSION_EV_STREAM_READY,     /* stream signalled availability of headers/data */
-    H2_SESSION_EV_DATA_READ,        /* connection data has been read */
+    H2_SESSION_EV_FRAME_RCVD,       /* a frame has been received */
     H2_SESSION_EV_NGH2_DONE,        /* nghttp2 wants neither read nor write anything */
     H2_SESSION_EV_MPM_STOPPING,     /* the process is stopping */
+    H2_SESSION_EV_PRE_CLOSE,        /* connection will close after this */
+    H2_SESSION_EV_STREAM_CHANGE,    /* a stream (state/input/output) changed */
 } h2_session_event_t;
 
 typedef struct h2_session {
@@ -85,17 +80,33 @@ typedef struct h2_session {
     request_rec *r;                 /* the request that started this in case
                                      * of 'h2c', NULL otherwise */
     server_rec *s;                  /* server/vhost we're starting on */
-    const struct h2_config *config; /* Relevant config for this session */
-    
+    apr_pool_t *pool;               /* pool to use in session */
+    struct h2_mplx *mplx;           /* multiplexer for stream data */
+    struct h2_workers *workers;     /* for executing stream tasks */
+    struct h2_filter_cin *cin;      /* connection input filter context */
+    h2_conn_io io;                  /* io on httpd conn filters */
+    int padding_max;                /* max number of padding bytes */
+    int padding_always;             /* padding has precedence over I/O optimizations */
+    struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
+
     h2_session_state state;         /* state session is in */
-    unsigned int reprioritize  : 1; /* scheduled streams priority changed */
-    unsigned int eoc_written   : 1; /* h2 eoc bucket written */
-    apr_interval_time_t  wait_us;   /* timout during BUSY_WAIT state, micro secs */
     
+    h2_session_props local;         /* properties of local session */
+    h2_session_props remote;        /* properites of remote session */
+    
+    unsigned int reprioritize  : 1; /* scheduled streams priority changed */
+    unsigned int flush         : 1; /* flushing output necessary */
+    unsigned int have_read     : 1; /* session has read client data */
+    unsigned int have_written  : 1; /* session did write data to client */
+    apr_interval_time_t  wait_us;   /* timeout during BUSY_WAIT state, micro secs */
+    
+    struct h2_push_diary *push_diary; /* remember pushes, avoid duplicates */
+    
+    struct h2_stream_monitor *monitor;/* monitor callbacks for streams */
+    int open_streams;               /* number of client streams open */
     int unsent_submits;             /* number of submitted, but not yet written responses. */
-    int unsent_promises;            /* number of submitted, but not yet written push promised */
+    int unsent_promises;            /* number of submitted, but not yet written push promises */
                                          
-    int requests_received;          /* number of http/2 requests received */
     int responses_submitted;        /* number of http/2 responses submitted */
     int streams_reset;              /* number of http/2 streams reset by client */
     int pushes_promised;            /* number of http/2 push promises submitted */
@@ -105,75 +116,60 @@ typedef struct h2_session {
     apr_size_t frames_received;     /* number of http/2 frames received */
     apr_size_t frames_sent;         /* number of http/2 frames sent */
     
-    int max_stream_received;        /* highest stream id created */
-    int max_stream_handled;         /* highest stream id completed */
-    
     apr_size_t max_stream_count;    /* max number of open streams */
     apr_size_t max_stream_mem;      /* max buffer memory for a single stream */
-
-    apr_time_t start_wait;          /* Time we started waiting for sth. to happen */
-    apr_time_t idle_until;          /* Time we shut down due to sheer boredom */
     
-    apr_pool_t *pool;               /* pool to use in session handling */
+    apr_time_t idle_until;          /* Time we shut down due to sheer boredom */
+    apr_time_t idle_sync_until;     /* Time we sync wait until keepalive handling kicks in */
+    apr_size_t idle_frames;         /* number of rcvd frames that kept session in idle state */
+    apr_interval_time_t idle_delay; /* Time we delay processing rcvd frames in idle state */
+    
     apr_bucket_brigade *bbtmp;      /* brigade for keeping temporary data */
     struct apr_thread_cond_t *iowait; /* our cond when trywaiting for data */
     
-    struct h2_filter_cin *cin;      /* connection input filter context */
-    h2_conn_io io;                  /* io on httpd conn filters */
+    char status[64];                /* status message for scoreboard */
+    int last_status_code;           /* the one already reported */
+    const char *last_status_msg;    /* the one already reported */
+    
+    struct h2_iqueue *in_pending;   /* all streams with input pending */
+    struct h2_iqueue *in_process;   /* all streams ready for processing on a secondary */
 
-    struct h2_mplx *mplx;           /* multiplexer for stream data */
-    
-    struct h2_stream *last_stream;  /* last stream worked with */
-    struct h2_stream_set *streams;  /* streams handled by this session */
-    
-    apr_pool_t *spare;              /* spare stream pool */
-    
-    struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
-    struct h2_workers *workers;     /* for executing stream tasks */
-    
-    struct h2_push_diary *push_diary; /* remember pushes, avoid duplicates */
 } h2_session;
 
+const char *h2_session_state_str(h2_session_state state);
 
 /**
  * Create a new h2_session for the given connection.
  * The session will apply the configured parameter.
+ * @param psession pointer receiving the created session on success or NULL
  * @param c       the connection to work on
+ * @param r       optional request when protocol was upgraded
  * @param cfg     the module config to apply
  * @param workers the worker pool to use
  * @return the created session
  */
-h2_session *h2_session_create(conn_rec *c, struct h2_ctx *ctx, 
-                              struct h2_workers *workers);
-
-/**
- * Create a new h2_session for the given request.
- * The session will apply the configured parameter.
- * @param r       the request that was upgraded
- * @param cfg     the module config to apply
- * @param workers the worker pool to use
- * @return the created session
- */
-h2_session *h2_session_rcreate(request_rec *r, struct h2_ctx *ctx,
+apr_status_t h2_session_create(h2_session **psession,
+                               conn_rec *c, request_rec *r, server_rec *, 
                                struct h2_workers *workers);
+
+void h2_session_event(h2_session *session, h2_session_event_t ev, 
+                             int err, const char *msg);
 
 /**
  * Process the given HTTP/2 session until it is ended or a fatal
- * error occured.
+ * error occurred.
  *
  * @param session the sessionm to process
  */
 apr_status_t h2_session_process(h2_session *session, int async);
 
 /**
- * Cleanup the session and all objects it still contains. This will not
- * destroy h2_task instances that have not finished yet. 
- * @param session the session to destroy
+ * Last chance to do anything before the connection is closed.
  */
-void h2_session_eoc_callback(h2_session *session);
+apr_status_t h2_session_pre_close(h2_session *session, int async);
 
 /**
- * Called when a serious error occured and the session needs to terminate
+ * Called when a serious error occurred and the session needs to terminate
  * without further connection io.
  * @param session the session to abort
  * @param reason  the apache status that caused the abort
@@ -185,36 +181,11 @@ void h2_session_abort(h2_session *session, apr_status_t reason);
  */
 void h2_session_close(h2_session *session);
 
-/* Start submitting the response to a stream request. This is possible
- * once we have all the response headers. */
-apr_status_t h2_session_handle_response(h2_session *session,
-                                        struct h2_stream *stream);
-
-/* Get the h2_stream for the given stream idenrtifier. */
-struct h2_stream *h2_session_get_stream(h2_session *session, int stream_id);
-
-/**
- * Create and register a new stream under the given id.
- * 
- * @param session the session to register in
- * @param stream_id the new stream identifier
- * @return the new stream
- */
-struct h2_stream *h2_session_open_stream(h2_session *session, int stream_id);
-
 /**
  * Returns if client settings have push enabled.
  * @param != 0 iff push is enabled in client settings
  */
 int h2_session_push_enabled(h2_session *session);
-
-/**
- * Destroy the stream and release it everywhere. Reclaim all resources.
- * @param session the session to which the stream belongs
- * @param stream the stream to destroy
- */
-apr_status_t h2_session_stream_destroy(h2_session *session, 
-                                       struct h2_stream *stream);
 
 /**
  * Submit a push promise on the stream and schedule the new steam for
@@ -232,5 +203,10 @@ apr_status_t h2_session_set_prio(h2_session *session,
                                  struct h2_stream *stream, 
                                  const struct h2_priority *prio);
 
+#define H2_SSSN_MSG(s, msg)     \
+    "h2_session(%ld,%s,%d): "msg, s->id, h2_session_state_str(s->state), \
+                            s->open_streams
+
+#define H2_SSSN_LOG(aplogno, s, msg)    aplogno H2_SSSN_MSG(s, msg)
 
 #endif /* defined(__mod_h2__h2_session__) */

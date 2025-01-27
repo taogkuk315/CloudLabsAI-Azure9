@@ -14,7 +14,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.2.7], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.15.14], [stefan.eissing@greenbytes.de])
 
 LT_PREREQ([2.2.6])
 LT_INIT()
@@ -59,41 +59,6 @@ AC_ARG_WITH([apxs], [AS_HELP_STRING([--with-apxs],
 AC_PROG_CC
 AC_PROG_CC_STDC
 
-if test "x$werror" != "xno"; then
-    AX_CHECK_COMPILE_FLAG([-Wall], [CFLAGS="$CFLAGS -Wall"])
-    AX_CHECK_COMPILE_FLAG([-Wextra], [CFLAGS="$CFLAGS -Wextra"])
-    AX_CHECK_COMPILE_FLAG([-Werror], [CFLAGS="$CFLAGS -Werror"])
-    AX_CHECK_COMPILE_FLAG([-Wmissing-prototypes], [CFLAGS="$CFLAGS -Wmissing-prototypes"])
-    AX_CHECK_COMPILE_FLAG([-Wstrict-prototypes], [CFLAGS="$CFLAGS -Wstrict-prototypes"])
-    AX_CHECK_COMPILE_FLAG([-Wmissing-declarations], [CFLAGS="$CFLAGS -Wmissing-declarations"])
-    AX_CHECK_COMPILE_FLAG([-Wpointer-arith], [CFLAGS="$CFLAGS -Wpointer-arith"])
-    # we like to use such things...
-    #AX_CHECK_COMPILE_FLAG([-Wdeclaration-after-statement], [CFLAGS="$CFLAGS -Wdeclaration-after-statement"])
-    AX_CHECK_COMPILE_FLAG([-Wformat-security], [CFLAGS="$CFLAGS -Wformat-security"])
-    AX_CHECK_COMPILE_FLAG([-Wwrite-strings], [CFLAGS="$CFLAGS -Wwrite-strings"])
-    AX_CHECK_COMPILE_FLAG([-Wshadow], [CFLAGS="$CFLAGS -Wshadow"])
-    AX_CHECK_COMPILE_FLAG([-Winline], [CFLAGS="$CFLAGS -Winline"])
-    AX_CHECK_COMPILE_FLAG([-Wnested-externs], [CFLAGS="$CFLAGS -Wnested-externs"])
-    AX_CHECK_COMPILE_FLAG([-Wfloat-equal], [CFLAGS="$CFLAGS -Wfloat-equal"])
-    AX_CHECK_COMPILE_FLAG([-Wundef], [CFLAGS="$CFLAGS -Wundef"])
-    AX_CHECK_COMPILE_FLAG([-Wendif-labels], [CFLAGS="$CFLAGS -Wendif-labels"])
-    AX_CHECK_COMPILE_FLAG([-Wempty-body], [CFLAGS="$CFLAGS -Wempty-body"])
-# does not make sense with APR as it prefers char* to void*
-#    AX_CHECK_COMPILE_FLAG([-Wcast-align], [CFLAGS="$CFLAGS -Wcast-align"])
-    AX_CHECK_COMPILE_FLAG([-Wclobbered], [CFLAGS="$CFLAGS -Wclobbered"])
-    AX_CHECK_COMPILE_FLAG([-Wvla], [CFLAGS="$CFLAGS -Wvla"])
-    AX_CHECK_COMPILE_FLAG([-Wpragmas], [CFLAGS="$CFLAGS -Wpragmas"])
-    AX_CHECK_COMPILE_FLAG([-Wunreachable-code], [CFLAGS="$CFLAGS -Wunreachable-code"])
-    AX_CHECK_COMPILE_FLAG([-Waddress], [CFLAGS="$CFLAGS -Waddress"])
-    AX_CHECK_COMPILE_FLAG([-Wattributes], [CFLAGS="$CFLAGS -Wattributes"])
-    AX_CHECK_COMPILE_FLAG([-Wdiv-by-zero], [CFLAGS="$CFLAGS -Wdiv-by-zero"])
-    AX_CHECK_COMPILE_FLAG([-Wshorten-64-to-32], [CFLAGS="$CFLAGS -Wshorten-64-to-32"])
-
-    AX_CHECK_COMPILE_FLAG(["-std=c89"], [CFLAGS="$CFLAGS -std=c89"])
-    AX_CHECK_COMPILE_FLAG([-Wdeclaration-after-statement], [CFLAGS="$CFLAGS -Wdeclaration-after-statement"])
-fi
-
-
 # extern, we need to find where the apxs is. which then
 # can tell us the various directories we need.
 #
@@ -110,8 +75,10 @@ fi
 export BUILD_SUBDIRS="mod_http2"
 
 prefix="$($APXS -q prefix)"
-LDFLAGS="$LDFLAGS -L$($APXS -q libdir)"
-CPPFLAGS="$CPPFLAGS -I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR)"
+prefix="${prefix:-/usr}"
+export PREFIX="${prefix}"
+LDFLAGS="-L$($APXS -q libdir) $LDFLAGS"
+CPPFLAGS="-I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR) $($APXS -q EXTRA_CPPFLAGS) $CPPFLAGS"
 export SYSCONF_DIR="$($APXS -q sysconfdir)"
 export LIBEXEC_DIR="$($APXS -q LIBEXECDIR)"
 
@@ -129,6 +96,33 @@ AC_CHECK_FUNCS([nghttp2_stream_get_weight],
 # nghttp2 >= 1.5.0: changing stream priorities
 AC_CHECK_FUNCS([nghttp2_session_change_stream_priority], 
         [CPPFLAGS="$CPPFLAGS -DH2_NG2_CHANGE_PRIO"], [])
+# nghttp2 >= 1.14.0: invalid header callback
+AC_CHECK_FUNCS([nghttp2_session_callbacks_set_on_invalid_header_callback], 
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_INVALID_HEADER_CB"], [])
+dnl # nghttp2 >= 1.15.0: get/set stream window sizes
+AC_CHECK_FUNCS([nghttp2_session_get_stream_local_window_size], 
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_LOCAL_WIN_SIZE"], [])
+
+AC_PATH_PROG([NGHTTP], [nghttp])
+if test "x${NGHTTP}" = "x"; then
+    if test -x "${prefix}/bin/nghttp"; then
+        NGHTTP="${prefix}/bin/nghttp"
+    else
+        AC_MSG_WARN("no nghttp found, test coverage will be incomplete")
+    fi
+fi
+AC_SUBST(NGHTTP)
+
+AC_PATH_PROG([H2LOAD], [h2load])
+if test "x${H2LOAD}" = "x"; then
+    if test -x "${prefix}/bin/h2load"; then
+        H2LOAD="${prefix}/bin/h2load"
+    else
+        AC_MSG_WARN("no h2laod found, test coverage will be incomplete")
+    fi
+fi
+AC_SUBST(H2LOAD)
+
 
 
 AC_CHECK_LIB([crypto], [SHA256_Init], [
@@ -141,6 +135,58 @@ AC_CHECK_HEADERS([ \
     assert.h \
     stddef.h \
 ])
+
+WERROR_CFLAGS=""
+if test "x$werror" != "xno"; then
+    AX_CHECK_COMPILE_FLAG([-Wall], [WERROR_CFLAGS="$WERROR_CFLAGS -Wall"])
+    #AX_CHECK_COMPILE_FLAG([-Wconversion], [WERROR_CFLAGS="$WERROR_CFLAGS -Wconversion"])
+    AX_CHECK_COMPILE_FLAG([-Wextra], [WERROR_CFLAGS="$WERROR_CFLAGS -Wextra"])
+    AX_CHECK_COMPILE_FLAG([-Werror], [WERROR_CFLAGS="$WERROR_CFLAGS -Werror"])
+    AX_CHECK_COMPILE_FLAG([-Wmissing-prototypes], [WERROR_CFLAGS="$WERROR_CFLAGS -Wmissing-prototypes"])
+    AX_CHECK_COMPILE_FLAG([-Wstrict-prototypes], [WERROR_CFLAGS="$WERROR_CFLAGS -Wstrict-prototypes"])
+    AX_CHECK_COMPILE_FLAG([-Wmissing-declarations], [WERROR_CFLAGS="$WERROR_CFLAGS -Wmissing-declarations"])
+    AX_CHECK_COMPILE_FLAG([-Wpointer-arith], [WERROR_CFLAGS="$WERROR_CFLAGS -Wpointer-arith"])
+    # we like to use such things...
+    #AX_CHECK_COMPILE_FLAG([-Wdeclaration-after-statement], [WERROR_CFLAGS="$WERROR_CFLAGS -Wdeclaration-after-statement"])
+    AX_CHECK_COMPILE_FLAG([-Wformat-security], [WERROR_CFLAGS="$WERROR_CFLAGS -Wformat-security"])
+    AX_CHECK_COMPILE_FLAG([-Wwrite-strings], [WERROR_CFLAGS="$WERROR_CFLAGS -Wwrite-strings"])
+    AX_CHECK_COMPILE_FLAG([-Wshadow], [WERROR_CFLAGS="$WERROR_CFLAGS -Wshadow"])
+    AX_CHECK_COMPILE_FLAG([-Winline], [WERROR_CFLAGS="$WERROR_CFLAGS -Winline"])
+    AX_CHECK_COMPILE_FLAG([-Wnested-externs], [WERROR_CFLAGS="$WERROR_CFLAGS -Wnested-externs"])
+    AX_CHECK_COMPILE_FLAG([-Wfloat-equal], [WERROR_CFLAGS="$WERROR_CFLAGS -Wfloat-equal"])
+    AX_CHECK_COMPILE_FLAG([-Wundef], [WERROR_CFLAGS="$WERROR_CFLAGS -Wundef"])
+    AX_CHECK_COMPILE_FLAG([-Wendif-labels], [WERROR_CFLAGS="$WERROR_CFLAGS -Wendif-labels"])
+    AX_CHECK_COMPILE_FLAG([-Wempty-body], [WERROR_CFLAGS="$WERROR_CFLAGS -Wempty-body"])
+# does not make sense with APR as it prefers char* to void*
+#    AX_CHECK_COMPILE_FLAG([-Wcast-align], [WERROR_CFLAGS="$WERROR_CFLAGS -Wcast-align"])
+    AX_CHECK_COMPILE_FLAG([-Wvla], [WERROR_CFLAGS="$WERROR_CFLAGS -Wvla"])
+    AX_CHECK_COMPILE_FLAG([-Wunreachable-code], [WERROR_CFLAGS="$WERROR_CFLAGS -Wunreachable-code"])
+    AX_CHECK_COMPILE_FLAG([-Waddress], [WERROR_CFLAGS="$WERROR_CFLAGS -Waddress"])
+    AX_CHECK_COMPILE_FLAG([-Wattributes], [WERROR_CFLAGS="$WERROR_CFLAGS -Wattributes"])
+    AX_CHECK_COMPILE_FLAG([-Wdiv-by-zero], [WERROR_CFLAGS="$WERROR_CFLAGS -Wdiv-by-zero"])
+    AX_CHECK_COMPILE_FLAG([-Wshorten-64-to-32], [WERROR_CFLAGS="$WERROR_CFLAGS -Wshorten-64-to-32"])
+    AX_CHECK_COMPILE_FLAG([-Wno-sign-compare], [WERROR_CFLAGS="$WERROR_CFLAGS -Wno-sign-compare"])
+    AX_CHECK_COMPILE_FLAG([-Wno-unused-parameter], [WERROR_CFLAGS="$WERROR_CFLAGS -Wno-unused-parameter"])
+    #AX_CHECK_COMPILE_FLAG([-Wno-shadow], [WERROR_CFLAGS="$WERROR_CFLAGS -Wno-shadow"])
+    #AX_CHECK_COMPILE_FLAG([-Wno-undef], [WERROR_CFLAGS="$WERROR_CFLAGS -Wno-undef"])
+
+    AX_CHECK_COMPILE_FLAG(["-std=c89"], [WERROR_CFLAGS="$WERROR_CFLAGS -std=c89"])
+    AX_CHECK_COMPILE_FLAG([-Wdeclaration-after-statement], [WERROR_CFLAGS="$WERROR_CFLAGS -Wdeclaration-after-statement"])
+
+# gcc warnings, considered useful as in https://kristerw.blogspot.de/2017/09/useful-gcc-warning-options-not-enabled.html
+#
+    #AX_CHECK_COMPILE_FLAG(["-Wduplicated-cond"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wduplicated-cond"])
+    #AX_CHECK_COMPILE_FLAG(["-Wduplicated-branches"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wduplicated-branches"])
+    #AX_CHECK_COMPILE_FLAG(["-Wlogical-op"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wlogical-op"])
+    #AX_CHECK_COMPILE_FLAG(["-Wrestrict"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wrestrict"])
+    AX_CHECK_COMPILE_FLAG(["-Wnull-dereference"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wnull-dereference"])
+    #AX_CHECK_COMPILE_FLAG(["-Wuseless-cast"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wuseless-cast"])
+    #AX_CHECK_COMPILE_FLAG(["-Wjump-misses-init"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wjump-misses-init"])
+    AX_CHECK_COMPILE_FLAG(["-Wdouble-promotion"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wdouble-promotion"])
+    AX_CHECK_COMPILE_FLAG(["-Wshadow"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wshadow"])
+    AX_CHECK_COMPILE_FLAG(["-Wformat=2"], [WERROR_CFLAGS="$WERROR_CFLAGS -Wformat=2"])
+fi
+AC_SUBST(WERROR_CFLAGS)
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_INT32_T
@@ -159,10 +205,88 @@ AC_SUBST(BUILD_SUBDIRS)
 AC_SUBST(SYSCONF_DIR)
 AC_SUBST(LIBEXEC_DIR)
 
+HTTP_PORT=12345
+HTTPS_PORT=12346
+HTTP_TLD="tests.httpd.apache.org"
+
+AC_SUBST(PREFIX)
+AC_SUBST(HTTP_PORT)
+AC_SUBST(HTTPS_PORT)
+AC_SUBST(HTTP_TLD)
+
+AC_ARG_WITH([serverdir], [AS_HELP_STRING([--with-serverdir],
+    [Use serverdir directory for setup [default=gen/apache]])],
+    [request_serverdir=$withval], [request_serverdir=$PWD/test/gen/apache])
+
+AC_ARG_WITH([curl], [AS_HELP_STRING([--with-curl], [Use curl from this prefix])],
+    [request_curl=$withval], [request_curl=check])
+
+SERVER_NAME=$(hostname -f)
+AC_SUBST(SERVER_NAME)
+
+TEST_DIR="$PWD/test"
+AC_SUBST(TEST_DIR)
+
+GEN_DIR="$PWD/test/gen"
+AC_SUBST(GEN_DIR)
+
+SERVER_DIR="$request_serverdir"
+AC_SUBST(SERVER_DIR)
+
+HTTP_PORT=42001
+AC_SUBST(HTTP_PORT)
+
+HTTPS_PORT=42002
+AC_SUBST(HTTPS_PORT)
+
+HTTPD_USER="$USER"
+AC_SUBST(HTTPD_USER)
+
+MODULE_SRC="$PWD/mod_http2"
+AC_SUBST(MODULE_SRC)
+
+# we need curl for testing
+#
+curl_check="curl"
+CURL_BIN="-"
+if test "x$request_curl" != "xcheck"; then
+    curl_check="$request_curl/bin/curl"
+    test -x $curl_check && CURL_BIN=$curl_check
+else
+    AC_PATH_PROG([CURL_BIN],["$curl_check"], "-")
+    if test "x$CURL_BIN" = "x-"; then
+        curl_check="${prefix}/bin/curl"
+        test -x $curl_check && CURL_BIN=$curl_check
+    fi
+fi
+
+if test "x$CURL_BIN" = "x-"; then
+    CURL_MSG="$curl_check was not found. Tests will not work."
+    AC_MSG_WARN([$CURL_MSG])
+else
+    CURL_MSG="$CURL_BIN"
+    AC_SUBST(CURL_BIN)
+
+    curl_h2=$( $CURL_BIN -V | fgrep 'HTTP2' )
+    if test "x$curl_h2" = "x"; then
+        CURL_MSG="$CURL_BIN does not support HTTP/2. Tests will not work."
+        AC_MSG_WARN([$CURL_MSG])
+    fi
+fi
+
+# Do we have a pkg-config?
+AC_ARG_VAR([PKGCONFIG], [pkg-config executable])
+AC_PATH_PROG([PKGCONFIG], [pkg-config])
+
+
 AC_CONFIG_FILES([
     Makefile
     mod_http2/Makefile
     mod_http2/h2_version.h
+    test/Makefile
+    test/e2e/config.ini
+    test/e2e/conf/httpd.conf
+    test/e2e/conf/modules.conf
 ])
 
 AC_OUTPUT
@@ -180,5 +304,7 @@ AC_MSG_NOTICE([summary of build options:
     LDFLAGS:        ${LDFLAGS}
     LIBS:           ${LIBS}
     CPPFLAGS:       ${CPPFLAGS}
-    a2enmod         ${A2ENMOD:--}
+    curl            ${CURL_MSG}
+    nghttp          ${NGHTTP:--}
+    h2load          ${H2LOAD:--}
 ])

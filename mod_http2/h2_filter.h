@@ -1,11 +1,12 @@
-/* Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * http://www.apache.org/licenses/LICENSE-2.0
- 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,26 +17,23 @@
 #ifndef __mod_h2__h2_filter__
 #define __mod_h2__h2_filter__
 
+struct h2_bucket_beam;
+struct h2_headers;
 struct h2_stream;
 struct h2_session;
 
-typedef apr_status_t h2_filter_cin_cb(void *ctx, 
-                                      const char *data, apr_size_t len,
-                                      apr_size_t *readlen);
-
 typedef struct h2_filter_cin {
     apr_pool_t *pool;
-    apr_bucket_brigade *bb;
-    h2_filter_cin_cb *cb;
-    void *cb_ctx;
     apr_socket_t *socket;
     apr_interval_time_t timeout;
-    apr_time_t start_read;
+    apr_bucket_brigade *bb;
+    struct h2_session *session;
+    apr_bucket *cur;
 } h2_filter_cin;
 
-h2_filter_cin *h2_filter_cin_create(apr_pool_t *p, h2_filter_cin_cb *cb, void *ctx);
+h2_filter_cin *h2_filter_cin_create(struct h2_session *session);
 
-void h2_filter_cin_timeout_set(h2_filter_cin *cin, apr_interval_time_t timeout_secs);
+void h2_filter_cin_timeout_set(h2_filter_cin *cin, apr_interval_time_t timeout);
 
 apr_status_t h2_filter_core_input(ap_filter_t* filter,
                                   apr_bucket_brigade* brigade,
@@ -43,35 +41,33 @@ apr_status_t h2_filter_core_input(ap_filter_t* filter,
                                   apr_read_type_e block,
                                   apr_off_t readbytes);
 
-typedef struct h2_sos h2_sos;
-typedef apr_status_t h2_sos_data_cb(void *ctx, const char *data, apr_off_t len);
+/******* observer bucket ******************************************************/
 
-typedef apr_status_t h2_sos_buffer(h2_sos *sos, apr_bucket_brigade *bb);
-typedef apr_status_t h2_sos_prep_read(h2_sos *sos, apr_off_t *plen, int *peos);
-typedef apr_status_t h2_sos_readx(h2_sos *sos, h2_sos_data_cb *cb, 
-                                  void *ctx, apr_off_t *plen, int *peos);
-typedef apr_status_t h2_sos_read_to(h2_sos *sos, apr_bucket_brigade *bb, 
-                                    apr_off_t *plen, int *peos);
-typedef apr_table_t *h2_sos_get_trailers(h2_sos *sos);
+typedef enum {
+    H2_BUCKET_EV_BEFORE_DESTROY,
+    H2_BUCKET_EV_BEFORE_MASTER_SEND
+} h2_bucket_event;
 
+extern const apr_bucket_type_t h2_bucket_type_observer;
 
-#define H2_RESP_SOS_NOTE     "h2-sos-filter"
+typedef apr_status_t h2_bucket_event_cb(void *ctx, h2_bucket_event event, apr_bucket *b);
 
-struct h2_sos {
-    struct h2_stream *stream;
-    h2_sos           *prev;
-    struct h2_response *response;
-    void             *ctx;
-    h2_sos_buffer    *buffer;
-    h2_sos_prep_read *prep_read;
-    h2_sos_readx     *readx;
-    h2_sos_read_to   *read_to;
-    h2_sos_get_trailers *get_trailers;
-};
+#define H2_BUCKET_IS_OBSERVER(e)     (e->type == &h2_bucket_type_observer)
 
-h2_sos *h2_filter_sos_create(const char *name, struct h2_sos *prev); 
+apr_bucket * h2_bucket_observer_make(apr_bucket *b, h2_bucket_event_cb *cb, 
+                                     void *ctx); 
+
+apr_bucket * h2_bucket_observer_create(apr_bucket_alloc_t *list, 
+                                       h2_bucket_event_cb *cb, void *ctx); 
+                                       
+apr_status_t h2_bucket_observer_fire(apr_bucket *b, h2_bucket_event event);
+
+apr_bucket *h2_bucket_observer_beam(struct h2_bucket_beam *beam,
+                                    apr_bucket_brigade *dest,
+                                    const apr_bucket *src);
+
+/******* /.well-known/h2/state handler ****************************************/
 
 int h2_filter_h2_status_handler(request_rec *r);
-
 
 #endif /* __mod_h2__h2_filter__ */

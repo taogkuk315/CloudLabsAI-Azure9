@@ -1,0 +1,39 @@
+language: c
+sudo: required
+
+os:
+    - linux
+
+addons:
+    apt:
+        update: true
+        config:
+            retries: true
+        sources:
+            - ubuntu-toolchain-r-test
+        packages:
+            - apache2
+            - apache2-dev
+            - libnghttp2-14
+            - libnghttp2-dev
+
+# lets see if bionic's apache2 is recent enough
+matrix:
+    include:
+        - os: linux
+          dist: bionic
+          compiler: gcc
+          env:
+            - MY_ENV="BASE_OS=xenial-gcc"
+
+
+before_install:
+    - eval "${MY_ENV}"
+
+before_script: 
+    - ./buildconf
+
+branches:
+    only:
+        - master
+

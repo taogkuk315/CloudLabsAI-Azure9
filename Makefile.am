@@ -17,32 +17,25 @@ DIST_SUBDIRS    = mod_http2
 
 ACLOCAL_AMFLAGS = -I m4
 
+EXTRA_DIST     = test/e2e test/unit test/Makefile.in test/Makefile.am
 
-dist_doc_DATA   = README
 
+dist_doc_DATA   = README README.md LICENSE
 
-.PHONY: test loadtest start stop restart
+dist-hook:
+	@rm -rf $(distdir)/test/unit/.deps \
+            $(distdir)/test/unit/.py* \
+            `find $(distdir) -name __pycache__` \
+            `find $(distdir) -name .deps` \
+            `find $(distdir) -name .libs` \
+            `find $(distdir) -name .dirstamp` \
+            `find $(distdir) -name .pytest_cache` \
+            `find $(distdir) -name "*.o"`
 
-start:
-	make -C sandbox start
-
-restart:
-	make -C sandbox restart
-
-stop:
-	make -C sandbox stop
+.PHONY: test
 
 test:
-	make -C sandbox test
+	$(MAKE) -C test/ test
 
-loadtest:
-	make -C sandbox loadtest
-
-mpm_worker:
-	make -C sandbox mpm_worker
-
-mpm_event:
-	make -C sandbox mpm_event
-
-mpm_prefork:
-	make -C sandbox mpm_prefork
+clean-local:
+	$(MAKE) -C test/ clean
