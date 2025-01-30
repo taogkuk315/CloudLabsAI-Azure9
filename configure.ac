@@ -118,7 +118,7 @@ if test "x${H2LOAD}" = "x"; then
     if test -x "${prefix}/bin/h2load"; then
         H2LOAD="${prefix}/bin/h2load"
     else
-        AC_MSG_WARN("no h2laod found, test coverage will be incomplete")
+        AC_MSG_WARN("no h2load found, test coverage will be incomplete")
     fi
 fi
 AC_SUBST(H2LOAD)
