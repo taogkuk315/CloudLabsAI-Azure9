@@ -299,16 +299,10 @@ static int m_stream_destroy_iter(void *ctx, void *val)
         stream->task = NULL;
         secondary = task->c;
         if (secondary) {
-            /* On non-serialized requests, the IO logging has not accounted for any
-             * meta data send over the network: response headers and h2 frame headers. we
-             * counted this on the stream and need to add this now.
-             * This is supposed to happen before the EOR bucket triggers the
-             * logging of the transaction. *fingers crossed* */
-            if (task->request && !task->request->serialize && h2_task_logio_add_bytes_out) {
-                apr_off_t unaccounted = stream->out_frame_octets - stream->out_data_octets;
-                if (unaccounted > 0) {
-                    h2_task_logio_add_bytes_out(secondary, unaccounted);
-                }
+            if (h2_task_logio_add_bytes_out) {
+                /* We changed logio reporting in v1.15.15 to only count data
+                 * actually sent from the main connection to the client. */
+                h2_task_logio_add_bytes_out(secondary, stream->out_data_octets);
             }
         
             if (m->s->keep_alive_max == 0 || secondary->keepalives < m->s->keep_alive_max) {

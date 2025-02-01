@@ -108,9 +108,6 @@ static apr_status_t send_out(h2_task *task, apr_bucket_brigade* bb, int block)
         status = APR_SUCCESS;
     }
     if (status == APR_SUCCESS) {
-        if (h2_task_logio_add_bytes_out) {
-            h2_task_logio_add_bytes_out(task->c, written);
-        }
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, task->c, 
                       "h2_task(%s): send_out done", task->id);
     }
