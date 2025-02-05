@@ -54,6 +54,7 @@ class TestEnv:
         
         cls.HTTPD_CONF_DIR = os.path.join(cls.WEBROOT, "conf")
         cls.HTTPD_DOCS_DIR = os.path.join(cls.WEBROOT, "htdocs")
+        cls.HTTPD_LOGS_DIR = os.path.join(cls.WEBROOT, "logs")
         cls.HTTPD_TEST_CONF = os.path.join(cls.HTTPD_CONF_DIR, "test.conf")
         cls.E2E_DIR    = os.path.join(cls.TEST_DIR, "e2e")
 

@@ -4,6 +4,7 @@
 #
 
 import copy
+import json
 import os
 import re
 import sys
@@ -175,3 +176,41 @@ class TestStore:
         self.nghttp_upload_and_verify( "data-100k", [  "--no-content-length" ] )
         self.nghttp_upload_and_verify( "data-1m", [  "--no-content-length" ] )
 
+    def test_004_30(self):
+        # issue: #203
+        resource = "data-1k"
+        full_length = 1000
+        chunk = 200
+        self.curl_upload_and_verify( resource, [ "-v", "--http2"] )
+        logfile = os.path.join(TestEnv.HTTPD_LOGS_DIR, "test_004_30")
+        if os.path.isfile(logfile):
+            os.remove(logfile)
+        HttpdConf().add_line("""
+LogFormat "{ \\"request\\": \\"%r\\", \\"status\\": %>s, \\"bytes_resp_B\\": %B, \\"bytes_tx_O\\": %O, \\"bytes_rx_I\\": %I, \\"bytes_rx_tx_S\\": %S }" issue_203
+CustomLog logs/test_004_30 issue_203
+        """).add_vhost_cgi().install()
+        assert TestEnv.apache_restart() == 0
+        url = TestEnv.mkurl("https", "cgi", "/files/{0}".format(resource))
+        r = TestEnv.curl_get(url, 5, ["--http2"])
+        assert 200 == r["response"]["status"]
+        r = TestEnv.curl_get(url, 5, ["--http1.1", "-H", "Range: bytes=0-{0}".format(chunk-1)])
+        assert 206 == r["response"]["status"]
+        assert chunk == len(r["response"]["body"].decode('utf-8'))
+        r = TestEnv.curl_get(url, 5, ["--http2", "-H", "Range: bytes=0-{0}".format(chunk-1)])
+        assert 206 == r["response"]["status"]
+        assert chunk == len(r["response"]["body"].decode('utf-8'))
+        # now check what response lengths have actually been reported
+        lines = open(logfile).readlines()
+        log_h2_full = json.loads(lines[-3])
+        log_h1 = json.loads(lines[-2])
+        log_h2 = json.loads(lines[-1])
+        assert log_h2_full['bytes_rx_I'] > 0
+        assert log_h2_full['bytes_resp_B'] == full_length
+        assert log_h2_full['bytes_tx_O'] > full_length
+        assert log_h1['bytes_rx_I'] > 0         # input bytes recieved
+        assert log_h1['bytes_resp_B'] == chunk  # response bytes sent (payload)
+        assert log_h1['bytes_tx_O'] > chunk     # output bytes sent
+        assert log_h2['bytes_rx_I'] > 0
+        assert log_h2['bytes_resp_B'] == chunk
+        assert log_h2['bytes_tx_O'] > chunk
+        
