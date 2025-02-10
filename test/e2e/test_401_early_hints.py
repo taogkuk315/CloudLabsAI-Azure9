@@ -23,7 +23,7 @@ def setup_module(module):
 
     H2EarlyHints on
     RewriteEngine on
-    RewriteRule ^/006-(.*)?\.html$ /006.html
+    RewriteRule ^/006-(.*)?\\.html$ /006.html
     <Location /006-hints.html>
         H2PushResource "/006/006.css" critical
     </Location>

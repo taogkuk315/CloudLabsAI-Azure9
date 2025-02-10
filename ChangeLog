@@ -1,3 +1,7 @@
+ * mod-h2 always flushes input DATA to the stream, so a running task (if there
+   is one) can access it immediately. Curious if this alone addresses #207
+ * Eliminated some Python deprecation warnings in test code.
+ 
 v1.15.16
 --------------------------------------------------------------------------------
  * Fixed reporting of transferred bytes for mod_logio for modifiers %O (and %S) to

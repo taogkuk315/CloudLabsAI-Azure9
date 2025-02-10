@@ -80,7 +80,7 @@ class TestStore:
         ( "H2_PUSHED", ""),
         ( "H2_PUSHED_ON", ""),
         ( "H2_STREAM_ID", "1"),
-        ( "H2_STREAM_TAG", "\d+-1"),
+        ( "H2_STREAM_TAG", r'\d+-1'),
     ])
     def test_004_07(self, name, value):
         url = TestEnv.mkurl("https", "cgi", "/env.py")

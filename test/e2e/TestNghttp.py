@@ -77,7 +77,7 @@ class Nghttp:
             
         return self._run( args )
     
-    def parse_output( self, text ):
+    def parse_output(self, btext):
         # getting meta data and response body out of nghttp's output
         # is a bit tricky. Without '-v' we just get the body. With '-v' meta
         # data and timings in both directions are listed. 
@@ -85,38 +85,32 @@ class Nghttp:
         # response body not starting with space.
         # Something not good enough for general purpose, but for these tests.
         output = {}
-        body = b''
+        body = ''
         stream = 0
         streams = {}
         skip_indents = True
-        # take the binary program output and chunk into lines. nghttp mixes text
+        # chunk output into lines. nghttp mixes text
         # meta output with bytes from the response body.
-        offset = 0
-        lines = []
-        while True:
-            index = text.find(b'\n', offset)
-            if index < 0: break
-            lines.append(text[offset:(index+1)])
-            offset = index + 1
-        if offset < len(text):
-            lines.append(text[offset:])
-        
+        lines = [l.decode() for l in btext.split(b'\n')]
         for lidx, l in enumerate(lines):
-            m = re.match(b'\\[.*\\] recv \\(stream_id=(\\d+)\\) (\\S+): (\\S*)', l)
+            if len(l) == 0:
+                body += '\n'
+                continue
+            m = re.match(r'\[.*\] recv \(stream_id=(\d+)\) (\S+): (\S*)', l)
             if m:
                 s = self.get_stream( streams, m.group(1) )
-                hname = m.group(2).decode('utf-8')
-                hval = m.group(3).decode('utf-8')
+                hname = m.group(2)
+                hval = m.group(3)
                 print("stream %d header %s: %s" % (s["id"], hname, hval))
                 header = s["header"]
                 if hname in header: 
                     header[hname] += ", %s" % hval
                 else:
                     header[hname] = hval
-                body = b''
+                body = ''
                 continue
 
-            m = re.match(b'\\[.*\\] recv HEADERS frame <.* stream_id=(\\d+)>', l)
+            m = re.match(r'\[.*\] recv HEADERS frame <.* stream_id=(\d+)>', l)
             if m:
                 s = self.get_stream( streams, m.group(1) )
                 if s:
@@ -136,10 +130,10 @@ class Nghttp:
                             response["previous"] = prev
                     response[hkey] = s["header"]
                     s["header"] = {} 
-                body = b''
+                body = ''
                 continue
             
-            m = re.match(b'(.*)\\[.*\\] recv DATA frame <length=(\\d+), .*stream_id=(\\d+)>', l)
+            m = re.match(r'(.*)\[.*\] recv DATA frame <length=(\d+), .*stream_id=(\d+)>', l)
             if m:
                 s = self.get_stream( streams, m.group(3) )
                 body += m.group(1)
@@ -148,17 +142,17 @@ class Nghttp:
                     print("stream %d: %d DATA bytes added" % (s["id"], blen))
                     padlen = 0
                     if len(lines) > lidx + 2:
-                        mpad = re.match(b' +\(padlen=(\d+)\)', lines[lidx+2])
+                        mpad = re.match(r' +\(padlen=(\d+)\)', lines[lidx+2])
                         if mpad: 
                             padlen = int(mpad.group(1))
                     s["paddings"].append(padlen)
                     blen -= padlen
-                    s["response"]["body"] += body[-blen:]
-                body = b''
+                    s["response"]["body"] += body[-blen:].encode()
+                body = ''
                 skip_indents = True
                 continue
                 
-            m = re.match(b'\\[.*\\] recv PUSH_PROMISE frame <.* stream_id=(\\d+)>', l)
+            m = re.match(r'\[.*\] recv PUSH_PROMISE frame <.* stream_id=(\d+)>', l)
             if m:
                 s = self.get_stream( streams, m.group(1) )
                 if s:
@@ -167,7 +161,7 @@ class Nghttp:
                     # stream id it mentioned in the following lines
                     print("stream %d: %d PUSH_PROMISE header" % (s["id"], len(s["header"])))
                     if len(lines) > lidx+2:
-                        m2 = re.match(b'\s+\(.*promised_stream_id=(\d+)\)', lines[lidx+2])
+                        m2 = re.match(r'\s+\(.*promised_stream_id=(\d+)\)', lines[lidx+2])
                         if m2:
                             s2 = self.get_stream( streams, m2.group(1) )
                             s2["request"]["header"] = s["header"]
@@ -175,26 +169,26 @@ class Nghttp:
                     s["header"] = {} 
                 continue
                     
-            m = re.match(b'(.*)\\[.*\\] recv (\\S+) frame <length=(\\d+), .*stream_id=(\\d+)>', l)
+            m = re.match(r'(.*)\[.*\] recv (\S+) frame <length=(\d+), .*stream_id=(\d+)>', l)
             if m:
                 print("recv frame %s on stream %s" % (m.group(2), m.group(4)))
                 body += m.group(1)
                 skip_indents = True
                 continue
                 
-            m = re.match(b'(.*)\\[.*\\] send (\\S+) frame <length=(\\d+), .*stream_id=(\\d+)>', l)
+            m = re.match(r'(.*)\[.*\] send (\S+) frame <length=(\d+), .*stream_id=(\d+)>', l)
             if m:
                 print("send frame %s on stream %s" % (m.group(2), m.group(4)))
                 body += m.group(1)
                 skip_indents = True
                 continue
                 
-            if skip_indents and l.startswith(b'      '):
+            if skip_indents and l.startswith('      '):
                 continue
             
-            if b'[' != l[0]:
+            if '[' != l[0]:
                 skip_indents = None
-                body += l
+                body += l + '\n' 
                 
         # the main request is done on the lowest odd numbered id
         main_stream = 99999999999

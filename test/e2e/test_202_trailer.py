@@ -99,4 +99,5 @@ class TestStore:
         fpath = os.path.join(TestEnv.GEN_DIR, "data-1k")
         r = TestEnv.nghttp().upload(url, fpath, options=[ "--trailer", "test: 2" ])
         assert 200 == r["response"]["status"]
-        assert "1" == r["response"]["trailer"]["h2-trailers-in"]
+        assert 'trailer' in r["response"]
+        assert "1" == r["response"]['trailer']["h2-trailers-in"]
