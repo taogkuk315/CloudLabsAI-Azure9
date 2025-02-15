@@ -229,8 +229,9 @@ class TestEnv:
 ###################################################################################################
 # curl
 #
+
     @classmethod
-    def curl_raw( cls, urls, timeout, options ) :
+    def curl_complete_args( cls, urls, timeout, options ):
         if not isinstance(urls, list):
             urls = [ urls ]
         u = urlparse(urls[0])
@@ -247,6 +248,11 @@ class TestEnv:
         if options:
             args.extend(options)
         args += urls
+        return args, headerfile
+
+    @classmethod
+    def curl_raw( cls, urls, timeout, options ):
+        args, headerfile = cls.curl_complete_args(urls, timeout, options)
         r = cls.run( args )
         if r["rv"] == 0:
             lines = open(headerfile).readlines()

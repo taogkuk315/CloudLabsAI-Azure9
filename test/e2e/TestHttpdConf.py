@@ -30,7 +30,7 @@ class HttpdConf(object):
             self.path = os.path.join(TestEnv.GEN_DIR, "auto.conf")
         if os.path.isfile(self.path):
             os.remove(self.path)
-        open(self.path, "a").write("LogLevel http2:trace2\n")
+        open(self.path, "a").write("LogLevel http2:trace2 h2test:trace2\n")
 
     def add_line(self, line):
         open(self.path, "a").write(line + "\n")
@@ -114,6 +114,9 @@ class HttpdConf(object):
         self.add_line("          SetHandler http2-status")
         self.add_line("      </Location>")
         self.add_proxies( "cgi", proxy_self, h2proxy_self )
+        self.add_line("      <Location \"/h2test/echo\">")
+        self.add_line("          SetHandler h2test-echo")
+        self.add_line("      </Location>")
         self.end_vhost()
         self.start_vhost( TestEnv.HTTP_PORT, "cgi", aliasList=[ "cgi-alias" ], docRoot="htdocs/cgi", withSSL=False)
         self.add_line("      AddHandler cgi-script .py")

@@ -245,6 +245,9 @@ AC_SUBST(HTTPD_USER)
 MODULE_SRC="$PWD/mod_http2"
 AC_SUBST(MODULE_SRC)
 
+TEST_MODULE_SRC="$PWD/test/mod_h2test"
+AC_SUBST(TEST_MODULE_SRC)
+
 # we need curl for testing
 #
 curl_check="curl"
@@ -284,6 +287,7 @@ AC_CONFIG_FILES([
     mod_http2/Makefile
     mod_http2/h2_version.h
     test/Makefile
+    test/mod_h2test/Makefile
     test/e2e/config.ini
     test/e2e/conf/httpd.conf
     test/e2e/conf/modules.conf

@@ -45,5 +45,8 @@ LoadModule http2_module         "@PREFIX@/modules/mod_http2.so"
 LoadModule proxy_http2_module   "@PREFIX@/modules/mod_proxy_http2.so"
 #LoadModule proxy_http2_module   "@MODULE_SRC@/.libs/mod_proxy_http2.so"
 
+# Load the local test module also into the server
+LoadModule h2test_module        "@TEST_MODULE_SRC@/.libs/mod_h2test.so"
+
 LoadModule mpm_event_module     "@PREFIX@/modules/mod_mpm_event.so"
 

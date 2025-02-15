@@ -13,6 +13,8 @@
 # limitations under the License.
 #
 
+SUBDIRS        = mod_h2test
+
 SERVER_DIR     = @SERVER_DIR@
 GEN            = gen
 
@@ -41,7 +43,12 @@ $(SERVER_DIR)/htdocs/.copied: \
 	@cp -r e2e/htdocs/* $(SERVER_DIR)/htdocs 
 	@chmod +x $(SERVER_DIR)/htdocs/cgi/*.* 
 
+.PHONY: mod_h2test
+mod_h2test:
+	$(MAKE) -C mod_h2test
+
 $(SERVER_DIR)/.test-setup: \
+                mod_h2test \
                 $(wildcard e2e/conf/*) \
                 $(SERVER_DIR)/htdocs/.copied \
 		$(CERTIFICATES)

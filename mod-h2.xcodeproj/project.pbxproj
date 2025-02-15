@@ -63,6 +63,9 @@
 		B25574A41BEB6EFC0058F97B /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
 		B25574A71BEB6EFC0058F97B /* mod_http2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mod_http2.c; sourceTree = "<group>"; };
 		B256C4BA1ADD5FF10042C760 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		B25AEBE32550222700C2CBCD /* mod_h2test.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mod_h2test.c; sourceTree = "<group>"; };
+		B25AEBE42550222700C2CBCD /* Makefile.am */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
+		B25AEBE52550222700C2CBCD /* mod_h2test.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mod_h2test.h; sourceTree = "<group>"; };
 		B26A5B63238BEF0E006F7AF3 /* test_105_timeout.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_105_timeout.py; sourceTree = "<group>"; };
 		B277B814221310B800A41B44 /* test_500_proxy.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_500_proxy.py; sourceTree = "<group>"; };
 		B277B8162214576300A41B44 /* test_005_status.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_005_status.py; sourceTree = "<group>"; };
@@ -436,6 +439,7 @@
 		B2583B0B21108FC40061E89A /* test */ = {
 			isa = PBXGroup;
 			children = (
+				B25AEBE22550222700C2CBCD /* mod_h2test */,
 				B2D2D2C82136D5CE00D8F6B7 /* e2e */,
 				B2AEB19D21186ED60034C7CB /* Makefile.am */,
 				B2583B0C21108FC40061E89A /* unit */,
@@ -451,6 +455,16 @@
 				B2AEB1A62118745F0034C7CB /* test_h2_util.c */,
 			);
 			path = unit;
+			sourceTree = "<group>";
+		};
+		B25AEBE22550222700C2CBCD /* mod_h2test */ = {
+			isa = PBXGroup;
+			children = (
+				B25AEBE32550222700C2CBCD /* mod_h2test.c */,
+				B25AEBE42550222700C2CBCD /* Makefile.am */,
+				B25AEBE52550222700C2CBCD /* mod_h2test.h */,
+			);
+			path = mod_h2test;
 			sourceTree = "<group>";
 		};
 		B277B81A221588C200A41B44 /* data */ = {

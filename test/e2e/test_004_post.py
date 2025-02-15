@@ -4,14 +4,17 @@
 #
 
 import copy
+import email.parser
 import json
 import os
 import re
 import sys
 import time
 import pytest
+import subprocess
 
 from datetime import datetime
+from threading import Thread
 from TestEnv import TestEnv
 from TestHttpdConf import HttpdConf
 
@@ -214,3 +217,90 @@ CustomLog logs/test_004_30 issue_203
         assert log_h2['bytes_resp_B'] == chunk
         assert log_h2['bytes_tx_O'] > chunk
         
+    def test_004_40(self):
+        # echo content using h2test_module "echo" handler
+        def post_and_verify(fname, options=None):
+            url = TestEnv.mkurl("https", "cgi", "/h2test/echo")
+            fpath = os.path.join(TestEnv.GEN_DIR, fname)
+            r = TestEnv.curl_upload(url, fpath, options=options)
+            assert r["rv"] == 0
+            assert r["response"]["status"] >= 200 and r["response"]["status"] < 300
+            
+            ct = r["response"]["header"]["content-type"]
+            mail_hd = "Content-Type: " + ct + "\r\nMIME-Version: 1.0\r\n\r\n"
+            mime_msg = mail_hd.encode() + r["response"]["body"]
+            # this MIME API is from hell
+            body = email.parser.BytesParser().parsebytes(mime_msg)
+            assert body
+            assert body.is_multipart()
+            filepart = None
+            for part in body.walk():
+                if fname == part.get_filename():
+                    filepart = part
+            assert filepart
+            with open(TestEnv.e2e_src( fpath ), mode='rb') as file:
+                src = file.read()
+            assert src == filepart.get_payload(decode=True)
+        
+        post_and_verify( "data-1k", [ ] )
+
+    @pytest.mark.skipif(True, reason="not fixed yet")
+    def test_004_41(self):
+        # test gRPC like requests that do not end, but give answers, see #207
+        
+        def _start_proc(args: [str]):
+            self.proc = subprocess.Popen(args, stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
+            # collect all stderr until we are done, this we start only once
+            if self.proc.stderr:
+                self._stderr = []
+                def read_stderr(fh, buffer):
+                    while True:
+                        chunk = fh.read()
+                        if not chunk:
+                            break
+                        buffer.append(chunk.decode())
+                self.stderr_thread = Thread(target=read_stderr, args=(self.proc.stderr, self._stderr))
+                self.stderr_thread.rqspecd = True
+                self.stderr_thread.start()
+            return self.proc
+
+        def _end_proc():
+            if self.proc:
+                try:
+                    if self.proc.stdin:
+                        try:
+                            self.proc.stdin.close()
+                        except Exception:
+                            pass
+                    if self.proc.stdout:
+                        self.proc.stdout.close()
+                    if self.proc.stderr:
+                        self.proc.stderr.close()
+                except Exception:
+                    self.proc.terminate()
+                finally:
+                    self.stderr_thread = None
+                    self.proc = None
+
+        url = TestEnv.mkurl("https", "cgi", "/h2test/echo")
+        args, headerfile = TestEnv.curl_complete_args(url, timeout=5, options=["-T", "-", "-X", "POST"])
+        _start_proc(args)
+        chunks = [
+            "012345678901234567890123456789",
+            "012345678901234567890123456789",
+            "012345678901234567890123456789",
+        ]
+        for idx, chunk in enumerate(chunks):
+            self.proc.stdin.write(chunk.encode())
+            self.proc.stdin.flush()
+            sys.stderr.write("written chunk {0}\n".format(idx))
+            buffer = b''
+            while buffer != chunk:
+                buffer += self.proc.stdout.read()
+            sys.stderr.write("read chunk {0}\n".format(idx))
+        self.proc.stdin.close()
+        _end_proc()
+        
+
