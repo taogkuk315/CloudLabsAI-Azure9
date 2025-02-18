@@ -188,7 +188,7 @@ send:
         }
     }
     
-    if (APR_SUCCESS == rv && !task->output.opened && flush) {
+    if (APR_SUCCESS == rv && !task->output.opened && (flush || !task->output.buffered)) {
         /* got a flush or could not write all, time to tell someone to read */
         rv = open_output(task);
     }

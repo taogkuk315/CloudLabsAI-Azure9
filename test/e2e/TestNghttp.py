@@ -52,30 +52,29 @@ class Nghttp:
 
     def run( self, urls, timeout, options ) :
         return self._baserun(urls, timeout, options)
-    
-    def _baserun( self, url, timeout, options ) :
+
+    def complete_args(self, url, timeout, options: [str]) -> [str]:
         if not isinstance(url, list):
-            url = [ url ]
-            
+            url = [url]
         u = urlparse(url[0])
-        args = [ self.NGHTTP ]
+        args = [self.NGHTTP]
         if self.CONNECT_ADDR:
             connect_host = self.CONNECT_ADDR
             args.append("--header=host: %s:%s" % (u.hostname, u.port))
         else:
             connect_host = u.hostname
-        
         if options:
             args.extend(options)
-        
         for xurl in url:
             xu = urlparse(xurl)
             nurl = "%s://%s:%s/%s" % (u.scheme, connect_host, xu.port, xu.path)
             if xu.query:
                 nurl = "%s?%s" % (nurl, xu.query)
-            args.append( nurl )
-            
-        return self._run( args )
+            args.append(nurl)
+        return args
+
+    def _baserun(self, url, timeout, options):
+        return self._run(self.complete_args(url, timeout, options))
     
     def parse_output(self, btext):
         # getting meta data and response body out of nghttp's output

@@ -1,5 +1,8 @@
- * mod-h2 always flushes input DATA to the stream, so a running task (if there
-   is one) can access it immediately. Curious if this alone addresses #207
+ * new option 'H2OutputBuffering on/off' which controls the buffering of stream output.
+   The default is on, which is the behaviour of older mod-h2 versions. When off, all
+   bytes are made available immediately to the main connection for sending them
+   out to the client. This fixes interop issues with certain flavours of gRPC, see
+   als #207.
  * Eliminated some Python deprecation warnings in test code.
  
 v1.15.16
