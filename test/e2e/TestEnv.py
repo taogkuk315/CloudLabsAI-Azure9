@@ -26,7 +26,33 @@ from TestNghttp import Nghttp
 class TestEnv:
 
     initialized = False
-    
+
+    PREFIX = "/usr"
+    GEN_DIR = "gen"
+    WEBROOT = "gen/apache"
+    CURL = "curl"
+    TEST_DIR = "test"
+    NGHTTP = "nghttp"
+    H2LOAD = "h2load"
+
+    HTTP_PORT = 42001
+    HTTPS_PORT = 42002
+    HTTP_TLD = "tests.httpd.apache.org"
+
+    APACHECTL = os.path.join(PREFIX, 'bin', 'apachectl')
+
+    HTTPD_ADDR = "127.0.0.1"
+    HTTP_URL = "http://{0}:{1}".format(HTTPD_ADDR, HTTP_PORT)
+    HTTPS_URL = "https://{0}:{1}".format(HTTPD_ADDR, HTTPS_PORT)
+
+    HTTPD_CONF_DIR = os.path.join(WEBROOT, "conf")
+    HTTPD_DOCS_DIR = os.path.join(WEBROOT, "htdocs")
+    HTTPD_LOGS_DIR = os.path.join(WEBROOT, "logs")
+    HTTPD_TEST_CONF = os.path.join(HTTPD_CONF_DIR, "test.conf")
+    E2E_DIR = os.path.join(TEST_DIR, "e2e")
+
+    VERIFY_CERTIFICATES = False
+
     @classmethod
     def init( cls ) :
         if TestEnv.initialized:

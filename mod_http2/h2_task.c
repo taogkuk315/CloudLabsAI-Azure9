@@ -188,6 +188,8 @@ send:
         }
     }
     
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, task->c,
+                  "h2_secondary_out(%s): buffered=%d", task->id, task->output.buffered);
     if (APR_SUCCESS == rv && !task->output.opened && (flush || !task->output.buffered)) {
         /* got a flush or could not write all, time to tell someone to read */
         rv = open_output(task);

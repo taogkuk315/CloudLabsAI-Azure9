@@ -360,9 +360,6 @@ void h2_stream_dispatch(h2_stream *stream, h2_stream_event_t ev)
         on_state_event(stream, ev);
         transit(stream, new_state);
     }
-    if (H2_SEV_IN_DATA_PENDING == ev) {
-        h2_stream_flush_input(stream);
-    }
 }
 
 static void set_policy_for(h2_stream *stream, h2_request *r) 

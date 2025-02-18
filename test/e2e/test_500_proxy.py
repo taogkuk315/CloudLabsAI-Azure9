@@ -3,14 +3,10 @@
 # check HTTP/1.1 proxied backend
 #
 
-import copy
 import os
 import re
-import sys
-import time
 import pytest
 
-from datetime import datetime
 from TestEnv import TestEnv
 from TestHttpdConf import HttpdConf
 
@@ -50,7 +46,7 @@ class TestStore:
         fpath = os.path.join(TestEnv.GEN_DIR, fname)
         r = TestEnv.curl_upload(url, fpath, options=options)
         assert r["rv"] == 0
-        assert r["response"]["status"] >= 200 and r["response"]["status"] < 300
+        assert 200 <= r["response"]["status"] < 300
 
         # why is the scheme wrong?
         r2 = TestEnv.curl_get(re.sub(r'http:', 'https:', r["response"]["header"]["location"]))
@@ -73,7 +69,7 @@ class TestStore:
         fpath = os.path.join(TestEnv.GEN_DIR, fname)
         r = TestEnv.nghttp().upload(url, fpath, options=options)
         assert r["rv"] == 0
-        assert r["response"]["status"] >= 200 and r["response"]["status"] < 300
+        assert 200 <= r["response"]["status"] < 300
         with open(TestEnv.e2e_src( fpath ), mode='rb') as file:
             src = file.read()
         #assert len(src) == len(r["response"]["body"])
@@ -101,7 +97,7 @@ class TestStore:
 
         r = TestEnv.nghttp().upload_file(url, fpath, options=options)
         assert r["rv"] == 0
-        assert r["response"]["status"] >= 200 and r["response"]["status"] < 300
+        assert 200 <= r["response"]["status"] < 300
         assert r["response"]["header"]["location"]
 
         # why is the scheme wrong?
@@ -133,7 +129,7 @@ class TestStore:
 
         r = TestEnv.nghttp().upload_file(url, fpath, options=options)
         assert r["rv"] == 0
-        assert r["response"]["status"] >= 200 and r["response"]["status"] < 300
+        assert 200 <= r["response"]["status"] < 300
         assert r["response"]["header"]["location"]
 
     @pytest.mark.skipif(not TestEnv.has_nghttp() or True, reason="no nghttp command available and python3 chokes on chunks")
