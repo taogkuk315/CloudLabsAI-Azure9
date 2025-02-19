@@ -19,7 +19,7 @@ def setup_module(module):
     TestEnv.init()
     HttpdConf(
     ).start_vhost( TestEnv.HTTPS_PORT, "push", docRoot="htdocs/test1", withSSL=True
-    ).add_line("""    Protocols h2 http/1.1"
+    ).add_line(r"""    Protocols h2 http/1.1"
 
     RewriteEngine on
     RewriteRule ^/006-push(.*)?\.html$ /006.html

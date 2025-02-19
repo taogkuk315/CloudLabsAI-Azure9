@@ -30,7 +30,7 @@ class HttpdConf(object):
             self.path = os.path.join(TestEnv.GEN_DIR, "auto.conf")
         if os.path.isfile(self.path):
             os.remove(self.path)
-        open(self.path, "a").write("LogLevel http2:trace2 h2test:trace2\n")
+        open(self.path, "a").write("LogLevel http2:trace2 h2test:trace2 proxy_http2:trace2\n")
 
     def add_line(self, line):
         open(self.path, "a").write(line + "\n")
@@ -121,6 +121,8 @@ class HttpdConf(object):
         self.start_vhost( TestEnv.HTTP_PORT, "cgi", aliasList=[ "cgi-alias" ], docRoot="htdocs/cgi", withSSL=False)
         self.add_line("      AddHandler cgi-script .py")
         self.end_vhost()
+        self.add_line("      LogLevel proxy:trace8")
+        self.add_line("      LogLevel proxy_http:trace8")
         return self
 
     def add_vhost_noh2( self ) :
