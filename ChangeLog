@@ -1,3 +1,6 @@
+ * Integrated changes from Apache trunk.
+ * Log requests and sent the configured error response in case of early detected
+   errors like too many or too long headers. [Ruediger Pluem]
  * added test for buffering across a mod_http2+mod_proxy_http2 connection
  * added TRACE2 logging to show buffering flag when writing task output
  * new option 'H2OutputBuffering on/off' which controls the buffering of stream output.
