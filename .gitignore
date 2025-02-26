@@ -40,6 +40,7 @@ mod-h2.xcodeproj/xcuserdata/sei.xcuserdatad/*/*/*
 mod_http2/.dirstamp
 test-driver
 test/.cache/
+test/__pycache__
 test/e2e/.cache/
 test/e2e/*.pyc
 test/e2e/__pycache__/

@@ -3,7 +3,7 @@
 #
 # (c) 2019 greenbytes GmbH
 ###################################################################################################
-
+import inspect
 import json
 import pytest
 import re
@@ -22,6 +22,7 @@ from configparser import ConfigParser
 from shutil import copyfile
 from urllib.parse import urlparse
 from TestNghttp import Nghttp
+
 
 class TestEnv:
 
@@ -57,9 +58,10 @@ class TestEnv:
     def init( cls ) :
         if TestEnv.initialized:
             return
+        our_dir = os.path.dirname(inspect.getfile(TestEnv))
         cls.config = ConfigParser()
-        cls.config.read('config.ini')
-        
+        cls.config.read(os.path.join(our_dir, 'config.ini'))
+
         cls.PREFIX      = cls.config.get('global', 'prefix')
         cls.GEN_DIR     = cls.config.get('global', 'gen_dir')
         cls.WEBROOT     = cls.config.get('global', 'server_dir')
