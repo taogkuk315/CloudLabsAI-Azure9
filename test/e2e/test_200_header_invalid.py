@@ -152,3 +152,26 @@ class TestStore:
         r = TestEnv.curl_get(url, options=opt)
         assert 200 == r["response"]["status"]
 
+    # the uri limits
+    def test_200_15(self):
+        conf = HttpdConf()
+        conf.add_line("""
+            LimitRequestLine 48
+            """)
+        conf.add_vhost_cgi()
+        conf.install()
+        assert TestEnv.apache_restart() == 0
+        url = TestEnv.mkurl("https", "cgi", "/")
+        r = TestEnv.curl_get(url)
+        assert 200 == r["response"]["status"]
+        url = TestEnv.mkurl("https", "cgi", "/" + (48*"x"))
+        r = TestEnv.curl_get(url)
+        assert 414 == r["response"]["status"]
+        # nghttp sends the :method: header first (so far)
+        # trigger a too long request line on it
+        # the stream will RST and we get no response
+        url = TestEnv.mkurl("https", "cgi", "/")
+        opt=["-H:method: {0}".format(100*"x") ]
+        r = TestEnv.nghttp().get(url, options=opt)
+        assert r['rv'] == 0, r
+        assert  "response" not in r
