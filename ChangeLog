@@ -1,3 +1,8 @@
+v1.15.18
+--------------------------------------------------------------------------------
+ * Fixed a race condition that could lead to streams being aborted
+   (RST to the client), although a response had been produced.
+
 v1.15.17
 --------------------------------------------------------------------------------
  * Integrated changes from Apache trunk.
