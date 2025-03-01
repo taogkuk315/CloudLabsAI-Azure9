@@ -1,3 +1,8 @@
+v1.15.19
+--------------------------------------------------------------------------------
+ * Fixed the Makefile to include the test module in the distribution, so that
+   tests can be build an run from the tar file. Fixes #210.
+
 v1.15.18
 --------------------------------------------------------------------------------
  * Fixed a race condition that could lead to streams being aborted
