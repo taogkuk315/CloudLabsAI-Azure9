@@ -175,3 +175,21 @@ class TestStore:
         r = TestEnv.nghttp().get(url, options=opt)
         assert r['rv'] == 0, r
         assert  "response" not in r
+
+    # invalid chars in method
+    def test_200_16(self):
+        conf = HttpdConf()
+        conf.add_vhost_cgi()
+        conf.install()
+        assert TestEnv.apache_restart() == 0
+        url = TestEnv.mkurl("https", "cgi", "/hello.py")
+        opt=["-H:method: GET /hello.py" ]
+        r = TestEnv.nghttp().get(url, options=opt)
+        assert r['rv'] == 0, r
+        assert  "response" in r
+        assert  r["response"]["status"] == 400
+        url = TestEnv.mkurl("https", "cgi", "/proxy/hello.py")
+        r = TestEnv.nghttp().get(url, options=opt)
+        assert r['rv'] == 0, r
+        assert  "response" in r
+        assert  r["response"]["status"] == 400
