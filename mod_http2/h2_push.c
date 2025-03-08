@@ -23,7 +23,7 @@
 #include <apr_time.h>
 
 #ifdef H2_OPENSSL
-#include <openssl/evp.h>
+#include <openssl/sha.h>
 #endif
 
 #include <httpd.h>
@@ -472,32 +472,27 @@ typedef struct h2_push_diary_entry {
 
 
 #ifdef H2_OPENSSL
-static void sha256_update(EVP_MD_CTX *ctx, const char *s)
+static void sha256_update(SHA256_CTX *ctx, const char *s)
 {
-    EVP_DigestUpdate(ctx, s, strlen(s));
+    SHA256_Update(ctx, s, strlen(s));
 }
 
 static void calc_sha256_hash(h2_push_diary *diary, apr_uint64_t *phash, h2_push *push) 
 {
-    EVP_MD_CTX *md;
+    SHA256_CTX sha256;
     apr_uint64_t val;
-    unsigned char hash[EVP_MAX_MD_SIZE];
-    unsigned len;
+    unsigned char hash[SHA256_DIGEST_LENGTH];
     int i;
-
-    md = EVP_MD_CTX_create();
-    ap_assert(md != NULL);
-
-    i = EVP_DigestInit_ex(md, EVP_sha256(), NULL);
-    ap_assert(i == 1);
-    sha256_update(md, push->req->scheme);
-    sha256_update(md, "://");
-    sha256_update(md, push->req->authority);
-    sha256_update(md, push->req->path);
-    EVP_DigestFinal(md, hash, &len);
+    
+    SHA256_Init(&sha256);
+    sha256_update(&sha256, push->req->scheme);
+    sha256_update(&sha256, "://");
+    sha256_update(&sha256, push->req->authority);
+    sha256_update(&sha256, push->req->path);
+    SHA256_Final(hash, &sha256);
 
     val = 0;
-    for (i = 0; i != len; ++i)
+    for (i = 0; i != sizeof(val); ++i)
         val = val * 256 + hash[i];
     *phash = val >> (64 - diary->mask_bits);
 }
