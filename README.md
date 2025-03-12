@@ -1,8 +1,6 @@
 
 # mod_h[ttp]2 - http/2 for Apache httpd
 
-Copyright 2015-2019 greenbytes GmbH
-
 This repository contains `mod_h[ttp]2` and `mod_proxy_h[ttp]2` from Apache httpd as a standalone build. It servers as early access to features and fixes before being shipped in the next Apache release. Both modules can be considered **production ready** and stable as shipped by the Apache project.
 
 ## Status

@@ -1,3 +1,13 @@
+ * when ongoing sessions detect that the process shuts down (for example due to a
+   graceful restart), they now cause idle h2 workers to terminate early.
+   This hopefully addresses #212.
+
+v1.15.20
+--------------------------------------------------------------------------------
+ * requires apache httpd 2.4.48
+ * Align handling of 304 response headers with behaviour of http/1.1. [ylavic]
+ * now shares code with http/1.1 protocol implementation
+   for checking validity of methods and other request parameter. [ylavic]
  * Using the new ap_ssl_* functions available since Apache 2.4.48
  * Some compatibility fixes with the ever evolving OpenSSL API
 

@@ -187,9 +187,9 @@ class TestStore:
         r = TestEnv.nghttp().get(url, options=opt)
         assert r['rv'] == 0, r
         assert  "response" in r
-        assert  r["response"]["status"] == 400
+        assert  r["response"]["status"] == 200
         url = TestEnv.mkurl("https", "cgi", "/proxy/hello.py")
         r = TestEnv.nghttp().get(url, options=opt)
         assert r['rv'] == 0, r
         assert  "response" in r
-        assert  r["response"]["status"] == 400
+        assert  r["response"]["status"] == 501

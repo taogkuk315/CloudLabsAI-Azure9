@@ -257,11 +257,10 @@ static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)
     return NULL;
 }
 
-static apr_status_t workers_pool_cleanup(void *data)
+static void workers_abort_idle(h2_workers *workers)
 {
-    h2_workers *workers = data;
     h2_slot *slot;
-    
+
     workers->aborted = 1;
     h2_fifo_term(workers->mplxs);
 
@@ -271,6 +270,13 @@ static apr_status_t workers_pool_cleanup(void *data)
         apr_thread_cond_signal(slot->not_idle);
         apr_thread_mutex_unlock(slot->lock);
     }
+}
+
+static apr_status_t workers_pool_cleanup(void *data)
+{
+    h2_workers *workers = data;
+
+    workers_abort_idle(workers);
 
     /* wait for all the workers to become zombies and join them */
     apr_thread_mutex_lock(workers->lock);
@@ -395,4 +401,9 @@ apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m)
 apr_status_t h2_workers_unregister(h2_workers *workers, struct h2_mplx *m)
 {
     return h2_fifo_remove(workers->mplxs, m);
+}
+
+void h2_workers_graceful_shutdown(h2_workers *workers)
+{
+    workers_abort_idle(workers);
 }
