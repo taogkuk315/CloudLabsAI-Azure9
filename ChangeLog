@@ -1,3 +1,7 @@
+ * Align handling of 304 response headers with behaviour of http/1.1. [ylavic]
+ * requires apache httpd 2.4.48: now shares code with http/1.1 protocol implementation
+   for checking validity of methods and other request parameter. [ylavic]
+
 v1.15.19
 --------------------------------------------------------------------------------
  * Fixed the Makefile to include the test module in the distribution, so that
