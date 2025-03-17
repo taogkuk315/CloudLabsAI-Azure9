@@ -1,5 +1,8 @@
+v1.15.20
+--------------------------------------------------------------------------------
+ * requires apache httpd 2.4.48
  * Align handling of 304 response headers with behaviour of http/1.1. [ylavic]
- * requires apache httpd 2.4.48: now shares code with http/1.1 protocol implementation
+ * now shares code with http/1.1 protocol implementation
    for checking validity of methods and other request parameter. [ylavic]
 
 v1.15.19
