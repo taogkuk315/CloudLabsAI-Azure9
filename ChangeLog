@@ -1,3 +1,7 @@
+ * when ongoing sessions detect that the process shuts down (for example due to a
+   graceful restart), they now cause idle h2 workers to terminate early.
+   This hopefully addresses #212.
+
 v1.15.20
 --------------------------------------------------------------------------------
  * requires apache httpd 2.4.48

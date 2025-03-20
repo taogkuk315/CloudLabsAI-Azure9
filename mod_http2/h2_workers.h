@@ -80,4 +80,9 @@ apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m);
  */
 apr_status_t h2_workers_unregister(h2_workers *workers, struct h2_mplx *m);
 
+/**
+ *  Shut down processing gracefully by terminating all idle workers.
+ */
+void h2_workers_graceful_shutdown(h2_workers *workers);
+
 #endif /* defined(__mod_h2__h2_workers__) */
