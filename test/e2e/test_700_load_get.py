@@ -1,39 +1,20 @@
-#
-# mod-h2 test suite
-# check load with GET requests
-#
-
-import copy
-import re
-import sys
-import time
 import pytest
 
-from datetime import datetime
-from TestEnv import TestEnv
 from TestHttpdConf import HttpdConf
 
-def setup_module(module):
-    print("setup_module: %s" % module.__name__)
-    TestEnv.init()
-    HttpdConf().add_vhost_cgi().add_vhost_test1().install()
-    assert TestEnv.apache_restart() == 0
-        
-def teardown_module(module):
-    print("teardown_module: %s" % module.__name__)
-    assert TestEnv.apache_stop() == 0
 
 class TestStore:
 
-    def setup_method(self, method):
-        print("setup_method: %s" % method.__name__)
+    @pytest.fixture(autouse=True, scope='class')
+    def _class_scope(self, env):
+        HttpdConf(env).add_vhost_cgi().add_vhost_test1().install()
+        assert env.apache_restart() == 0
+        yield
+        assert env.apache_stop() == 0
 
-    def teardown_method(self, method):
-        print("teardown_method: %s" % method.__name__)
-
-    def check_h2load_ok(self, r, n):
+    def check_h2load_ok(self, env, r, n):
         assert 0 == r["rv"]
-        r = TestEnv.h2load_status(r)
+        r = env.h2load_status(r)
         assert n == r["h2load"]["requests"]["total"]
         assert n == r["h2load"]["requests"]["started"]
         assert n == r["h2load"]["requests"]["done"]
@@ -44,33 +25,32 @@ class TestStore:
         assert 0 == r["h2load"]["status"]["5xx"]
     
     # test load on cgi script, single connection, different sizes
-    @pytest.mark.skipif(not TestEnv.has_h2load(), reason="no h2load command available")
     @pytest.mark.parametrize("start", [
         1000, 80000
     ])
-    def test_700_10(self, start):
+    def test_700_10(self, env, start):
         text = "X"
         chunk = 32
         for n in range(0, 5):
-            args = [ TestEnv.H2LOAD, "-n", "%d" % chunk, "-c", "1", "-m", "10", "--base-uri=https://%s:%s" % (TestEnv.HTTPD_ADDR, TestEnv.HTTPS_PORT) ]
+            args = [env.H2LOAD, "-n", "%d" % chunk, "-c", "1", "-m", "10",
+                    "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT)]
             for i in range(0, chunk):
-                args.append( TestEnv.mkurl("https", "cgi", ("/mnot164.py?count=%d&text=%s" % (start+(n*chunk)+i, text))) )
-            r = TestEnv.run( args ) 
-            self.check_h2load_ok(r, chunk)
+                args.append(env.mkurl("https", "cgi", ("/mnot164.py?count=%d&text=%s" % (start+(n*chunk)+i, text))))
+            r = env.run(args)
+            self.check_h2load_ok(env, r, chunk)
 
     # test load on cgi script, single connection
-    @pytest.mark.skipif(not TestEnv.has_h2load(), reason="no h2load command available")
     @pytest.mark.parametrize("conns", [
         1, 2, 16, 32
     ])
-    def test_700_11(self, conns):
+    def test_700_11(self, env, conns):
         text = "X"
         start = 1200
         chunk = 64
         for n in range(0, 5):
-            args = [ TestEnv.H2LOAD, "-n", "%d" % chunk, "-c", "%d" % conns, "-m", "10", "--base-uri=https://%s:%s" % (TestEnv.HTTPD_ADDR, TestEnv.HTTPS_PORT) ]
+            args = [env.H2LOAD, "-n", "%d" % chunk, "-c", "%d" % conns, "-m", "10",
+                    "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT)]
             for i in range(0, chunk):
-                args.append( TestEnv.mkurl("https", "cgi", ("/mnot164.py?count=%d&text=%s" % (start+(n*chunk)+i, text))) )
-            r = TestEnv.run( args ) 
-            self.check_h2load_ok(r, chunk)
-
+                args.append(env.mkurl("https", "cgi", ("/mnot164.py?count=%d&text=%s" % (start+(n*chunk)+i, text))))
+            r = env.run(args)
+            self.check_h2load_ok(env, r, chunk)

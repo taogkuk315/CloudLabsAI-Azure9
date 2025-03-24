@@ -1,8 +1,3 @@
-#
-# mod-h2 test suite
-# check I/O buffering
-#
-
 import datetime
 import re
 import sys
@@ -11,22 +6,10 @@ import subprocess
 
 from datetime import timedelta
 from threading import Thread
-from TestEnv import TestEnv
+
+import pytest
+
 from TestHttpdConf import HttpdConf
-
-
-def setup_module(module):
-    print("setup_module: %s" % module.__name__)
-    TestEnv.init()
-    TestEnv.setup_data_1k_1m()
-    conf = HttpdConf().add_line("H2OutputBuffering off")
-    conf.add_vhost_cgi(h2proxy_self=True).install()
-    assert TestEnv.apache_restart() == 0
-
-
-def teardown_module(module):
-    print("teardown_module: %s" % module.__name__)
-    assert TestEnv.apache_stop() == 0
 
 
 class CurlPiper:
@@ -41,8 +24,8 @@ class CurlPiper:
         self.stdout_thread = None
         self.stderr_thread = None
 
-    def start(self):
-        self.args, self.headerfile = TestEnv.curl_complete_args(self.url, timeout=5, options=[
+    def start(self, env):
+        self.args, self.headerfile = env.curl_complete_args(self.url, timeout=5, options=[
             "-T", "-", "-X", "POST", "--trace-ascii", "%", "--trace-time"])
         sys.stderr.write("starting: {0}\n".format(self.args))
         self.proc = subprocess.Popen(self.args, stdin=subprocess.PIPE,
@@ -101,9 +84,9 @@ class CurlPiper:
                 self.stderr_thread = None
                 self.proc = None
 
-    def stutter_check(self, chunks: [str], stutter: datetime.timedelta):
+    def stutter_check(self, env, chunks: [str], stutter: datetime.timedelta):
         if not self.proc:
-            self.start()
+            self.start(env)
         for chunk in chunks:
             self.send(chunk)
             time.sleep(stutter.total_seconds())
@@ -139,13 +122,16 @@ class CurlPiper:
 
 class TestStore:
 
-    def setup_method(self, method):
-        print("setup_method: %s" % method.__name__)
+    @pytest.fixture(autouse=True, scope='class')
+    def _class_scope(self, env):
+        env.setup_data_1k_1m()
+        conf = HttpdConf(env).add_line("H2OutputBuffering off")
+        conf.add_vhost_cgi(h2proxy_self=True).install()
+        assert env.apache_restart() == 0
+        yield
+        assert env.apache_stop() == 0
 
-    def teardown_method(self, method):
-        print("teardown_method: %s" % method.__name__)
-
-    def test_712_01(self):
+    def test_712_01(self, env):
         # test gRPC like requests that do not end, but give answers, see #207
         #
         # this test works like this:
@@ -159,29 +145,29 @@ class TestStore:
         #   as it should, we see receiving timestamps separated roughly by the
         #   wait time between sends.
         #
-        url = TestEnv.mkurl("https", "cgi", "/h2test/echo")
+        url = env.mkurl("https", "cgi", "/h2test/echo")
         base_chunk = "0123456789"
         chunks = ["chunk-{0:03d}-{1}\n".format(i, base_chunk) for i in range(5)]
         stutter = timedelta(seconds=0.1)  # this is short, but works on my machine (tm)
         piper = CurlPiper(url=url)
-        piper.stutter_check(chunks, stutter)
+        piper.stutter_check(env, chunks, stutter)
 
-    def test_712_02(self):
+    def test_712_02(self, env):
         # same as 712_01 but via mod_proxy_http2
         #
-        url = TestEnv.mkurl("https", "cgi", "/h2proxy/h2test/echo")
+        url = env.mkurl("https", "cgi", "/h2proxy/h2test/echo")
         base_chunk = "0123456789"
         chunks = ["chunk-{0:03d}-{1}\n".format(i, base_chunk) for i in range(3)]
         stutter = timedelta(seconds=0.3)  # need a bit more delay since we have the extra connection
         piper = CurlPiper(url=url)
-        piper.stutter_check(chunks, stutter)
+        piper.stutter_check(env, chunks, stutter)
 
-    def test_712_03(self):
+    def test_712_03(self, env):
         # same as 712_02 but with smaller chunks
         #
-        url = TestEnv.mkurl("https", "cgi", "/h2proxy/h2test/echo")
+        url = env.mkurl("https", "cgi", "/h2proxy/h2test/echo")
         base_chunk = "0"
         chunks = ["ck{0}-{1}\n".format(i, base_chunk) for i in range(3)]
         stutter = timedelta(seconds=0.3)  # need a bit more delay since we have the extra connection
         piper = CurlPiper(url=url)
-        piper.stutter_check(chunks, stutter)
+        piper.stutter_check(env, chunks, stutter)

@@ -1,38 +1,20 @@
-#
-# mod-h2 test status page
-#
-
-import copy
-import re
-import sys
-import time
 import pytest
 
-from datetime import datetime
-from TestEnv import TestEnv
 from TestHttpdConf import HttpdConf
 
-def setup_module(module):
-    print("setup_module: %s" % module.__name__)
-    TestEnv.init()
-    HttpdConf().add_vhost_cgi().install()
-    assert TestEnv.apache_restart() == 0
-        
-def teardown_module(module):
-    print("teardown_module: %s" % module.__name__)
-    assert TestEnv.apache_stop() == 0
 
 class TestStore:
 
-    def setup_method(self, method):
-        print("setup_method: %s" % method.__name__)
+    @pytest.fixture(autouse=True, scope='class')
+    def _class_scope(self, env):
+        HttpdConf(env).add_vhost_cgi().install()
+        assert env.apache_restart() == 0
+        yield
+        assert env.apache_stop() == 0
 
-    def teardown_method(self, method):
-        print("teardown_method: %s" % method.__name__)
-    
-    def test_005_01(self):
-        url = TestEnv.mkurl("https", "cgi", "/.well-known/h2/state")
-        r = TestEnv.curl_get(url, 5)
+    def test_005_01(self, env):
+        url = env.mkurl("https", "cgi", "/.well-known/h2/state")
+        r = env.curl_get(url, 5)
         assert 200 == r["response"]["status"]
         st = r["response"]["json"]
         
@@ -49,13 +31,13 @@ class TestStore:
         del st["connFlowOut"]
         
         assert st == {
-            "version" : "draft-01",
-            "settings" : {
+            "version": "draft-01",
+            "settings": {
                 "SETTINGS_MAX_CONCURRENT_STREAMS": 100,
                 "SETTINGS_MAX_FRAME_SIZE": 16384,
                 "SETTINGS_ENABLE_PUSH": 0
             },
-            "peerSettings" : {
+            "peerSettings": {
                 "SETTINGS_MAX_CONCURRENT_STREAMS": 100,
                 "SETTINGS_MAX_FRAME_SIZE": 16384,
                 "SETTINGS_ENABLE_PUSH": 0,

@@ -5,20 +5,10 @@
 ###################################################################################################
 
 import json
-import pytest
 import re
 import os
-import shutil
 import subprocess
-import sys
-import string
-import time
-import requests
 
-from datetime import datetime
-from datetime import tzinfo
-from datetime import timedelta
-from shutil import copyfile
 from urllib.parse import urlparse
 
 def _get_path(x):
