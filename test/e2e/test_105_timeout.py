@@ -1,7 +1,7 @@
 import socket
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -90,4 +90,4 @@ class TestStore:
             "-F", ("text=%s" % "abcdefghijklmnopqrstuvwxyz"),
             "-F", ("wait1=%f" % 1.5),
         ])
-        assert 200 == r["response"]["status"]
+        assert 200 == r.response["status"]

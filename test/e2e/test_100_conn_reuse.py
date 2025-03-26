@@ -1,6 +1,6 @@
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -29,18 +29,18 @@ class TestStore:
         url = env.mkurl("https", "cgi", "/hello.py")
         hostname = ("cgi-alias.%s" % env.HTTP_TLD)
         r = env.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
-        assert 200 == r["response"]["status"]
-        assert "HTTP/2" == r["response"]["protocol"]
-        assert hostname == r["response"]["json"]["host"]
+        assert 200 == r.response["status"]
+        assert "HTTP/2" == r.response["protocol"]
+        assert hostname == r.response["json"]["host"]
 
     # access another vhost, after using ServerName in SNI, that uses same SSL setup
     def test_100_03(self, env):
         url = env.mkurl("https", "cgi", "/")
         hostname = ("test1.%s" % env.HTTP_TLD)
         r = env.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
-        assert 200 == r["response"]["status"]
-        assert "HTTP/2" == r["response"]["protocol"]
-        assert "text/html" == r["response"]["header"]["content-type"]
+        assert 200 == r.response["status"]
+        assert "HTTP/2" == r.response["protocol"]
+        assert "text/html" == r.response["header"]["content-type"]
 
     # access another vhost, after using ServerName in SNI, 
     # that has different SSL certificate. This triggers a 421 (misdirected request) response.
@@ -48,16 +48,11 @@ class TestStore:
         url = env.mkurl("https", "cgi", "/hello.py")
         hostname = ("noh2.%s" % env.HTTP_TLD)
         r = env.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
-        assert 421 == r["response"]["status"]
+        assert 421 == r.response["status"]
 
     # access an unknown vhost, after using ServerName in SNI
     def test_100_05(self, env):
         url = env.mkurl("https", "cgi", "/hello.py")
         hostname = ("unknown.%s" % env.HTTP_TLD)
         r = env.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
-        assert 421 == r["response"]["status"]
-
-
-
-
-
+        assert 421 == r.response["status"]

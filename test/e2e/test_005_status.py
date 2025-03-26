@@ -1,6 +1,6 @@
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -15,8 +15,8 @@ class TestStore:
     def test_005_01(self, env):
         url = env.mkurl("https", "cgi", "/.well-known/h2/state")
         r = env.curl_get(url, 5)
-        assert 200 == r["response"]["status"]
-        st = r["response"]["json"]
+        assert 200 == r.response["status"]
+        st = r.response["json"]
         
         # remove some parts that are very dependant on client/lib versions
         # or connection time etc.

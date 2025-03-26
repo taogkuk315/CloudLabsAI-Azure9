@@ -1,6 +1,6 @@
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -16,11 +16,11 @@ class TestStore:
     def test_600_01(self, env):
         url = env.mkurl("https", "cgi", "/h2proxy/hello.py")
         r = env.curl_get(url, 5)
-        assert 200 == r["response"]["status"]
-        assert "HTTP/2.0" == r["response"]["json"]["protocol"]
-        assert "on" == r["response"]["json"]["https"]
-        assert "" != r["response"]["json"]["ssl_protocol"]
-        assert "on" == r["response"]["json"]["h2"]
-        assert "off" == r["response"]["json"]["h2push"]
+        assert 200 == r.response["status"]
+        assert "HTTP/2.0" == r.response["json"]["protocol"]
+        assert "on" == r.response["json"]["https"]
+        assert "" != r.response["json"]["ssl_protocol"]
+        assert "on" == r.response["json"]["h2"]
+        assert "off" == r.response["json"]["h2push"]
 
 

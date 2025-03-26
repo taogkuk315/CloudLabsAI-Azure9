@@ -1,8 +1,18 @@
 import argparse
 import logging
+import multiprocessing
+import os
+import re
 import sys
-from datetime import timedelta
-from typing import Dict
+import time
+from datetime import timedelta, datetime
+from threading import Thread
+from typing import Dict, Tuple, Optional, List, Iterable
+
+from tqdm import tqdm
+
+from h2_conf import HttpdConf
+from h2_env import H2TestEnv
 
 log = logging.getLogger(__name__)
 
@@ -169,7 +179,7 @@ class H2LoadMonitor:
 class LoadTestCase:
 
     @staticmethod
-    def from_scenario(scenario: Dict, env: TlsTestEnv) -> 'SingleFileLoadTest':
+    def from_scenario(scenario: Dict, env: H2TestEnv) -> 'SingleFileLoadTest':
         raise NotImplemented
 
     def run(self) -> H2LoadLogSummary:
@@ -179,8 +189,8 @@ class LoadTestCase:
         raise NotImplemented
 
     @staticmethod
-    def setup_base_conf(env: TlsTestEnv, worker_count: int = 5000) -> TlsTestConf:
-        conf = TlsTestConf(env=env)
+    def setup_base_conf(env: H2TestEnv, worker_count: int = 5000) -> HttpdConf:
+        conf = HttpdConf(env=env)
         # ylavic's formula
         process_count = int(max(10, min(100, int(worker_count / 100))))
         thread_count = int(max(25, int(worker_count / process_count)))
@@ -199,7 +209,7 @@ class LoadTestCase:
         return conf
 
     @staticmethod
-    def start_server(env: TlsTestEnv, cd: timedelta = None):
+    def start_server(env: H2TestEnv, cd: timedelta = None):
         if env.apache_stop() == 0 and cd:
             with tqdm(desc="connection cooldown", total=int(cd.total_seconds()), unit="s", leave=False) as t:
                 end = datetime.now() + cd
@@ -209,7 +219,7 @@ class LoadTestCase:
         assert env.apache_start() == 0
 
     @staticmethod
-    def server_setup(env: TlsTestEnv, ssl_module: str):
+    def server_setup(env: H2TestEnv, ssl_module: str):
         conf = LoadTestCase.setup_base_conf(env=env)
         extras = {
             'base': """
@@ -262,7 +272,7 @@ class LoadTestCase:
 
 class SingleFileLoadTest(LoadTestCase):
 
-    def __init__(self, env: TlsTestEnv, location: str,
+    def __init__(self, env: H2TestEnv, location: str,
                  clients: int, requests: int, resource_kb: int,
                  ssl_module: str = 'mod_tls', protocol: str = 'h2',
                  threads: int = None):
@@ -276,7 +286,7 @@ class SingleFileLoadTest(LoadTestCase):
         self._threads = threads if threads is not None else min(multiprocessing.cpu_count()/2, self._clients)
 
     @staticmethod
-    def from_scenario(scenario: Dict, env: TlsTestEnv) -> 'SingleFileLoadTest':
+    def from_scenario(scenario: Dict, env: H2TestEnv) -> 'SingleFileLoadTest':
         return SingleFileLoadTest(
             env=env,
             location=scenario['location'],

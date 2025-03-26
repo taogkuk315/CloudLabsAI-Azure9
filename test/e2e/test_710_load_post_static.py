@@ -1,7 +1,7 @@
 import pytest
 import os
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -15,16 +15,16 @@ class TestStore:
         assert env.apache_stop() == 0
 
     def check_h2load_ok(self, env, r, n):
-        assert 0 == r["rv"]
+        assert 0 == r.exit_code
         r = env.h2load_status(r)
-        assert n == r["h2load"]["requests"]["total"]
-        assert n == r["h2load"]["requests"]["started"]
-        assert n == r["h2load"]["requests"]["done"]
-        assert n == r["h2load"]["requests"]["succeeded"]
-        assert n == r["h2load"]["status"]["2xx"]
-        assert 0 == r["h2load"]["status"]["3xx"]
-        assert 0 == r["h2load"]["status"]["4xx"]
-        assert 0 == r["h2load"]["status"]["5xx"]
+        assert n == r.results["h2load"]["requests"]["total"]
+        assert n == r.results["h2load"]["requests"]["started"]
+        assert n == r.results["h2load"]["requests"]["done"]
+        assert n == r.results["h2load"]["requests"]["succeeded"]
+        assert n == r.results["h2load"]["status"]["2xx"]
+        assert 0 == r.results["h2load"]["status"]["3xx"]
+        assert 0 == r.results["h2load"]["status"]["4xx"]
+        assert 0 == r.results["h2load"]["status"]["5xx"]
     
     # test POST on static file, slurped in by server
     def test_710_00(self, env):

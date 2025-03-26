@@ -1,7 +1,7 @@
 import pytest
 import os
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -15,19 +15,19 @@ class TestStore:
         assert env.apache_stop() == 0
 
     def check_h2load_ok(self, env, r, n):
-        assert 0 == r["rv"]
+        assert 0 == r.exit_code
         r = env.h2load_status(r)
-        assert n == r["h2load"]["requests"]["total"]
-        assert n == r["h2load"]["requests"]["started"]
-        assert n == r["h2load"]["requests"]["done"]
-        assert n == r["h2load"]["requests"]["succeeded"]
-        assert n == r["h2load"]["status"]["2xx"]
-        assert 0 == r["h2load"]["status"]["3xx"]
-        assert 0 == r["h2load"]["status"]["4xx"]
-        assert 0 == r["h2load"]["status"]["5xx"]
+        assert n == r.results["h2load"]["requests"]["total"]
+        assert n == r.results["h2load"]["requests"]["started"]
+        assert n == r.results["h2load"]["requests"]["done"]
+        assert n == r.results["h2load"]["requests"]["succeeded"]
+        assert n == r.results["h2load"]["status"]["2xx"]
+        assert 0 == r.results["h2load"]["status"]["3xx"]
+        assert 0 == r.results["h2load"]["status"]["4xx"]
+        assert 0 == r.results["h2load"]["status"]["5xx"]
     
     # test POST on cgi, where input is read
-    def test_710_10(self, env):
+    def test_711_10(self, env):
         url = env.mkurl("https", "test1", "/echo.py")
         n = 100
         m = 5
@@ -41,7 +41,7 @@ class TestStore:
         self.check_h2load_ok(env, r, n)
 
     # test POST on cgi via http/1.1 proxy, where input is read
-    def test_710_11(self, env):
+    def test_711_11(self, env):
         url = env.mkurl("https", "test1", "/proxy/echo.py")
         n = 100
         m = 5
@@ -55,7 +55,7 @@ class TestStore:
         self.check_h2load_ok(env, r, n)
 
     # test POST on cgi via h2proxy, where input is read
-    def test_710_12(self, env):
+    def test_711_12(self, env):
         url = env.mkurl("https", "test1", "/h2proxy/echo.py")
         n = 100
         m = 5
@@ -67,5 +67,3 @@ class TestStore:
             url ]
         r = env.run( args ) 
         self.check_h2load_ok(env, r, n)
-
-

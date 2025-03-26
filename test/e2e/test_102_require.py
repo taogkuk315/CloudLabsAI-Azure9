@@ -1,6 +1,6 @@
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -29,15 +29,15 @@ class TestStore:
     def test_102_01(self, env):
         url = env.mkurl("https", "ssl", "/h2only.html")
         r = env.curl_get( url )
-        assert 0 == r["rv"]
-        assert "response" in r
-        assert 404 == r["response"]["status"]
+        assert 0 == r.exit_code
+        assert r.response
+        assert 404 == r.response["status"]
         
     def test_102_02(self, env):
         url = env.mkurl("https", "ssl", "/noh2.html")
         r = env.curl_get( url )
-        assert 0 == r["rv"]
-        assert "response" in r
-        assert 403 == r["response"]["status"]
+        assert 0 == r.exit_code
+        assert r.response
+        assert 403 == r.response["status"]
         
 

@@ -7,7 +7,7 @@ from threading import Thread
 
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestShutdown:
@@ -26,20 +26,20 @@ class TestShutdown:
         lines = 100000
         text = "123456789"
         wait2 = 1.0
-        r = {}
+        self.r = None
         def long_request():
             args = ["-vvv",
                     "-F", f"count={lines}",
                     "-F", f"text={text}",
                     "-F", f"wait2={wait2}",
                     ]
-            run = env.curl_get(url, 5, args)
-            r.update(run)
+            self.r = env.curl_get(url, 5, args)
 
         t = Thread(target=long_request)
         t.start()
         time.sleep(0.5)
         assert env.apache_restart() == 0
         t.join()
-        assert r["response"]["status"] == 200
-        assert len(r["response"]["body"]) == (lines * (len(text)+1))
+        r = self.r
+        assert r.response["status"] == 200
+        assert len(r.response["body"]) == (lines * (len(text)+1))

@@ -2,18 +2,20 @@
 # h2 end-to-end test environment class
 ###################################################################
 import inspect
-import json
 import re
 import os
 import subprocess
 import sys
 import time
+from datetime import datetime
+
 import requests
 
 from configparser import ConfigParser
 from shutil import copyfile
 from urllib.parse import urlparse
-from TestNghttp import Nghttp
+from h2_nghttp import Nghttp
+from h2_result import ExecResult
 
 
 class Dummy:
@@ -104,25 +106,12 @@ class H2TestEnv:
     def e2e_src(self, path):
         return os.path.join(self.E2E_DIR, path)
 
-    def run(self, args, input=None):
+    def run(self, args, input=None) -> ExecResult:
         print("execute: %s" % " ".join(args))
+        start = datetime.now()
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        rv = p.returncode
-        print("exit code %d, stderr:\n%s" % (rv, p.stderr.decode('utf-8')))
-        try:
-            jout = json.loads(p.stdout)
-        except:
-            jout = None
-            print("stdout:\n%s" % p.stdout.decode('utf-8'))
-        return { 
-            "rv": rv,
-            "out": {
-                "raw": p.stdout,
-                "text": p.stdout.decode('utf-8'),
-                "err": p.stderr.decode('utf-8'),
-                "json": jout
-            } 
-        }
+        return ExecResult(exit_code=p.returncode, stdout=p.stdout, stderr=p.stderr,
+                          duration=datetime.now() - start)
 
     def mkurl(self, scheme, hostname, path='/'):
         port = self.HTTPS_PORT if scheme == 'https' else self.HTTP_PORT
@@ -135,7 +124,7 @@ class H2TestEnv:
         while time.time() < try_until:
             try:
                 req = requests.Request('HEAD', url).prepare()
-                resp = s.send(req, verify=self.VERIFY_CERTIFICATES, timeout=timeout)
+                s.send(req, verify=self.VERIFY_CERTIFICATES, timeout=timeout)
                 return True
             except IOError:
                 print("connect error: %s" % sys.exc_info()[0])
@@ -153,7 +142,7 @@ class H2TestEnv:
         while time.time() < try_until:
             try:
                 req = requests.Request('HEAD', url).prepare()
-                resp = s.send(req, verify=self.VERIFY_CERTIFICATES, timeout=timeout)
+                s.send(req, verify=self.VERIFY_CERTIFICATES, timeout=timeout)
                 time.sleep(.2)
             except IOError:
                 return True
@@ -167,7 +156,6 @@ class H2TestEnv:
             self.install_test_conf(conf)
         args = [self.APACHECTL, "-d", self.WEBROOT, "-k", cmd]
         print("execute: %s" % " ".join(args))
-        self.apachectl_stderr = ""
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
         sys.stderr.write(p.stderr)
         rv = p.returncode
@@ -219,7 +207,7 @@ class H2TestEnv:
     def curl_raw(self, urls, timeout, options):
         args, headerfile = self.curl_complete_args(urls, timeout, options)
         r = self.run(args)
-        if r["rv"] == 0:
+        if r.exit_code == 0:
             lines = open(headerfile).readlines()
             exp_stat = True
             header = {}
@@ -228,15 +216,12 @@ class H2TestEnv:
                     print("reading 1st response line: %s" % line)
                     m = re.match(r'^(\S+) (\d+) (.*)$', line)
                     assert m
-                    prev = r["response"] if "response" in r else None
-                    r["response"] = {
+                    r.add_response({
                         "protocol": m.group(1),
                         "status": int(m.group(2)),
                         "description": m.group(3),
-                        "body": r["out"]["raw"]
-                    }
-                    if prev:
-                        r["response"]["previous"] = prev
+                        "body": r.outraw
+                    })
                     exp_stat = False
                     header = {}
                 elif re.match(r'^$', line):
@@ -246,9 +231,9 @@ class H2TestEnv:
                     m = re.match(r'^([^:]+):\s*(.*)$', line)
                     assert m
                     header[m.group(1).lower()] = m.group(2)
-            r["response"]["header"] = header
-            if r["out"]["json"]:
-                r["response"]["json"] = r["out"]["json"] 
+            r.response["header"] = header
+            if r.json:
+                r.response["json"] = r.json
         return r
 
     def curl_get(self, url, timeout=5, options=None):
@@ -280,32 +265,35 @@ class H2TestEnv:
             options = []
         options.extend(["-w", "%{http_version}\n", "-o", "/dev/null"])
         r = self.curl_raw(url, timeout=timeout, options=options)
-        if r["rv"] == 0 and "response" in r:
-            return r["response"]["body"].decode('utf-8').rstrip()
+        if r.exit_code == 0 and r.response:
+            return r.response["body"].decode('utf-8').rstrip()
         return -1
         
     def nghttp(self):
         return Nghttp(self.NGHTTP, connect_addr=self.HTTPD_ADDR, tmp_dir=self.GEN_DIR)
 
-    def h2load_status(self, run):
-        m = re.search(r'requests: (\d+) total, (\d+) started, (\d+) done, (\d+) succeeded, (\d+) failed, (\d+) errored, (\d+) timeout', run["out"]["text"])
+    def h2load_status(self, run: ExecResult):
+        stats ={}
+        m = re.search(
+            r'requests: (\d+) total, (\d+) started, (\d+) done, (\d+) succeeded, (\d+) failed, (\d+) errored, (\d+) timeout',
+            run.stdout)
         if m:
-            run["h2load"] = {
-                "requests": {
-                    "total": int(m.group(1)),
-                    "started": int(m.group(2)),
-                    "done": int(m.group(3)),
-                    "succeeded": int(m.group(4))
-                }
+            stats["requests"] = {
+                "total": int(m.group(1)),
+                "started": int(m.group(2)),
+                "done": int(m.group(3)),
+                "succeeded": int(m.group(4))
             }
-            m = re.search(r'status codes: (\d+) 2xx, (\d+) 3xx, (\d+) 4xx, (\d+) 5xx', run["out"]["text"])
+            m = re.search(r'status codes: (\d+) 2xx, (\d+) 3xx, (\d+) 4xx, (\d+) 5xx',
+                          run.stdout)
             if m:
-                run["h2load"]["status"] = {
+                stats["status"] = {
                     "2xx": int(m.group(1)),
                     "3xx": int(m.group(2)),
                     "4xx": int(m.group(3)),
                     "5xx": int(m.group(4))
                 }
+            run.add_results({"h2load": stats})
         return run
 
     def setup_data_1k_1m(self):

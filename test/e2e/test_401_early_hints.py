@@ -1,6 +1,6 @@
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 # The push tests depend on "nghttp"
@@ -30,10 +30,10 @@ class TestStore:
     def test_401_31(self, env):
         url = env.mkurl("https", "hints", "/006-hints.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
-        early = r["response"]["previous"]
+        early = r.response["previous"]
         assert early
         assert 103 == int(early["header"][":status"])
         assert early["header"]["link"]
@@ -42,7 +42,7 @@ class TestStore:
     def test_401_32(self, env):
         url = env.mkurl("https", "hints", "/006-nohints.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
-        assert "previous" not in r["response"]
+        assert "previous" not in r.response

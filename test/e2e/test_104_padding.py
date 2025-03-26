@@ -1,6 +1,6 @@
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 def frame_padding(payload, padbits):
@@ -51,8 +51,8 @@ class TestStore:
         # check the number of padding bytes is as expected
         for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
             r = r = env.nghttp().post_data(url, data, 5)
-            assert 200 == r["response"]["status"]
-            assert r["paddings"] == [ 
+            assert 200 == r.response["status"]
+            assert r.results["paddings"] == [
                 frame_padding(len(data)+1, 0), 
                 frame_padding(0, 0)
             ]
@@ -62,16 +62,16 @@ class TestStore:
         url = env.mkurl("https", "pad0", "/echo.py")
         for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
             r = r = env.nghttp().post_data(url, data, 5)
-            assert 200 == r["response"]["status"]
-            assert r["paddings"] == [ 0, 0 ] 
+            assert 200 == r.response["status"]
+            assert r.results["paddings"] == [ 0, 0 ]
 
     # 1 bit of padding
     def test_104_03(self, env):
         url = env.mkurl("https", "pad1", "/echo.py")
         for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
             r = r = env.nghttp().post_data(url, data, 5)
-            assert 200 == r["response"]["status"]
-            for i in r["paddings"]:
+            assert 200 == r.response["status"]
+            for i in r.results["paddings"]:
                 assert i in range(0, 2)
 
     # 2 bits of padding
@@ -79,8 +79,8 @@ class TestStore:
         url = env.mkurl("https", "pad2", "/echo.py")
         for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
             r = r = env.nghttp().post_data(url, data, 5)
-            assert 200 == r["response"]["status"]
-            for i in r["paddings"]:
+            assert 200 == r.response["status"]
+            for i in r.results["paddings"]:
                 assert i in range(0, 4)
 
     # 3 bits of padding
@@ -88,8 +88,8 @@ class TestStore:
         url = env.mkurl("https", "pad3", "/echo.py")
         for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
             r = r = env.nghttp().post_data(url, data, 5)
-            assert 200 == r["response"]["status"]
-            for i in r["paddings"]:
+            assert 200 == r.response["status"]
+            for i in r.results["paddings"]:
                 assert i in range(0, 8)
 
     # 8 bits of padding
@@ -97,7 +97,7 @@ class TestStore:
         url = env.mkurl("https", "pad8", "/echo.py")
         for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
             r = r = env.nghttp().post_data(url, data, 5)
-            assert 200 == r["response"]["status"]
-            for i in r["paddings"]:
+            assert 200 == r.response["status"]
+            for i in r.results["paddings"]:
                 assert i in range(0, 256)
 

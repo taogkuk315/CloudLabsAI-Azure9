@@ -2,7 +2,7 @@ import os
 import re
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -24,12 +24,12 @@ class TestStore:
     def test_500_01(self, env):
         url = env.mkurl("https", "cgi", "/proxy/hello.py")
         r = env.curl_get(url, 5)
-        assert 200 == r["response"]["status"]
-        assert "HTTP/1.1" == r["response"]["json"]["protocol"]
-        assert "" == r["response"]["json"]["https"]
-        assert "" == r["response"]["json"]["ssl_protocol"]
-        assert "" == r["response"]["json"]["h2"]
-        assert "" == r["response"]["json"]["h2push"]
+        assert 200 == r.response["status"]
+        assert "HTTP/1.1" == r.response["json"]["protocol"]
+        assert "" == r.response["json"]["https"]
+        assert "" == r.response["json"]["ssl_protocol"]
+        assert "" == r.response["json"]["h2"]
+        assert "" == r.response["json"]["h2push"]
 
 
     # upload and GET again using curl, compare to original content
@@ -37,16 +37,16 @@ class TestStore:
         url = env.mkurl("https", "cgi", "/proxy/upload.py")
         fpath = os.path.join(env.GEN_DIR, fname)
         r = env.curl_upload(url, fpath, options=options)
-        assert r["rv"] == 0
-        assert 200 <= r["response"]["status"] < 300
+        assert r.exit_code == 0
+        assert 200 <= r.response["status"] < 300
 
         # why is the scheme wrong?
-        r2 = env.curl_get(re.sub(r'http:', 'https:', r["response"]["header"]["location"]))
-        assert r2["rv"] == 0
-        assert r2["response"]["status"] == 200 
+        r2 = env.curl_get(re.sub(r'http:', 'https:', r.response["header"]["location"]))
+        assert r2.exit_code == 0
+        assert r2.response["status"] == 200
         with open(env.e2e_src( fpath ), mode='rb') as file:
             src = file.read()
-        assert src == r2["response"]["body"]
+        assert src == r2.response["body"]
 
     def test_500_10(self, env):
         self.curl_upload_and_verify(env, "data-1k", [ "--http2" ] )
@@ -60,12 +60,12 @@ class TestStore:
         url = env.mkurl("https", "cgi", "/proxy/echo.py")
         fpath = os.path.join(env.GEN_DIR, fname)
         r = env.nghttp().upload(url, fpath, options=options)
-        assert r["rv"] == 0
-        assert 200 <= r["response"]["status"] < 300
+        assert r.exit_code == 0
+        assert 200 <= r.response["status"] < 300
         with open(env.e2e_src( fpath ), mode='rb') as file:
             src = file.read()
-        #assert len(src) == len(r["response"]["body"])
-        assert src == r["response"]["body"]
+        #assert len(src) == len(r.response["body"])
+        assert src == r.response["body"]
 
     def test_500_20(self, env):
         self.nghttp_post_and_verify(env, "data-1k", [ ] )
@@ -86,17 +86,17 @@ class TestStore:
         fpath = os.path.join(env.GEN_DIR, fname)
 
         r = env.nghttp().upload_file(url, fpath, options=options)
-        assert r["rv"] == 0
-        assert 200 <= r["response"]["status"] < 300
-        assert r["response"]["header"]["location"]
+        assert r.exit_code == 0
+        assert 200 <= r.response["status"] < 300
+        assert r.response["header"]["location"]
 
         # why is the scheme wrong?
-        r2 = env.nghttp().get(re.sub(r'http:', 'https:', r["response"]["header"]["location"]))
-        assert r2["rv"] == 0
-        assert r2["response"]["status"] == 200 
+        r2 = env.nghttp().get(re.sub(r'http:', 'https:', r.response["header"]["location"]))
+        assert r2.exit_code == 0
+        assert r2.response["status"] == 200
         with open(env.e2e_src( fpath ), mode='rb') as file:
             src = file.read()
-        assert src == r2["response"]["body"]
+        assert src == r2.response["body"]
 
     def test_500_22(self, env):
         self.nghttp_upload_and_verify(env, "data-1k", [ ] )
@@ -116,9 +116,9 @@ class TestStore:
         fpath = os.path.join(env.GEN_DIR, fname)
 
         r = env.nghttp().upload_file(url, fpath, options=options)
-        assert r["rv"] == 0
-        assert 200 <= r["response"]["status"] < 300
-        assert r["response"]["header"]["location"]
+        assert r.exit_code == 0
+        assert 200 <= r.response["status"] < 300
+        assert r.response["header"]["location"]
 
     def test_500_24(self, env):
         for i in range(100):

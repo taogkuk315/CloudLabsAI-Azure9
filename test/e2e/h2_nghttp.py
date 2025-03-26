@@ -8,8 +8,13 @@ import json
 import re
 import os
 import subprocess
+from datetime import datetime
+from typing import Dict
 
 from urllib.parse import urlparse
+
+from h2_result import ExecResult
+
 
 def _get_path(x):
     return x["path"]
@@ -66,7 +71,7 @@ class Nghttp:
     def _baserun(self, url, timeout, options):
         return self._run(self.complete_args(url, timeout, options))
     
-    def parse_output(self, btext):
+    def parse_output(self, btext) -> Dict:
         # getting meta data and response body out of nghttp's output
         # is a bit tricky. Without '-v' we just get the body. With '-v' meta
         # data and timings in both directions are listed. 
@@ -199,10 +204,8 @@ class Nghttp:
         if options:
             args.extend(options)
         r = self._baserun( url, timeout, args )
-        if 0 == r["rv"]:
-            o = self.parse_output(r["out"]["raw"])
-            for name in o:
-                r[name] = o[name] 
+        if 0 == r.exit_code:
+            r.add_results(self.parse_output(r.outraw))
         return r
 
     def get( self, url, timeout=5, options=None ) :
@@ -214,8 +217,8 @@ class Nghttp:
         options.extend([ "-ans" ]) 
         r = self._baserun( url, timeout, options )
         assets = []
-        if 0 == r["rv"]:
-            lines = re.findall(r'[^\n]*\n', r["out"]["text"], re.MULTILINE)
+        if 0 == r.exit_code:
+            lines = re.findall(r'[^\n]*\n', r.stdout, re.MULTILINE)
             for lidx, l in enumerate(lines):
                 m = re.match(r'\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+/(.*)', l)
                 if m:
@@ -225,7 +228,7 @@ class Nghttp:
                         "size" : m.group(6)
                     })
         assets.sort(key=_get_path)
-        r["assets"] = assets
+        r.add_assets(assets)
         return r
 
     def post_data( self, url, data, timeout=5, options=None ) :
@@ -283,25 +286,12 @@ Content-Transfer-Encoding: binary
             "-HContent-Type: multipart/form-data; boundary=DSAJKcd9876" ])
         return self._raw( url, timeout, options )
 
-    def _run( self, args, input=None ) :
+    def _run( self, args, input=None ) -> ExecResult:
         print(("execute: %s" % " ".join(args)))
+        start = datetime.now()
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        rv = p.returncode
-        print("stderr: %s" % p.stderr)
-        try:
-            jout = json.loads(p.stdout)
-        except:
-            jout = None
-            print("stdout: %s" % p.stdout)
-        return { 
-            "rv": rv,
-            "out" : {
-                "raw" : p.stdout,
-                "text" : p.stdout.decode('utf-8'),
-                "err" : p.stderr.decode('utf-8'),
-                "json" : jout
-            } 
-        }
+        return ExecResult(exit_code=p.returncode, stdout=p.stdout, stderr=p.stderr,
+                          duration=datetime.now() - start)
 
 
 

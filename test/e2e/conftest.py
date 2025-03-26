@@ -5,7 +5,7 @@ from configparser import ConfigParser
 
 import pytest
 
-from H2TestEnv import H2TestEnv
+from h2_env import H2TestEnv
 
 class Dummy:
     pass

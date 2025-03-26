@@ -1,6 +1,6 @@
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -16,9 +16,9 @@ class TestStore:
     def test_006_01(self, env):
         url = env.mkurl("https", "test1", "/001.html")
         r = env.nghttp().assets(url,  options=["-Haccept-encoding: none"])
-        assert 0 == r["rv"]
-        assert 1 == len(r["assets"])
-        assert r["assets"] == [
+        assert 0 == r.exit_code
+        assert 1 == len(r.assets)
+        assert r.assets == [
             {"status": 200, "size": "251", "path": "/001.html"}
         ]
 
@@ -26,9 +26,9 @@ class TestStore:
     def test_006_02(self, env):
         url = env.mkurl("https", "test1", "/002.jpg")
         r = env.nghttp().assets(url,  options=["-Haccept-encoding: none"])
-        assert 0 == r["rv"]
-        assert 1 == len(r["assets"])
-        assert r["assets"] == [
+        assert 0 == r.exit_code
+        assert 1 == len(r.assets)
+        assert r.assets == [
             {"status": 200, "size": "88K", "path": "/002.jpg"}
         ]
         
@@ -36,9 +36,9 @@ class TestStore:
     def test_006_03(self, env):
         url = env.mkurl("https", "test1", "/004.html")
         r = env.nghttp().assets(url, options=["-Haccept-encoding: none"])
-        assert 0 == r["rv"]
-        assert 181 == len(r["assets"])
-        assert r["assets"] == [
+        assert 0 == r.exit_code
+        assert 181 == len(r.assets)
+        assert r.assets == [
             {"status": 200, "size": "10K", "path": "/004.html"},
             {"status": 200, "size": "742", "path": "/004/gophertiles.jpg"},
             {"status": 200, "size": "945", "path": "/004/gophertiles_002.jpg"},
@@ -226,9 +226,9 @@ class TestStore:
     def test_006_04(self, env):
         url = env.mkurl("https", "test1", "/006.html")
         r = env.nghttp().assets(url, options=["-Haccept-encoding: none"])
-        assert 0 == r["rv"]
-        assert 3 == len(r["assets"])
-        assert r["assets"] == [
+        assert 0 == r.exit_code
+        assert 3 == len(r.assets)
+        assert r.assets == [
             {"status": 200, "size": "543", "path": "/006.html"},
             {"status": 200, "size": "216", "path": "/006/006.css"},
             {"status": 200, "size": "839", "path": "/006/006.js"}
@@ -238,9 +238,9 @@ class TestStore:
     def test_006_05(self, env):
         url = env.mkurl("https", "test1", "/003.html")
         r = env.nghttp().assets(url, options=["--window-bits=24", "-Haccept-encoding: none"])
-        assert 0 == r["rv"]
-        assert 2 == len(r["assets"])
-        assert r["assets"] == [
+        assert 0 == r.exit_code
+        assert 2 == len(r.assets)
+        assert r.assets == [
             {"status": 200, "size": "316", "path": "/003.html"},
             {"status": 200, "size": "88K", "path": "/003/003_img.jpg"}
         ]

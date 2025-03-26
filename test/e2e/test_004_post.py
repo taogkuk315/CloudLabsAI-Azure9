@@ -4,7 +4,7 @@ import os
 import re
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -22,15 +22,15 @@ class TestStore:
         url = env.mkurl("https", "cgi", "/upload.py")
         fpath = os.path.join(env.GEN_DIR, fname)
         r = env.curl_upload(url, fpath, options=options)
-        assert r["rv"] == 0
-        assert r["response"]["status"] >= 200 and r["response"]["status"] < 300
+        assert r.exit_code == 0
+        assert r.response["status"] >= 200 and r.response["status"] < 300
 
-        r2 = env.curl_get(r["response"]["header"]["location"])
-        assert r2["rv"] == 0
-        assert r2["response"]["status"] == 200 
+        r2 = env.curl_get(r.response["header"]["location"])
+        assert r2.exit_code == 0
+        assert r2.response["status"] == 200
         with open(env.e2e_src(fpath), mode='rb') as file:
             src = file.read()
-        assert src == r2["response"]["body"]
+        assert src == r2.response["body"]
 
     def test_004_01(self, env):
         self.curl_upload_and_verify(env, "data-1k", ["--http1.1"])
@@ -68,9 +68,9 @@ class TestStore:
     def test_004_07(self, env, name, value):
         url = env.mkurl("https", "cgi", "/env.py")
         r = env.curl_post_value(url, "name", name)
-        assert r["rv"] == 0
-        assert r["response"]["status"] == 200
-        m = re.match("{0}=(.*)".format(name), r["response"]["body"].decode('utf-8'))
+        assert r.exit_code == 0
+        assert r.response["status"] == 200
+        m = re.match("{0}=(.*)".format(name), r.response["body"].decode('utf-8'))
         assert m
         assert re.match(value, m.group(1)) 
 
@@ -100,12 +100,12 @@ class TestStore:
         fpath = os.path.join(env.GEN_DIR, fname)
 
         r = env.nghttp().upload(url, fpath, options=options)
-        assert r["rv"] == 0
-        assert r["response"]["status"] >= 200 and r["response"]["status"] < 300
+        assert r.exit_code == 0
+        assert r.response["status"] >= 200 and r.response["status"] < 300
 
         with open(env.e2e_src(fpath), mode='rb') as file:
             src = file.read()
-        assert src == r["response"]["body"]
+        assert src == r.response["body"]
 
     def test_004_21(self, env):
         self.nghttp_post_and_verify(env, "data-1k", [])
@@ -125,16 +125,16 @@ class TestStore:
         fpath = os.path.join(env.GEN_DIR, fname)
 
         r = env.nghttp().upload_file(url, fpath, options=options)
-        assert r["rv"] == 0
-        assert r["response"]["status"] >= 200 and r["response"]["status"] < 300
-        assert r["response"]["header"]["location"]
+        assert r.exit_code == 0
+        assert r.response["status"] >= 200 and r.response["status"] < 300
+        assert r.response["header"]["location"]
 
-        r2 = env.nghttp().get(r["response"]["header"]["location"])
-        assert r2["rv"] == 0
-        assert r2["response"]["status"] == 200 
+        r2 = env.nghttp().get(r.response["header"]["location"])
+        assert r2.exit_code == 0
+        assert r2.response["status"] == 200
         with open(env.e2e_src(fpath), mode='rb') as file:
             src = file.read()
-        assert src == r2["response"]["body"]
+        assert src == r2.response["body"]
 
     def test_004_23(self, env):
         self.nghttp_upload_and_verify(env, "data-1k", [])
@@ -169,13 +169,13 @@ CustomLog logs/test_004_30 issue_203
         assert env.apache_restart() == 0
         url = env.mkurl("https", "cgi", "/files/{0}".format(resource))
         r = env.curl_get(url, 5, ["--http2"])
-        assert 200 == r["response"]["status"]
+        assert 200 == r.response["status"]
         r = env.curl_get(url, 5, ["--http1.1", "-H", "Range: bytes=0-{0}".format(chunk-1)])
-        assert 206 == r["response"]["status"]
-        assert chunk == len(r["response"]["body"].decode('utf-8'))
+        assert 206 == r.response["status"]
+        assert chunk == len(r.response["body"].decode('utf-8'))
         r = env.curl_get(url, 5, ["--http2", "-H", "Range: bytes=0-{0}".format(chunk-1)])
-        assert 206 == r["response"]["status"]
-        assert chunk == len(r["response"]["body"].decode('utf-8'))
+        assert 206 == r.response["status"]
+        assert chunk == len(r.response["body"].decode('utf-8'))
         # now check what response lengths have actually been reported
         lines = open(logfile).readlines()
         log_h2_full = json.loads(lines[-3])
@@ -197,12 +197,12 @@ CustomLog logs/test_004_30 issue_203
             url = env.mkurl("https", "cgi", "/h2test/echo")
             fpath = os.path.join(env.GEN_DIR, fname)
             r = env.curl_upload(url, fpath, options=options)
-            assert r["rv"] == 0
-            assert r["response"]["status"] >= 200 and r["response"]["status"] < 300
+            assert r.exit_code == 0
+            assert r.response["status"] >= 200 and r.response["status"] < 300
             
-            ct = r["response"]["header"]["content-type"]
+            ct = r.response["header"]["content-type"]
             mail_hd = "Content-Type: " + ct + "\r\nMIME-Version: 1.0\r\n\r\n"
-            mime_msg = mail_hd.encode() + r["response"]["body"]
+            mime_msg = mail_hd.encode() + r.response["body"]
             # this MIME API is from hell
             body = email.parser.BytesParser().parsebytes(mime_msg)
             assert body

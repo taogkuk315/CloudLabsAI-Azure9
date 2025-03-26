@@ -1,7 +1,7 @@
 import re
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -51,35 +51,35 @@ class TestStore:
     def test_101_01(self, env):
         url = env.mkurl("https", "ssl", "/renegotiate/cipher/")
         r = env.curl_get( url, options=[ "-v", "--http1.1", "--tlsv1.2", "--tls-max", "1.2" ] )
-        assert 0 == r["rv"]
-        assert "response" in r
-        assert 403 == r["response"]["status"]
+        assert 0 == r.exit_code
+        assert r.response
+        assert 403 == r.response["status"]
         
     # try to renegotiate the cipher, should fail with correct code
     def test_101_02(self, env):
         url = env.mkurl("https", "ssl", "/renegotiate/cipher/")
         r = env.curl_get( url, options=[ "-vvv", "--tlsv1.2", "--tls-max", "1.2" ] )
-        assert 0 != r["rv"]
-        assert not "response" in r
-        assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
+        assert 0 != r.exit_code
+        assert not r.response
+        assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r.stderr)
         
     # try to renegotiate a client certificate from Location 
     # needs to fail with correct code
     def test_101_03(self, env):
         url = env.mkurl("https", "ssl", "/renegotiate/verify/")
         r = env.curl_get( url, options=[ "-vvv", "--tlsv1.2", "--tls-max", "1.2" ] )
-        assert 0 != r["rv"]
-        assert not "response" in r
-        assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
+        assert 0 != r.exit_code
+        assert not r.response
+        assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r.stderr)
         
     # try to renegotiate a client certificate from Directory 
     # needs to fail with correct code
     def test_101_04(self, env):
         url = env.mkurl("https", "ssl", "/ssl-client-verify/index.html")
         r = env.curl_get( url, options=[ "-vvv", "--tlsv1.2", "--tls-max", "1.2" ] )
-        assert 0 != r["rv"]
-        assert not "response" in r
-        assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
+        assert 0 != r.exit_code
+        assert not r.response
+        assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r.stderr)
         
     # make 10 requests on the same connection, none should produce a status code
     # reported by erki@example.ee
@@ -87,40 +87,39 @@ class TestStore:
         url = env.mkurl("https", "ssl", "/ssl-client-verify/index.html")
         r = env.run( [ env.H2LOAD, "-n", "10", "-c", "1", "-m", "1", "-vvvv", 
             "https://%s:%s/ssl-client-verify/index.html" % (env.HTTPD_ADDR, env.HTTPS_PORT)] )
-        assert 0 == r["rv"]
+        assert 0 == r.exit_code
         r = env.h2load_status(r)
-        assert 10 == r["h2load"]["requests"]["total"]
-        assert 10 == r["h2load"]["requests"]["started"]
-        assert 10 == r["h2load"]["requests"]["done"]
-        assert 0 == r["h2load"]["requests"]["succeeded"]
-        assert 0 == r["h2load"]["status"]["2xx"]
-        assert 0 == r["h2load"]["status"]["3xx"]
-        assert 0 == r["h2load"]["status"]["4xx"]
-        assert 0 == r["h2load"]["status"]["5xx"]
+        assert 10 == r.results["h2load"]["requests"]["total"]
+        assert 10 == r.results["h2load"]["requests"]["started"]
+        assert 10 == r.results["h2load"]["requests"]["done"]
+        assert 0 == r.results["h2load"]["requests"]["succeeded"]
+        assert 0 == r.results["h2load"]["status"]["2xx"]
+        assert 0 == r.results["h2load"]["status"]["3xx"]
+        assert 0 == r.results["h2load"]["status"]["4xx"]
+        assert 0 == r.results["h2load"]["status"]["5xx"]
 
     # Check that "SSLRequireSSL" works on h2 connections
     # See <https://bz.apache.org/bugzilla/show_bug.cgi?id=62654>
     def test_101_10a(self, env):
         url = env.mkurl("https", "ssl", "/sslrequire/index.html")
         r = env.curl_get( url )
-        assert 0 == r["rv"]
-        assert "response" in r
-        assert 404 == r["response"]["status"]
+        assert 0 == r.exit_code
+        assert r.response
+        assert 404 == r.response["status"]
 
     # Check that "require ssl" works on h2 connections
     # See <https://bz.apache.org/bugzilla/show_bug.cgi?id=62654>
     def test_101_10b(self, env):
         url = env.mkurl("https", "ssl", "/requiressl/index.html")
         r = env.curl_get( url )
-        assert 0 == r["rv"]
-        assert "response" in r
-        assert 404 == r["response"]["status"]
+        assert 0 == r.exit_code
+        assert r.response
+        assert 404 == r.response["status"]
         
     # Check that status works with ErrorDoc, see pull #174, fixes #172
     def test_101_11(self, env):
         url = env.mkurl("https", "ssl", "/renegotiate/err-doc-cipher")
         r = env.curl_get( url, options=[ "-vvv", "--tlsv1.2", "--tls-max", "1.2" ] )
-        assert 0 != r["rv"]
-        assert not "response" in r
-        assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r["out"]["err"])
-        
+        assert 0 != r.exit_code
+        assert not r.response
+        assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r.stderr)

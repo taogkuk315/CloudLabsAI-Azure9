@@ -9,7 +9,7 @@ from threading import Thread
 
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class CurlPiper:

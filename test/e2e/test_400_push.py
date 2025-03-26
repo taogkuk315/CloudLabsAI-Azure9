@@ -1,7 +1,7 @@
 import os
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 # The push tests depend on "nghttp"
@@ -66,16 +66,16 @@ class TestStore:
     def test_400_00(self, env):
         url = env.mkurl("https", "push", "/006.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 0 == len(promises)
 
     # 2 link headers configured, only 1 triggers push
     def test_400_01(self, env):
         url = env.mkurl("https", "push", "/006-push.html")
         r = env.nghttp().get(url, options=["-Haccept-encoding: none"])
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
         assert '/006/006.css' == promises[0]["request"]["header"][":path"]
         assert 216 == len(promises[0]["response"]["body"])
@@ -84,8 +84,8 @@ class TestStore:
     def test_400_02(self, env):
         url = env.mkurl("https", "push", "/006-push2.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
         assert '/006/006.js' == promises[0]["request"]["header"][":path"]
 
@@ -93,8 +93,8 @@ class TestStore:
     def test_400_03(self, env):
         url = env.mkurl("https", "push", "/006-push3.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
         assert '/006/006.js' == promises[0]["request"]["header"][":path"]
 
@@ -102,16 +102,16 @@ class TestStore:
     def test_400_04(self, env):
         url = env.mkurl("https", "push", "/006-push4.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 0 == len(promises)
 
     # More than one value in "rel" parameter
     def test_400_05(self, env):
         url = env.mkurl("https", "push", "/006-push5.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
         assert '/006/006.css' == promises[0]["request"]["header"][":path"]
 
@@ -119,8 +119,8 @@ class TestStore:
     def test_400_06(self, env):
         url = env.mkurl("https", "push", "/006-push6.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
         assert '/006/006.css' == promises[0]["request"]["header"][":path"]
 
@@ -128,8 +128,8 @@ class TestStore:
     def test_400_07(self, env):
         url = env.mkurl("https", "push", "/006-push7.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
         assert '/006/006.css' == promises[0]["request"]["header"][":path"]
 
@@ -137,56 +137,56 @@ class TestStore:
     def test_400_08(self, env):
         url = env.mkurl("https", "push", "/006-push8.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 0 == len(promises)
 
     # 2 H2PushResource config trigger on GET, but not on POST
     def test_400_20(self, env):
         url = env.mkurl("https", "push", "/006-push20.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 2 == len(promises)
 
         fpath = os.path.join(env.GEN_DIR, "data-400-20")
         with open(fpath, 'w') as f:
             f.write("test upload data")
         r = env.nghttp().upload(url, fpath)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 0 == len(promises)
     
     # H2Push configured Off in location
     def test_400_30(self, env):
         url = env.mkurl("https", "push", "/006-push30.html")
         r = env.nghttp().get(url)
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 0 == len(promises)
 
     # - suppress PUSH
     def test_400_50(self, env):
         url = env.mkurl("https", "push", "/006-push.html")
         r = env.nghttp().get(url, options=['-H', 'accept-push-policy: none'])
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 0 == len(promises)
 
     # - default pushes desired
     def test_400_51(self, env):
         url = env.mkurl("https", "push", "/006-push.html")
         r = env.nghttp().get(url, options=['-H', 'accept-push-policy: default'])
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
 
     # - HEAD pushes desired
     def test_400_52(self, env):
         url = env.mkurl("https", "push", "/006-push.html")
         r = env.nghttp().get(url, options=['-H', 'accept-push-policy: head'])
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)
         assert '/006/006.css' == promises[0]["request"]["header"][":path"]
         assert b"" == promises[0]["response"]["body"]
@@ -196,6 +196,6 @@ class TestStore:
     def test_400_53(self, env):
         url = env.mkurl("https", "push", "/006-push.html")
         r = env.nghttp().get(url, options=['-H', 'accept-push-policy: fast-load'])
-        assert 200 == r["response"]["status"]
-        promises = r["streams"][r["response"]["id"]]["promises"]
+        assert 200 == r.response["status"]
+        promises = r.results["streams"][r.response["id"]]["promises"]
         assert 1 == len(promises)

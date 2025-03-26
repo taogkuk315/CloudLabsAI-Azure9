@@ -1,6 +1,6 @@
 import pytest
 
-from TestHttpdConf import HttpdConf
+from h2_conf import HttpdConf
 
 
 class TestStore:
@@ -15,16 +15,16 @@ class TestStore:
     # we expect to see the document from the generic server
     def test_001_01(self, env):
         r = env.curl_get(env.HTTP_URL + "/alive.json", 5)
-        assert r["rv"] == 0
-        assert r["response"]["json"]
-        assert True == r["response"]["json"]["alive"]
-        assert "generic" == r["response"]["json"]["host"] 
+        assert r.exit_code == 0
+        assert r.response["json"]
+        assert True == r.response["json"]["alive"]
+        assert "generic" == r.response["json"]["host"]
 
     # we expect to see the document from the generic server
     def test_001_02(self, env):
         r = env.curl_get(env.HTTPS_URL + "/alive.json", 5)
-        assert r["rv"] == 0
-        assert r["response"]["json"]
-        assert True == r["response"]["json"]["alive"]
-        assert "generic" == r["response"]["json"]["host"] 
+        assert r.exit_code == 0
+        assert r.response["json"]
+        assert True == r.response["json"]["alive"]
+        assert "generic" == r.response["json"]["host"]
 
