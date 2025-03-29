@@ -27,20 +27,20 @@ class HttpdConf(object):
         open(self.path, "a").write(line + "\n")
         return self
 
-    def add_vhost(self, port, name, aliasList=None, docRoot="htdocs", withSSL=True):
-        self.start_vhost(port, name, aliasList, docRoot, withSSL)
+    def add_vhost(self, port, name, aliases=None, doc_root="htdocs", with_ssl=True):
+        self.start_vhost(port, name, aliases, doc_root, with_ssl)
         self.end_vhost()
         return self
 
-    def start_vhost(self, port, name, aliasList=None, docRoot="htdocs", withSSL=True):
+    def start_vhost(self, port, name, aliases=None, doc_root="htdocs", with_ssl=True):
         f = open(self.path, "a") 
         f.write("<VirtualHost *:%s>\n" % port)
-        f.write("    ServerName %s.%s\n" % (name, self.env.HTTP_TLD) )
-        if aliasList:
-            for alias in aliasList:
+        f.write("    ServerName %s.%s\n" % (name, self.env.HTTP_TLD))
+        if aliases:
+            for alias in aliases:
                 f.write("    ServerAlias %s.%s\n" % (alias, self.env.HTTP_TLD))
-        f.write("    DocumentRoot %s\n\n" % docRoot)
-        if withSSL:
+        f.write("    DocumentRoot %s\n\n" % doc_root)
+        if with_ssl:
             f.write("    SSLEngine on\n")
         return self
                   
@@ -55,43 +55,47 @@ class HttpdConf(object):
         if proxy_self or h2proxy_self:
             self.add_line("      ProxyPreserveHost on")
         if proxy_self:
-            self.add_line("      ProxyPass \"/proxy/\" \"http://127.0.0.1:%s/\"" % self.env.HTTP_PORT)
-            self.add_line("      ProxyPassReverse \"/proxy/\" \"http://%s.%s:%s/\"" 
-                % (host, self.env.HTTP_TLD, self.env.HTTP_PORT))
+            self.add_line(f"""
+                ProxyPass /proxy/ http://127.0.0.1:{self.env.HTTP_PORT}/
+                ProxyPassReverse /proxy/ http://{host}.{self.env.HTTP_TLD}:{self.env.HTTP_PORT}/
+            """)
         if h2proxy_self:
-            self.add_line("      ProxyPass \"/h2proxy/\" \"h2://127.0.0.1:%s/\"" % self.env.HTTPS_PORT)
-            self.add_line("      ProxyPassReverse \"/h2proxy/\" \"https://%s.%s:%s/\""
-                          % (host, self.env.HTTP_TLD, self.env.HTTPS_PORT))
+            self.add_line(f"""
+                ProxyPass /h2proxy/ h2://127.0.0.1:{self.env.HTTPS_PORT}/
+                ProxyPassReverse /h2proxy/ https://{host}.{self.env.HTTP_TLD}:self.env.HTTPS_PORT/
+            """)
         return self
     
-    def add_vhost_test1(self, proxy_self=False, h2proxy_self=False) :
+    def add_vhost_test1(self, proxy_self=False, h2proxy_self=False):
         self.start_vhost(
-            self.env.HTTP_PORT, "test1", aliasList=["www1"], docRoot="htdocs/test1", withSSL=False
+            self.env.HTTP_PORT, "test1", aliases=["www1"], doc_root="htdocs/test1", with_ssl=False
         ).add_line(
             "      Protocols h2c http/1.1"
         ).end_vhost()
         self.start_vhost(
-            self.env.HTTPS_PORT, "test1", aliasList=["www1"], docRoot="htdocs/test1", withSSL=True
-        ).add_line("      Protocols h2 http/1.1"
-        ).add_line("      <Location /006>"
-        ).add_line("        Options +Indexes"
-        ).add_line("        HeaderName /006/header.html"
-        ).add_line("      </Location>"
-        ).add_proxies( "test1", proxy_self, h2proxy_self 
-        ).end_vhost()
+            self.env.HTTPS_PORT, "test1", aliases=["www1"], doc_root="htdocs/test1", with_ssl=True)
+        self.add_line("""
+            Protocols h2 http/1.1
+            <Location /006>
+                Options +Indexes
+                HeaderName /006/header.html
+            </Location>""")
+        self.add_proxies("test1", proxy_self, h2proxy_self)
+        self.end_vhost()
         return self
         
     def add_vhost_test2(self):
-        self.start_vhost(self.env.HTTP_PORT, "test2", aliasList=["www2"], docRoot="htdocs/test2", withSSL=False
-        ).add_line("      Protocols http/1.1 h2c"
-        ).end_vhost()
-        self.start_vhost( self.env.HTTPS_PORT, "test2", aliasList=["www2"], docRoot="htdocs/test2", withSSL=True
-        ).add_line("      Protocols http/1.1 h2"
-        ).add_line("      <Location /006>"
-        ).add_line("        Options +Indexes"
-        ).add_line("        HeaderName /006/header.html"
-        ).add_line("      </Location>"
-        ).end_vhost()
+        self.start_vhost(self.env.HTTP_PORT, "test2", aliases=["www2"], doc_root="htdocs/test2", with_ssl=False)
+        self.add_line("      Protocols http/1.1 h2c")
+        self.end_vhost()
+        self.start_vhost(self.env.HTTPS_PORT, "test2", aliases=["www2"], doc_root="htdocs/test2", with_ssl=True)
+        self.add_line("""
+            Protocols http/1.1 h2
+            <Location /006>
+                Options +Indexes
+                HeaderName /006/header.html
+            </Location>""")
+        self.end_vhost()
         return self
 
     def add_vhost_cgi(self, proxy_self=False, h2proxy_self=False):
@@ -100,19 +104,20 @@ class HttpdConf(object):
         if h2proxy_self:
             self.add_line("      SSLProxyEngine on")
             self.add_line("      SSLProxyCheckPeerName off")
-        self.start_vhost(self.env.HTTPS_PORT, "cgi", aliasList=["cgi-alias"], docRoot="htdocs/cgi", withSSL=True)
-        self.add_line("      Protocols h2 http/1.1")
-        self.add_line("      SSLOptions +StdEnvVars")
-        self.add_line("      AddHandler cgi-script .py")
-        self.add_line("      <Location \"/.well-known/h2/state\">")
-        self.add_line("          SetHandler http2-status")
-        self.add_line("      </Location>")
+        self.start_vhost(self.env.HTTPS_PORT, "cgi", aliases=["cgi-alias"], doc_root="htdocs/cgi", with_ssl=True)
+        self.add_line("""
+            Protocols h2 http/1.1
+            SSLOptions +StdEnvVars
+            AddHandler cgi-script .py
+            <Location \"/.well-known/h2/state\">
+                SetHandler http2-status
+            </Location>""")
         self.add_proxies("cgi", proxy_self, h2proxy_self)
         self.add_line("      <Location \"/h2test/echo\">")
         self.add_line("          SetHandler h2test-echo")
         self.add_line("      </Location>")
         self.end_vhost()
-        self.start_vhost(self.env.HTTP_PORT, "cgi", aliasList=["cgi-alias"], docRoot="htdocs/cgi", withSSL=False)
+        self.start_vhost(self.env.HTTP_PORT, "cgi", aliases=["cgi-alias"], doc_root="htdocs/cgi", with_ssl=False)
         self.add_line("      AddHandler cgi-script .py")
         self.end_vhost()
         self.add_line("      LogLevel proxy:info")
@@ -120,13 +125,14 @@ class HttpdConf(object):
         return self
 
     def add_vhost_noh2(self):
-        self.start_vhost(self.env.HTTPS_PORT, "noh2", aliasList=["noh2-alias"], docRoot="htdocs/noh2", withSSL=True)
-        self.add_line("      Protocols http/1.1")
-        self.add_line("      SSLCertificateKeyFile conf/ssl/cert.pkey")
-        self.add_line("      SSLCertificateFile conf/ssl/noh2.%s_cert.pem" % self.env.HTTP_TLD)
-        self.add_line("      SSLOptions +StdEnvVars")
+        self.start_vhost(self.env.HTTPS_PORT, "noh2", aliases=["noh2-alias"], doc_root="htdocs/noh2", with_ssl=True)
+        self.add_line(f"""
+              Protocols http/1.1
+            SSLCertificateKeyFile conf/ssl/cert.pkey
+            SSLCertificateFile conf/ssl/noh2.{self.env.HTTP_TLD}_cert.pem
+            SSLOptions +StdEnvVars""")
         self.end_vhost()
-        self.start_vhost(self.env.HTTP_PORT, "noh2", aliasList=["noh2-alias"], docRoot="htdocs/noh2", withSSL=False)
+        self.start_vhost(self.env.HTTP_PORT, "noh2", aliases=["noh2-alias"], doc_root="htdocs/noh2", with_ssl=False)
         self.add_line("      Protocols http/1.1")
         self.add_line("      SSLOptions +StdEnvVars")
         self.end_vhost()

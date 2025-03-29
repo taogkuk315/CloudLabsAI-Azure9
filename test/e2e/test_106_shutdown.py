@@ -8,6 +8,7 @@ from threading import Thread
 import pytest
 
 from h2_conf import HttpdConf
+from h2_result import ExecResult
 
 
 class TestShutdown:
@@ -40,6 +41,7 @@ class TestShutdown:
         time.sleep(0.5)
         assert env.apache_restart() == 0
         t.join()
-        r = self.r
+        # noinspection PyTypeChecker
+        r: ExecResult = self.r
         assert r.response["status"] == 200
         assert len(r.response["body"]) == (lines * (len(text)+1))

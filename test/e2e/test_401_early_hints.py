@@ -9,7 +9,7 @@ class TestStore:
     @pytest.fixture(autouse=True, scope='class')
     def _class_scope(self, env):
         HttpdConf(env).start_vhost(
-            env.HTTPS_PORT, "hints", docRoot="htdocs/test1", withSSL=True
+            env.HTTPS_PORT, "hints", doc_root="htdocs/test1", with_ssl=True
         ).add_line("""    Protocols h2 http/1.1"
         H2EarlyHints on
         RewriteEngine on

@@ -1,10 +1,3 @@
-###################################################################################################
-# Utility class for calling and analysing nghttp calls
-#
-# (c) 2019 greenbytes GmbH, Stefan Eissing
-###################################################################################################
-
-import json
 import re
 import os
 import subprocess
@@ -19,36 +12,38 @@ from h2_result import ExecResult
 def _get_path(x):
     return x["path"]
     
+
 class Nghttp:
 
-    def __init__( self, path, connect_addr=None, tmp_dir="/tmp" ) :
+    def __init__(self, path, connect_addr=None, tmp_dir="/tmp"):
         self.NGHTTP = path
         self.CONNECT_ADDR = connect_addr
         self.TMP_DIR = tmp_dir
 
-    def get_stream( cls, streams, sid ) :
+    @staticmethod
+    def get_stream(streams, sid):
         sid = int(sid)
-        if not sid in streams:
+        if sid not in streams:
             streams[sid] = {
-                    "id" : sid,
-                    "header" : {},
-                    "request" : {
-                        "id" : sid,
-                        "body" : b'' 
+                    "id": sid,
+                    "header": {},
+                    "request": {
+                        "id": sid,
+                        "body": b''
                     },
-                    "response" : {
-                        "id" : sid, 
-                        "body" : b''
+                    "response": {
+                        "id": sid,
+                        "body": b''
                     },
-                    "paddings" : [],
-                    "promises" : []
+                    "paddings": [],
+                    "promises": []
             }
         return streams[sid] if sid in streams else None
 
-    def run( self, urls, timeout, options ) :
+    def run(self, urls, timeout, options):
         return self._baserun(urls, timeout, options)
 
-    def complete_args(self, url, timeout, options: [str]) -> [str]:
+    def complete_args(self, url, _timeout, options: [str]) -> [str]:
         if not isinstance(url, list):
             url = [url]
         u = urlparse(url[0])
@@ -80,7 +75,6 @@ class Nghttp:
         # Something not good enough for general purpose, but for these tests.
         output = {}
         body = ''
-        stream = 0
         streams = {}
         skip_indents = True
         # chunk output into lines. nghttp mixes text
@@ -90,9 +84,9 @@ class Nghttp:
             if len(l) == 0:
                 body += '\n'
                 continue
-            m = re.match(r'\[.*\] recv \(stream_id=(\d+)\) (\S+): (\S*)', l)
+            m = re.match(r'\[.*] recv \(stream_id=(\d+)\) (\S+): (\S*)', l)
             if m:
-                s = self.get_stream( streams, m.group(1) )
+                s = self.get_stream(streams, m.group(1))
                 hname = m.group(2)
                 hval = m.group(3)
                 print("stream %d header %s: %s" % (s["id"], hname, hval))
@@ -104,9 +98,9 @@ class Nghttp:
                 body = ''
                 continue
 
-            m = re.match(r'\[.*\] recv HEADERS frame <.* stream_id=(\d+)>', l)
+            m = re.match(r'\[.*] recv HEADERS frame <.* stream_id=(\d+)>', l)
             if m:
-                s = self.get_stream( streams, m.group(1) )
+                s = self.get_stream(streams, m.group(1))
                 if s:
                     print("stream %d: recv %d header" % (s["id"], len(s["header"]))) 
                     response = s["response"]
@@ -117,7 +111,7 @@ class Nghttp:
                             hkey = "trailer"
                         else:
                             prev = {
-                                "header" : h
+                                "header": h
                             }
                             if "previous" in response:
                                 prev["previous"] = response["previous"]
@@ -127,9 +121,9 @@ class Nghttp:
                 body = ''
                 continue
             
-            m = re.match(r'(.*)\[.*\] recv DATA frame <length=(\d+), .*stream_id=(\d+)>', l)
+            m = re.match(r'(.*)\[.*] recv DATA frame <length=(\d+), .*stream_id=(\d+)>', l)
             if m:
-                s = self.get_stream( streams, m.group(3) )
+                s = self.get_stream(streams, m.group(3))
                 body += m.group(1)
                 blen = int(m.group(2))
                 if s:
@@ -146,9 +140,9 @@ class Nghttp:
                 skip_indents = True
                 continue
                 
-            m = re.match(r'\[.*\] recv PUSH_PROMISE frame <.* stream_id=(\d+)>', l)
+            m = re.match(r'\[.*] recv PUSH_PROMISE frame <.* stream_id=(\d+)>', l)
             if m:
-                s = self.get_stream( streams, m.group(1) )
+                s = self.get_stream(streams, m.group(1))
                 if s:
                     # headers we have are request headers for the PUSHed stream
                     # these have been received on the originating stream, the promised
@@ -157,20 +151,20 @@ class Nghttp:
                     if len(lines) > lidx+2:
                         m2 = re.match(r'\s+\(.*promised_stream_id=(\d+)\)', lines[lidx+2])
                         if m2:
-                            s2 = self.get_stream( streams, m2.group(1) )
+                            s2 = self.get_stream(streams, m2.group(1))
                             s2["request"]["header"] = s["header"]
                             s["promises"].append(s2)
                     s["header"] = {} 
                 continue
                     
-            m = re.match(r'(.*)\[.*\] recv (\S+) frame <length=(\d+), .*stream_id=(\d+)>', l)
+            m = re.match(r'(.*)\[.*] recv (\S+) frame <length=(\d+), .*stream_id=(\d+)>', l)
             if m:
                 print("recv frame %s on stream %s" % (m.group(2), m.group(4)))
                 body += m.group(1)
                 skip_indents = True
                 continue
                 
-            m = re.match(r'(.*)\[.*\] send (\S+) frame <length=(\d+), .*stream_id=(\d+)>', l)
+            m = re.match(r'(.*)\[.*] send (\S+) frame <length=(\d+), .*stream_id=(\d+)>', l)
             if m:
                 print("send frame %s on stream %s" % (m.group(2), m.group(4)))
                 body += m.group(1)
@@ -199,23 +193,23 @@ class Nghttp:
             output["paddings"] = streams[main_stream]["paddings"]
         return output
     
-    def _raw( self, url, timeout, options ) :
-        args = [ "-v" ]
+    def _raw(self, url, timeout, options):
+        args = ["-v"]
         if options:
             args.extend(options)
-        r = self._baserun( url, timeout, args )
+        r = self._baserun(url, timeout, args)
         if 0 == r.exit_code:
             r.add_results(self.parse_output(r.outraw))
         return r
 
-    def get( self, url, timeout=5, options=None ) :
-        return self._raw( url, timeout, options )
+    def get(self, url, timeout=5, options=None):
+        return self._raw(url, timeout, options)
 
-    def assets( self, url, timeout=5, options=None ) :
+    def assets(self, url, timeout=5, options=None):
         if not options:
             options = []
-        options.extend([ "-ans" ]) 
-        r = self._baserun( url, timeout, options )
+        options.extend(["-ans"])
+        r = self._baserun(url, timeout, options)
         assets = []
         if 0 == r.exit_code:
             lines = re.findall(r'[^\n]*\n', r.stdout, re.MULTILINE)
@@ -223,24 +217,24 @@ class Nghttp:
                 m = re.match(r'\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+/(.*)', l)
                 if m:
                     assets.append({
-                        "path" : m.group(7),
-                        "status" : int(m.group(5)),
-                        "size" : m.group(6)
+                        "path": m.group(7),
+                        "status": int(m.group(5)),
+                        "size": m.group(6)
                     })
         assets.sort(key=_get_path)
         r.add_assets(assets)
         return r
 
-    def post_data( self, url, data, timeout=5, options=None ) :
+    def post_data(self, url, data, timeout=5, options=None):
         reqbody = ("%s/nghttp.req.body" % self.TMP_DIR)
         with open(reqbody, 'wb') as f:
             f.write(data.encode('utf-8'))
         if not options:
             options = []
-        options.extend([ "--data=%s" % reqbody ])
-        return self._raw( url, timeout, options )
+        options.extend(["--data=%s" % reqbody])
+        return self._raw(url, timeout, options)
 
-    def post_name( self, url, name, timeout=5, options=None ) :
+    def post_name(self, url, name, timeout=5, options=None):
         reqbody = ("%s/nghttp.req.body" % self.TMP_DIR)
         with open(reqbody, 'w') as f:
             f.write("--DSAJKcd9876\n")
@@ -250,16 +244,16 @@ class Nghttp:
             f.write("--DSAJKcd9876\n")
         if not options:
             options = []
-        options.extend([ "--data=%s" % reqbody ])
-        return self._raw( url, timeout, options )
+        options.extend(["--data=%s" % reqbody])
+        return self._raw(url, timeout, options)
 
-    def upload( self, url, fpath, timeout=5, options=None ) :
+    def upload(self, url, fpath, timeout=5, options=None):
         if not options:
             options = []
-        options.extend([ "--data=%s" % fpath ])
-        return self._raw( url, timeout, options )
+        options.extend(["--data=%s" % fpath])
+        return self._raw(url, timeout, options)
 
-    def upload_file( self, url, fpath, timeout=5, options=None ) :
+    def upload_file(self, url, fpath, timeout=5, options=None):
         fname = os.path.basename(fpath)
         reqbody = ("%s/nghttp.req.body" % self.TMP_DIR)
         with open(fpath, 'rb') as fin:
@@ -274,7 +268,7 @@ Content-Disposition: form-data; name="file"; filename="%s"
 Content-Type: application/octet-stream
 Content-Transfer-Encoding: binary
 
-""" % (fname)).encode('utf-8'))
+""" % fname).encode('utf-8'))
                 f.write(fin.read())
                 f.write("""
 --DSAJKcd9876""".encode('utf-8'))
@@ -283,15 +277,12 @@ Content-Transfer-Encoding: binary
         options.extend([ 
             "--data=%s" % reqbody, 
             "--expect-continue", 
-            "-HContent-Type: multipart/form-data; boundary=DSAJKcd9876" ])
-        return self._raw( url, timeout, options )
+            "-HContent-Type: multipart/form-data; boundary=DSAJKcd9876"])
+        return self._raw(url, timeout, options)
 
-    def _run( self, args, input=None ) -> ExecResult:
+    def _run(self, args) -> ExecResult:
         print(("execute: %s" % " ".join(args)))
         start = datetime.now()
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         return ExecResult(exit_code=p.returncode, stdout=p.stdout, stderr=p.stderr,
                           duration=datetime.now() - start)
-
-
-

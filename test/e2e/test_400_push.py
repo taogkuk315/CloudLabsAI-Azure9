@@ -10,7 +10,7 @@ class TestStore:
     @pytest.fixture(autouse=True, scope='class')
     def _class_scope(self, env):
         HttpdConf(env).start_vhost(
-            env.HTTPS_PORT, "push", docRoot="htdocs/test1", withSSL=True
+            env.HTTPS_PORT, "push", doc_root="htdocs/test1", with_ssl=True
         ).add_line(r"""    Protocols h2 http/1.1"
         RewriteEngine on
         RewriteRule ^/006-push(.*)?\.html$ /006.html

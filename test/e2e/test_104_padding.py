@@ -14,27 +14,27 @@ class TestStore:
     def _class_scope(self, env):
         conf = HttpdConf(env)
         conf.add_vhost_cgi()
-        conf.start_vhost(env.HTTPS_PORT, "pad0", docRoot="htdocs/cgi", withSSL=True)
+        conf.start_vhost(env.HTTPS_PORT, "pad0", doc_root="htdocs/cgi", with_ssl=True)
         conf.add_line("Protocols h2 http/1.1")
         conf.add_line("H2Padding 0")
         conf.add_line("AddHandler cgi-script .py")
         conf.end_vhost()
-        conf.start_vhost(env.HTTPS_PORT, "pad1", docRoot="htdocs/cgi", withSSL=True)
+        conf.start_vhost(env.HTTPS_PORT, "pad1", doc_root="htdocs/cgi", with_ssl=True)
         conf.add_line("Protocols h2 http/1.1")
         conf.add_line("H2Padding 1")
         conf.add_line("AddHandler cgi-script .py")
         conf.end_vhost()
-        conf.start_vhost(env.HTTPS_PORT, "pad2", docRoot="htdocs/cgi", withSSL=True)
+        conf.start_vhost(env.HTTPS_PORT, "pad2", doc_root="htdocs/cgi", with_ssl=True)
         conf.add_line("Protocols h2 http/1.1")
         conf.add_line("H2Padding 2")
         conf.add_line("AddHandler cgi-script .py")
         conf.end_vhost()
-        conf.start_vhost(env.HTTPS_PORT, "pad3", docRoot="htdocs/cgi", withSSL=True)
+        conf.start_vhost(env.HTTPS_PORT, "pad3", doc_root="htdocs/cgi", with_ssl=True)
         conf.add_line("Protocols h2 http/1.1")
         conf.add_line("H2Padding 3")
         conf.add_line("AddHandler cgi-script .py")
         conf.end_vhost()
-        conf.start_vhost(env.HTTPS_PORT, "pad8", docRoot="htdocs/cgi", withSSL=True)
+        conf.start_vhost(env.HTTPS_PORT, "pad8", doc_root="htdocs/cgi", with_ssl=True)
         conf.add_line("Protocols h2 http/1.1")
         conf.add_line("H2Padding 8")
         conf.add_line("AddHandler cgi-script .py")
@@ -49,8 +49,8 @@ class TestStore:
         url = env.mkurl("https", "cgi", "/echo.py")
         # we get 2 frames back: one with data and an empty one with EOF
         # check the number of padding bytes is as expected
-        for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
-            r = r = env.nghttp().post_data(url, data, 5)
+        for data in ["x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx"]:
+            r = env.nghttp().post_data(url, data, 5)
             assert 200 == r.response["status"]
             assert r.results["paddings"] == [
                 frame_padding(len(data)+1, 0), 
@@ -60,16 +60,16 @@ class TestStore:
     # 0 bits of padding
     def test_104_02(self, env):
         url = env.mkurl("https", "pad0", "/echo.py")
-        for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
-            r = r = env.nghttp().post_data(url, data, 5)
+        for data in ["x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx"]:
+            r = env.nghttp().post_data(url, data, 5)
             assert 200 == r.response["status"]
-            assert r.results["paddings"] == [ 0, 0 ]
+            assert r.results["paddings"] == [0, 0]
 
     # 1 bit of padding
     def test_104_03(self, env):
         url = env.mkurl("https", "pad1", "/echo.py")
-        for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
-            r = r = env.nghttp().post_data(url, data, 5)
+        for data in ["x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx"]:
+            r = env.nghttp().post_data(url, data, 5)
             assert 200 == r.response["status"]
             for i in r.results["paddings"]:
                 assert i in range(0, 2)
@@ -77,8 +77,8 @@ class TestStore:
     # 2 bits of padding
     def test_104_04(self, env):
         url = env.mkurl("https", "pad2", "/echo.py")
-        for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
-            r = r = env.nghttp().post_data(url, data, 5)
+        for data in ["x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx"]:
+            r = env.nghttp().post_data(url, data, 5)
             assert 200 == r.response["status"]
             for i in r.results["paddings"]:
                 assert i in range(0, 4)
@@ -86,8 +86,8 @@ class TestStore:
     # 3 bits of padding
     def test_104_05(self, env):
         url = env.mkurl("https", "pad3", "/echo.py")
-        for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
-            r = r = env.nghttp().post_data(url, data, 5)
+        for data in ["x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx"]:
+            r = env.nghttp().post_data(url, data, 5)
             assert 200 == r.response["status"]
             for i in r.results["paddings"]:
                 assert i in range(0, 8)
@@ -95,9 +95,8 @@ class TestStore:
     # 8 bits of padding
     def test_104_06(self, env):
         url = env.mkurl("https", "pad8", "/echo.py")
-        for data in [ "x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx" ]:
-            r = r = env.nghttp().post_data(url, data, 5)
+        for data in ["x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxx", "xxxxxxxx"]:
+            r = env.nghttp().post_data(url, data, 5)
             assert 200 == r.response["status"]
             for i in r.results["paddings"]:
                 assert i in range(0, 256)
-

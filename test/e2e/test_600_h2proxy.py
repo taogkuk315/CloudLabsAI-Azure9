@@ -22,5 +22,3 @@ class TestStore:
         assert "" != r.response["json"]["ssl_protocol"]
         assert "on" == r.response["json"]["h2"]
         assert "off" == r.response["json"]["h2push"]
-
-

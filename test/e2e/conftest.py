@@ -7,8 +7,10 @@ import pytest
 
 from h2_env import H2TestEnv
 
+
 class Dummy:
     pass
+
 
 def pytest_report_header(config, startdir):
     our_dir = os.path.dirname(inspect.getfile(Dummy))

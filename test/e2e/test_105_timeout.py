@@ -35,7 +35,7 @@ class TestStore:
         sock = socket.create_connection((host, int(env.HTTPS_PORT)))
         try:
             sock.settimeout(0.5)
-            buff = sock.recv(1024)
+            sock.recv(1024)
             assert False
         except Exception as ex:
             print(f"as expected: {ex}")
@@ -66,7 +66,7 @@ class TestStore:
         sock = socket.create_connection((host, int(env.HTTPS_PORT)))
         try:
             sock.settimeout(0.5)
-            buff = sock.recv(1024)
+            sock.recv(1024)
             assert False
         except Exception as ex:
             print(f"as expected: {ex}")

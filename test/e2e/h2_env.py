@@ -106,7 +106,7 @@ class H2TestEnv:
     def e2e_src(self, path):
         return os.path.join(self.E2E_DIR, path)
 
-    def run(self, args, input=None) -> ExecResult:
+    def run(self, args) -> ExecResult:
         print("execute: %s" % " ".join(args))
         start = datetime.now()
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -240,7 +240,6 @@ class H2TestEnv:
         return self.curl_raw(url, timeout=timeout, options=options)
 
     def curl_upload(self, url, fpath, timeout=5, options=None):
-        fname = os.path.basename(fpath)
         if not options:
             options = []
         options.extend([
@@ -273,10 +272,10 @@ class H2TestEnv:
         return Nghttp(self.NGHTTP, connect_addr=self.HTTPD_ADDR, tmp_dir=self.GEN_DIR)
 
     def h2load_status(self, run: ExecResult):
-        stats ={}
+        stats = {}
         m = re.search(
-            r'requests: (\d+) total, (\d+) started, (\d+) done, (\d+) succeeded, (\d+) failed, (\d+) errored, (\d+) timeout',
-            run.stdout)
+            r'requests: (\d+) total, (\d+) started, (\d+) done, (\d+) succeeded'
+            r', (\d+) failed, (\d+) errored, (\d+) timeout', run.stdout)
         if m:
             stats["requests"] = {
                 "total": int(m.group(1)),
@@ -297,7 +296,7 @@ class H2TestEnv:
         return run
 
     def setup_data_1k_1m(self):
-        s100="012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678\n"
+        s100 = "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678\n"
         with open(os.path.join(self.GEN_DIR, "data-1k"), 'w') as f:
             for i in range(10):
                 f.write(s100)

@@ -33,11 +33,12 @@ class TestStore:
         m = 5
         conn = 1
         fname = "data-100k"
-        args = [ env.H2LOAD, "-n", "%d" % (n), "-c", "%d" % (conn), "-m", "%d" % (m), 
+        args = [
+            env.H2LOAD, "-n", str(n), "-c", str(conn), "-m", str(m),
             "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT),
-            "-d", os.path.join(env.GEN_DIR, fname),  
-            url ]
-        r = env.run( args ) 
+            "-d", os.path.join(env.GEN_DIR, fname), url
+        ]
+        r = env.run(args)
         self.check_h2load_ok(env, r, n)
 
     # test POST on cgi via http/1.1 proxy, where input is read
@@ -47,11 +48,12 @@ class TestStore:
         m = 5
         conn = 1
         fname = "data-100k"
-        args = [ env.H2LOAD, "-n", "%d" % (n), "-c", "%d" % (conn), "-m", "%d" % (m), 
+        args = [
+            env.H2LOAD, "-n", str(n), "-c", str(conn), "-m", str(m),
             "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT),
-            "-d", os.path.join(env.GEN_DIR, fname),  
-            url ]
-        r = env.run( args ) 
+            "-d", os.path.join(env.GEN_DIR, fname), url
+        ]
+        r = env.run(args)
         self.check_h2load_ok(env, r, n)
 
     # test POST on cgi via h2proxy, where input is read
@@ -61,9 +63,10 @@ class TestStore:
         m = 5
         conn = 1
         fname = "data-100k"
-        args = [ env.H2LOAD, "-n", "%d" % (n), "-c", "%d" % (conn), "-m", "%d" % (m), 
+        args = [
+            env.H2LOAD, "-n", str(n), "-c", str(conn), "-m", str(m),
             "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT),
-            "-d", os.path.join(env.GEN_DIR, fname),  
-            url ]
-        r = env.run( args ) 
+            "-d", os.path.join(env.GEN_DIR, fname), url
+        ]
+        r = env.run(args)
         self.check_h2load_ok(env, r, n)
