@@ -1,8 +1,4 @@
-import inspect
 import logging
-import os
-from configparser import ConfigParser
-
 import pytest
 
 from h2_env import H2TestEnv
@@ -13,11 +9,11 @@ class Dummy:
 
 
 def pytest_report_header(config, startdir):
-    our_dir = os.path.dirname(inspect.getfile(Dummy))
-    config = ConfigParser()
-    config.read(os.path.join(our_dir, 'config.ini'))
-    return "mod_h2: [apache: {prefix}]".format(
-        prefix=config.get('global', 'prefix'),
+    env = H2TestEnv()
+    return "mod_h2 [apache: {aversion}({prefix}), mpm: {mpm}]".format(
+        prefix=env.prefix,
+        aversion=env.get_httpd_version(),
+        mpm=env.mpm_type
     )
 
 

@@ -24,87 +24,129 @@ class Dummy:
 
 class H2TestEnv:
 
-    PREFIX = "/usr"
-    GEN_DIR = "gen"
-    WEBROOT = "gen/apache"
-    CURL = "curl"
-    TEST_DIR = "test"
-    NGHTTP = "nghttp"
-    H2LOAD = "h2load"
-
-    HTTP_PORT = 42001
-    HTTPS_PORT = 42002
-    HTTP_TLD = "tests.httpd.apache.org"
-
-    APACHECTL = os.path.join(PREFIX, 'bin', 'apachectl')
-
-    HTTPD_ADDR = "127.0.0.1"
-    HTTP_URL = "http://{0}:{1}".format(HTTPD_ADDR, HTTP_PORT)
-    HTTPS_URL = "https://{0}:{1}".format(HTTPD_ADDR, HTTPS_PORT)
-
-    HTTPD_CONF_DIR = os.path.join(WEBROOT, "conf")
-    HTTPD_DOCS_DIR = os.path.join(WEBROOT, "htdocs")
-    HTTPD_LOGS_DIR = os.path.join(WEBROOT, "logs")
-    HTTPD_TEST_CONF = os.path.join(HTTPD_CONF_DIR, "test.conf")
-    E2E_DIR = os.path.join(TEST_DIR, "e2e")
-
-    VERIFY_CERTIFICATES = False
-
     def __init__(self):
         our_dir = os.path.dirname(inspect.getfile(Dummy))
         self.config = ConfigParser()
         self.config.read(os.path.join(our_dir, 'config.ini'))
 
-        self.PREFIX = self.config.get('global', 'prefix')
-        self.GEN_DIR = self.config.get('global', 'gen_dir')
-        self.WEBROOT = self.config.get('global', 'server_dir')
-        self.CURL = self.config.get('global', 'curl_bin')
-        self.TEST_DIR = self.config.get('global', 'test_dir')
-        self.NGHTTP = self.config.get('global', 'nghttp')
-        self.H2LOAD = self.config.get('global', 'h2load')
+        self._prefix = self.config.get('global', 'prefix')
+        self._gen_dir = self.config.get('global', 'gen_dir')
+        self._server_dir = self.config.get('global', 'server_dir')
+        self._server_conf_dir = os.path.join(self._server_dir, "conf")
+        self._server_docs_dir = os.path.join(self._server_dir, "htdocs")
+        self._server_logs_dir = os.path.join(self.server_dir, "logs")
+        self._curl = self.config.get('global', 'curl_bin')
+        self._test_dir = self.config.get('global', 'test_dir')
+        self._nghttp = self.config.get('global', 'nghttp')
+        self._h2load = self.config.get('global', 'h2load')
 
-        self.HTTP_PORT = self.config.get('httpd', 'http_port')
-        self.HTTPS_PORT = self.config.get('httpd', 'https_port')
-        self.HTTP_TLD = self.config.get('httpd', 'http_tld')
+        self._http_port = int(self.config.get('httpd', 'http_port'))
+        self._https_port = int(self.config.get('httpd', 'https_port'))
+        self._http_tld = self.config.get('httpd', 'http_tld')
 
-        self.APACHECTL = os.path.join(self.PREFIX, 'bin', 'apachectl')
+        self._mpm_type = os.environ['MPM'] if 'MPM' in os.environ else 'event'
+        self._apxs = os.path.join(self._prefix, 'bin', 'apxs')
+        self._apachectl = os.path.join(self.get_apxs_var('SBINDIR'), 'apachectl')
+        self._libexec_dir = self.get_apxs_var('LIBEXECDIR')
 
-        self.HTTPD_ADDR = "127.0.0.1"
-        self.HTTP_URL = "http://" + self.HTTPD_ADDR + ":" + self.HTTP_PORT
-        self.HTTPS_URL = "https://" + self.HTTPD_ADDR + ":" + self.HTTPS_PORT
+        self._httpd_addr = "127.0.0.1"
+        self._http_base = f"http://{self._httpd_addr}:{self.http_port}"
+        self._https_base = f"https://{self._httpd_addr}:{self.https_port}"
 
-        self.HTTPD_CONF_DIR = os.path.join(self.WEBROOT, "conf")
-        self.HTTPD_DOCS_DIR = os.path.join(self.WEBROOT, "htdocs")
-        self.HTTPD_LOGS_DIR = os.path.join(self.WEBROOT, "logs")
-        self.HTTPD_TEST_CONF = os.path.join(self.HTTPD_CONF_DIR, "test.conf")
-        self.E2E_DIR = os.path.join(self.TEST_DIR, "e2e")
+        self._test_conf = os.path.join(self._server_conf_dir, "test.conf")
+        self._e2e_dir = os.path.join(self._test_dir, "e2e")
 
-        self.VERIFY_CERTIFICATES = False
-        if not os.path.exists(self.GEN_DIR):
-            os.makedirs(self.GEN_DIR)
+        self._verify_certs = False
+        if not os.path.exists(self.gen_dir):
+            os.makedirs(self.gen_dir)
+
+    @property
+    def prefix(self) -> str:
+        return self._prefix
+
+    @property
+    def mpm_type(self) -> str:
+        return self._mpm_type
+
+    @property
+    def http_port(self) -> int:
+        return self._http_port
+
+    @property
+    def https_port(self) -> int:
+        return self._https_port
+
+    @property
+    def http_tld(self) -> str:
+        return self._http_tld
+
+    @property
+    def http_base_url(self) -> str:
+        return self._http_base
+
+    @property
+    def https_base_url(self) -> str:
+        return self._https_base
+
+    @property
+    def gen_dir(self) -> str:
+        return self._gen_dir
+
+    @property
+    def server_dir(self) -> str:
+        return self._server_dir
+
+    @property
+    def server_logs_dir(self) -> str:
+        return self._server_logs_dir
+
+    @property
+    def libexec_dir(self) -> str:
+        return self._libexec_dir
+
+    @property
+    def server_conf_dir(self) -> str:
+        return self._server_conf_dir
+
+    @property
+    def server_docs_dir(self) -> str:
+        return self._server_docs_dir
+
+    @property
+    def h2load(self) -> str:
+        return self._h2load
 
     def has_h2load(self):
-        return self.H2LOAD != ""
+        return self._h2load != ""
 
     def has_nghttp(self):
-        return self.NGHTTP != ""
+        return self._nghttp != ""
 
     def has_nghttp_get_assets(self):
         if not self.has_nghttp():
             return False
-        args = [self.NGHTTP, "-a"]
+        args = [self._nghttp, "-a"]
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         rv = p.returncode
         if rv != 0:
             return False
         return p.stderr == ""
 
+    def get_apxs_var(self, name: str) -> str:
+        p = subprocess.run([self._apxs, "-q", name], capture_output=True, text=True)
+        if p.returncode != 0:
+            return ""
+        return p.stdout.strip()
+
+    def get_httpd_version(self) -> str:
+        return self.get_apxs_var("HTTPD_VERSION")
+
     def mkpath(self, path):
         if not os.path.exists(path):
             return os.makedirs(path)
 
     def e2e_src(self, path):
-        return os.path.join(self.E2E_DIR, path)
+        return os.path.join(self._e2e_dir, path)
 
     def run(self, args) -> ExecResult:
         print("execute: %s" % " ".join(args))
@@ -114,8 +156,8 @@ class H2TestEnv:
                           duration=datetime.now() - start)
 
     def mkurl(self, scheme, hostname, path='/'):
-        port = self.HTTPS_PORT if scheme == 'https' else self.HTTP_PORT
-        return "%s://%s.%s:%s%s" % (scheme, hostname, self.HTTP_TLD, port, path)
+        port = self.https_port if scheme == 'https' else self.http_port
+        return "%s://%s.%s:%s%s" % (scheme, hostname, self.http_tld, port, path)
 
     def is_live(self, url, timeout):
         s = requests.Session()
@@ -124,7 +166,7 @@ class H2TestEnv:
         while time.time() < try_until:
             try:
                 req = requests.Request('HEAD', url).prepare()
-                s.send(req, verify=self.VERIFY_CERTIFICATES, timeout=timeout)
+                s.send(req, verify=self._verify_certs, timeout=timeout)
                 return True
             except IOError:
                 print("connect error: %s" % sys.exc_info()[0])
@@ -142,7 +184,7 @@ class H2TestEnv:
         while time.time() < try_until:
             try:
                 req = requests.Request('HEAD', url).prepare()
-                s.send(req, verify=self.VERIFY_CERTIFICATES, timeout=timeout)
+                s.send(req, verify=self._verify_certs, timeout=timeout)
                 time.sleep(.2)
             except IOError:
                 return True
@@ -154,16 +196,16 @@ class H2TestEnv:
     def apachectl(self, cmd, conf=None, check_live=True):
         if conf:
             self.install_test_conf(conf)
-        args = [self.APACHECTL, "-d", self.WEBROOT, "-k", cmd]
+        args = [self._apachectl, "-d", self.server_dir, "-k", cmd]
         print("execute: %s" % " ".join(args))
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
         sys.stderr.write(p.stderr)
         rv = p.returncode
         if rv == 0:
             if check_live:
-                rv = 0 if self.is_live(self.HTTP_URL, 10) else -1
+                rv = 0 if self.is_live(self._http_base, 10) else -1
             else:
-                rv = 0 if self.is_dead(self.HTTP_URL, 10) else -1
+                rv = 0 if self.is_dead(self._http_base, 10) else -1
                 print("waited for a apache.is_dead, rv=%d" % rv)
         return rv
 
@@ -183,20 +225,20 @@ class H2TestEnv:
             conf_src = conf
         else:
             conf_src = os.path.join("data", conf + ".conf")
-        copyfile(conf_src, self.HTTPD_TEST_CONF)
+        copyfile(conf_src, self._test_conf)
 
     def curl_complete_args(self, urls, timeout, options):
         if not isinstance(urls, list):
             urls = [urls]
         u = urlparse(urls[0])
-        headerfile = ("%s/curl.headers" % self.GEN_DIR)
+        headerfile = ("%s/curl.headers" % self.gen_dir)
         if os.path.isfile(headerfile):
             os.remove(headerfile)
 
         args = [ 
-            self.CURL,
+            self._curl,
             "-ks", "-D", headerfile, 
-            "--resolve", ("%s:%s:%s" % (u.hostname, u.port, self.HTTPD_ADDR)),
+            "--resolve", ("%s:%s:%s" % (u.hostname, u.port, self._httpd_addr)),
             "--connect-timeout", ("%d" % timeout) 
         ]
         if options:
@@ -269,7 +311,7 @@ class H2TestEnv:
         return -1
         
     def nghttp(self):
-        return Nghttp(self.NGHTTP, connect_addr=self.HTTPD_ADDR, tmp_dir=self.GEN_DIR)
+        return Nghttp(self._nghttp, connect_addr=self._httpd_addr, tmp_dir=self.gen_dir)
 
     def h2load_status(self, run: ExecResult):
         stats = {}
@@ -297,15 +339,15 @@ class H2TestEnv:
 
     def setup_data_1k_1m(self):
         s100 = "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678\n"
-        with open(os.path.join(self.GEN_DIR, "data-1k"), 'w') as f:
+        with open(os.path.join(self.gen_dir, "data-1k"), 'w') as f:
             for i in range(10):
                 f.write(s100)
-        with open(os.path.join(self.GEN_DIR, "data-10k"), 'w') as f:
+        with open(os.path.join(self.gen_dir, "data-10k"), 'w') as f:
             for i in range(100):
                 f.write(s100)
-        with open(os.path.join(self.GEN_DIR, "data-100k"), 'w') as f:
+        with open(os.path.join(self.gen_dir, "data-100k"), 'w') as f:
             for i in range(1000):
                 f.write(s100)
-        with open(os.path.join(self.GEN_DIR, "data-1m"), 'w') as f:
+        with open(os.path.join(self.gen_dir, "data-1m"), 'w') as f:
             for i in range(10000):
                 f.write(s100)

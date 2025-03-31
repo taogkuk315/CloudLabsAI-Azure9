@@ -33,9 +33,9 @@ class TestStore:
         m = 1
         conn = 1
         fname = "data-10k"
-        args = [env.H2LOAD, "-n", "%d" % n, "-c", "%d" % conn, "-m", "%d" % m,
-                "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT),
-                "-d", os.path.join(env.GEN_DIR, fname), url]
+        args = [env.h2load, "-n", "%d" % n, "-c", "%d" % conn, "-m", "%d" % m,
+                f"--base-uri={env.https_base_url}",
+                "-d", os.path.join(env.gen_dir, fname), url]
         r = env.run(args)
         self.check_h2load_ok(env, r, n)
 
@@ -45,9 +45,9 @@ class TestStore:
         m = 100
         conn = 1
         fname = "data-1k"
-        args = [env.H2LOAD, "-n", "%d" % n, "-c", "%d" % conn, "-m", "%d" % m,
-                "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT),
-                "-d", os.path.join(env.GEN_DIR, fname), url]
+        args = [env.h2load, "-n", "%d" % n, "-c", "%d" % conn, "-m", "%d" % m,
+                f"--base-uri={env.https_base_url}",
+                "-d", os.path.join(env.gen_dir, fname), url]
         r = env.run(args)
         self.check_h2load_ok(env, r, n)
 
@@ -57,8 +57,8 @@ class TestStore:
         m = 50
         conn = 1
         fname = "data-100k"
-        args = [env.H2LOAD, "-n", "%d" % n, "-c", "%d" % conn, "-m", "%d" % m,
-                "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT),
-                "-d", os.path.join(env.GEN_DIR, fname), url]
+        args = [env.h2load, "-n", "%d" % n, "-c", "%d" % conn, "-m", "%d" % m,
+                f"--base-uri={env.https_base_url}",
+                "-d", os.path.join(env.gen_dir, fname), url]
         r = env.run(args)
         self.check_h2load_ok(env, r, n)

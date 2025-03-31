@@ -32,8 +32,8 @@ class TestStore:
         text = "X"
         chunk = 32
         for n in range(0, 5):
-            args = [env.H2LOAD, "-n", "%d" % chunk, "-c", "1", "-m", "10",
-                    "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT)]
+            args = [env.h2load, "-n", "%d" % chunk, "-c", "1", "-m", "10",
+                    f"--base-uri={env.https_base_url}"]
             for i in range(0, chunk):
                 args.append(env.mkurl("https", "cgi", ("/mnot164.py?count=%d&text=%s" % (start+(n*chunk)+i, text))))
             r = env.run(args)
@@ -48,8 +48,8 @@ class TestStore:
         start = 1200
         chunk = 64
         for n in range(0, 5):
-            args = [env.H2LOAD, "-n", "%d" % chunk, "-c", "%d" % conns, "-m", "10",
-                    "--base-uri=https://%s:%s" % (env.HTTPD_ADDR, env.HTTPS_PORT)]
+            args = [env.h2load, "-n", "%d" % chunk, "-c", "%d" % conns, "-m", "10",
+                    f"--base-uri={env.https_base_url}"]
             for i in range(0, chunk):
                 args.append(env.mkurl("https", "cgi", ("/mnot164.py?count=%d&text=%s" % (start+(n*chunk)+i, text))))
             r = env.run(args)

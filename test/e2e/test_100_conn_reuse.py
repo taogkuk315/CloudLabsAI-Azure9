@@ -27,7 +27,7 @@ class TestStore:
     # access a ServerAlias, after using ServerName in SNI
     def test_100_02(self, env):
         url = env.mkurl("https", "cgi", "/hello.py")
-        hostname = ("cgi-alias.%s" % env.HTTP_TLD)
+        hostname = ("cgi-alias.%s" % env.http_tld)
         r = env.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
         assert 200 == r.response["status"]
         assert "HTTP/2" == r.response["protocol"]
@@ -36,7 +36,7 @@ class TestStore:
     # access another vhost, after using ServerName in SNI, that uses same SSL setup
     def test_100_03(self, env):
         url = env.mkurl("https", "cgi", "/")
-        hostname = ("test1.%s" % env.HTTP_TLD)
+        hostname = ("test1.%s" % env.http_tld)
         r = env.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
         assert 200 == r.response["status"]
         assert "HTTP/2" == r.response["protocol"]
@@ -46,13 +46,13 @@ class TestStore:
     # that has different SSL certificate. This triggers a 421 (misdirected request) response.
     def test_100_04(self, env):
         url = env.mkurl("https", "cgi", "/hello.py")
-        hostname = ("noh2.%s" % env.HTTP_TLD)
+        hostname = ("noh2.%s" % env.http_tld)
         r = env.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
         assert 421 == r.response["status"]
 
     # access an unknown vhost, after using ServerName in SNI
     def test_100_05(self, env):
         url = env.mkurl("https", "cgi", "/hello.py")
-        hostname = ("unknown.%s" % env.HTTP_TLD)
+        hostname = ("unknown.%s" % env.http_tld)
         r = env.curl_get(url, 5, [ "-H", "Host:%s" % hostname ])
         assert 421 == r.response["status"]

@@ -20,7 +20,7 @@ class TestStore:
     # upload and GET again using curl, compare to original content
     def curl_upload_and_verify(self, env, fname, options=None):
         url = env.mkurl("https", "cgi", "/upload.py")
-        fpath = os.path.join(env.GEN_DIR, fname)
+        fpath = os.path.join(env.gen_dir, fname)
         r = env.curl_upload(url, fpath, options=options)
         assert r.exit_code == 0
         assert r.response["status"] >= 200 and r.response["status"] < 300
@@ -76,7 +76,7 @@ class TestStore:
 
     # verify that we parse nghttp output correctly
     def check_nghttp_body(self, env, ref_input, nghttp_output):
-        with open(env.e2e_src(os.path.join(env.GEN_DIR, ref_input)), mode='rb') as f:
+        with open(env.e2e_src(os.path.join(env.gen_dir, ref_input)), mode='rb') as f:
             refbody = f.read()
         with open(env.e2e_src(nghttp_output), mode='rb') as f:
             text = f.read()
@@ -84,7 +84,7 @@ class TestStore:
         assert "response" in o
         assert "body" in o["response"]
         if refbody != o["response"]["body"]:
-            with open(env.e2e_src(os.path.join(env.GEN_DIR, '%s.parsed' % ref_input)), mode='bw') as f:
+            with open(env.e2e_src(os.path.join(env.gen_dir, '%s.parsed' % ref_input)), mode='bw') as f:
                 f.write(o["response"]["body"])
         assert len(refbody) == len(o["response"]["body"])
         assert refbody == o["response"]["body"]
@@ -97,7 +97,7 @@ class TestStore:
     # POST some data using nghttp and see it echo'ed properly back
     def nghttp_post_and_verify(self, env, fname, options=None):
         url = env.mkurl("https", "cgi", "/echo.py")
-        fpath = os.path.join(env.GEN_DIR, fname)
+        fpath = os.path.join(env.gen_dir, fname)
 
         r = env.nghttp().upload(url, fpath, options=options)
         assert r.exit_code == 0
@@ -122,7 +122,7 @@ class TestStore:
     # upload and GET again using nghttp, compare to original content
     def nghttp_upload_and_verify(self, env, fname, options=None):
         url = env.mkurl("https", "cgi", "/upload.py")
-        fpath = os.path.join(env.GEN_DIR, fname)
+        fpath = os.path.join(env.gen_dir, fname)
 
         r = env.nghttp().upload_file(url, fpath, options=options)
         assert r.exit_code == 0
@@ -159,7 +159,7 @@ class TestStore:
         full_length = 1000
         chunk = 200
         self.curl_upload_and_verify(env, resource, ["-v", "--http2"])
-        logfile = os.path.join(env.HTTPD_LOGS_DIR, "test_004_30")
+        logfile = os.path.join(env.server_logs_dir, "test_004_30")
         if os.path.isfile(logfile):
             os.remove(logfile)
         HttpdConf(env).add_line("""
@@ -195,7 +195,7 @@ CustomLog logs/test_004_30 issue_203
         # echo content using h2test_module "echo" handler
         def post_and_verify(fname, options=None):
             url = env.mkurl("https", "cgi", "/h2test/echo")
-            fpath = os.path.join(env.GEN_DIR, fname)
+            fpath = os.path.join(env.gen_dir, fname)
             r = env.curl_upload(url, fpath, options=options)
             assert r.exit_code == 0
             assert r.response["status"] >= 200 and r.response["status"] < 300

@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from h2_conf import HttpdConf
 from h2_env import H2TestEnv
+from h2_result import ExecResult
 
 log = logging.getLogger(__name__)
 
@@ -176,10 +177,21 @@ class H2LoadMonitor:
         self._tqdm.close()
 
 
+def mk_text_file(fpath: str, lines: int):
+    t110 = ""
+    for _ in range(11):
+        t110 += "0123456789"
+    with open(fpath, "w") as fd:
+        for i in range(lines):
+            fd.write("{0:015d}: ".format(i))  # total 128 bytes per line
+            fd.write(t110)
+            fd.write("\n")
+
+
 class LoadTestCase:
 
     @staticmethod
-    def from_scenario(scenario: Dict, env: H2TestEnv) -> 'SingleFileLoadTest':
+    def from_scenario(scenario: Dict, env: H2TestEnv) -> 'UrlsLoadTest':
         raise NotImplemented
 
     def run(self) -> H2LoadLogSummary:
@@ -270,7 +282,7 @@ class LoadTestCase:
         conf.write()
 
 
-class SingleFileLoadTest(LoadTestCase):
+class UrlsLoadTest(LoadTestCase):
 
     def __init__(self, env: H2TestEnv, location: str,
                  clients: int, requests: int, resource_kb: int,
@@ -284,10 +296,11 @@ class SingleFileLoadTest(LoadTestCase):
         self._ssl_module = ssl_module
         self._protocol = protocol
         self._threads = threads if threads is not None else min(multiprocessing.cpu_count()/2, self._clients)
+        self._url_file = "{gen_dir}/h2load-urls.txt".format(gen_dir=self.env.gen_dir)
 
     @staticmethod
-    def from_scenario(scenario: Dict, env: H2TestEnv) -> 'SingleFileLoadTest':
-        return SingleFileLoadTest(
+    def from_scenario(scenario: Dict, env: H2TestEnv) -> 'UrlsLoadTest':
+        return UrlsLoadTest(
             env=env,
             location=scenario['location'],
             clients=scenario['clients'], requests=scenario['requests'],
@@ -295,13 +308,25 @@ class SingleFileLoadTest(LoadTestCase):
             protocol=scenario['protocol'] if 'protocol' in scenario else 'h2'
         )
 
-    def _setup(self) -> str:
+    def _setup(self, cls):
         LoadTestCase.server_setup(env=self.env, ssl_module=self._ssl_module)
-        docs_a = os.path.join(self.env.server_docs_dir, self.env.domain_a)
-        fname = "{0}k.txt".format(self._resource_kb)
-        mk_text_file(os.path.join(docs_a, fname), 8 * self._resource_kb)
+        if not cls.SETUP_DONE:
+            with tqdm(desc="setup resources", total=self._file_count, unit="file", leave=False) as t:
+                docs_a = os.path.join(self.env.server_docs_dir, self.env.domain_a)
+                uris = []
+                for i in range(self._file_count):
+                    fsize = self._file_sizes[i % len(self._file_sizes)]
+                    if fsize is None:
+                        raise Exception("file sizes?: {0} {1}".format(i, fsize))
+                    fname = "{0}-{1}k.txt".format(i, fsize)
+                    mk_text_file(os.path.join(docs_a, fname), 8 * fsize)
+                    uris.append(f"{self._location}{fname}")
+                    t.update()
+                with open(self._url_file, 'w') as fd:
+                    fd.write("\n".join(uris))
+                    fd.write("\n")
+            cls.SETUP_DONE = True
         self.start_server(env=self.env)
-        return fname
 
     def _teardown(self):
         if self.env.is_live(timeout=timedelta(milliseconds=100)):
@@ -315,13 +340,13 @@ class SingleFileLoadTest(LoadTestCase):
                 os.remove(log_file)
             monitor = H2LoadMonitor(log_file, expected=self._requests,
                                     title=f"{self._ssl_module}/{self._protocol}/"
-                                          f"{self._clients}c/{self._resource_kb / 1024}MB[{mode}]")
+                                          f"{self._file_count / 1024}f/{self._clients}c[{mode}]")
             monitor.start()
             args = [
                 'h2load',
                 '--clients={0}'.format(self._clients),
-                '--threads={0}'.format(self._threads),
                 '--requests={0}'.format(self._requests),
+                '--input-file={0}'.format(self._url_file),
                 '--log-file={0}'.format(log_file),
                 '--connect-to=localhost:{0}'.format(self.env.https_port)
             ]
@@ -332,14 +357,13 @@ class SingleFileLoadTest(LoadTestCase):
             else:
                 raise Exception(f"unknown protocol: {self._protocol}")
             r = self.env.run(args + [
-                f'https://{self.env.domain_a}:{self.env.https_port}{self._location}{path}'
+                f'--base-uri=https://{self.env.domain_a}:{self.env.https_port}{self._location}'
             ])
             if r.exit_code != 0:
                 raise LoadTestException("h2load returned {0}: {1}".format(r.exit_code, r.stderr))
             summary = monitor.get_summary(duration=r.duration)
             summary.set_expected_responses(self._requests)
             summary.set_exec_result(r)
-            summary.set_transfered_mb(self._requests * self._resource_kb / 1024)
             return summary
         finally:
             if monitor is not None:

@@ -6,7 +6,7 @@ from h2_conf import HttpdConf
 
 def setup_data(env):
     s100 = "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678\n"
-    with open(os.path.join(env.GEN_DIR, "data-1k"), 'w') as f:
+    with open(os.path.join(env.gen_dir, "data-1k"), 'w') as f:
         for i in range(10):
             f.write(s100)
 
@@ -26,7 +26,7 @@ class TestStore:
     # check if the server survives a trailer or two
     def test_202_01(self, env):
         url = env.mkurl("https", "cgi", "/echo.py")
-        fpath = os.path.join(env.GEN_DIR, "data-1k")
+        fpath = os.path.join(env.gen_dir, "data-1k")
         r = env.nghttp().upload(url, fpath, options=["--trailer", "test: 1"])
         assert 300 > r.response["status"]
         assert 1000 == len(r.response["body"])
@@ -38,7 +38,7 @@ class TestStore:
     # check if the server survives a trailer without content-length
     def test_202_02(self, env):
         url = env.mkurl("https", "cgi", "/echo.py")
-        fpath = os.path.join(env.GEN_DIR, "data-1k")
+        fpath = os.path.join(env.gen_dir, "data-1k")
         r = env.nghttp().upload(url, fpath, options=["--trailer", "test: 2", "--no-content-length"])
         assert 300 > r.response["status"]
         assert 1000 == len(r.response["body"])
@@ -68,7 +68,7 @@ class TestStore:
     # The h2 status handler echoes a trailer if it sees a trailer
     def test_202_05(self, env):
         url = env.mkurl("https", "cgi", "/.well-known/h2/state")
-        fpath = os.path.join(env.GEN_DIR, "data-1k")
+        fpath = os.path.join(env.gen_dir, "data-1k")
         r = env.nghttp().upload(url, fpath, options=["--trailer", "test: 2"])
         assert 200 == r.response["status"]
         assert "1" == r.response["trailer"]["h2-trailers-in"]
@@ -76,7 +76,7 @@ class TestStore:
     # Check that we can send and receive trailers throuh mod_proxy_http2
     def test_202_06(self, env):
         url = env.mkurl("https", "cgi", "/h2proxy/.well-known/h2/state")
-        fpath = os.path.join(env.GEN_DIR, "data-1k")
+        fpath = os.path.join(env.gen_dir, "data-1k")
         r = env.nghttp().upload(url, fpath, options=["--trailer", "test: 2"])
         assert 200 == r.response["status"]
         assert 'trailer' in r.response

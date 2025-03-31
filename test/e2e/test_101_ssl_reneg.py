@@ -11,13 +11,13 @@ class TestStore:
         HttpdConf(env).add_line(
             f"""
             SSLCipherSuite ECDHE-RSA-AES256-GCM-SHA384
-            <Directory \"{env.WEBROOT}/htdocs/ssl-client-verify\"> 
+            <Directory \"{env.server_dir}/htdocs/ssl-client-verify\"> 
                 Require all granted
                 SSLVerifyClient require
                 SSLVerifyDepth 0
             </Directory>"""
         ).start_vhost(
-            env.HTTPS_PORT, "ssl", with_ssl=True
+            env.https_port, "ssl", with_ssl=True
         ).add_line(
             f"""
             Protocols h2 http/1.1"
@@ -31,18 +31,18 @@ class TestStore:
             <Location /renegotiate/verify>
                 SSLVerifyClient require
             </Location>
-            <Directory \"{env.WEBROOT}/htdocs/sslrequire\"> 
+            <Directory \"{env.server_dir}/htdocs/sslrequire\"> 
                 SSLRequireSSL
             </Directory>
-            <Directory \"{env.WEBROOT}/htdocs/requiressl\"> 
+            <Directory \"{env.server_dir}/htdocs/requiressl\"> 
                 Require ssl
             </Directory>"""
         ).end_vhost().install()
         # the dir needs to exists for the configuration to have effect
-        env.mkpath("%s/htdocs/ssl-client-verify" % env.WEBROOT)
-        env.mkpath("%s/htdocs/renegotiate/cipher" % env.WEBROOT)
-        env.mkpath("%s/htdocs/sslrequire" % env.WEBROOT)
-        env.mkpath("%s/htdocs/requiressl" % env.WEBROOT)
+        env.mkpath("%s/htdocs/ssl-client-verify" % env.server_dir)
+        env.mkpath("%s/htdocs/renegotiate/cipher" % env.server_dir)
+        env.mkpath("%s/htdocs/sslrequire" % env.server_dir)
+        env.mkpath("%s/htdocs/requiressl" % env.server_dir)
         assert env.apache_restart() == 0
         yield
         assert env.apache_stop() == 0
@@ -84,9 +84,8 @@ class TestStore:
     # make 10 requests on the same connection, none should produce a status code
     # reported by erki@example.ee
     def test_101_05(self, env):
-        r = env.run([env.H2LOAD, "-n", "10", "-c", "1", "-m", "1", "-vvvv",
-                     "https://%s:%s/ssl-client-verify/index.html"
-                     % (env.HTTPD_ADDR, env.HTTPS_PORT)])
+        r = env.run([env.h2load, "-n", "10", "-c", "1", "-m", "1", "-vvvv",
+                     f"{env.https_base_url}/ssl-client-verify/index.html"])
         assert 0 == r.exit_code
         r = env.h2load_status(r)
         assert 10 == r.results["h2load"]["requests"]["total"]

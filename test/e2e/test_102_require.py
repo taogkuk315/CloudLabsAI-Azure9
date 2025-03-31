@@ -7,7 +7,7 @@ class TestStore:
 
     @pytest.fixture(autouse=True, scope='class')
     def _class_scope(self, env):
-        conf = HttpdConf(env).start_vhost(env.HTTPS_PORT, "ssl", with_ssl=True)
+        conf = HttpdConf(env).start_vhost(env.https_port, "ssl", with_ssl=True)
         conf.add_line("""
               Protocols h2 http/1.1
               SSLOptions +StdEnvVars
@@ -20,7 +20,7 @@ class TestStore:
         conf.end_vhost()
         conf.install()
         # the dir needs to exists for the configuration to have effect
-        env.mkpath("%s/htdocs/ssl-client-verify" % env.WEBROOT)
+        env.mkpath("%s/htdocs/ssl-client-verify" % env.server_dir)
         assert env.apache_restart() == 0
         yield
         assert env.apache_stop() == 0

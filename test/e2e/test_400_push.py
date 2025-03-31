@@ -10,7 +10,7 @@ class TestStore:
     @pytest.fixture(autouse=True, scope='class')
     def _class_scope(self, env):
         HttpdConf(env).start_vhost(
-            env.HTTPS_PORT, "push", doc_root="htdocs/test1", with_ssl=True
+            env.https_port, "push", doc_root="htdocs/test1", with_ssl=True
         ).add_line(r"""    Protocols h2 http/1.1"
         RewriteEngine on
         RewriteRule ^/006-push(.*)?\.html$ /006.html
@@ -149,7 +149,7 @@ class TestStore:
         promises = r.results["streams"][r.response["id"]]["promises"]
         assert 2 == len(promises)
 
-        fpath = os.path.join(env.GEN_DIR, "data-400-20")
+        fpath = os.path.join(env.gen_dir, "data-400-20")
         with open(fpath, 'w') as f:
             f.write("test upload data")
         r = env.nghttp().upload(url, fpath)

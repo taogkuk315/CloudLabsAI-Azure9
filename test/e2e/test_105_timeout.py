@@ -22,7 +22,7 @@ class TestStore:
         assert env.apache_restart() == 0
         host = 'localhost'
         # read with a longer timeout than the server 
-        sock = socket.create_connection((host, int(env.HTTPS_PORT)))
+        sock = socket.create_connection((host, int(env.https_port)))
         try:
             sock.settimeout(2.5)
             buff = sock.recv(1024)
@@ -32,7 +32,7 @@ class TestStore:
             assert False
         sock.close()
         # read with a shorter timeout than the server 
-        sock = socket.create_connection((host, int(env.HTTPS_PORT)))
+        sock = socket.create_connection((host, int(env.https_port)))
         try:
             sock.settimeout(0.5)
             sock.recv(1024)
@@ -53,7 +53,7 @@ class TestStore:
         assert env.apache_restart() == 0
         host = 'localhost'
         # read with a longer timeout than the server 
-        sock = socket.create_connection((host, int(env.HTTPS_PORT)))
+        sock = socket.create_connection((host, int(env.https_port)))
         try:
             sock.settimeout(2.5)
             buff = sock.recv(1024)
@@ -63,7 +63,7 @@ class TestStore:
             assert False
         sock.close()
         # read with a shorter timeout than the server 
-        sock = socket.create_connection((host, int(env.HTTPS_PORT)))
+        sock = socket.create_connection((host, int(env.https_port)))
         try:
             sock.settimeout(0.5)
             sock.recv(1024)

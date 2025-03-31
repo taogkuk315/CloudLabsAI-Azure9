@@ -34,7 +34,7 @@ class TestStore:
     # upload and GET again using curl, compare to original content
     def curl_upload_and_verify(self, env, fname, options=None):
         url = env.mkurl("https", "cgi", "/proxy/upload.py")
-        fpath = os.path.join(env.GEN_DIR, fname)
+        fpath = os.path.join(env.gen_dir, fname)
         r = env.curl_upload(url, fpath, options=options)
         assert r.exit_code == 0
         assert 200 <= r.response["status"] < 300
@@ -56,7 +56,7 @@ class TestStore:
     # POST some data using nghttp and see it echo'ed properly back
     def nghttp_post_and_verify(self, env, fname, options=None):
         url = env.mkurl("https", "cgi", "/proxy/echo.py")
-        fpath = os.path.join(env.GEN_DIR, fname)
+        fpath = os.path.join(env.gen_dir, fname)
         r = env.nghttp().upload(url, fpath, options=options)
         assert r.exit_code == 0
         assert 200 <= r.response["status"] < 300
@@ -79,7 +79,7 @@ class TestStore:
     # upload and GET again using nghttp, compare to original content
     def nghttp_upload_and_verify(self, env, fname, options=None):
         url = env.mkurl("https", "cgi", "/proxy/upload.py")
-        fpath = os.path.join(env.GEN_DIR, fname)
+        fpath = os.path.join(env.gen_dir, fname)
 
         r = env.nghttp().upload_file(url, fpath, options=options)
         assert r.exit_code == 0
@@ -109,7 +109,7 @@ class TestStore:
     # upload using nghttp and check returned status
     def nghttp_upload_stat(self, env, fname, options=None):
         url = env.mkurl("https", "cgi", "/proxy/upload.py")
-        fpath = os.path.join(env.GEN_DIR, fname)
+        fpath = os.path.join(env.gen_dir, fname)
 
         r = env.nghttp().upload_file(url, fpath, options=options)
         assert r.exit_code == 0
