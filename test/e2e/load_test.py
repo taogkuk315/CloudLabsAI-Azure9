@@ -231,7 +231,7 @@ class LoadTestCase:
         assert env.apache_start() == 0
 
     @staticmethod
-    def server_setup(env: H2TestEnv, ssl_module: str):
+    def server_setup(env: H2TestEnv):
         conf = LoadTestCase.setup_base_conf(env=env)
         extras = {
             'base': """
@@ -240,62 +240,45 @@ class LoadTestCase:
         Protocols h2 http/1.1
                 """
         }
-        if 'mod_tls' == ssl_module:
-            extras['base'] += f"""
-            ProxyPreserveHost on
-            TLSProxyCA {env.ca.cert_file}
-            <Proxy https://127.0.0.1:{env.https_port}/>
-                TLSProxyEngine on
-            </Proxy>
-            <Proxy h2://127.0.0.1:{env.https_port}/>
-                TLSProxyEngine on
-            </Proxy>
-            """
-            extras[env.domain_a] = f"""
-            Protocols h2 http/1.1
-            ProxyPass /proxy-h1/ https://127.0.0.1:{env.https_port}/
-            ProxyPass /proxy-h2/ h2://127.0.0.1:{env.https_port}/
-            TLSOptions +StdEnvVars 
-            """
-            conf.add_vhosts(domains=[env.domain_a], extras=extras)
-        elif 'mod_ssl' == ssl_module:
-            extras['base'] += f"""
-            ProxyPreserveHost on
-            SSLProxyVerify require
-            SSLProxyCACertificateFile {env.ca.cert_file}
-            <Proxy https://127.0.0.1:{env.https_port}/>
-                SSLProxyEngine on
-            </Proxy>
-            <Proxy h2://127.0.0.1:{env.https_port}/>
-                SSLProxyEngine on
-            </Proxy>
-            """
-            extras[env.domain_a] = f"""
-            Protocols h2 http/1.1
-            ProxyPass /proxy-h1/ https://127.0.0.1:{env.https_port}/
-            ProxyPass /proxy-h2/ h2://127.0.0.1:{env.https_port}/
-            TLSOptions +StdEnvVars 
-            """
-            conf.add_ssl_vhosts(domains=[env.domain_a], extras=extras)
-        else:
-            raise LoadTestException("tests for module: {0}".format(ssl_module))
+        extras['base'] += f"""
+        ProxyPreserveHost on
+        SSLProxyVerify require
+        SSLProxyCACertificateFile {env.ca.cert_file}
+        <Proxy https://127.0.0.1:{env.https_port}/>
+            SSLProxyEngine on
+        </Proxy>
+        <Proxy h2://127.0.0.1:{env.https_port}/>
+            SSLProxyEngine on
+        </Proxy>
+        """
+        extras[env.domain_a] = f"""
+        Protocols h2 http/1.1
+        ProxyPass /proxy-h1/ https://127.0.0.1:{env.https_port}/
+        ProxyPass /proxy-h2/ h2://127.0.0.1:{env.https_port}/
+        TLSOptions +StdEnvVars 
+        """
+        conf.add_ssl_vhosts(domains=[env.domain_a], extras=extras)
         conf.write()
 
 
 class UrlsLoadTest(LoadTestCase):
 
+    SETUP_DONE = False
+
     def __init__(self, env: H2TestEnv, location: str,
-                 clients: int, requests: int, resource_kb: int,
-                 ssl_module: str = 'mod_tls', protocol: str = 'h2',
-                 threads: int = None):
+                 clients: int, requests: int, file_count: int,
+                 file_sizes: List[int],
+                 protocol: str = 'h2',
+                 threads: int = None, ):
         self.env = env
         self._location = location
         self._clients = clients
         self._requests = requests
-        self._resource_kb = resource_kb
-        self._ssl_module = ssl_module
+        self._file_count = file_count
+        self._file_sizes = file_sizes
         self._protocol = protocol
-        self._threads = threads if threads is not None else min(multiprocessing.cpu_count()/2, self._clients)
+        self._threads = threads if threads is not None else \
+            min(multiprocessing.cpu_count()/2, self._clients)
         self._url_file = "{gen_dir}/h2load-urls.txt".format(gen_dir=self.env.gen_dir)
 
     @staticmethod
@@ -304,12 +287,12 @@ class UrlsLoadTest(LoadTestCase):
             env=env,
             location=scenario['location'],
             clients=scenario['clients'], requests=scenario['requests'],
-            ssl_module=scenario['module'], resource_kb=scenario['rsize'],
-            protocol=scenario['protocol'] if 'protocol' in scenario else 'h2'
+            file_sizes=scenario['file_sizes'], file_count=scenario['file_count'],
+            protocol=scenario['protocol']
         )
 
     def _setup(self, cls):
-        LoadTestCase.server_setup(env=self.env, ssl_module=self._ssl_module)
+        LoadTestCase.server_setup(env=self.env)
         if not cls.SETUP_DONE:
             with tqdm(desc="setup resources", total=self._file_count, unit="file", leave=False) as t:
                 docs_a = os.path.join(self.env.server_docs_dir, self.env.domain_a)
@@ -339,7 +322,7 @@ class UrlsLoadTest(LoadTestCase):
             if os.path.isfile(log_file):
                 os.remove(log_file)
             monitor = H2LoadMonitor(log_file, expected=self._requests,
-                                    title=f"{self._ssl_module}/{self._protocol}/"
+                                    title=f"{self._protocol}/"
                                           f"{self._file_count / 1024}f/{self._clients}c[{mode}]")
             monitor.start()
             args = [
@@ -370,7 +353,7 @@ class UrlsLoadTest(LoadTestCase):
                 monitor.stop()
 
     def run(self) -> H2LoadLogSummary:
-        path = self._setup()
+        path = self._setup(self.__class__)
         try:
             self.run_test(mode="warmup", path=path)
             return self.run_test(mode="measure", path=path)
@@ -378,10 +361,33 @@ class UrlsLoadTest(LoadTestCase):
             self._teardown()
 
     def format_result(self, summary: H2LoadLogSummary) -> Tuple[str, Optional[List[str]]]:
-        return "{0:.1f}".format(summary.throughput_mb), summary.get_footnote()
+        return "{0:.1f}".format(
+            summary.response_count / summary.duration.total_seconds()
+        ), summary.get_footnote()
 
 
 class LoadTest:
+
+    @staticmethod
+    def print_table(table: List[List[str]], foot_notes: List[str] = None):
+        col_widths = []
+        col_sep = "   "
+        for row in table[1:]:
+            for idx, cell in enumerate(row):
+                if idx >= len(col_widths):
+                    col_widths.append(len(cell))
+                else:
+                    col_widths[idx] = max(len(cell), col_widths[idx])
+        row_len = sum(col_widths) + (len(col_widths) * len(col_sep))
+        print(f"{' '.join(table[0]):^{row_len}}")
+        for row in table[1:]:
+            line = ""
+            for idx, cell in enumerate(row):
+                line += f"{col_sep if idx > 0 else ''}{cell:>{col_widths[idx]}}"
+            print(line)
+        if foot_notes is not None:
+            for idx, note in enumerate(foot_notes):
+                print("{0:3d}) {1}".format(idx+1, note))
 
     @classmethod
     def main(cls):
@@ -401,13 +407,70 @@ class LoadTest:
             console.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
             logging.getLogger('').addHandler(console)
 
-        scenarios = {}
+        scenarios = {
+            "h2load": {
+                "title": "1k files, 1k-10MB, *conn, 10k req, (req/s)",
+                "class": UrlsLoadTest,
+                "location": "/",
+                "file_count": 1024,
+                "file_sizes": [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 10000],
+                "requests": 10000,
+                "row0_title": "protocol",
+                "row_title": "{protocol}",
+                "rows": [
+                    {"protocol": 'h1'},
+                    {"protocol": 'h1'},
+                ],
+                "col_title": "{clients}c",
+                "clients": 1,
+                "columns": [
+                    {"clients": 1},
+                    {"clients": 2},
+                    {"clients": 4},
+                    {"clients": 8},
+                    {"clients": 16},
+                    {"clients": 32},
+                    {"clients": 64},
+                ],
+            }
+        }
+
         try:
             log.debug("starting tests")
+            env = H2TestEnv()
 
             names = args.names if len(args.names) else sorted(scenarios.keys())
             for name in names:
-                pass
+                if name not in scenarios:
+                    raise LoadTestException(f"unknown test scenario: {name}")
+                scenario = scenarios[name]
+                table = [
+                    [scenario['title']],
+                ]
+                foot_notes = []
+                headers = [scenario['row0_title']]
+                for col in scenario['columns']:
+                    headers.append(scenario['col_title'].format(**col))
+                table.append(headers)
+                cls.print_table(table)
+                for row in scenario['rows']:
+                    if args.protocol is not None and row['protocol'] != args.protocol:
+                        continue
+                    row_line = [scenario['row_title'].format(**row)]
+                    table.append(row_line)
+                    for col in scenario['columns']:
+                        t = scenario.copy()
+                        t.update(row)
+                        t.update(col)
+                        test = scenario['class'].from_scenario(t, env=env)
+                        env.apache_error_log_clear()
+                        summary = test.run()
+                        result, fnote = test.format_result(summary)
+                        if fnote:
+                            foot_notes.append(fnote)
+                        row_line.append("{0}{1}".format(result,
+                                                        f"[{len(foot_notes)}]" if fnote else ""))
+                        cls.print_table(table, foot_notes)
 
         except KeyboardInterrupt:
             sys.exit(1)

@@ -8,12 +8,15 @@ import subprocess
 import sys
 import time
 from datetime import datetime
+from typing import List
 
 import requests
 
 from configparser import ConfigParser
 from shutil import copyfile
 from urllib.parse import urlparse
+
+from h2_certs import Credentials
 from h2_nghttp import Nghttp
 from h2_result import ExecResult
 
@@ -35,15 +38,21 @@ class H2TestEnv:
         self._server_conf_dir = os.path.join(self._server_dir, "conf")
         self._server_docs_dir = os.path.join(self._server_dir, "htdocs")
         self._server_logs_dir = os.path.join(self.server_dir, "logs")
+        self._server_error_log = os.path.join(self._server_logs_dir, "error_log")
         self._curl = self.config.get('global', 'curl_bin')
         self._test_dir = self.config.get('global', 'test_dir')
         self._nghttp = self.config.get('global', 'nghttp')
         self._h2load = self.config.get('global', 'h2load')
+        self._ca = None
 
         self._http_port = int(self.config.get('httpd', 'http_port'))
         self._https_port = int(self.config.get('httpd', 'https_port'))
         self._http_tld = self.config.get('httpd', 'http_tld')
-
+        self._domains = [
+            f"cgi.{self._http_tld}",
+            f"test1.{self._http_tld}",
+            f"test2.{self._http_tld}",
+        ]
         self._mpm_type = os.environ['MPM'] if 'MPM' in os.environ else 'event'
         self._apxs = os.path.join(self._prefix, 'bin', 'apxs')
         self._apachectl = os.path.join(self.get_apxs_var('SBINDIR'), 'apachectl')
@@ -81,6 +90,10 @@ class H2TestEnv:
         return self._http_tld
 
     @property
+    def domains(self) -> List[str]:
+        return self._domains
+
+    @property
     def http_base_url(self) -> str:
         return self._http_base
 
@@ -115,6 +128,13 @@ class H2TestEnv:
     @property
     def h2load(self) -> str:
         return self._h2load
+
+    @property
+    def ca(self) -> Credentials:
+        return self._ca
+
+    def set_ca(self, ca: Credentials):
+        self._ca = ca
 
     def has_h2load(self):
         return self._h2load != ""
@@ -226,6 +246,10 @@ class H2TestEnv:
         else:
             conf_src = os.path.join("data", conf + ".conf")
         copyfile(conf_src, self._test_conf)
+
+    def apache_error_log_clear(self):
+        if os.path.isfile(self._server_error_log):
+            os.remove(self._server_error_log)
 
     def curl_complete_args(self, urls, timeout, options):
         if not isinstance(urls, list):

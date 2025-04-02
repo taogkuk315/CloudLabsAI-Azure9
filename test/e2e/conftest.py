@@ -1,6 +1,10 @@
 import logging
+import os
+from datetime import timedelta
+
 import pytest
 
+from h2_certs import CertificateSpec, H2TestCA
 from h2_env import H2TestEnv
 
 
@@ -26,4 +30,11 @@ def env() -> H2TestEnv:
     logging.getLogger('').addHandler(console)
     logging.getLogger('').setLevel(level=level)
     env = H2TestEnv()
+    cert_specs = [
+        CertificateSpec(domains=env.domains, key_type='rsa4096'),
+    ]
+    ca = H2TestCA.create_root(name=env._http_tld,
+                              store_dir=os.path.join(env.server_dir, 'ca'), key_type="rsa4096")
+    ca.issue_certs(cert_specs)
+    env.set_ca(ca)
     return env
