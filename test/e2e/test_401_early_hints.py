@@ -10,7 +10,7 @@ class TestStore:
     def _class_scope(self, env):
         HttpdConf(env).start_vhost(
             env.https_port, "hints", doc_root="htdocs/test1", with_ssl=True
-        ).add_line("""    Protocols h2 http/1.1"
+        ).add("""    Protocols h2 http/1.1"
         H2EarlyHints on
         RewriteEngine on
         RewriteRule ^/006-(.*)?\\.html$ /006.html

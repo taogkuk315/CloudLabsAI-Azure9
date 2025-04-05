@@ -8,7 +8,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 import requests
 
@@ -49,9 +49,21 @@ class H2TestEnv:
         self._https_port = int(self.config.get('httpd', 'https_port'))
         self._http_tld = self.config.get('httpd', 'http_tld')
         self._domains = [
-            f"cgi.{self._http_tld}",
             f"test1.{self._http_tld}",
             f"test2.{self._http_tld}",
+            f"test3.{self._http_tld}",
+            f"cgi.{self._http_tld}",
+            f"push.{self._http_tld}",
+            f"hints.{self._http_tld}",
+            f"ssl.{self._http_tld}",
+            f"pad0.{self._http_tld}",
+            f"pad1.{self._http_tld}",
+            f"pad2.{self._http_tld}",
+            f"pad3.{self._http_tld}",
+            f"pad8.{self._http_tld}",
+        ]
+        self._domains_noh2 = [
+            f"noh2.{self._http_tld}",
         ]
         self._mpm_type = os.environ['MPM'] if 'MPM' in os.environ else 'event'
         self._apxs = os.path.join(self._prefix, 'bin', 'apxs')
@@ -90,8 +102,16 @@ class H2TestEnv:
         return self._http_tld
 
     @property
+    def domain_test1(self) -> str:
+        return self._domains[0]
+
+    @property
     def domains(self) -> List[str]:
         return self._domains
+
+    @property
+    def domains_noh2(self) -> List[str]:
+        return self._domains_noh2
 
     @property
     def http_base_url(self) -> str:
@@ -135,6 +155,12 @@ class H2TestEnv:
 
     def set_ca(self, ca: Credentials):
         self._ca = ca
+
+    def get_credentials_for_name(self, dns_name) -> List['Credentials']:
+        for domains in [self._domains, self._domains_noh2]:
+            if dns_name in domains:
+                return self.ca.get_credentials_for_name(domains[0])
+        return []
 
     def has_h2load(self):
         return self._h2load != ""
@@ -255,13 +281,16 @@ class H2TestEnv:
         if not isinstance(urls, list):
             urls = [urls]
         u = urlparse(urls[0])
+        assert u.hostname, f"hostname not in url: {urls[0]}"
+        assert u.port, f"port not in url: {urls[0]}"
         headerfile = ("%s/curl.headers" % self.gen_dir)
         if os.path.isfile(headerfile):
             os.remove(headerfile)
 
         args = [ 
             self._curl,
-            "-ks", "-D", headerfile, 
+            "--cacert", self.ca.cert_file,
+            "-s", "-D", headerfile,
             "--resolve", ("%s:%s:%s" % (u.hostname, u.port, self._httpd_addr)),
             "--connect-timeout", ("%d" % timeout) 
         ]
@@ -303,7 +332,7 @@ class H2TestEnv:
         return r
 
     def curl_get(self, url, timeout=5, options=None):
-        return self.curl_raw(url, timeout=timeout, options=options)
+        return self.curl_raw([url], timeout=timeout, options=options)
 
     def curl_upload(self, url, fpath, timeout=5, options=None):
         if not options:
@@ -311,7 +340,7 @@ class H2TestEnv:
         options.extend([
             "--form", ("file=@%s" % fpath)
         ])
-        return self.curl_raw(url, timeout, options)
+        return self.curl_raw([url], timeout, options)
 
     def curl_post_data(self, url, data="", timeout=5, options=None):
         if not options:

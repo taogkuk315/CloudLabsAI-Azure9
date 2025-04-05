@@ -26,7 +26,7 @@ class TestStore:
         url = env.mkurl("https", "test1", "/alive.json")
         r = env.curl_get(url, 5)
         assert 200 == r.response["status"]
-        assert True == r.response["json"]["alive"]
+        assert r.response["json"]["alive"] is True
         assert "test1" == r.response["json"]["host"]
         assert "application/json" == r.response["header"]["content-type"]
 

@@ -18,23 +18,6 @@ SUBDIRS        = mod_h2test
 SERVER_DIR     = @SERVER_DIR@
 GEN            = gen
 
-$(SERVER_DIR)/conf/ssl/cert.pkey:
-	@mkdir -p $(SERVER_DIR)/conf/ssl
-	@openssl genrsa -out $@ 2048
-
-CERTIFICATES=\
-    $(SERVER_DIR)/conf/ssl/not-forbidden.org_cert.pem \
-    $(SERVER_DIR)/conf/ssl/noh2.@HTTP_TLD@_cert.pem
-
-$(CERTIFICATES): %_cert.pem: $(SERVER_DIR)/conf/ssl/cert.pkey
-	@openssl req -new -key $< -out $@.req -config e2e/ssl/req_template.conf
-	@cp e2e/ssl/req_exts.conf $@.extensions
-	DOMAIN=`basename $@ _cert.pem`; \
- 	    echo "subjectAltName = DNS:$$DOMAIN,DNS:www.$$DOMAIN,DNS:mail.$$DOMAIN" >>$@.extensions
-	@openssl x509 -req -sha256 -days 1095 \
-            -signkey $(SERVER_DIR)/conf/ssl/cert.pkey \
-            -in $@.req -out $@ -extfile $@.extensions -extensions v3_req_ext
-         
 $(SERVER_DIR)/htdocs/.copied: \
             $(wildcard e2e/htdocs/*) \
             $(wildcard e2e/htdocs/*/*) \

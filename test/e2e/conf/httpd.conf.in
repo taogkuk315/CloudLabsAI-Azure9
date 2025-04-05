@@ -17,9 +17,6 @@ DocumentRoot "@SERVER_DIR@/htdocs"
 Listen @HTTP_PORT@
 Listen @HTTPS_PORT@
 
-SSLCertificateFile conf/ssl/not-forbidden.org_cert.pem
-SSLCertificateKeyFile conf/ssl/cert.pkey
-
 # Insert our test specific configuration before the first vhost,
 # so that its vhosts can be the default one. This is relevant in
 # certain behaviours, such as protocol selection during SSL ALPN 
@@ -41,15 +38,6 @@ RequestReadTimeout header=10 body=10
     ServerAlias www.not-forbidden.org
     
     DocumentRoot "@SERVER_DIR@/htdocs"
-</VirtualHost>
-
-<VirtualHost *:@HTTPS_PORT@>
-    ServerName not-forbidden.org
-    ServerAlias www.not-forbidden.org
-    
-    DocumentRoot "@SERVER_DIR@/htdocs"
-    
-    SSLEngine on
 </VirtualHost>
 
 <Directory "@SERVER_DIR@/htdocs/cgi">

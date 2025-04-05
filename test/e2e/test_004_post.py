@@ -162,7 +162,7 @@ class TestStore:
         logfile = os.path.join(env.server_logs_dir, "test_004_30")
         if os.path.isfile(logfile):
             os.remove(logfile)
-        HttpdConf(env).add_line("""
+        HttpdConf(env).add("""
 LogFormat "{ \\"request\\": \\"%r\\", \\"status\\": %>s, \\"bytes_resp_B\\": %B, \\"bytes_tx_O\\": %O, \\"bytes_rx_I\\": %I, \\"bytes_rx_tx_S\\": %S }" issue_203
 CustomLog logs/test_004_30 issue_203
         """).add_vhost_cgi().install()

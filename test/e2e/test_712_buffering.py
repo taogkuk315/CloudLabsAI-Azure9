@@ -125,7 +125,7 @@ class TestStore:
     @pytest.fixture(autouse=True, scope='class')
     def _class_scope(self, env):
         env.setup_data_1k_1m()
-        conf = HttpdConf(env).add_line("H2OutputBuffering off")
+        conf = HttpdConf(env).add("H2OutputBuffering off")
         conf.add_vhost_cgi(h2proxy_self=True).install()
         assert env.apache_restart() == 0
         yield

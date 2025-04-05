@@ -8,7 +8,7 @@ class TestStore:
     @pytest.fixture(autouse=True, scope='class')
     def _class_scope(self, env):
         conf = HttpdConf(env).start_vhost(env.https_port, "ssl", with_ssl=True)
-        conf.add_line("""
+        conf.add("""
               Protocols h2 http/1.1
               SSLOptions +StdEnvVars
               <Location /h2only.html>

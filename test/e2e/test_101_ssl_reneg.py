@@ -8,7 +8,7 @@ class TestStore:
 
     @pytest.fixture(autouse=True, scope='class')
     def _class_scope(self, env):
-        HttpdConf(env).add_line(
+        HttpdConf(env).add(
             f"""
             SSLCipherSuite ECDHE-RSA-AES256-GCM-SHA384
             <Directory \"{env.server_dir}/htdocs/ssl-client-verify\"> 
@@ -18,7 +18,7 @@ class TestStore:
             </Directory>"""
         ).start_vhost(
             env.https_port, "ssl", with_ssl=True
-        ).add_line(
+        ).add(
             f"""
             Protocols h2 http/1.1"
             <Location /renegotiate/cipher>

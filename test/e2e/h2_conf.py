@@ -1,9 +1,3 @@
-###################################################################################################
-# httpd test configuration generator
-#
-# (c) 2019 greenbytes GmbH
-###################################################################################################
-
 import os
 
 
@@ -17,6 +11,7 @@ class HttpdConf(object):
             self.path = os.path.join(env.gen_dir, "auto.conf")
         if os.path.isfile(self.path):
             os.remove(self.path)
+        self._has_ssl_vhost = False
         open(self.path, "a").write(f"""
         LoadModule mpm_{env.mpm_type}_module  \"{env.libexec_dir}/mod_mpm_{env.mpm_type}.so\"
         
@@ -25,7 +20,9 @@ class HttpdConf(object):
         LogLevel http2:info h2test:trace2 proxy_http2:info
         """)
 
-    def add_line(self, line):
+    def add(self, line):
+        if isinstance(line, list):
+            line = "\n".join(line)
         open(self.path, "a").write(line + "\n")
         return self
 
@@ -35,34 +32,45 @@ class HttpdConf(object):
         return self
 
     def start_vhost(self, port, name, aliases=None, doc_root="htdocs", with_ssl=True):
-        f = open(self.path, "a") 
-        f.write("<VirtualHost *:%s>\n" % port)
-        f.write("    ServerName %s.%s\n" % (name, self.env.http_tld))
+        server_domain = f"{name}.{self.env.http_tld}"
+        lines = [
+            f"<VirtualHost *:{port}>",
+            f"    ServerName {server_domain}"
+        ]
         if aliases:
-            for alias in aliases:
-                f.write("    ServerAlias %s.%s\n" % (alias, self.env.http_tld))
-        f.write("    DocumentRoot %s\n\n" % doc_root)
+            lines.extend([
+                f"    ServerAlias {alias}.{self.env.http_tld}" for alias in aliases])
+        lines.append(f"    DocumentRoot {doc_root}")
         if with_ssl:
-            f.write("    SSLEngine on\n")
-        return self
+            self._has_ssl_vhost = True
+            lines.append("    SSLEngine on")
+            for cred in self.env.get_credentials_for_name(server_domain):
+                lines.extend([
+                    f"SSLCertificateFile {cred.cert_file}",
+                    f"SSLCertificateKeyFile {cred.pkey_file}",
+                ])
+
+        return self.add(lines)
                   
     def end_vhost(self):
-        self.add_line("</VirtualHost>\n\n")
+        self.add("</VirtualHost>")
         return self
 
     def install(self):
+        if not self._has_ssl_vhost:
+            self.add_vhost_test1()
         self.env.install_test_conf(self.path)
 
     def add_proxies(self, host, proxy_self=False, h2proxy_self=False):
         if proxy_self or h2proxy_self:
-            self.add_line("      ProxyPreserveHost on")
+            self.add("      ProxyPreserveHost on")
         if proxy_self:
-            self.add_line(f"""
+            self.add(f"""
                 ProxyPass /proxy/ http://127.0.0.1:{self.env.http_port}/
                 ProxyPassReverse /proxy/ http://{host}.{self.env.http_tld}:{self.env.http_port}/
             """)
         if h2proxy_self:
-            self.add_line(f"""
+            self.add(f"""
                 ProxyPass /h2proxy/ h2://127.0.0.1:{self.env.https_port}/
                 ProxyPassReverse /h2proxy/ https://{host}.{self.env.http_tld}:self.env.https_port/
             """)
@@ -71,12 +79,12 @@ class HttpdConf(object):
     def add_vhost_test1(self, proxy_self=False, h2proxy_self=False):
         self.start_vhost(
             self.env.http_port, "test1", aliases=["www1"], doc_root="htdocs/test1", with_ssl=False
-        ).add_line(
+        ).add(
             "      Protocols h2c http/1.1"
         ).end_vhost()
         self.start_vhost(
             self.env.https_port, "test1", aliases=["www1"], doc_root="htdocs/test1", with_ssl=True)
-        self.add_line("""
+        self.add("""
             Protocols h2 http/1.1
             <Location /006>
                 Options +Indexes
@@ -88,10 +96,10 @@ class HttpdConf(object):
         
     def add_vhost_test2(self):
         self.start_vhost(self.env.http_port, "test2", aliases=["www2"], doc_root="htdocs/test2", with_ssl=False)
-        self.add_line("      Protocols http/1.1 h2c")
+        self.add("      Protocols http/1.1 h2c")
         self.end_vhost()
         self.start_vhost(self.env.https_port, "test2", aliases=["www2"], doc_root="htdocs/test2", with_ssl=True)
-        self.add_line("""
+        self.add("""
             Protocols http/1.1 h2
             <Location /006>
                 Options +Indexes
@@ -104,10 +112,10 @@ class HttpdConf(object):
         if proxy_self:
             self.add_proxy_setup()
         if h2proxy_self:
-            self.add_line("      SSLProxyEngine on")
-            self.add_line("      SSLProxyCheckPeerName off")
+            self.add("      SSLProxyEngine on")
+            self.add("      SSLProxyCheckPeerName off")
         self.start_vhost(self.env.https_port, "cgi", aliases=["cgi-alias"], doc_root="htdocs/cgi", with_ssl=True)
-        self.add_line("""
+        self.add("""
             Protocols h2 http/1.1
             SSLOptions +StdEnvVars
             AddHandler cgi-script .py
@@ -115,34 +123,32 @@ class HttpdConf(object):
                 SetHandler http2-status
             </Location>""")
         self.add_proxies("cgi", proxy_self, h2proxy_self)
-        self.add_line("      <Location \"/h2test/echo\">")
-        self.add_line("          SetHandler h2test-echo")
-        self.add_line("      </Location>")
+        self.add("      <Location \"/h2test/echo\">")
+        self.add("          SetHandler h2test-echo")
+        self.add("      </Location>")
         self.end_vhost()
         self.start_vhost(self.env.http_port, "cgi", aliases=["cgi-alias"], doc_root="htdocs/cgi", with_ssl=False)
-        self.add_line("      AddHandler cgi-script .py")
+        self.add("      AddHandler cgi-script .py")
         self.end_vhost()
-        self.add_line("      LogLevel proxy:info")
-        self.add_line("      LogLevel proxy_http:info")
+        self.add("      LogLevel proxy:info")
+        self.add("      LogLevel proxy_http:info")
         return self
 
     def add_vhost_noh2(self):
         self.start_vhost(self.env.https_port, "noh2", aliases=["noh2-alias"], doc_root="htdocs/noh2", with_ssl=True)
-        self.add_line(f"""
-              Protocols http/1.1
-            SSLCertificateKeyFile conf/ssl/cert.pkey
-            SSLCertificateFile conf/ssl/noh2.{self.env.http_tld}_cert.pem
+        self.add(f"""
+            Protocols http/1.1
             SSLOptions +StdEnvVars""")
         self.end_vhost()
         self.start_vhost(self.env.http_port, "noh2", aliases=["noh2-alias"], doc_root="htdocs/noh2", with_ssl=False)
-        self.add_line("      Protocols http/1.1")
-        self.add_line("      SSLOptions +StdEnvVars")
+        self.add("      Protocols http/1.1")
+        self.add("      SSLOptions +StdEnvVars")
         self.end_vhost()
         return self
 
     def add_proxy_setup(self):
-        self.add_line("ProxyStatus on")
-        self.add_line("ProxyTimeout 5")
-        self.add_line("SSLProxyEngine on")
-        self.add_line("SSLProxyVerify none")
+        self.add("ProxyStatus on")
+        self.add("ProxyTimeout 5")
+        self.add("SSLProxyEngine on")
+        self.add("SSLProxyVerify none")
         return self

@@ -11,7 +11,7 @@ class TestStore:
     def _class_scope(self, env):
         HttpdConf(env).start_vhost(
             env.https_port, "push", doc_root="htdocs/test1", with_ssl=True
-        ).add_line(r"""    Protocols h2 http/1.1"
+        ).add(r"""    Protocols h2 http/1.1"
         RewriteEngine on
         RewriteRule ^/006-push(.*)?\.html$ /006.html
         <Location /006-push.html>

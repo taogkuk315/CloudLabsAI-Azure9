@@ -7,7 +7,7 @@ class TestStore:
 
     @pytest.fixture(autouse=True, scope='class')
     def _class_scope(self, env):
-        HttpdConf(env).add_line(
+        HttpdConf(env).add(
             """
             KeepAlive on
             MaxKeepAliveRequests 30

@@ -10,14 +10,14 @@ class TestStore:
         HttpdConf(env).add_vhost_test1().add_vhost_test2().add_vhost_noh2(
         ).start_vhost(
             env.https_port, "test3", doc_root="htdocs/test1", with_ssl=True
-        ).add_line(
+        ).add(
             """
             Protocols h2 http/1.1
             Header unset Upgrade"""
         ).end_vhost(
         ).start_vhost(
             env.http_port, "test1b", doc_root="htdocs/test1", with_ssl=False
-        ).add_line(
+        ).add(
             """
             Protocols h2c http/1.1
             H2Upgrade off

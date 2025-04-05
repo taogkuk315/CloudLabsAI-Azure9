@@ -105,7 +105,7 @@ class TestStore:
     # test "LimitRequestFields 0" setting, see #200
     def test_200_14(self, env):
         conf = HttpdConf(env)
-        conf.add_line("""
+        conf.add("""
             LimitRequestFields 20
             """)
         conf.add_vhost_cgi()
@@ -118,7 +118,7 @@ class TestStore:
         r = env.curl_get(url, options=opt)
         assert 431 == r.response["status"]
         conf = HttpdConf(env)
-        conf.add_line("""
+        conf.add("""
             LimitRequestFields 0
             """)
         conf.add_vhost_cgi()
@@ -134,7 +134,7 @@ class TestStore:
     # the uri limits
     def test_200_15(self, env):
         conf = HttpdConf(env)
-        conf.add_line("""
+        conf.add("""
             LimitRequestLine 48
             """)
         conf.add_vhost_cgi()

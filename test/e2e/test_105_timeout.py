@@ -14,7 +14,7 @@ class TestStore:
     # Check that base servers 'Timeout' setting is observed on SSL handshake
     def test_105_01(self, env):
         conf = HttpdConf(env)
-        conf.add_line("""
+        conf.add("""
             Timeout 2
             """)
         conf.add_vhost_cgi()
@@ -44,7 +44,7 @@ class TestStore:
     # Check that mod_reqtimeout handshake setting takes effect
     def test_105_02(self, env):
         conf = HttpdConf(env)
-        conf.add_line("""
+        conf.add("""
             Timeout 10
             RequestReadTimeout handshake=2 header=5 body=10
             """)
@@ -76,7 +76,7 @@ class TestStore:
     # connections. See <https://github.com/icing/mod_h2/issues/196>.
     def test_105_03(self, env):
         conf = HttpdConf(env)
-        conf.add_line("""
+        conf.add("""
             Timeout 10
             RequestReadTimeout handshake=1 header=5 body=10
             """)
