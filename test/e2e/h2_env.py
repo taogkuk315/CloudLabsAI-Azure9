@@ -2,12 +2,13 @@
 # h2 end-to-end test environment class
 ###################################################################
 import inspect
+import logging
 import re
 import os
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 import requests
@@ -19,6 +20,9 @@ from urllib.parse import urlparse
 from h2_certs import Credentials
 from h2_nghttp import Nghttp
 from h2_result import ExecResult
+
+
+log = logging.getLogger(__name__)
 
 
 class Dummy:
@@ -195,7 +199,7 @@ class H2TestEnv:
         return os.path.join(self._e2e_dir, path)
 
     def run(self, args) -> ExecResult:
-        print("execute: %s" % " ".join(args))
+        log.debug("execute: %s", " ".join(args))
         start = datetime.now()
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         return ExecResult(exit_code=p.returncode, stdout=p.stdout, stderr=p.stderr,
@@ -205,29 +209,33 @@ class H2TestEnv:
         port = self.https_port if scheme == 'https' else self.http_port
         return "%s://%s.%s:%s%s" % (scheme, hostname, self.http_tld, port, path)
 
-    def is_live(self, url, timeout):
+    def is_live(self, url, timeout: timedelta = None):
         s = requests.Session()
-        try_until = time.time() + timeout
-        print("checking reachability of %s" % url)
-        while time.time() < try_until:
+        if not timeout:
+            timeout = timedelta(seconds=10)
+        try_until = datetime.now() + timeout
+        log.debug("checking reachability of %s", url)
+        while datetime.now() < try_until:
             try:
                 req = requests.Request('HEAD', url).prepare()
-                s.send(req, verify=self._verify_certs, timeout=timeout)
+                s.send(req, verify=self._verify_certs, timeout=timeout.total_seconds())
                 return True
             except IOError:
-                print("connect error: %s" % sys.exc_info()[0])
+                log.debug("connect error: %s", sys.exc_info()[0])
                 time.sleep(.2)
             except:
-                print("Unexpected error: %s" % sys.exc_info()[0])
+                log.warning("Unexpected error: %s", sys.exc_info()[0])
                 time.sleep(.2)
-        print("Unable to contact '%s' after %d sec" % (url, timeout))
+        log.debug(f"Unable to contact '{url}' after {timeout} sec")
         return False
 
-    def is_dead(self, url, timeout):
+    def is_dead(self, url, timeout: timedelta = None):
         s = requests.Session()
-        try_until = time.time() + timeout
-        print("checking reachability of %s" % url)
-        while time.time() < try_until:
+        if not timeout:
+            timeout = timedelta(seconds=10)
+        try_until = datetime.now() + timeout
+        log.debug("checking reachability of %s", url)
+        while datetime.now() < try_until:
             try:
                 req = requests.Request('HEAD', url).prepare()
                 s.send(req, verify=self._verify_certs, timeout=timeout)
@@ -236,23 +244,24 @@ class H2TestEnv:
                 return True
             except:
                 return True
-        print("Server still responding after %d sec" % timeout)
+        log.debug("Server still responding after %d sec", timeout)
         return False
 
     def apachectl(self, cmd, conf=None, check_live=True):
         if conf:
             self.install_test_conf(conf)
         args = [self._apachectl, "-d", self.server_dir, "-k", cmd]
-        print("execute: %s" % " ".join(args))
+        log.debug("execute: %s", " ".join(args))
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
         sys.stderr.write(p.stderr)
         rv = p.returncode
+        timeout = timedelta(seconds=10)
         if rv == 0:
             if check_live:
-                rv = 0 if self.is_live(self._http_base, 10) else -1
+                rv = 0 if self.is_live(self._http_base, timeout=timeout) else -1
             else:
-                rv = 0 if self.is_dead(self._http_base, 10) else -1
-                print("waited for a apache.is_dead, rv=%d" % rv)
+                rv = 0 if self.is_dead(self._http_base, timeout=timeout) else -1
+                log.debug("waited for a apache.is_dead, rv=%d", rv)
         return rv
 
     def apache_restart(self):
@@ -308,7 +317,7 @@ class H2TestEnv:
             header = {}
             for line in lines:
                 if exp_stat:
-                    print("reading 1st response line: %s" % line)
+                    log.debug("reading 1st response line: %s", line)
                     m = re.match(r'^(\S+) (\d+) (.*)$', line)
                     assert m
                     r.add_response({
@@ -322,7 +331,7 @@ class H2TestEnv:
                 elif re.match(r'^$', line):
                     exp_stat = True
                 else:
-                    print("reading header line: %s" % line)
+                    log.debug("reading header line: %s", line)
                     m = re.match(r'^([^:]+):\s*(.*)$', line)
                     assert m
                     header[m.group(1).lower()] = m.group(2)

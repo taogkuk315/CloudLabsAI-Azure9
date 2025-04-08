@@ -11,6 +11,7 @@ from typing import Dict, Tuple, Optional, List, Iterable
 
 from tqdm import tqdm
 
+from h2_certs import CertificateSpec, H2TestCA
 from h2_conf import HttpdConf
 from h2_env import H2TestEnv
 from h2_result import ExecResult
@@ -235,7 +236,6 @@ class LoadTestCase:
         conf = LoadTestCase.setup_base_conf(env=env)
         extras = {
             'base': """
-        LogLevel tls:warn
         LogLevel ssl:warn
         Protocols h2 http/1.1
                 """
@@ -251,14 +251,13 @@ class LoadTestCase:
             SSLProxyEngine on
         </Proxy>
         """
-        extras[env.domain_a] = f"""
+        extras[env.domain_test1] = f"""
         Protocols h2 http/1.1
         ProxyPass /proxy-h1/ https://127.0.0.1:{env.https_port}/
         ProxyPass /proxy-h2/ h2://127.0.0.1:{env.https_port}/
-        TLSOptions +StdEnvVars 
         """
-        conf.add_ssl_vhosts(domains=[env.domain_a], extras=extras)
-        conf.write()
+        conf.add_vhost_test1(extras=extras)
+        conf.install()
 
 
 class UrlsLoadTest(LoadTestCase):
@@ -269,6 +268,7 @@ class UrlsLoadTest(LoadTestCase):
                  clients: int, requests: int, file_count: int,
                  file_sizes: List[int],
                  protocol: str = 'h2',
+                 max_parallel: int = 1,
                  threads: int = None, ):
         self.env = env
         self._location = location
@@ -277,6 +277,7 @@ class UrlsLoadTest(LoadTestCase):
         self._file_count = file_count
         self._file_sizes = file_sizes
         self._protocol = protocol
+        self._max_parallel = max_parallel
         self._threads = threads if threads is not None else \
             min(multiprocessing.cpu_count()/2, self._clients)
         self._url_file = "{gen_dir}/h2load-urls.txt".format(gen_dir=self.env.gen_dir)
@@ -288,14 +289,14 @@ class UrlsLoadTest(LoadTestCase):
             location=scenario['location'],
             clients=scenario['clients'], requests=scenario['requests'],
             file_sizes=scenario['file_sizes'], file_count=scenario['file_count'],
-            protocol=scenario['protocol']
+            protocol=scenario['protocol'], max_parallel=scenario['max_parallel']
         )
 
     def _setup(self, cls):
         LoadTestCase.server_setup(env=self.env)
         if not cls.SETUP_DONE:
             with tqdm(desc="setup resources", total=self._file_count, unit="file", leave=False) as t:
-                docs_a = os.path.join(self.env.server_docs_dir, self.env.domain_a)
+                docs_a = os.path.join(self.env.server_docs_dir, "test1")
                 uris = []
                 for i in range(self._file_count):
                     fsize = self._file_sizes[i % len(self._file_sizes)]
@@ -312,7 +313,7 @@ class UrlsLoadTest(LoadTestCase):
         self.start_server(env=self.env)
 
     def _teardown(self):
-        if self.env.is_live(timeout=timedelta(milliseconds=100)):
+        if self.env.is_live(url=self.env.domain_test1, timeout=timedelta(milliseconds=100)):
             assert self.env.apache_stop() == 0
 
     def run_test(self, mode: str, path: str) -> H2LoadLogSummary:
@@ -336,11 +337,11 @@ class UrlsLoadTest(LoadTestCase):
             if self._protocol == 'h1' or self._protocol == 'http/1.1':
                 args.append('--h1')
             elif self._protocol == 'h2':
-                args.extend(['-m', "6"])
+                args.extend(['-m', str(self._max_parallel)])
             else:
                 raise Exception(f"unknown protocol: {self._protocol}")
             r = self.env.run(args + [
-                f'--base-uri=https://{self.env.domain_a}:{self.env.https_port}{self._location}'
+                f'--base-uri=https://{self.env.domain_test1}:{self.env.https_port}{self._location}'
             ])
             if r.exit_code != 0:
                 raise LoadTestException("h2load returned {0}: {1}".format(r.exit_code, r.stderr))
@@ -408,29 +409,31 @@ class LoadTest:
             logging.getLogger('').addHandler(console)
 
         scenarios = {
-            "h2load": {
+            "1k-files": {
                 "title": "1k files, 1k-10MB, *conn, 10k req, (req/s)",
                 "class": UrlsLoadTest,
                 "location": "/",
                 "file_count": 1024,
                 "file_sizes": [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 10000],
                 "requests": 10000,
-                "row0_title": "protocol",
-                "row_title": "{protocol}",
+                "row0_title": "protocol  max",
+                "row_title": "{protocol}   {max_parallel:3d}",
                 "rows": [
-                    {"protocol": 'h1'},
-                    {"protocol": 'h1'},
+                    {"protocol": 'h2', "max_parallel": 1},
+                    {"protocol": 'h2', "max_parallel": 2},
+                    {"protocol": 'h2', "max_parallel": 6},
+                    {"protocol": 'h2', "max_parallel": 20},
+                    {"protocol": 'h2', "max_parallel": 50},
+                    {"protocol": 'h1', "max_parallel": 1},
                 ],
                 "col_title": "{clients}c",
                 "clients": 1,
                 "columns": [
                     {"clients": 1},
-                    {"clients": 2},
                     {"clients": 4},
                     {"clients": 8},
                     {"clients": 16},
                     {"clients": 32},
-                    {"clients": 64},
                 ],
             }
         }
@@ -438,6 +441,13 @@ class LoadTest:
         try:
             log.debug("starting tests")
             env = H2TestEnv()
+            cert_specs = [
+                CertificateSpec(domains=[env.domain_test1]),
+            ]
+            ca = H2TestCA.create_root(name=env.http_tld,
+                                       store_dir=os.path.join(env.server_dir, 'ca'), key_type="rsa4096")
+            ca.issue_certs(cert_specs)
+            env.set_ca(ca)
 
             names = args.names if len(args.names) else sorted(scenarios.keys())
             for name in names:

@@ -76,7 +76,8 @@ class HttpdConf(object):
             """)
         return self
     
-    def add_vhost_test1(self, proxy_self=False, h2proxy_self=False):
+    def add_vhost_test1(self, proxy_self=False, h2proxy_self=False, extras=None):
+        domain = f"test1.{self.env.http_tld}"
         self.start_vhost(
             self.env.http_port, "test1", aliases=["www1"], doc_root="htdocs/test1", with_ssl=False
         ).add(
@@ -84,12 +85,14 @@ class HttpdConf(object):
         ).end_vhost()
         self.start_vhost(
             self.env.https_port, "test1", aliases=["www1"], doc_root="htdocs/test1", with_ssl=True)
-        self.add("""
+        self.add(f"""
             Protocols h2 http/1.1
             <Location /006>
                 Options +Indexes
                 HeaderName /006/header.html
-            </Location>""")
+            </Location>
+            {extras[domain] if extras and domain in extras else ""}
+            """)
         self.add_proxies("test1", proxy_self, h2proxy_self)
         self.end_vhost()
         return self
