@@ -78,6 +78,8 @@ class HttpdConf(object):
     
     def add_vhost_test1(self, proxy_self=False, h2proxy_self=False, extras=None):
         domain = f"test1.{self.env.http_tld}"
+        if extras and 'base' in extras:
+            self.add(extras['base'])
         self.start_vhost(
             self.env.http_port, "test1", aliases=["www1"], doc_root="htdocs/test1", with_ssl=False
         ).add(
