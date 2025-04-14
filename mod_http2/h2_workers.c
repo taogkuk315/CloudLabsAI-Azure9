@@ -130,7 +130,7 @@ static void wake_idle_worker(h2_workers *workers)
     if (slot) {
         int timed_out = 0;
         apr_thread_mutex_lock(slot->lock);
-        timed_out = apr_atomic_read32(&slot->timed_out);
+        timed_out = slot->timed_out;
         if (!timed_out) {
             apr_thread_cond_signal(slot->not_idle);
         }
@@ -140,7 +140,7 @@ static void wake_idle_worker(h2_workers *workers)
             wake_idle_worker(workers);
         }
     }
-    else if (workers->dynamic) {
+    else if (workers->dynamic && !workers->shutdown) {
         add_worker(workers);
     }
 }
@@ -194,14 +194,18 @@ static h2_fifo_op_t mplx_peek(void *head, void *ctx)
 static int get_next(h2_slot *slot)
 {
     h2_workers *workers = slot->workers;
+    int non_essential = slot->id >= workers->min_workers;
     apr_status_t rv;
 
-    while (!workers->aborted && !apr_atomic_read32(&slot->timed_out)) {
+    while (!workers->aborted && !slot->timed_out) {
         ap_assert(slot->task == NULL);
+        if (non_essential && workers->shutdown) {
+            /* Terminate non-essential worker on shutdown */
+            break;
+        }
         if (h2_fifo_try_peek(workers->mplxs, mplx_peek, slot) == APR_EOF) {
             /* The queue is terminated with the MPM child being cleaned up,
-             * just leave.
-             */
+             * just leave. */
             break;
         }
         if (slot->task) {
@@ -212,12 +216,13 @@ static int get_next(h2_slot *slot)
 
         apr_thread_mutex_lock(slot->lock);
         if (!workers->aborted) {
+
             push_slot(&workers->idle, slot);
-            if (slot->id >= workers->min_workers && workers->max_idle_duration) {
+            if (non_essential && workers->max_idle_duration) {
                 rv = apr_thread_cond_timedwait(slot->not_idle, slot->lock,
                                                workers->max_idle_duration);
                 if (APR_TIMEUP == rv) {
-                    apr_atomic_inc32(&slot->timed_out);
+                    slot->timed_out = 1;
                 }
             }
             else {
@@ -270,7 +275,7 @@ static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)
         } while (slot->task);
     }
 
-    if (!apr_atomic_read32(&slot->timed_out)) {
+    if (!slot->timed_out) {
         slot_done(slot);
     }
 
@@ -278,10 +283,28 @@ static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)
     return NULL;
 }
 
+static void wake_non_essential_workers(h2_workers *workers)
+{
+    h2_slot *slot;
+    /* pop all idle, signal the non essentials and add the others again */
+    if ((slot = pop_slot(&workers->idle))) {
+        wake_non_essential_workers(workers);
+        if (slot->id > workers->min_workers) {
+            apr_thread_mutex_lock(slot->lock);
+            apr_thread_cond_signal(slot->not_idle);
+            apr_thread_mutex_unlock(slot->lock);
+        }
+        else {
+            push_slot(&workers->idle, slot);
+        }
+    }
+}
+
 static void workers_abort_idle(h2_workers *workers)
 {
     h2_slot *slot;
 
+    workers->shutdown = 1;
     workers->aborted = 1;
     h2_fifo_term(workers->mplxs);
 
@@ -423,5 +446,7 @@ apr_status_t h2_workers_unregister(h2_workers *workers, struct h2_mplx *m)
 
 void h2_workers_graceful_shutdown(h2_workers *workers)
 {
-    workers_abort_idle(workers);
+    workers->shutdown = 1;
+    h2_fifo_term(workers->mplxs);
+    wake_non_essential_workers(workers);
 }

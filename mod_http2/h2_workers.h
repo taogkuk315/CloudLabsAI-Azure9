@@ -43,6 +43,7 @@ struct h2_workers {
     apr_interval_time_t max_idle_duration;
     
     volatile int aborted;
+    volatile int shutdown;
     int dynamic;
 
     apr_threadattr_t *thread_attr;
