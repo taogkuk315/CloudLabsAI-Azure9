@@ -432,8 +432,9 @@ class StressTest(LoadTestCase):
     def _setup(self, cls):
         LoadTestCase.server_setup(env=self.env, extras={
             'base': f"""
-            H2MinWorkers    1
+            H2MinWorkers    32
             H2MaxWorkers    128
+            H2MaxWorkerIdleSeconds 5
             """
         })
         if not cls.SETUP_DONE:

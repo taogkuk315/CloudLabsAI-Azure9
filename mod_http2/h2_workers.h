@@ -40,9 +40,10 @@ struct h2_workers {
     int next_worker_id;
     apr_uint32_t min_workers;
     apr_uint32_t max_workers;
-    int max_idle_secs;
+    apr_interval_time_t max_idle_duration;
     
     volatile int aborted;
+    volatile int shutdown;
     int dynamic;
 
     apr_threadattr_t *thread_attr;
