@@ -1,3 +1,10 @@
+ * Making H2Min/MaxWorkers behave as intended again. The module will initially
+   create H2MinWorkers threads and add up to H2MaxWorkers when needed. These
+   additional workers time out when idle after H2MaxWorkerIdleSeconds and
+   disappear again.
+ * When the shutdown of a child is detected (e.g. graceful shutdown), the
+   module will terminate all idle workers above H2MinWorkers right away.
+   This detection currently only happens when a HTTP/2 connection is active.
  * Restoring compatibility with apache httpd 2.4.48 again.
  * when ongoing sessions detect that the process shuts down (for example due to a
    graceful restart), they now cause idle h2 workers to terminate early.
