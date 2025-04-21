@@ -15,6 +15,9 @@ class TestStore:
     def test_105_01(self, env):
         conf = HttpdConf(env)
         conf.add("""
+            AcceptFilter http none
+            AcceptFilter https none
+
             Timeout 2
             """)
         conf.add_vhost_cgi()
@@ -45,6 +48,9 @@ class TestStore:
     def test_105_02(self, env):
         conf = HttpdConf(env)
         conf.add("""
+            AcceptFilter http none
+            AcceptFilter https none
+
             Timeout 10
             RequestReadTimeout handshake=2 header=5 body=10
             """)
