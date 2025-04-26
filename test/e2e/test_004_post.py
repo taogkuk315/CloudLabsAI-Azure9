@@ -14,8 +14,6 @@ class TestStore:
         env.setup_data_1k_1m()
         HttpdConf(env).add_vhost_cgi().install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # upload and GET again using curl, compare to original content
     def curl_upload_and_verify(self, env, fname, options=None):

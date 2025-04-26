@@ -23,8 +23,6 @@ class TestStore:
         """).end_vhost(
         ).install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # H2EarlyHints enabled in general, check that it works for H2PushResource
     def test_401_31(self, env):

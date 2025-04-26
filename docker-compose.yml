@@ -1,0 +1,28 @@
+version: '3.7'
+services:
+  debian-sid:
+    # build and run tests in a debian sid container
+    image: ${DOCKER_REGISTRY}/mod-h2-debian-sid:0.0.1
+    container_name: mod-h2-debian-sid
+    build:
+      context: .
+      dockerfile: docker/debian-sid/Dockerfile
+      labels:
+        - "description=mod_h2 debian sid server"
+        - "maintainer=stefan@eissing.org"
+    expose:
+      - "5010"
+      - "5011"
+    volumes:
+      - mod-h2-debian-sid-data:/apache-httpd/data
+    ports:
+      - "42001"
+      - "42002"
+
+volumes:
+  mod-h2-debian-sid-data:
+    name: mod-h2-debian-sid-data
+    labels:
+      - "description=debian sid data for mod_h2"
+      - "maintainer=stefan@eissing.org"
+

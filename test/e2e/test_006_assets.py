@@ -9,8 +9,6 @@ class TestStore:
     def _class_scope(self, env):
         HttpdConf(env).add_vhost_test1().install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # single page without any assets
     def test_006_01(self, env):

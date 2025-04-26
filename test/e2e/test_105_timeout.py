@@ -6,17 +6,12 @@ from h2_conf import HttpdConf
 
 class TestStore:
 
-    @pytest.fixture(autouse=True, scope='class')
-    def _class_scope(self, env):
-        yield
-        assert env.apache_stop() == 0
-
     # Check that base servers 'Timeout' setting is observed on SSL handshake
     def test_105_01(self, env):
         conf = HttpdConf(env)
         conf.add("""
             AcceptFilter http none
-            Timeout 2
+            Timeout 1.5
             """)
         conf.add_vhost_cgi()
         conf.install()
@@ -25,7 +20,10 @@ class TestStore:
         # read with a longer timeout than the server 
         sock = socket.create_connection((host, int(env.https_port)))
         try:
-            sock.settimeout(2.5)
+            # on some OS, the server does not see our connection until there is
+            # something incoming
+            sock.send(b'0')
+            sock.settimeout(4)
             buff = sock.recv(1024)
             assert buff == b''
         except Exception as ex:
@@ -48,7 +46,7 @@ class TestStore:
         conf.add("""
             AcceptFilter http none
             Timeout 10
-            RequestReadTimeout handshake=2 header=5 body=10
+            RequestReadTimeout handshake=1 header=5 body=10
             """)
         conf.add_vhost_cgi()
         conf.install()
@@ -57,7 +55,10 @@ class TestStore:
         # read with a longer timeout than the server 
         sock = socket.create_connection((host, int(env.https_port)))
         try:
-            sock.settimeout(2.5)
+            # on some OS, the server does not see our connection until there is
+            # something incoming
+            sock.send(b'0')
+            sock.settimeout(4)
             buff = sock.recv(1024)
             assert buff == b''
         except Exception as ex:

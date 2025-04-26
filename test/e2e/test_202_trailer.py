@@ -20,8 +20,6 @@ class TestStore:
         setup_data(env)
         HttpdConf(env).add_vhost_cgi(h2proxy_self=True).install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # check if the server survives a trailer or two
     def test_202_01(self, env):

@@ -9,8 +9,6 @@ class TestStore:
     def _class_scope(self, env):
         HttpdConf(env).add_vhost_cgi().install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # let the hecho.py CGI echo chars < 0x20 in field name
     # for almost all such characters, the stream gets aborted with a h2 error and 

@@ -9,8 +9,6 @@ class TestStore:
     def _class_scope(self, env):
         HttpdConf(env).add_vhost_cgi().install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     def test_005_01(self, env):
         url = env.mkurl("https", "cgi", "/.well-known/h2/state")

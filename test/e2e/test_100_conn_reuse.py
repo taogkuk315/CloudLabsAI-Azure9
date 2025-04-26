@@ -9,8 +9,6 @@ class TestStore:
     def _class_scope(self, env):
         HttpdConf(env).add_vhost_noh2().add_vhost_test1().add_vhost_cgi().install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # make sure the protocol selection on the different hosts work as expected
     def test_100_01(self, env):

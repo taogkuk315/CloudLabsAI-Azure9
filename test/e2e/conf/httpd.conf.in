@@ -1,5 +1,3 @@
-User @HTTPD_USER@
-
 ServerName @SERVER_NAME@
 ServerRoot "@SERVER_DIR@"
 
@@ -13,6 +11,8 @@ DocumentRoot "@SERVER_DIR@/htdocs"
     CustomLog "logs/access_log" combined
     
 </IfModule>
+
+TypesConfig "@GEN_DIR@/apache/conf/mime.types"
 
 Listen @HTTP_PORT@
 Listen @HTTPS_PORT@

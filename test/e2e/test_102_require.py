@@ -22,8 +22,6 @@ class TestStore:
         # the dir needs to exists for the configuration to have effect
         env.mkpath("%s/htdocs/ssl-client-verify" % env.server_dir)
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     def test_102_01(self, env):
         url = env.mkurl("https", "ssl", "/h2only.html")

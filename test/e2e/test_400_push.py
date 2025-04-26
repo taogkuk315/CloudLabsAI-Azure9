@@ -56,8 +56,6 @@ class TestStore:
         """).end_vhost(
         ).install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     ############################
     # Link: header handling, various combinations

@@ -247,21 +247,23 @@ class H2TestEnv:
         log.debug("Server still responding after %d sec", timeout)
         return False
 
-    def apachectl(self, cmd, conf=None, check_live=True):
-        if conf:
-            self.install_test_conf(conf)
-        args = [self._apachectl, "-d", self.server_dir, "-k", cmd]
+    def apachectl(self, cmd, check_live=True):
+        args = [self._apachectl,
+                "-d", self.server_dir,
+                "-f", os.path.join(self._server_dir, 'conf/httpd.conf'),
+                "-k", cmd]
         log.debug("execute: %s", " ".join(args))
-        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
-        sys.stderr.write(p.stderr)
+        p = subprocess.run(args, capture_output=True, text=True)
         rv = p.returncode
-        timeout = timedelta(seconds=10)
         if rv == 0:
+            timeout = timedelta(seconds=10)
             if check_live:
                 rv = 0 if self.is_live(self._http_base, timeout=timeout) else -1
             else:
                 rv = 0 if self.is_dead(self._http_base, timeout=timeout) else -1
                 log.debug("waited for a apache.is_dead, rv=%d", rv)
+        else:
+            log.warning(f"exit {rv}, stdout: {p.stdout}, stderr: {p.stderr}")
         return rv
 
     def apache_restart(self):
@@ -273,7 +275,7 @@ class H2TestEnv:
     def apache_stop(self):
         return self.apachectl("stop", check_live=False)
 
-    def install_test_conf(self, conf=None):
+    def install_test_conf(self, conf):
         if conf is None:
             conf_src = os.path.join("conf", "test.conf")
         elif os.path.isabs(conf):

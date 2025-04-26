@@ -12,8 +12,6 @@ class TestStore:
         env.setup_data_1k_1m()
         HttpdConf(env).add_vhost_cgi(proxy_self=True).install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     def setup_method(self, method):
         print("setup_method: %s" % method.__name__)

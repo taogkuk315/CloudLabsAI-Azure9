@@ -41,8 +41,6 @@ class TestStore:
         conf.end_vhost()
         conf.install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # default paddings settings: 0 bits
     def test_104_01(self, env):

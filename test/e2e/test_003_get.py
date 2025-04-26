@@ -14,8 +14,6 @@ class TestStore:
             proxy_self=True, h2proxy_self=True
         ).install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # check SSL environment variables from CGI script
     def test_003_01(self, env):

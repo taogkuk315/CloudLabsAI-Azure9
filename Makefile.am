@@ -41,5 +41,8 @@ dist-hook:
 test:
 	$(MAKE) -C test/ test
 
+loadtest:
+	$(MAKE) -C test/ loadtest
+
 clean-local:
 	$(MAKE) -C test/ clean

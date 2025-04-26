@@ -72,8 +72,6 @@ else
     AC_MSG_NOTICE("using APXS=$APXS as configured")
 fi
 
-export BUILD_SUBDIRS="mod_http2"
-
 prefix="$($APXS -q prefix)"
 prefix="${prefix:-/usr}"
 export PREFIX="${prefix}"
@@ -81,8 +79,35 @@ LDFLAGS="-L$($APXS -q libdir) $LDFLAGS"
 CPPFLAGS="-I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR) $($APXS -q EXTRA_CPPFLAGS) $CPPFLAGS"
 export SYSCONF_DIR="$($APXS -q sysconfdir)"
 export LIBEXEC_DIR="$($APXS -q LIBEXECDIR)"
+export SBINDIR="$($APXS -q SBINDIR)"
 
 HTTPD_VERSION="$($APXS -q HTTPD_VERSION)"
+
+# some installations have modules linked statically
+test -x "$SBINDIR/apachectl" || AC_MSG_ERROR("not found: $SBINDIR/apachectl")
+LOAD_LOG_CONFIG=
+LOAD_LOGIO=
+LOAD_UNIXD=
+LOAD_VERSION=
+LOAD_WATCHDOG=
+linked=$($SBINDIR/apachectl -t -D DUMP_MODULES | fgrep '(static)')
+case "$linked" in *log_config_module*) LOAD_LOG_CONFIG='#';; esac
+case "$linked" in *logio_module*) LOAD_LOGIO='#';; esac
+case "$linked" in *unixd_module*) LOAD_UNIXD='#';; esac
+case "$linked" in *version_module*) LOAD_VERSION='#';; esac
+case "$linked" in *watchdog_module*) LOAD_WATCHDOG='#';; esac
+
+AC_SUBST(LOAD_LOG_CONFIG)
+AC_SUBST(LOAD_LOGIO)
+AC_SUBST(LOAD_UNIXD)
+AC_SUBST(LOAD_VERSION)
+AC_SUBST(LOAD_WATCHDOG)
+
+
+export BUILD_SUBDIRS="mod_http2"
+
+AC_SUBST(LIBEXECDIR)
+AC_SUBST(LIBEXEC_DIR)
 
 # We need nghttp2 to be in our link path, check for it.
 #
@@ -239,7 +264,7 @@ AC_SUBST(HTTP_PORT)
 HTTPS_PORT=42002
 AC_SUBST(HTTPS_PORT)
 
-HTTPD_USER="$USER"
+HTTPD_USER="${USER:-www-data}"
 AC_SUBST(HTTPD_USER)
 
 MODULE_SRC="$PWD/mod_http2"

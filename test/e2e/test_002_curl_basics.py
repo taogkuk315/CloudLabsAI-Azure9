@@ -9,8 +9,6 @@ class TestStore:
     def _class_scope(self, env):
         HttpdConf(env).add_vhost_test1().add_vhost_test2().install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # check that we see the correct documents when using the test1 server name over http:
     def test_002_01(self, env):

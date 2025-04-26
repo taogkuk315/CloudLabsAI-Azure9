@@ -1,3 +1,6 @@
+ * Adding a docker image for testing on Debian 'sid'. Use:
+   > docker-compose build debian-sid
+   > docker-compose run debian-sid
  * Making H2Min/MaxWorkers behave as intended again. The module will initially
    create H2MinWorkers threads and add up to H2MaxWorkers when needed. These
    additional workers time out when idle after H2MaxWorkerIdleSeconds and

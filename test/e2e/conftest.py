@@ -1,6 +1,5 @@
 import logging
 import os
-from datetime import timedelta
 
 import pytest
 
@@ -34,8 +33,14 @@ def env() -> H2TestEnv:
         CertificateSpec(domains=env.domains, key_type='rsa4096'),
         CertificateSpec(domains=env.domains_noh2, key_type='rsa2048'),
     ]
-    ca = H2TestCA.create_root(name=env._http_tld,
+    ca = H2TestCA.create_root(name=env.http_tld,
                               store_dir=os.path.join(env.server_dir, 'ca'), key_type="rsa4096")
     ca.issue_certs(cert_specs)
     env.set_ca(ca)
     return env
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _session_scope(env):
+    yield
+    assert env.apache_stop() == 0

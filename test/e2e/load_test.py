@@ -226,13 +226,13 @@ class LoadTestCase:
 
     @staticmethod
     def start_server(env: H2TestEnv, cd: timedelta = None):
-        if env.apache_stop() == 0 and cd:
+        if cd:
             with tqdm(desc="connection cooldown", total=int(cd.total_seconds()), unit="s", leave=False) as t:
                 end = datetime.now() + cd
                 while datetime.now() < end:
                     time.sleep(1)
                     t.update()
-        assert env.apache_start() == 0
+        assert env.apache_restart() == 0
 
     @staticmethod
     def server_setup(env: H2TestEnv, extras: Dict = None):
@@ -326,8 +326,8 @@ class UrlsLoadTest(LoadTestCase):
         self.start_server(env=self.env)
 
     def _teardown(self):
-        if self.env.is_live(url=self.env.domain_test1, timeout=timedelta(milliseconds=100)):
-            assert self.env.apache_stop() == 0
+        # we shutdown apache at program exit
+        pass
 
     def shutdown(self):
         self._teardown()
@@ -457,8 +457,8 @@ class StressTest(LoadTestCase):
         self._is_setup = True
 
     def shutdown(self):
-        if self.env.is_live(url=self.env.domain_test1, timeout=timedelta(milliseconds=100)):
-            assert self.env.apache_stop() == 0
+        # we shutdown apache at program exit
+        pass
 
     def run_test(self, mode: str) -> H2LoadLogSummary:
         monitor = None

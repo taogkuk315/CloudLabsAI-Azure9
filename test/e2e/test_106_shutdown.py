@@ -19,8 +19,6 @@ class TestShutdown:
         conf.add_vhost_cgi()
         conf.install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     def test_106_01(self, env):
         url = env.mkurl("https", "cgi", "/necho.py")

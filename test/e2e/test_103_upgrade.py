@@ -27,8 +27,6 @@ class TestStore:
         ).end_vhost(
         ).install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # accessing http://test1, will not try h2 and advertise h2 in the response
     def test_103_01(self, env):

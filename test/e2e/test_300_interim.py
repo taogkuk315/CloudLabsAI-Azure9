@@ -9,8 +9,6 @@ class TestStore:
     def _class_scope(self, env):
         HttpdConf(env).add_vhost_test1().add_vhost_cgi().install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     def setup_method(self, method):
         print("setup_method: %s" % method.__name__)

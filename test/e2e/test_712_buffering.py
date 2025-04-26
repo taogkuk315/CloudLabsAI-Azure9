@@ -128,8 +128,6 @@ class TestStore:
         conf = HttpdConf(env).add("H2OutputBuffering off")
         conf.add_vhost_cgi(h2proxy_self=True).install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     def test_712_01(self, env):
         # test gRPC like requests that do not end, but give answers, see #207

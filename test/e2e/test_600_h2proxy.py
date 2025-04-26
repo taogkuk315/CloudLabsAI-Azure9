@@ -10,8 +10,6 @@ class TestStore:
         env.setup_data_1k_1m()
         HttpdConf(env).add_vhost_cgi(h2proxy_self=True).install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     def test_600_01(self, env):
         url = env.mkurl("https", "cgi", "/h2proxy/hello.py")

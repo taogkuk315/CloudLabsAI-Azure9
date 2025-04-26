@@ -14,8 +14,6 @@ class TestStore:
             KeepAliveTimeout 30"""
         ).add_vhost_test1().install()
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # check handling of 'if-modified-since' header
     def test_201_01(self, env):

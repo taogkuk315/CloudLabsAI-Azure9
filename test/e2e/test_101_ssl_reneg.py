@@ -44,8 +44,6 @@ class TestStore:
         env.mkpath("%s/htdocs/sslrequire" % env.server_dir)
         env.mkpath("%s/htdocs/requiressl" % env.server_dir)
         assert env.apache_restart() == 0
-        yield
-        assert env.apache_stop() == 0
 
     # access a resource with SSL renegotiation, using HTTP/1.1
     def test_101_01(self, env):
@@ -58,7 +56,9 @@ class TestStore:
     # try to renegotiate the cipher, should fail with correct code
     def test_101_02(self, env):
         url = env.mkurl("https", "ssl", "/renegotiate/cipher/")
-        r = env.curl_get(url, options=["-vvv", "--tlsv1.2", "--tls-max", "1.2"])
+        r = env.curl_get(url, options=[
+            "-vvv", "--tlsv1.2", "--tls-max", "1.2", "--ciphers", "ECDHE-RSA-AES256-GCM-SHA384"
+        ])
         assert 0 != r.exit_code
         assert not r.response
         assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r.stderr)
@@ -118,7 +118,9 @@ class TestStore:
     # Check that status works with ErrorDoc, see pull #174, fixes #172
     def test_101_11(self, env):
         url = env.mkurl("https", "ssl", "/renegotiate/err-doc-cipher")
-        r = env.curl_get(url, options=["-vvv", "--tlsv1.2", "--tls-max", "1.2"])
+        r = env.curl_get(url, options=[
+            "-vvv", "--tlsv1.2", "--tls-max", "1.2", "--ciphers", "ECDHE-RSA-AES256-GCM-SHA384"
+        ])
         assert 0 != r.exit_code
         assert not r.response
         assert re.search(r'HTTP_1_1_REQUIRED \(err 13\)', r.stderr)
