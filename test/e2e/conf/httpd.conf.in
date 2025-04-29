@@ -1,4 +1,4 @@
-ServerName @SERVER_NAME@
+ServerName localhost
 ServerRoot "@SERVER_DIR@"
 
 Include "conf/modules.conf"

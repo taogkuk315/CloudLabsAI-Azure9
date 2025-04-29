@@ -1,3 +1,6 @@
+ * Adding a docker image for testing on archlinux. Use:
+   > docker-compose build archlinux
+   > docker-compose run archlinux
  * Adding a docker image for testing on Debian 'sid'. Use:
    > docker-compose build debian-sid
    > docker-compose run debian-sid

@@ -1,6 +1,7 @@
 # configuration for h2 tests
 
 [global]
+apxs = @APXS@
 gen_dir = @GEN_DIR@
 prefix = @PREFIX@
 server_dir = @SERVER_DIR@

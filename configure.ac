@@ -246,9 +246,6 @@ AC_ARG_WITH([serverdir], [AS_HELP_STRING([--with-serverdir],
 AC_ARG_WITH([curl], [AS_HELP_STRING([--with-curl], [Use curl from this prefix])],
     [request_curl=$withval], [request_curl=check])
 
-SERVER_NAME=$(hostname -f)
-AC_SUBST(SERVER_NAME)
-
 TEST_DIR="$PWD/test"
 AC_SUBST(TEST_DIR)
 

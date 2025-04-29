@@ -36,6 +36,7 @@ class H2TestEnv:
         self.config = ConfigParser()
         self.config.read(os.path.join(our_dir, 'config.ini'))
 
+        self._apxs = self.config.get('global', 'apxs')
         self._prefix = self.config.get('global', 'prefix')
         self._gen_dir = self.config.get('global', 'gen_dir')
         self._server_dir = self.config.get('global', 'server_dir')
@@ -70,7 +71,6 @@ class H2TestEnv:
             f"noh2.{self._http_tld}",
         ]
         self._mpm_type = os.environ['MPM'] if 'MPM' in os.environ else 'event'
-        self._apxs = os.path.join(self._prefix, 'bin', 'apxs')
         self._apachectl = os.path.join(self.get_apxs_var('SBINDIR'), 'apachectl')
         self._libexec_dir = self.get_apxs_var('LIBEXECDIR')
 
