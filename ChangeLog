@@ -1,3 +1,13 @@
+ * Making h2 connection "mood swings" to ignore clients resetting
+   requests which have at least produced the response headers and
+   one DATA chunk. This targets long-running requests like
+   websockets and server-side-events (SSE), where a RST_STREAM
+   ius the cleint's only option of terminating such requests.
+   With this change, clients are no longer punished for it.
+   See also: <https://bz.apache.org/bugzilla/show_bug.cgi?id=65402>
+   (background: "mood swings" influence how many resources are
+   available to a connection, e.g. how many h2 workers may be
+   working for it at a given point in time.)
  * Adding a docker image for testing on archlinux. Use:
    > docker-compose build archlinux
    > docker-compose run archlinux
