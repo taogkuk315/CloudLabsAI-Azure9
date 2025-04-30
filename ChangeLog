@@ -1,3 +1,5 @@
+v1.15.21
+--------------------------------------------------------------------------------
  * Making h2 connection "mood swings" to ignore clients resetting
    requests which have at least produced the response headers and
    one DATA chunk. This targets long-running requests like
@@ -8,12 +10,6 @@
    (background: "mood swings" influence how many resources are
    available to a connection, e.g. how many h2 workers may be
    working for it at a given point in time.)
- * Adding a docker image for testing on archlinux. Use:
-   > docker-compose build archlinux
-   > docker-compose run archlinux
- * Adding a docker image for testing on Debian 'sid'. Use:
-   > docker-compose build debian-sid
-   > docker-compose run debian-sid
  * Making H2Min/MaxWorkers behave as intended again. The module will initially
    create H2MinWorkers threads and add up to H2MaxWorkers when needed. These
    additional workers time out when idle after H2MaxWorkerIdleSeconds and
@@ -21,10 +17,14 @@
  * When the shutdown of a child is detected (e.g. graceful shutdown), the
    module will terminate all idle workers above H2MinWorkers right away.
    This detection currently only happens when a HTTP/2 connection is active.
+   See also #212.
  * Restoring compatibility with apache httpd 2.4.48 again.
- * when ongoing sessions detect that the process shuts down (for example due to a
-   graceful restart), they now cause idle h2 workers to terminate early.
-   This hopefully addresses #212.
+ * Adding a docker image for testing on archlinux. Use:
+   > docker-compose build archlinux
+   > docker-compose run archlinux
+ * Adding a docker image for testing on Debian 'sid'. Use:
+   > docker-compose build debian-sid
+   > docker-compose run debian-sid
 
 v1.15.20
 --------------------------------------------------------------------------------
