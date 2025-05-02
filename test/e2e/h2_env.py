@@ -71,7 +71,7 @@ class H2TestEnv:
             f"noh2.{self._http_tld}",
         ]
         self._mpm_type = os.environ['MPM'] if 'MPM' in os.environ else 'event'
-        self._apachectl = os.path.join(self.get_apxs_var('SBINDIR'), 'apachectl')
+        self._apachectl = self.config.get('httpd', 'apachectl')
         self._libexec_dir = self.get_apxs_var('LIBEXECDIR')
 
         self._httpd_addr = "127.0.0.1"

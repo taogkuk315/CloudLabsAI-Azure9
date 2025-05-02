@@ -83,26 +83,38 @@ export SBINDIR="$($APXS -q SBINDIR)"
 
 HTTPD_VERSION="$($APXS -q HTTPD_VERSION)"
 
-# some installations have modules linked statically
-test -x "$SBINDIR/apachectl" || AC_MSG_ERROR("not found: $SBINDIR/apachectl")
+# some installations have modules linked statically,
+# we can find that out via `apachectl`, if we can find it
+# if we cannot find it, our test suite will not work.
 LOAD_LOG_CONFIG=
 LOAD_LOGIO=
 LOAD_UNIXD=
 LOAD_VERSION=
 LOAD_WATCHDOG=
-linked=$($SBINDIR/apachectl -t -D DUMP_MODULES | fgrep '(static)')
-case "$linked" in *log_config_module*) LOAD_LOG_CONFIG='#';; esac
-case "$linked" in *logio_module*) LOAD_LOGIO='#';; esac
-case "$linked" in *unixd_module*) LOAD_UNIXD='#';; esac
-case "$linked" in *version_module*) LOAD_VERSION='#';; esac
-case "$linked" in *watchdog_module*) LOAD_WATCHDOG='#';; esac
 
+APACHECTL="$SBINDIR/apachectl"
+if test ! -x "$APACHECTL"; then
+    # rogue distros rename things! =)
+    APACHECTL="$SBINDIR/apache2ctl"
+fi
+
+if test -x "$APACHECTL"; then
+    linked=$($APACHECTL -t -D DUMP_MODULES | fgrep '(static)')
+    case "$linked" in *log_config_module*) LOAD_LOG_CONFIG='#';; esac
+    case "$linked" in *logio_module*) LOAD_LOGIO='#';; esac
+    case "$linked" in *unixd_module*) LOAD_UNIXD='#';; esac
+    case "$linked" in *version_module*) LOAD_VERSION='#';; esac
+    case "$linked" in *watchdog_module*) LOAD_WATCHDOG='#';; esac
+else
+    AC_MSG_WARN("apachectl not found in '$BINDIR', test suite will not work!")
+    APACHECTL=""
+fi
+AC_SUBST(APACHECTL)
 AC_SUBST(LOAD_LOG_CONFIG)
 AC_SUBST(LOAD_LOGIO)
 AC_SUBST(LOAD_UNIXD)
 AC_SUBST(LOAD_VERSION)
 AC_SUBST(LOAD_WATCHDOG)
-
 
 export BUILD_SUBDIRS="mod_http2"
 
@@ -333,4 +345,5 @@ AC_MSG_NOTICE([summary of build options:
     curl            ${CURL_MSG}
     nghttp          ${NGHTTP:--}
     h2load          ${H2LOAD:--}
+    apachectl       ${APACHECTL:--}
 ])
