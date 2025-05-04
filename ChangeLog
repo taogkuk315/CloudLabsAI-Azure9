@@ -1,3 +1,8 @@
+ * Added a timeout to h2 worker cleanup to exit latest after 5 seconds of
+   waiting on idle workers to terminate. This happens after all connections
+   have been processed. a WARNING is logged in case workers lagged behind.
+   This is a stopgap to an underlying issue introduced by the recent
+   dynamic worker changes.
  * `configure` now checks for `apache2ctl` if `apachectl` was not found.
  * `configure` now longer errors when no apachectl was found but warns
    that the test suite will not work.
