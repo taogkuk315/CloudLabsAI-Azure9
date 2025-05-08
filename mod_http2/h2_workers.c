@@ -341,6 +341,9 @@ static apr_status_t workers_pool_cleanup(void *data)
                              APLOGNO() "h2_workers: waiting for idle workers to close");
                 continue;
             }
+            else {
+                break;
+            }
         }
     }
     if (i >= n) {

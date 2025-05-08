@@ -17,7 +17,7 @@ class HttpdConf(object):
         
         H2MinWorkers 4
         H2MaxWorkers 32
-        LogLevel http2:info h2test:trace2 proxy_http2:info
+        LogLevel http2:debug h2test:trace2 proxy_http2:info core:trace6 mpm_event:trace6
         """)
 
     def add(self, line):
