@@ -21,14 +21,15 @@ def pytest_report_header(config, startdir):
 
 
 @pytest.fixture(scope="session")
-def env() -> H2TestEnv:
+def env(pytestconfig) -> H2TestEnv:
     level = logging.INFO
     console = logging.StreamHandler()
     console.setLevel(level)
     console.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
     logging.getLogger('').addHandler(console)
     logging.getLogger('').setLevel(level=level)
-    env = H2TestEnv()
+    env = H2TestEnv(pytestconfig=pytestconfig)
+    env.apache_error_log_clear()
     cert_specs = [
         CertificateSpec(domains=env.domains, key_type='rsa4096'),
         CertificateSpec(domains=env.domains_noh2, key_type='rsa2048'),

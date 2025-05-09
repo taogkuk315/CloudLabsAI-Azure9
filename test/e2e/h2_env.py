@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+import pytest
 import requests
 
 from configparser import ConfigParser
@@ -31,7 +32,7 @@ class Dummy:
 
 class H2TestEnv:
 
-    def __init__(self):
+    def __init__(self, pytestconfig=None):
         our_dir = os.path.dirname(inspect.getfile(Dummy))
         self.config = ConfigParser()
         self.config.read(os.path.join(our_dir, 'config.ini'))
@@ -80,6 +81,21 @@ class H2TestEnv:
 
         self._test_conf = os.path.join(self._server_conf_dir, "test.conf")
         self._e2e_dir = os.path.join(self._test_dir, "e2e")
+        self._httpd_base_conf = f"""
+        LoadModule mpm_{self.mpm_type}_module  \"{self.libexec_dir}/mod_mpm_{self.mpm_type}.so\"
+        H2MinWorkers 4
+        H2MaxWorkers 32
+        """
+        py_verbosity = pytestconfig.option.verbose if pytestconfig is not None else 0
+        if py_verbosity >= 2:
+            self._httpd_base_conf += f"""
+                LogLevel http2:trace2 h2test:trace2 proxy_http2:info 
+                LogLevel core:trace5 mpm_{self.mpm_type}:trace5
+                """
+        if py_verbosity >= 1:
+            self._httpd_base_conf += "LogLevel http2:debug h2test:trace2 proxy_http2:debug"
+        else:
+            self._httpd_base_conf += "LogLevel http2:info h2test:trace2 proxy_http2:info"
 
         self._verify_certs = False
         if not os.path.exists(self.gen_dir):
@@ -150,6 +166,10 @@ class H2TestEnv:
         return self._server_docs_dir
 
     @property
+    def httpd_base_conf(self) -> str:
+        return self._httpd_base_conf
+
+    @property
     def h2load(self) -> str:
         return self._h2load
 
@@ -208,6 +228,12 @@ class H2TestEnv:
     def mkurl(self, scheme, hostname, path='/'):
         port = self.https_port if scheme == 'https' else self.http_port
         return "%s://%s.%s:%s%s" % (scheme, hostname, self.http_tld, port, path)
+
+    def install_test_conf(self, conf: List[str]):
+        with open(self._test_conf, 'w') as fd:
+            fd.write(f"{self.httpd_base_conf}\n")
+            for line in conf:
+                fd.write(f"{line}\n")
 
     def is_live(self, url, timeout: timedelta = None):
         s = requests.Session()
@@ -274,15 +300,6 @@ class H2TestEnv:
 
     def apache_stop(self):
         return self.apachectl("stop", check_live=False)
-
-    def install_test_conf(self, conf):
-        if conf is None:
-            conf_src = os.path.join("conf", "test.conf")
-        elif os.path.isabs(conf):
-            conf_src = conf
-        else:
-            conf_src = os.path.join("data", conf + ".conf")
-        copyfile(conf_src, self._test_conf)
 
     def apache_error_log_clear(self):
         if os.path.isfile(self._server_error_log):

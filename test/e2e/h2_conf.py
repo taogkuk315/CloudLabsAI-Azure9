@@ -5,25 +5,19 @@ class HttpdConf(object):
 
     def __init__(self, env, path=None):
         self.env = env
-        if path:
-            self.path = path
-        else:
-            self.path = os.path.join(env.gen_dir, "auto.conf")
-        if os.path.isfile(self.path):
-            os.remove(self.path)
+        self._lines = []
         self._has_ssl_vhost = False
-        open(self.path, "a").write(f"""
-        LoadModule mpm_{env.mpm_type}_module  \"{env.libexec_dir}/mod_mpm_{env.mpm_type}.so\"
-        
-        H2MinWorkers 4
-        H2MaxWorkers 32
-        LogLevel http2:debug h2test:trace2 proxy_http2:info core:trace6 mpm_event:trace6
-        """)
+
+    def install(self):
+        if not self._has_ssl_vhost:
+            self.add_vhost_test1()
+        self.env.install_test_conf(self._lines)
 
     def add(self, line):
         if isinstance(line, list):
-            line = "\n".join(line)
-        open(self.path, "a").write(line + "\n")
+            self._lines.extend(line)
+        else:
+            self._lines.append(line)
         return self
 
     def add_vhost(self, port, name, aliases=None, doc_root="htdocs", with_ssl=True):
@@ -49,17 +43,11 @@ class HttpdConf(object):
                     f"SSLCertificateFile {cred.cert_file}",
                     f"SSLCertificateKeyFile {cred.pkey_file}",
                 ])
-
         return self.add(lines)
                   
     def end_vhost(self):
         self.add("</VirtualHost>")
         return self
-
-    def install(self):
-        if not self._has_ssl_vhost:
-            self.add_vhost_test1()
-        self.env.install_test_conf(self.path)
 
     def add_proxies(self, host, proxy_self=False, h2proxy_self=False):
         if proxy_self or h2proxy_self:
