@@ -1,3 +1,8 @@
+ * The test suite now clears Apache's error log on start and checks after
+   the run if unexpected errors or warnings were logged.
+ * H2 sessions normally log a warning when the connection is torn down
+   without them being able to send a last GOAWAY frame. This logging
+   happens at DEBUG level during the stopping of a child process.
  * Added a timeout to h2 worker cleanup to exit latest after 5 seconds of
    waiting on idle workers to terminate. This happens after all connections
    have been processed. a WARNING is logged in case workers lagged behind.

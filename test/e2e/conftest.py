@@ -45,3 +45,8 @@ def env(pytestconfig) -> H2TestEnv:
 def _session_scope(env):
     yield
     assert env.apache_stop() == 0
+    errors, warnings = env.apache_errors_and_warnings()
+    assert (len(errors), len(warnings)) == (0, 0),\
+            f"apache logged {len(errors)} errors and {len(warnings)} warnings: \n"\
+            "{0}\n{1}\n".format("\n".join(errors), "\n".join(warnings))
+

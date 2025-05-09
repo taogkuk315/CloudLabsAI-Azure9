@@ -85,6 +85,7 @@ class H2TestEnv:
         LoadModule mpm_{self.mpm_type}_module  \"{self.libexec_dir}/mod_mpm_{self.mpm_type}.so\"
         H2MinWorkers 4
         H2MaxWorkers 32
+        SSLSessionCache "shmcb:ssl_gcache_data(32000)"
         """
         py_verbosity = pytestconfig.option.verbose if pytestconfig is not None else 0
         if py_verbosity >= 2:
@@ -304,6 +305,30 @@ class H2TestEnv:
     def apache_error_log_clear(self):
         if os.path.isfile(self._server_error_log):
             os.remove(self._server_error_log)
+
+    RE_APLOGNO = re.compile(r'.*\[(?P<module>[^:]+):(error|warn)].* (?P<aplogno>AH\d+): .+')
+    RE_ERRLOG_ERROR = re.compile(r'.*\[(?P<module>[^:]+):error].*')
+    RE_ERRLOG_WARN = re.compile(r'.*\[(?P<module>[^:]+):warn].*')
+
+    def apache_errors_and_warnings(self):
+        errors = []
+        warnings = []
+
+        if os.path.isfile(self._server_error_log):
+            for line in open(self._server_error_log):
+                m = self.RE_APLOGNO.match(line)
+                if m and m.group('aplogno') in ['AH02032', 'AH01276', 'AH01630']:
+                    # we know these happen normally in our tests
+                    continue
+                m = self.RE_ERRLOG_ERROR.match(line)
+                if m and m.group('module') not in ['cgid']:
+                    errors.append(line)
+                    continue
+                m = self.RE_ERRLOG_WARN.match(line)
+                if m:
+                    warnings.append(line)
+                    continue
+        return errors, warnings
 
     def curl_complete_args(self, urls, timeout, options):
         if not isinstance(urls, list):
