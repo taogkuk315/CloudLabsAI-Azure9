@@ -334,16 +334,16 @@ static apr_status_t workers_pool_cleanup(void *data)
      * (ungrateful). Either way, we show limited patience. */
     apr_thread_mutex_lock(workers->lock);
     for (i = 0; i < n; ++i) {
-        if (apr_atomic_read32(&workers->worker_count)) {
-            rv = apr_thread_cond_timedwait(workers->all_done, workers->lock, timout);
-            if (APR_TIMEUP == rv) {
-                ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
-                             APLOGNO() "h2_workers: waiting for idle workers to close");
-                continue;
-            }
-            else {
-                break;
-            }
+        if (!apr_atomic_read32(&workers->worker_count)) {
+            break;
+        }
+        rv = apr_thread_cond_timedwait(workers->all_done, workers->lock, timout);
+        if (APR_TIMEUP == rv) {
+            ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, workers->s,
+                         APLOGNO() "h2_workers: waiting for idle workers to close, "
+                         "still seeing %d workers living",
+                         apr_atomic_read32(&workers->worker_count));
+            continue;
         }
     }
     if (i >= n) {

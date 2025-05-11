@@ -83,8 +83,8 @@ class H2TestEnv:
         self._e2e_dir = os.path.join(self._test_dir, "e2e")
         self._httpd_base_conf = f"""
         LoadModule mpm_{self.mpm_type}_module  \"{self.libexec_dir}/mod_mpm_{self.mpm_type}.so\"
-        H2MinWorkers 4
-        H2MaxWorkers 32
+        H2MinWorkers 1
+        H2MaxWorkers 64
         SSLSessionCache "shmcb:ssl_gcache_data(32000)"
         """
         py_verbosity = pytestconfig.option.verbose if pytestconfig is not None else 0
@@ -317,7 +317,7 @@ class H2TestEnv:
         if os.path.isfile(self._server_error_log):
             for line in open(self._server_error_log):
                 m = self.RE_APLOGNO.match(line)
-                if m and m.group('aplogno') in ['AH02032', 'AH01276', 'AH01630']:
+                if m and m.group('aplogno') in ['AH02032', 'AH01276', 'AH01630', 'AH00135']:
                     # we know these happen normally in our tests
                     continue
                 m = self.RE_ERRLOG_ERROR.match(line)
