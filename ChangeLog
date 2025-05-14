@@ -1,16 +1,18 @@
- * The test suite now clears Apache's error log on start and checks after
-   the run if unexpected errors or warnings were logged.
- * H2 sessions normally log a warning when the connection is torn down
-   without them being able to send a last GOAWAY frame. This logging
-   happens at DEBUG level during the stopping of a child process.
+v1.15.22
+--------------------------------------------------------------------------------
  * Added a timeout to h2 worker cleanup to exit latest after 5 seconds of
    waiting on idle workers to terminate. This happens after all connections
    have been processed. a WARNING is logged in case workers lagged behind.
    This is a stopgap to an underlying issue introduced by the recent
    dynamic worker changes.
+ * H2 sessions normally log a warning when the connection is torn down
+   without them being able to send a last GOAWAY frame. This logging
+   happens at DEBUG level during the stopping of a child process.
  * `configure` now checks for `apache2ctl` if `apachectl` was not found.
  * `configure` now longer errors when no apachectl was found but warns
    that the test suite will not work.
+ * The test suite now clears Apache's error log on start and checks after
+   the run if unexpected errors or warnings were logged.
 
 v1.15.21
 --------------------------------------------------------------------------------

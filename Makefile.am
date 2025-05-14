@@ -46,3 +46,9 @@ loadtest:
 
 clean-local:
 	$(MAKE) -C test/ clean
+
+docker-test:
+	docker-compose build debian-sid
+	docker-compose build archlinux
+	docker-compose run debian-sid
+	docker-compose run archlinux

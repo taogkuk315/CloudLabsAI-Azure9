@@ -307,6 +307,7 @@ class H2TestEnv:
             os.remove(self._server_error_log)
 
     RE_APLOGNO = re.compile(r'.*\[(?P<module>[^:]+):(error|warn)].* (?P<aplogno>AH\d+): .+')
+    RE_SSL_LIB_ERR = re.compile(r'.*\[ssl:error].* SSL Library Error: error:(?P<errno>\S+):.+')
     RE_ERRLOG_ERROR = re.compile(r'.*\[(?P<module>[^:]+):error].*')
     RE_ERRLOG_WARN = re.compile(r'.*\[(?P<module>[^:]+):warn].*')
 
@@ -317,7 +318,20 @@ class H2TestEnv:
         if os.path.isfile(self._server_error_log):
             for line in open(self._server_error_log):
                 m = self.RE_APLOGNO.match(line)
-                if m and m.group('aplogno') in ['AH02032', 'AH01276', 'AH01630', 'AH00135']:
+                if m and m.group('aplogno') in [
+                    'AH02032',
+                    'AH01276',
+                    'AH01630',
+                    'AH00135',
+                    'AH02261',  # Re-negotiation handshake failed (our test_101
+                ]:
+                    # we know these happen normally in our tests
+                    continue
+                m = self.RE_SSL_LIB_ERR.match(line)
+                if m and m.group('errno') in [
+                    '1417A0C1',  # cipher suite mismatch, test_101
+                    '1417C0C7',  # client cert not accepted, test_101
+                ]:
                     # we know these happen normally in our tests
                     continue
                 m = self.RE_ERRLOG_ERROR.match(line)
