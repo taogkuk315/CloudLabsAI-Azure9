@@ -1,3 +1,11 @@
+v1.15.23
+--------------------------------------------------------------------------------
+ * H2MinWorker is reduced automatically to 1 during graceful shutdown
+   of a child process (e.g. server reload). This lets all ongoing requests
+   continue, but shuts down unused threads early.
+   The H2MaxWorkerIdleSeconds is also reduced to 1, so that any workers
+   for ongoing tasks will close down fast.
+
 v1.15.22
 --------------------------------------------------------------------------------
  * Added a timeout to h2 worker cleanup to exit latest after 5 seconds of
