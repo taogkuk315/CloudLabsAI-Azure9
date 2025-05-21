@@ -345,6 +345,7 @@ class UrlsLoadTest(LoadTestCase):
             args = [
                 'h2load',
                 '--clients={0}'.format(self._clients),
+                '--threads={0}'.format(min(self._clients, 2)),
                 '--requests={0}'.format(self._requests),
                 '--input-file={0}'.format(self._url_file),
                 '--log-file={0}'.format(log_file),
@@ -473,6 +474,7 @@ class StressTest(LoadTestCase):
             args = [
                 'h2load',
                 '--clients={0}'.format(self._clients),
+                '--threads={0}'.format(min(self._clients, 2)),
                 '--requests={0}'.format(self._requests),
                 '--input-file={0}'.format(self._url_file),
                 '--log-file={0}'.format(log_file),
@@ -595,7 +597,7 @@ class LoadTest:
                 "file_sizes": [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 10000],
                 "requests": 20000,
                 "protocol": "h2",
-                "max_parallel": 20,
+                "max_parallel": 50,
                 "clients": 32,
                 "cooldown": timedelta(seconds=20),
                 "row0_title": "protocol",
