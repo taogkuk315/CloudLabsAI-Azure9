@@ -1,3 +1,7 @@
+ * With Apache httpd 2.4.49 or newer, h2 idle workers are terminated on a graceful
+   restar/shutdown immediately. This happens independant of any h2 connections being
+   processed or not.
+
 v1.15.23
 --------------------------------------------------------------------------------
  * H2MinWorker is reduced automatically to 1 during graceful shutdown
