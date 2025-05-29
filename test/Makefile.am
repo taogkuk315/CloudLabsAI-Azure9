@@ -42,10 +42,10 @@ $(SERVER_DIR)/.test-setup: \
 
 
 test: $(SERVER_DIR)/.test-setup
-	cd e2e && python3 -m pytest
+	pytest
 
 loadtest: $(SERVER_DIR)/.test-setup
-	cd e2e && python3 load_test.py
+	python3 e2e/load_test.py
 
 clean-local:
 	rm -rf *.pyc __pycache__
