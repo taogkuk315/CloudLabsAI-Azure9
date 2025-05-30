@@ -1,17 +1,28 @@
-# configuration for h2 tests
-
 [global]
-apxs = @APXS@
-gen_dir = @GEN_DIR@
-prefix = @PREFIX@
-server_dir = @SERVER_DIR@
-curl_bin = @CURL_BIN@
-test_dir = @TEST_DIR@
-nghttp = @NGHTTP@
-h2load = @H2LOAD@
+curl_bin = curl
+nghttp = nghttp
+h2load = h2load
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+bindir = @bindir@
+sbindir = @sbindir@
+libdir = @libdir@
+libexecdir = @libexecdir@
+
+apr_bindir = @APR_BINDIR@
+apxs = @APR_BINDIR@/apxs
+apachectl = @sbindir@/apachectl
+dso_modules = @DSO_MODULES@
 
 [httpd]
-http_port = @HTTP_PORT@
-https_port = @HTTPS_PORT@
-http_tld = @HTTP_TLD@
-apachectl = @APACHECTL@
+version = @HTTPD_VERSION@
+name = @progname@
+
+[test]
+gen_dir = @abs_srcdir@/gen
+http_port = 40001
+https_port = 40002
+http_tld = tests.httpd.apache.org
+test_dir = @abs_srcdir@
+test_src_dir = @abs_srcdir@

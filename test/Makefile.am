@@ -13,38 +13,12 @@
 # limitations under the License.
 #
 
-SUBDIRS        = mod_h2test
+.PHONY: test loadtest
 
-SERVER_DIR     = @SERVER_DIR@
-GEN            = gen
-
-$(SERVER_DIR)/htdocs/.copied: \
-            $(wildcard e2e/htdocs/*) \
-            $(wildcard e2e/htdocs/*/*) \
-            $(wildcard e2e/htdocs/*/*/*)
-	@mkdir -p $(SERVER_DIR)/htdocs
-	@cp -r e2e/htdocs/* $(SERVER_DIR)/htdocs 
-	@chmod +x $(SERVER_DIR)/htdocs/cgi/*.* 
-
-.PHONY: mod_h2test
-mod_h2test:
-	$(MAKE) -C mod_h2test
-
-$(SERVER_DIR)/.test-setup: \
-                mod_h2test \
-                $(wildcard e2e/conf/*) \
-                $(SERVER_DIR)/htdocs/.copied \
-		$(CERTIFICATES)
-	@mkdir -p $(SERVER_DIR)/conf/ssl
-	@mkdir -p $(SERVER_DIR)/logs
-	rsync -a --exclude="*.in" e2e/conf/*.* $(SERVER_DIR)/conf
-	@touch $(SERVER_DIR)/.test-setup
-
-
-test: $(SERVER_DIR)/.test-setup
+test:
 	pytest
 
-loadtest: $(SERVER_DIR)/.test-setup
+loadtest:
 	python3 e2e/load_test.py
 
 clean-local:

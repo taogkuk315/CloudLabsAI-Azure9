@@ -72,44 +72,47 @@ else
     AC_MSG_NOTICE("using APXS=$APXS as configured")
 fi
 
+AC_SUBST(APR)
+
 prefix="$($APXS -q prefix)"
 prefix="${prefix:-/usr}"
-export PREFIX="${prefix}"
-LDFLAGS="-L$($APXS -q libdir) $LDFLAGS"
+AC_SUBST(prefix)
+
+exec_prefix="$($APXS -q exec_prefix)"
+AC_SUBST(exec_prefix)
+APR_BINDIR="$($APXS -q APR_BINDIR)"
+AC_SUBST(APR_BINDIR)
+sbindir="$($APXS -q sbindir)"
+AC_SUBST(sbindir)
+progname="$($APXS -q progname)"
+AC_SUBST(progname)
+libdir="$($APXS -q libdir)"
+AC_SUBST(libdir)
+SYSCONF_DIR="$($APXS -q sysconfdir)"
+AC_SUBST(SYSCONF_DIR)
+LIBEXEC_DIR="$($APXS -q LIBEXECDIR)"
+AC_SUBST(LIBEXEC_DIR)
+
+LDFLAGS="-L$libdir $LDFLAGS"
 CPPFLAGS="-I$($APXS -q includedir) -I$($APXS -q APR_INCLUDEDIR) $($APXS -q EXTRA_CPPFLAGS) $CPPFLAGS"
-export SYSCONF_DIR="$($APXS -q sysconfdir)"
-export LIBEXEC_DIR="$($APXS -q LIBEXECDIR)"
-export SBINDIR="$($APXS -q SBINDIR)"
 
 HTTPD_VERSION="$($APXS -q HTTPD_VERSION)"
+AC_SUBST(HTTPD_VERSION)
 
-# some installations have modules linked statically,
-# we can find that out via `apachectl`, if we can find it
-# if we cannot find it, our test suite will not work.
-LOAD_LOG_CONFIG=
-LOAD_LOGIO=
-LOAD_UNIXD=
-LOAD_VERSION=
-LOAD_WATCHDOG=
-
-APACHECTL="$SBINDIR/apachectl"
+APACHECTL="$sbindir/apachectl"
 if test ! -x "$APACHECTL"; then
     # rogue distros rename things! =)
-    APACHECTL="$SBINDIR/apache2ctl"
+    APACHECTL="$sbindir/apache2ctl"
 fi
+AC_SUBST(APACHECTL)
 
 if test -x "$APACHECTL"; then
-    linked=$($APACHECTL -t -D DUMP_MODULES | fgrep '(static)')
-    case "$linked" in *log_config_module*) LOAD_LOG_CONFIG='#';; esac
-    case "$linked" in *logio_module*) LOAD_LOGIO='#';; esac
-    case "$linked" in *unixd_module*) LOAD_UNIXD='#';; esac
-    case "$linked" in *version_module*) LOAD_VERSION='#';; esac
-    case "$linked" in *watchdog_module*) LOAD_WATCHDOG='#';; esac
+    DSO_MODULES="$($APACHECTL -t -D DUMP_MODULES | fgrep '(shared)'| sed 's/_module.*//g'|tr -d \\n)"
+    AC_SUBST(DSO_MODULES)
 else
     AC_MSG_WARN("apachectl not found in '$BINDIR', test suite will not work!")
     APACHECTL=""
 fi
-AC_SUBST(APACHECTL)
 AC_SUBST(LOAD_LOG_CONFIG)
 AC_SUBST(LOAD_LOGIO)
 AC_SUBST(LOAD_UNIXD)
@@ -117,9 +120,8 @@ AC_SUBST(LOAD_VERSION)
 AC_SUBST(LOAD_WATCHDOG)
 
 export BUILD_SUBDIRS="mod_http2"
+AC_SUBST(BUILD_SUBDIRS)
 
-AC_SUBST(LIBEXECDIR)
-AC_SUBST(LIBEXEC_DIR)
 
 # We need nghttp2 to be in our link path, check for it.
 #
@@ -235,22 +237,6 @@ AC_TYPE_UINT8_T
 # Checks for library functions.
 AC_CHECK_FUNCS([memmove memset strcasecmp strchr])
 
-AC_CHECK_PROG([A2ENMOD],[a2enmod])
-
-# substitution in generated files
-AC_SUBST(BUILD_SUBDIRS)
-AC_SUBST(SYSCONF_DIR)
-AC_SUBST(LIBEXEC_DIR)
-
-HTTP_PORT=12345
-HTTPS_PORT=12346
-HTTP_TLD="tests.httpd.apache.org"
-
-AC_SUBST(PREFIX)
-AC_SUBST(HTTP_PORT)
-AC_SUBST(HTTPS_PORT)
-AC_SUBST(HTTP_TLD)
-
 AC_ARG_WITH([serverdir], [AS_HELP_STRING([--with-serverdir],
     [Use serverdir directory for setup [default=gen/apache]])],
     [request_serverdir=$withval], [request_serverdir=$PWD/test/gen/apache])
@@ -278,9 +264,6 @@ AC_SUBST(HTTPD_USER)
 
 MODULE_SRC="$PWD/mod_http2"
 AC_SUBST(MODULE_SRC)
-
-TEST_MODULE_SRC="$PWD/test/mod_h2test"
-AC_SUBST(TEST_MODULE_SRC)
 
 # we need curl for testing
 #
@@ -321,10 +304,7 @@ AC_CONFIG_FILES([
     mod_http2/Makefile
     mod_http2/h2_version.h
     test/Makefile
-    test/mod_h2test/Makefile
     test/e2e/config.ini
-    test/e2e/conf/httpd.conf
-    test/e2e/conf/modules.conf
 ])
 
 AC_OUTPUT
