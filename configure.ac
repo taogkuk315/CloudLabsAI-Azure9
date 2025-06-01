@@ -304,7 +304,7 @@ AC_CONFIG_FILES([
     mod_http2/Makefile
     mod_http2/h2_version.h
     test/Makefile
-    test/e2e/config.ini
+    test/config.ini
 ])
 
 AC_OUTPUT
