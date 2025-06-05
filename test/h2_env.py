@@ -131,8 +131,10 @@ class H2TestSetup:
         modules_conf = os.path.join(self.env.server_dir, 'conf/modules.conf')
         with open(modules_conf, 'w') as fd:
             # issue load directives for all modules we want that are shared
-            for m in [m for m in self.MODULES if m in self.env.dso_modules]:
-                fd.write(f"LoadModule {m}_module   \"{self.env.libexec_dir}/mod_{m}.so\"\n")
+            for m in self.MODULES:
+                mod_path = os.path.join(self.env.libexec_dir, f"mod_{m}.so")
+                if os.path.isfile(mod_path):
+                    fd.write(f"LoadModule {m}_module   \"{mod_path}\"\n")
             for m in ["http2", "proxy_http2"]:
                 fd.write(f"LoadModule {m}_module   \"{self.env.libexec_dir}/mod_{m}.so\"\n")
             # load our test module which is not installed

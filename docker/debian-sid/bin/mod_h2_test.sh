@@ -43,8 +43,8 @@ if needs_update .installed .; then
   make clean||fail
   make ||fail
   find .
-  make install ||fail
   touch .installed
 fi
+make install ||fail
 make test
 #make loadtest

@@ -14,7 +14,9 @@ COPY configure.ac Makefile.am NEWS README* AUTHORS ChangeLog COPYING LICENSE /ap
 COPY m4 /apache-httpd/mod_h2/m4
 COPY mod_http2 /apache-httpd/mod_h2/mod_http2
 COPY test test/Makefile.am /apache-httpd/mod_h2/test/
-COPY test/e2e /apache-httpd/mod_h2/test/e2e
+COPY test/conf /apache-httpd/mod_h2/test/conf
+COPY test/data /apache-httpd/mod_h2/test/data
+COPY test/htdocs /apache-httpd/mod_h2/test/htdocs
 COPY test/mod_h2test /apache-httpd/mod_h2/test/mod_h2test
 COPY test/unit /apache-httpd/mod_h2/test/unit
 
