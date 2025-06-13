@@ -1,6 +1,10 @@
+v1.15.24
+--------------------------------------------------------------------------------
  * With Apache httpd 2.4.49 or newer, h2 idle workers are terminated on a graceful
    restar/shutdown immediately. This happens independant of any h2 connections being
    processed or not.
+ * Switch to using OpenSSL EVP_* API to avoid deprecation warnings with
+   OpenSSL 3.0. [@notroj]
 
 v1.15.23
 --------------------------------------------------------------------------------
