@@ -71,8 +71,6 @@ struct h2_mplx {
     struct h2_iqueue *q;            /* all stream ids that need to be started */
     struct h2_ififo *readyq;        /* all stream ids ready for output */
         
-    struct h2_ihash_t *redo_tasks;  /* all tasks that need to be redone */
-    
     int max_streams;        /* max # of concurrent streams */
     int max_stream_started; /* highest stream id that started processing */
     int tasks_active;       /* # of tasks being processed from this mplx */

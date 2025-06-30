@@ -403,26 +403,9 @@ static apr_status_t h2_filter_parse_h1(ap_filter_t* f, apr_bucket_brigade* bb)
  * task things
  ******************************************************************************/
  
-int h2_task_can_redo(h2_task *task) {
-    if (task->input.beam && h2_beam_was_received(task->input.beam)) {
-        /* cannot repeat that. */
-        return 0;
-    }
-    return (!strcmp("GET", task->request->method)
-            || !strcmp("HEAD", task->request->method)
-            || !strcmp("OPTIONS", task->request->method));
-}
-
 int h2_task_has_started(h2_task *task)
 {
     return task && task->started_at != 0;
-}
-
-void h2_task_redo(h2_task *task)
-{
-    task->started_at = 0;
-    task->worker_done = 0;
-    task->rst_error = 0;
 }
 
 void h2_task_rst(h2_task *task, int error)

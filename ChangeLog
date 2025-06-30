@@ -1,3 +1,8 @@
+ * Removed the abort/redo of tasks when mood swings lower the active
+   limit. This probably hurts the server more than it helps. Some
+   setup, like proxied connections, can be slow to respond to the
+   abort of a connection.
+
 v1.15.22
 --------------------------------------------------------------------------------
  * Added a timeout to h2 worker cleanup to exit latest after 5 seconds of

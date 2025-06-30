@@ -116,25 +116,15 @@ static void m_stream_cleanup(h2_mplx *m, h2_stream *stream)
 {
     ap_assert(stream->state == H2_SS_CLEANUP);
 
-    if (stream->input) {
-        h2_beam_on_consumed(stream->input, NULL, NULL, NULL);
-        h2_beam_abort(stream->input);
-    }
-    if (stream->output) {
-        h2_beam_on_produced(stream->output, NULL, NULL);
-        h2_beam_leave(stream->output);
-    }
-    
     h2_stream_cleanup(stream);
-
     h2_ihash_remove(m->streams, stream->id);
     h2_iq_remove(m->q, stream->id);
-    
-    if (!h2_task_has_started(stream->task) || stream->task->done_done) {
+    h2_ififo_remove(m->readyq, stream->id);
+
+    if (!h2_task_has_started(stream->task) || stream->task->worker_done) {
         ms_stream_joined(m, stream);
     }
     else {
-        h2_ififo_remove(m->readyq, stream->id);
         h2_ihash_add(m->shold, stream);
         if (stream->task) {
             stream->task->c->aborted = 1;
@@ -391,7 +381,7 @@ static int m_stream_cancel_iter(void *ctx, void *val) {
     h2_mplx *m = ctx;
     h2_stream *stream = val;
 
-    /* disabled input consumed reporting */
+    /* disable input consumed reporting */
     if (stream->input) {
         h2_beam_on_consumed(stream->input, NULL, NULL, NULL);
     }
@@ -782,6 +772,7 @@ static void s_task_done(h2_mplx *m, h2_task *task)
                   "h2_mplx(%ld): task(%s) done", m->id, task->id);
     s_out_close(m, task);
     
+    ap_assert(task->worker_done == 0);
     task->worker_done = 1;
     task->done_at = apr_time_now();
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, task->c,
@@ -792,34 +783,20 @@ static void s_task_done(h2_mplx *m, h2_task *task)
         s_mplx_be_happy(m, task);
     }
     
-    ap_assert(task->done_done == 0);
-
     stream = h2_ihash_get(m->streams, task->stream_id);
     if (stream) {
         /* stream not done yet. */
-        if (!m->aborted && task->redo) {
-            /* reset and schedule again */
-            h2_task_redo(task);
-            h2_iq_add(m->q, stream->id, NULL, NULL);
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c,
-                          H2_STRM_MSG(stream, "redo, added to q")); 
+        /* stream not cleaned up, stay around */
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, task->c,
+                      H2_STRM_MSG(stream, "task_done, stream open"));
+        if (stream->input) {
+            h2_beam_leave(stream->input);
         }
-        else {
-            /* stream not cleaned up, stay around */
-            task->done_done = 1;
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, task->c,
-                          H2_STRM_MSG(stream, "task_done, stream open")); 
-            if (stream->input) {
-                h2_beam_leave(stream->input);
-            }
-
-            /* more data will not arrive, resume the stream */
-            mst_check_data_for(m, stream, 1);            
-        }
+        /* more data will not arrive, resume the stream */
+        mst_check_data_for(m, stream, 1);
     }
     else if ((stream = h2_ihash_get(m->shold, task->stream_id)) != NULL) {
         /* stream is done, was just waiting for this. */
-        task->done_done = 1;
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, task->c,
                       H2_STRM_MSG(stream, "task_done, in hold"));
         if (stream->input) {
@@ -862,102 +839,6 @@ void h2_mplx_s_task_done(h2_mplx *m, h2_task *task, h2_task **ptask)
 /*******************************************************************************
  * h2_mplx DoS protection
  ******************************************************************************/
-
-static int m_timed_out_busy_iter(void *data, void *val)
-{
-    stream_iter_ctx *ctx = data;
-    h2_stream *stream = val;
-    if (h2_task_has_started(stream->task) && !stream->task->worker_done
-        && (ctx->now - stream->task->started_at) > stream->task->timeout) {
-        /* timed out stream occupying a worker, found */
-        ctx->stream = stream;
-        return 0;
-    }
-    return 1;
-}
-
-static h2_stream *m_get_timed_out_busy_stream(h2_mplx *m) 
-{
-    stream_iter_ctx ctx;
-    ctx.m = m;
-    ctx.stream = NULL;
-    ctx.now = apr_time_now();
-    h2_ihash_iter(m->streams, m_timed_out_busy_iter, &ctx);
-    return ctx.stream;
-}
-
-static int m_latest_repeatable_unsubmitted_iter(void *data, void *val)
-{
-    stream_iter_ctx *ctx = data;
-    h2_stream *stream = val;
-    
-    if (!stream->task) goto leave;
-    if (!h2_task_has_started(stream->task) || stream->task->worker_done) goto leave;
-    if (h2_stream_is_ready(stream)) goto leave;
-    if (stream->task->redo) {
-        ++ctx->count;
-        goto leave;
-    }
-    if (h2_task_can_redo(stream->task)) {
-        /* this task occupies a worker, the response has not been submitted 
-         * yet, not been cancelled and it is a repeatable request
-         * -> we could redo it later */
-        if (!ctx->stream 
-            || (ctx->stream->task->started_at < stream->task->started_at)) {
-            /* we did not have one or this one was started later */
-            ctx->stream = stream;
-        }
-    }
-leave:
-    return 1;
-}
-
-static apr_status_t m_assess_task_to_throttle(h2_task **ptask, h2_mplx *m) 
-{
-    stream_iter_ctx ctx;
-    
-    /* count the running tasks already marked for redo and get one that could
-     * be throttled */
-    *ptask = NULL;
-    ctx.m = m;
-    ctx.stream = NULL;
-    ctx.count = 0;
-    h2_ihash_iter(m->streams, m_latest_repeatable_unsubmitted_iter, &ctx);
-    if (m->tasks_active - ctx.count > m->limit_active) {
-        /* we are above the limit of running tasks, accounting for the ones
-         * already throttled. */
-        if (ctx.stream && ctx.stream->task) {
-            *ptask = ctx.stream->task;
-            return APR_EAGAIN;
-        }
-        /* above limit, be seeing no candidate for easy throttling */
-        if (m_get_timed_out_busy_stream(m)) {
-            /* Too many busy workers, unable to cancel enough streams
-             * and with a busy, timed out stream, we tell the client
-             * to go away... */
-            return APR_TIMEUP;
-        }
-    }
-    return APR_SUCCESS;
-}
-
-static apr_status_t m_unschedule_slow_tasks(h2_mplx *m) 
-{
-    h2_task *task;
-    apr_status_t rv;
-    
-    /* Try to get rid of streams that occupy workers. Look for safe requests
-     * that are repeatable. If none found, fail the connection.
-     */
-    while (APR_EAGAIN == (rv = m_assess_task_to_throttle(&task, m))) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c, 
-                      "h2_mplx(%s): unschedule, resetting task for redo later",
-                      task->id);
-        task->redo = 1;
-        h2_task_rst(task, H2_ERR_CANCEL);
-    }
-    return rv;
-}
 
 static apr_status_t s_mplx_be_happy(h2_mplx *m, h2_task *task)
 {
@@ -1006,10 +887,6 @@ static apr_status_t m_be_annoyed(h2_mplx *m)
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
                       "h2_mplx(%ld): mood update, decreasing worker limit to %d",
                       m->id, m->limit_active);
-    }
-    
-    if (m->tasks_active > m->limit_active) {
-        status = m_unschedule_slow_tasks(m);
     }
     return status;
 }

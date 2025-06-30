@@ -556,6 +556,8 @@ void h2_stream_cleanup(h2_stream *stream)
         apr_brigade_cleanup(stream->out_buffer);
     }
     if (stream->input) {
+        h2_beam_on_consumed(stream->input, NULL, NULL, NULL);
+        h2_beam_abort(stream->input);
         h2_beam_abort(stream->input);
         status = h2_beam_wait_empty(stream->input, APR_NONBLOCK_READ);
         if (status == APR_EAGAIN) {
@@ -565,6 +567,10 @@ void h2_stream_cleanup(h2_stream *stream)
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, stream->session->c, 
                           H2_STRM_MSG(stream, "input drain returned"));
         }
+    }
+    if (stream->output) {
+        h2_beam_on_produced(stream->output, NULL, NULL);
+        h2_beam_leave(stream->output);
     }
 }
 
