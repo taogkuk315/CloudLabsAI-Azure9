@@ -366,7 +366,6 @@ static void set_policy_for(h2_stream *stream, h2_request *r)
 {
     int enabled = h2_session_push_enabled(stream->session);
     stream->push_policy = h2_push_policy_determine(r->headers, stream->pool, enabled);
-    r->serialize = h2_config_sgeti(stream->session->s, H2_CONF_SER_HEADERS);
 }
 
 apr_status_t h2_stream_send_frame(h2_stream *stream, int ftype, int flags, size_t frame_len)
@@ -722,7 +721,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
     else if (H2_SS_IDLE == stream->state) {
         if (!stream->rtmp) {
             stream->rtmp = h2_req_create(stream->id, stream->pool, 
-                                         NULL, NULL, NULL, NULL, NULL, 0);
+                                         NULL, NULL, NULL, NULL, NULL);
         }
         status = h2_request_add_header(stream->rtmp, stream->pool,
                                        name, nlen, value, vlen,

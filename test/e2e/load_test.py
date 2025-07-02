@@ -433,7 +433,7 @@ class StressTest(LoadTestCase):
         LoadTestCase.server_setup(env=self.env, extras={
             'base': f"""
             H2MinWorkers    32
-            H2MaxWorkers    128
+            H2MaxWorkers    512
             H2MaxWorkerIdleSeconds 5
             """
         })

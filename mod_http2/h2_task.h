@@ -98,7 +98,7 @@ void h2_task_destroy(h2_task *task);
 
 apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id);
 
-int h2_task_has_started(h2_task *task);
+int h2_task_is_running(h2_task *task);
 
 /**
  * Reset the task with the given error code, resets all input/output.

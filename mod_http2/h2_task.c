@@ -64,17 +64,6 @@ static void H2_TASK_OUT_LOG(int lvl, h2_task *task, apr_bucket_brigade *bb,
 }
 
 /*******************************************************************************
- * task input handling
- ******************************************************************************/
-
-static int input_ser_header(void *ctx, const char *name, const char *value) 
-{
-    h2_task *task = ctx;
-    apr_brigade_printf(task->input.bb, NULL, NULL, "%s: %s\r\n", name, value);
-    return 1;
-}
-
-/*******************************************************************************
  * task output handling
  ******************************************************************************/
 
@@ -403,9 +392,9 @@ static apr_status_t h2_filter_parse_h1(ap_filter_t* f, apr_bucket_brigade* bb)
  * task things
  ******************************************************************************/
  
-int h2_task_has_started(h2_task *task)
+int h2_task_is_running(h2_task *task)
 {
-    return task && task->started_at != 0;
+    return task && task->started_at != 0 && !task->worker_done;
 }
 
 void h2_task_rst(h2_task *task, int error)
@@ -505,17 +494,14 @@ h2_task *h2_task_create(conn_rec *secondary, int stream_id,
     apr_pool_create(&pool, secondary->pool);
     apr_pool_tag(pool, "h2_task");
     task = apr_pcalloc(pool, sizeof(h2_task));
-    if (task == NULL) {
-        return NULL;
-    }
-    task->id          = "000";
-    task->stream_id   = stream_id;
-    task->c           = secondary;
-    task->mplx        = m;
-    task->pool        = pool;
-    task->request     = req;
-    task->timeout     = timeout;
-    task->input.beam  = input;
+    task->id = "000";
+    task->stream_id = stream_id;
+    task->c = secondary;
+    task->mplx = m;
+    task->pool = pool;
+    task->request = req;
+    task->timeout = timeout;
+    task->input.beam = input;
     task->output.max_buffer = output_max_mem;
 
     return task;
@@ -596,17 +582,7 @@ apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id)
     h2_secondary_run_pre_connection(c, ap_get_conn_socket(c));            
 
     task->input.bb = apr_brigade_create(task->pool, c->bucket_alloc);
-    if (task->request->serialize) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                      "h2_task(%s): serialize request %s %s", 
-                      task->id, task->request->method, task->request->path);
-        apr_brigade_printf(task->input.bb, NULL, 
-                           NULL, "%s %s HTTP/1.1\r\n", 
-                           task->request->method, task->request->path);
-        apr_table_do(input_ser_header, task, task->request->headers, NULL);
-        apr_brigade_puts(task->input.bb, NULL, NULL, "\r\n");
-    }
-    
+
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_task(%s): process connection", task->id);
                   
@@ -626,7 +602,7 @@ static apr_status_t h2_task_process_request(h2_task *task, conn_rec *c)
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_task(%s): create request_rec", task->id);
-    r = h2_request_create_rec(req, c);
+    r = h2_create_request_rec(req, c);
     if (r && (r->status == HTTP_OK)) {
         /* set timeouts for virtual host of request */
         if (task->timeout != r->server->timeout) {
@@ -690,14 +666,10 @@ static int h2_task_process_conn(conn_rec* c)
     
     ctx = h2_ctx_get(c, 0);
     if (ctx->task) {
-        if (!ctx->task->request->serialize) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, 
-                          "h2_h2, processing request directly");
-            h2_task_process_request(ctx->task, c);
-            return DONE;
-        }
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, 
-                      "h2_task(%s), serialized handling", ctx->task->id);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                      "h2_h2, processing request directly");
+        h2_task_process_request(ctx->task, c);
+        return DONE;
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, 

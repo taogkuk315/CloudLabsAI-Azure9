@@ -105,7 +105,7 @@ static void m_stream_input_consumed(void *ctx, h2_bucket_beam *beam, apr_off_t l
 
 static void ms_stream_joined(h2_mplx *m, h2_stream *stream)
 {
-    ap_assert(!h2_task_has_started(stream->task) || stream->task->worker_done);
+    ap_assert(!h2_task_is_running(stream->task));
     
     h2_ififo_remove(m->readyq, stream->id);
     h2_ihash_remove(m->shold, stream->id);
@@ -121,7 +121,7 @@ static void m_stream_cleanup(h2_mplx *m, h2_stream *stream)
     h2_iq_remove(m->q, stream->id);
     h2_ififo_remove(m->readyq, stream->id);
 
-    if (!h2_task_has_started(stream->task) || stream->task->worker_done) {
+    if (!h2_task_is_running(stream->task)) {
         ms_stream_joined(m, stream);
     }
     else {

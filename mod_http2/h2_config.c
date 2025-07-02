@@ -62,8 +62,6 @@ typedef struct h2_config {
     int stream_max_mem_size;      /* max # bytes held in memory/stream */
     apr_array_header_t *alt_svcs; /* h2_alt_svc specs for this server */
     int alt_svc_max_age;          /* seconds clients can rely on alt-svc info*/
-    int serialize_headers;        /* Use serialized HTTP/1.1 headers for 
-                                     processing, better compatibility */
     int h2_direct;                /* if mod_h2 is active directly */
     int modern_tls_only;          /* Accept only modern TLS in HTTP/2 connections */  
     int h2_upgrade;               /* Allow HTTP/1 upgrade to h2/h2c */
@@ -102,7 +100,6 @@ static h2_config defconf = {
     32 * 1024,              /* stream max mem size */
     NULL,                   /* no alt-svcs */
     -1,                     /* alt-svc max age */
-    0,                      /* serialize headers */
     -1,                     /* h2 direct mode */
     1,                      /* modern TLS only */
     -1,                     /* HTTP/1 Upgrade support */
@@ -147,7 +144,6 @@ void *h2_config_create_svr(apr_pool_t *pool, server_rec *s)
     conf->max_worker_idle_secs = DEF_VAL;
     conf->stream_max_mem_size  = DEF_VAL;
     conf->alt_svc_max_age      = DEF_VAL;
-    conf->serialize_headers    = DEF_VAL;
     conf->h2_direct            = DEF_VAL;
     conf->modern_tls_only      = DEF_VAL;
     conf->h2_upgrade           = DEF_VAL;
@@ -181,7 +177,6 @@ static void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     n->stream_max_mem_size  = H2_CONFIG_GET(add, base, stream_max_mem_size);
     n->alt_svcs             = add->alt_svcs? add->alt_svcs : base->alt_svcs;
     n->alt_svc_max_age      = H2_CONFIG_GET(add, base, alt_svc_max_age);
-    n->serialize_headers    = H2_CONFIG_GET(add, base, serialize_headers);
     n->h2_direct            = H2_CONFIG_GET(add, base, h2_direct);
     n->modern_tls_only      = H2_CONFIG_GET(add, base, modern_tls_only);
     n->h2_upgrade           = H2_CONFIG_GET(add, base, h2_upgrade);
@@ -266,8 +261,6 @@ static apr_int64_t h2_srv_config_geti64(const h2_config *conf, h2_config_var_t v
             return H2_CONFIG_GET(conf, &defconf, stream_max_mem_size);
         case H2_CONF_ALT_SVC_MAX_AGE:
             return H2_CONFIG_GET(conf, &defconf, alt_svc_max_age);
-        case H2_CONF_SER_HEADERS:
-            return H2_CONFIG_GET(conf, &defconf, serialize_headers);
         case H2_CONF_MODERN_TLS_ONLY:
             return H2_CONFIG_GET(conf, &defconf, modern_tls_only);
         case H2_CONF_UPGRADE:
@@ -321,8 +314,6 @@ static void h2_srv_config_seti(h2_config *conf, h2_config_var_t var, int val)
         case H2_CONF_ALT_SVC_MAX_AGE:
             H2_CONFIG_SET(conf, alt_svc_max_age, val);
             break;
-        case H2_CONF_SER_HEADERS:
-            H2_CONFIG_SET(conf, serialize_headers, val);
             break;
         case H2_CONF_MODERN_TLS_ONLY:
             H2_CONFIG_SET(conf, modern_tls_only, val);
@@ -661,18 +652,15 @@ static const char *h2_conf_set_session_extra_files(cmd_parms *cmd,
     return NULL;
 }
 
-static const char *h2_conf_set_serialize_headers(cmd_parms *cmd,
+static const char *h2_conf_set_serialize_headers(cmd_parms *parms,
                                                  void *dirconf, const char *value)
 {
     if (!strcasecmp(value, "On")) {
-        CONFIG_CMD_SET(cmd, dirconf, H2_CONF_SER_HEADERS, 1);
-        return NULL;
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, parms->server, APLOGNO()
+                     "%s: this feature has been disabled and the directive "
+                     "to enable it is ignored.", parms->cmd->name);
     }
-    else if (!strcasecmp(value, "Off")) {
-        CONFIG_CMD_SET(cmd, dirconf, H2_CONF_SER_HEADERS, 0);
-        return NULL;
-    }
-    return "value must be On or Off";
+    return NULL;
 }
 
 static const char *h2_conf_set_direct(cmd_parms *cmd,
@@ -971,7 +959,7 @@ const command_rec h2_cmds[] = {
     AP_INIT_TAKE1("H2AltSvcMaxAge", h2_conf_set_alt_svc_max_age, NULL,
                   RSRC_CONF, "set the maximum age (in seconds) that client can rely on alt-svc information"),
     AP_INIT_TAKE1("H2SerializeHeaders", h2_conf_set_serialize_headers, NULL,
-                  RSRC_CONF, "on to enable header serialization for compatibility"),
+                  RSRC_CONF, "disabled, this directive has no longer an effect."),
     AP_INIT_TAKE1("H2ModernTLSOnly", h2_conf_set_modern_tls_only, NULL,
                   RSRC_CONF, "off to not impose RFC 7540 restrictions on TLS"),
     AP_INIT_TAKE1("H2Upgrade", h2_conf_set_upgrade, NULL,

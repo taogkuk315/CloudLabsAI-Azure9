@@ -1860,7 +1860,7 @@ apr_status_t h2_req_add_header(apr_table_t *headers, apr_pool_t *pool,
 
 h2_request *h2_req_create(int id, apr_pool_t *pool, const char *method, 
                           const char *scheme, const char *authority, 
-                          const char *path, apr_table_t *header, int serialize)
+                          const char *path, apr_table_t *header)
 {
     h2_request *req = apr_pcalloc(pool, sizeof(h2_request));
     
@@ -1870,8 +1870,7 @@ h2_request *h2_req_create(int id, apr_pool_t *pool, const char *method,
     req->path           = path;
     req->headers        = header? header : apr_table_make(pool, 10);
     req->request_time   = apr_time_now();
-    req->serialize      = serialize;
-    
+
     return req;
 }
 

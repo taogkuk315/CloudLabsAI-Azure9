@@ -829,7 +829,7 @@ static apr_status_t open_stream(h2_proxy_session *session, const char *url,
     stream->input = apr_brigade_create(stream->pool, session->c->bucket_alloc);
     stream->output = apr_brigade_create(stream->pool, session->c->bucket_alloc);
     
-    stream->req = h2_proxy_req_create(1, stream->pool, 0);
+    stream->req = h2_proxy_req_create(1, stream->pool);
 
     status = apr_uri_parse(stream->pool, url, &puri);
     if (status != APR_SUCCESS)
