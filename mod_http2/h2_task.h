@@ -79,19 +79,15 @@ struct h2_task {
     
     struct h2_mplx *mplx;
     
-    unsigned int filters_set;
-    unsigned int worker_started;     /* h2_worker started processing */
-    int worker_done;                 /* h2_worker finished */
-
+    int filters_set;                 /* protocol filters have been set up */
+    volatile int worker_done;        /* h2_worker finished */
     apr_time_t started_at;           /* when processing started */
     apr_time_t done_at;              /* when processing was done */
-    apr_bucket *eor;
 };
 
 h2_task *h2_task_create(conn_rec *secondary, int stream_id,
                         const h2_request *req, struct h2_mplx *m, 
                         struct h2_bucket_beam *input, 
-                        apr_interval_time_t timeout,
                         apr_size_t output_max_mem);
 
 void h2_task_destroy(h2_task *task);

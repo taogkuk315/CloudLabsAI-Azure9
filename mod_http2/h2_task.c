@@ -482,7 +482,6 @@ static int h2_task_pre_conn(conn_rec* c, void *arg)
 h2_task *h2_task_create(conn_rec *secondary, int stream_id,
                         const h2_request *req, h2_mplx *m,
                         h2_bucket_beam *input, 
-                        apr_interval_time_t timeout,
                         apr_size_t output_max_mem)
 {
     apr_pool_t *pool;
@@ -500,7 +499,6 @@ h2_task *h2_task_create(conn_rec *secondary, int stream_id,
     task->mplx = m;
     task->pool = pool;
     task->request = req;
-    task->timeout = timeout;
     task->input.beam = input;
     task->output.max_buffer = output_max_mem;
 
@@ -515,9 +513,6 @@ void h2_task_destroy(h2_task *task)
         task->output.beam = NULL;
     }
     
-    if (task->eor) {
-        apr_bucket_destroy(task->eor);
-    }
     if (task->pool) {
         apr_pool_destroy(task->pool);
     }
@@ -529,8 +524,7 @@ apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id)
     
     ap_assert(task);
     c = task->c;
-    task->worker_started = 1;
-    
+
     if (c->master) {
         /* See the discussion at <https://github.com/icing/mod_h2/issues/195>
          *
@@ -567,7 +561,7 @@ apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id)
     }
         
     h2_beam_create(&task->output.beam, c->pool, task->stream_id, "output", 
-                   H2_BEAM_OWNER_SEND, 0, task->timeout);
+                   H2_BEAM_OWNER_SEND, 0, c->base_server->timeout);
     if (!task->output.beam) {
         return APR_ENOMEM;
     }
@@ -604,15 +598,12 @@ static apr_status_t h2_task_process_request(h2_task *task, conn_rec *c)
                   "h2_task(%s): create request_rec", task->id);
     r = h2_create_request_rec(req, c);
     if (r && (r->status == HTTP_OK)) {
-        /* set timeouts for virtual host of request */
-        if (task->timeout != r->server->timeout) {
-            task->timeout = r->server->timeout;
-            h2_beam_timeout_set(task->output.beam, task->timeout);
-            if (task->input.beam) {
-                h2_beam_timeout_set(task->input.beam, task->timeout);
-            }
+        /* the request_rec->server carries the timeout value that applies */
+        h2_beam_timeout_set(task->output.beam, r->server->timeout);
+        if (task->input.beam) {
+            h2_beam_timeout_set(task->input.beam, r->server->timeout);
         }
-        
+
         ap_update_child_status(c->sbh, SERVER_BUSY_WRITE, r);
         
         if (cs) {

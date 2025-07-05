@@ -533,11 +533,9 @@ void h2_h2_register_hooks(void)
      * already. */
     ap_hook_pre_close_connection(h2_h2_pre_close_conn, NULL, mod_ssl, APR_HOOK_LAST);
 
-    /* With "H2SerializeHeaders On", we install the filter in this hook
-     * that parses the response. This needs to happen before any other post
-     * read function terminates the request with an error. Otherwise we will
-     * never see the response.
-     */
+    /* We need to manipulate the standard HTTP/1.1 protocol filters and
+     * install out own. This needs to be done very early after the request
+     * has been "read" (something we simulate). */
     ap_hook_post_read_request(h2_h2_post_read_req, NULL, NULL, APR_HOOK_REALLY_FIRST);
     ap_hook_fixups(h2_h2_late_fixups, NULL, NULL, APR_HOOK_LAST);
 
