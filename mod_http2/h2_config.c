@@ -30,7 +30,6 @@
 #include <apr_strings.h>
 
 #include "h2.h"
-#include "h2_alt_svc.h"
 #include "h2_ctx.h"
 #include "h2_conn.h"
 #include "h2_config.h"
@@ -60,8 +59,6 @@ typedef struct h2_config {
     int max_workers;              /* max # of worker threads/child */
     int max_worker_idle_secs;     /* max # of idle seconds for worker */
     int stream_max_mem_size;      /* max # bytes held in memory/stream */
-    apr_array_header_t *alt_svcs; /* h2_alt_svc specs for this server */
-    int alt_svc_max_age;          /* seconds clients can rely on alt-svc info*/
     int h2_direct;                /* if mod_h2 is active directly */
     int modern_tls_only;          /* Accept only modern TLS in HTTP/2 connections */  
     int h2_upgrade;               /* Allow HTTP/1 upgrade to h2/h2c */
@@ -81,8 +78,6 @@ typedef struct h2_config {
 
 typedef struct h2_dir_config {
     const char *name;
-    apr_array_header_t *alt_svcs; /* h2_alt_svc specs for this server */
-    int alt_svc_max_age;          /* seconds clients can rely on alt-svc info*/
     int h2_upgrade;               /* Allow HTTP/1 upgrade to h2/h2c */
     int h2_push;                  /* if HTTP/2 server push is enabled */
     apr_array_header_t *push_list;/* list of h2_push_res configurations */
@@ -98,8 +93,6 @@ static h2_config defconf = {
     -1,                     /* max workers */
     10 * 60,                /* max workers idle secs */
     32 * 1024,              /* stream max mem size */
-    NULL,                   /* no alt-svcs */
-    -1,                     /* alt-svc max age */
     -1,                     /* h2 direct mode */
     1,                      /* modern TLS only */
     -1,                     /* HTTP/1 Upgrade support */
@@ -118,8 +111,6 @@ static h2_config defconf = {
 
 static h2_dir_config defdconf = {
     "default",
-    NULL,                   /* no alt-svcs */
-    -1,                     /* alt-svc max age */
     -1,                     /* HTTP/1 Upgrade support */
     -1,                     /* HTTP/2 server push enabled */
     NULL,                   /* push list */
@@ -143,7 +134,6 @@ void *h2_config_create_svr(apr_pool_t *pool, server_rec *s)
     conf->max_workers          = DEF_VAL;
     conf->max_worker_idle_secs = DEF_VAL;
     conf->stream_max_mem_size  = DEF_VAL;
-    conf->alt_svc_max_age      = DEF_VAL;
     conf->h2_direct            = DEF_VAL;
     conf->modern_tls_only      = DEF_VAL;
     conf->h2_upgrade           = DEF_VAL;
@@ -175,8 +165,6 @@ static void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     n->max_workers          = H2_CONFIG_GET(add, base, max_workers);
     n->max_worker_idle_secs = H2_CONFIG_GET(add, base, max_worker_idle_secs);
     n->stream_max_mem_size  = H2_CONFIG_GET(add, base, stream_max_mem_size);
-    n->alt_svcs             = add->alt_svcs? add->alt_svcs : base->alt_svcs;
-    n->alt_svc_max_age      = H2_CONFIG_GET(add, base, alt_svc_max_age);
     n->h2_direct            = H2_CONFIG_GET(add, base, h2_direct);
     n->modern_tls_only      = H2_CONFIG_GET(add, base, modern_tls_only);
     n->h2_upgrade           = H2_CONFIG_GET(add, base, h2_upgrade);
@@ -216,7 +204,6 @@ void *h2_config_create_dir(apr_pool_t *pool, char *x)
     char *name = apr_pstrcat(pool, "dir[", s, "]", NULL);
     
     conf->name                 = name;
-    conf->alt_svc_max_age      = DEF_VAL;
     conf->h2_upgrade           = DEF_VAL;
     conf->h2_push              = DEF_VAL;
     conf->early_hints          = DEF_VAL;
@@ -230,8 +217,6 @@ void *h2_config_merge_dir(apr_pool_t *pool, void *basev, void *addv)
     h2_dir_config *n = (h2_dir_config *)apr_pcalloc(pool, sizeof(h2_dir_config));
 
     n->name = apr_pstrcat(pool, "merged[", add->name, ", ", base->name, "]", NULL);
-    n->alt_svcs             = add->alt_svcs? add->alt_svcs : base->alt_svcs;
-    n->alt_svc_max_age      = H2_CONFIG_GET(add, base, alt_svc_max_age);
     n->h2_upgrade           = H2_CONFIG_GET(add, base, h2_upgrade);
     n->h2_push              = H2_CONFIG_GET(add, base, h2_push);
     if (add->push_list && base->push_list) {
@@ -259,8 +244,6 @@ static apr_int64_t h2_srv_config_geti64(const h2_config *conf, h2_config_var_t v
             return H2_CONFIG_GET(conf, &defconf, max_worker_idle_secs);
         case H2_CONF_STREAM_MAX_MEM:
             return H2_CONFIG_GET(conf, &defconf, stream_max_mem_size);
-        case H2_CONF_ALT_SVC_MAX_AGE:
-            return H2_CONFIG_GET(conf, &defconf, alt_svc_max_age);
         case H2_CONF_MODERN_TLS_ONLY:
             return H2_CONFIG_GET(conf, &defconf, modern_tls_only);
         case H2_CONF_UPGRADE:
@@ -310,10 +293,6 @@ static void h2_srv_config_seti(h2_config *conf, h2_config_var_t var, int val)
             break;
         case H2_CONF_STREAM_MAX_MEM:
             H2_CONFIG_SET(conf, stream_max_mem_size, val);
-            break;
-        case H2_CONF_ALT_SVC_MAX_AGE:
-            H2_CONFIG_SET(conf, alt_svc_max_age, val);
-            break;
             break;
         case H2_CONF_MODERN_TLS_ONLY:
             H2_CONFIG_SET(conf, modern_tls_only, val);
@@ -387,8 +366,6 @@ static const h2_dir_config *h2_config_rget(request_rec *r)
 static apr_int64_t h2_dir_config_geti64(const h2_dir_config *conf, h2_config_var_t var)
 {
     switch(var) {
-        case H2_CONF_ALT_SVC_MAX_AGE:
-            return H2_CONFIG_GET(conf, &defdconf, alt_svc_max_age);
         case H2_CONF_UPGRADE:
             return H2_CONFIG_GET(conf, &defdconf, h2_upgrade);
         case H2_CONF_PUSH:
@@ -406,9 +383,6 @@ static void h2_config_seti(h2_dir_config *dconf, h2_config *conf, h2_config_var_
     int set_srv = !dconf;
     if (dconf) {
         switch(var) {
-            case H2_CONF_ALT_SVC_MAX_AGE:
-                H2_CONFIG_SET(dconf, alt_svc_max_age, val);
-                break;
             case H2_CONF_UPGRADE:
                 H2_CONFIG_SET(dconf, h2_upgrade, val);
                 break;
@@ -517,18 +491,6 @@ apr_array_header_t *h2_config_push_list(request_rec *r)
     return sconf? sconf->push_list : NULL;
 }
 
-apr_array_header_t *h2_config_alt_svcs(request_rec *r)
-{
-    const h2_config *sconf;
-    const h2_dir_config *conf = h2_config_rget(r);
-    
-    if (conf && conf->alt_svcs) {
-        return conf->alt_svcs;
-    }
-    sconf = h2_config_sget(r->server); 
-    return sconf? sconf->alt_svcs : NULL;
-}
-
 const struct h2_priority *h2_cconfig_get_priority(conn_rec *c, const char *content_type)
 {
     const h2_config *conf = h2_config_get(c);
@@ -603,41 +565,6 @@ static const char *h2_conf_set_stream_max_mem_size(cmd_parms *cmd,
         return "value must be >= 1024";
     }
     CONFIG_CMD_SET(cmd, dirconf, H2_CONF_STREAM_MAX_MEM, val);
-    return NULL;
-}
-
-static const char *h2_add_alt_svc(cmd_parms *cmd,
-                                  void *dirconf, const char *value)
-{
-    if (value && *value) {
-        h2_alt_svc *as = h2_alt_svc_parse(value, cmd->pool);
-        if (!as) {
-            return "unable to parse alt-svc specifier";
-        }
-
-        if (cmd->path) {
-            h2_dir_config *dcfg = (h2_dir_config *)dirconf;
-            if (!dcfg->alt_svcs) {
-                dcfg->alt_svcs = apr_array_make(cmd->pool, 5, sizeof(h2_alt_svc*));
-            }
-            APR_ARRAY_PUSH(dcfg->alt_svcs, h2_alt_svc*) = as;
-        }
-        else {
-            h2_config *cfg = (h2_config *)h2_config_sget(cmd->server);
-            if (!cfg->alt_svcs) {
-                cfg->alt_svcs = apr_array_make(cmd->pool, 5, sizeof(h2_alt_svc*));
-            }
-            APR_ARRAY_PUSH(cfg->alt_svcs, h2_alt_svc*) = as;
-        }
-    }
-    return NULL;
-}
-
-static const char *h2_conf_set_alt_svc_max_age(cmd_parms *cmd,
-                                               void *dirconf, const char *value)
-{
-    int val = (int)apr_atoi64(value);
-    CONFIG_CMD_SET(cmd, dirconf, H2_CONF_ALT_SVC_MAX_AGE, val);
     return NULL;
 }
 
@@ -954,10 +881,6 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "maximum number of idle seconds before a worker shuts down"),
     AP_INIT_TAKE1("H2StreamMaxMemSize", h2_conf_set_stream_max_mem_size, NULL,
                   RSRC_CONF, "maximum number of bytes buffered in memory for a stream"),
-    AP_INIT_TAKE1("H2AltSvc", h2_add_alt_svc, NULL,
-                  RSRC_CONF, "adds an Alt-Svc for this server"),
-    AP_INIT_TAKE1("H2AltSvcMaxAge", h2_conf_set_alt_svc_max_age, NULL,
-                  RSRC_CONF, "set the maximum age (in seconds) that client can rely on alt-svc information"),
     AP_INIT_TAKE1("H2SerializeHeaders", h2_conf_set_serialize_headers, NULL,
                   RSRC_CONF, "disabled, this directive has no longer an effect."),
     AP_INIT_TAKE1("H2ModernTLSOnly", h2_conf_set_modern_tls_only, NULL,

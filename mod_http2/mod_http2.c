@@ -29,7 +29,6 @@
 
 #include <nghttp2/nghttp2.h>
 #include "h2_stream.h"
-#include "h2_alt_svc.h"
 #include "h2_conn.h"
 #include "h2_filter.h"
 #include "h2_task.h"
@@ -233,9 +232,7 @@ static void h2_hooks(apr_pool_t *pool)
     h2_switch_register_hooks();
     h2_task_register_hooks();
 
-    h2_alt_svc_register_hooks();
-    
-    /* Setup subprocess env for certain variables 
+    /* Setup subprocess env for certain variables
      */
     ap_hook_fixups(h2_h2_fixups, NULL,NULL, APR_HOOK_MIDDLE);
     
@@ -301,10 +298,8 @@ static const char *val_H2_PUSHED_ON(apr_pool_t *p, server_rec *s,
 static const char *val_H2_STREAM_TAG(apr_pool_t *p, server_rec *s,
                                      conn_rec *c, request_rec *r, h2_ctx *ctx)
 {
-    if (ctx) {
-        if (ctx->task) {
-            return ctx->task->id;
-        }
+    if (c) {
+        return apr_table_get(c->notes, H2_TASK_ID_NOTE);
     }
     return "";
 }

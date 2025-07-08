@@ -26,7 +26,6 @@ mod_proxy_http2_la_CPPFLAGS = -std=c99 -D_GNU_SOURCE -Werror @WERROR_CFLAGS@
 mod_proxy_http2_la_LDFLAGS = -module -avoid-version -export-symbols-regex proxy_http2_module
 
 OBJECTS = \
-    h2_alt_svc.c \
     h2_bucket_beam.c \
     h2_bucket_eos.c \
     h2_config.c \
@@ -50,7 +49,6 @@ OBJECTS = \
 
 HFILES = \
     h2.h \
-    h2_alt_svc.h \
     h2_bucket_beam.h \
     h2_bucket_eos.h \
     h2_config.h \

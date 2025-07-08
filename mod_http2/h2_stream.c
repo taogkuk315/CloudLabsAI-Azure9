@@ -720,8 +720,8 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
     }
     else if (H2_SS_IDLE == stream->state) {
         if (!stream->rtmp) {
-            stream->rtmp = h2_req_create(stream->id, stream->pool, 
-                                         NULL, NULL, NULL, NULL, NULL);
+            stream->rtmp = h2_request_create(stream->id, stream->pool,
+                                             NULL, NULL, NULL, NULL, NULL);
         }
         status = h2_request_add_header(stream->rtmp, stream->pool,
                                        name, nlen, value, vlen,

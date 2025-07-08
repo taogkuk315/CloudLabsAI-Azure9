@@ -420,14 +420,6 @@ apr_status_t h2_req_add_header(apr_table_t *headers, apr_pool_t *pool,
                                size_t max_field_len, int *pwas_added);
 
 /*******************************************************************************
- * h2_request helpers
- ******************************************************************************/
-
-struct h2_request *h2_req_create(int id, apr_pool_t *pool, const char *method, 
-                                 const char *scheme, const char *authority, 
-                                 const char *path, apr_table_t *header);
-
-/*******************************************************************************
  * apr brigade helpers
  ******************************************************************************/
 

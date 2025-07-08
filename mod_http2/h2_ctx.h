@@ -33,7 +33,6 @@ typedef struct h2_ctx {
     const char *protocol;           /* the protocol negotiated */
     struct h2_session *session;     /* the session established */
     struct h2_task *task;           /* the h2_task executing or NULL */
-    const char *hostname;           /* hostname negotiated via SNI, optional */
     server_rec *server;             /* httpd server config selected. */
     const struct h2_config *config; /* effective config in this context */
 } h2_ctx;

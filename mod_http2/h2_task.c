@@ -493,20 +493,24 @@ h2_task *h2_task_create(conn_rec *secondary, int stream_id,
     apr_pool_create(&pool, secondary->pool);
     apr_pool_tag(pool, "h2_task");
     task = apr_pcalloc(pool, sizeof(h2_task));
-    task->id = "000";
-    task->stream_id = stream_id;
     task->c = secondary;
+    task->stream_id = stream_id;
     task->mplx = m;
     task->pool = pool;
     task->request = req;
     task->input.beam = input;
     task->output.max_buffer = output_max_mem;
 
+    task->id = apr_psprintf(pool, "%ld-%d", m->id, stream_id);
+    apr_table_setn(secondary->notes, H2_TASK_ID_NOTE, task->id);
+    h2_ctx_create_for(secondary, task);
+
     return task;
 }
 
 void h2_task_destroy(h2_task *task)
 {
+    h2_ctx_clear(task->c);
     if (task->output.beam) {
         h2_beam_log(task->output.beam, task->c, APLOG_TRACE2, "task_destroy");
         h2_beam_destroy(task->output.beam);
@@ -556,8 +560,6 @@ apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id)
          * configurations by mod_h2 alone. 
          */
         task->c->id = (c->master->id << 8)^worker_id;
-        task->id = apr_psprintf(task->pool, "%ld-%d", task->mplx->id,
-                                task->stream_id);
     }
         
     h2_beam_create(&task->output.beam, c->pool, task->stream_id, "output", 
@@ -570,10 +572,7 @@ apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id)
     h2_beam_send_from(task->output.beam, task->pool);
     h2_beam_on_consumed(task->output.beam, NULL, output_consumed, task);
 
-    h2_ctx_create_for(c, task);
-    apr_table_setn(c->notes, H2_TASK_ID_NOTE, task->id);
-
-    h2_secondary_run_pre_connection(c, ap_get_conn_socket(c));            
+    h2_secondary_run_pre_connection(c, ap_get_conn_socket(c));
 
     task->input.bb = apr_brigade_create(task->pool, c->bucket_alloc);
 

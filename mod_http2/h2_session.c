@@ -789,7 +789,6 @@ static apr_status_t session_cleanup(h2_session *session, const char *trigger)
     session->ngh2 = NULL;
     h2_ctx_clear(c);
     
-    
     return APR_SUCCESS;
 }
 
