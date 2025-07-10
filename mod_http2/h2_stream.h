@@ -94,7 +94,7 @@ struct h2_stream {
     unsigned int push_policy;   /* which push policy to use for this request */
     unsigned int input_buffering : 1; /* buffer request bodies for efficiency */
 
-    struct h2_task *task;       /* assigned task to fullfill request */
+    conn_rec *connection;       /* assigned connection to handle stream */
     
     const h2_priority *pref_priority; /* preferred priority for this stream */
     apr_off_t out_frames;       /* # of frames sent out */

@@ -787,7 +787,7 @@ static apr_status_t session_cleanup(h2_session *session, const char *trigger)
     ap_assert(session->ngh2);
     nghttp2_session_del(session->ngh2);
     session->ngh2 = NULL;
-    h2_ctx_clear(c);
+    h2_conn_ctx_clear(c);
     
     return APR_SUCCESS;
 }
@@ -797,7 +797,7 @@ static apr_status_t session_pool_cleanup(void *data)
     conn_rec *c = data;
     h2_session *session;
     
-    if ((session = h2_ctx_get_session(c))) {
+    if ((session = h2_conn_ctx_get_session(c))) {
         int mpm_state = 0;
         int level;
 
@@ -2394,7 +2394,7 @@ apr_status_t h2_session_pre_close(h2_session *session, int async)
     status = session_cleanup(session, "pre_close");
     if (status == APR_SUCCESS) {
         /* no one should hold a reference to this session any longer and
-         * the h2_ctx was removed from the connection.
+         * the h2_conn_ctx_twas removed from the connection.
          * Take the pool (and thus all subpools etc. down now, instead of
          * during cleanup of main connection pool. */
         apr_pool_destroy(session->pool);

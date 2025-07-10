@@ -425,7 +425,7 @@ static int cipher_is_blacklisted(const char *cipher, const char **psource)
  * Hooks for processing incoming connections:
  * - process_conn take over connection in case of h2
  */
-static int h2_h2_process_conn(conn_rec* c);
+static int h2_h2_process_main_conn(conn_rec* c);
 static int h2_h2_pre_close_conn(conn_rec* c);
 static int h2_h2_post_read_req(request_rec *r);
 static int h2_h2_late_fixups(request_rec *r);
@@ -526,7 +526,7 @@ void h2_h2_register_hooks(void)
      * The core HTTP/1 processing run as REALLY_LAST, so we will have
      * a chance to take over before it.
      */
-    ap_hook_process_connection(h2_h2_process_conn, 
+    ap_hook_process_connection(h2_h2_process_main_conn,
                                mod_reqtimeout, NULL, APR_HOOK_LAST);
     
     /* One last chance to properly say goodbye if we have not done so
@@ -544,26 +544,15 @@ void h2_h2_register_hooks(void)
     h2_register_bucket_beamer(h2_bucket_observer_beam);
 }
 
-int h2_h2_process_conn(conn_rec* c)
+static int h2_h2_process_main_conn(conn_rec* c)
 {
     apr_status_t status;
-    h2_ctx *ctx;
-    server_rec *s;
-    
-    if (c->master) {
-        return DECLINED;
-    }
-    
-    ctx = h2_ctx_get(c, 0);
-    s = ctx? ctx->server : c->base_server;
-    
+    h2_conn_ctx_t *ctx;
+
+    if (c->master) goto declined;
+    ctx = h2_conn_ctx_get(c);
+
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "h2_h2, process_conn");
-    if (ctx && ctx->task) {
-        /* our stream pseudo connection */
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c, "h2_h2, task, declined");
-        return DECLINED;
-    }
-    
     if (!ctx && c->keepalives == 0) {
         const char *proto = ap_get_protocol(c);
         
@@ -600,53 +589,50 @@ int h2_h2_process_conn(conn_rec* c)
             if ((peeklen >= 24) && !memcmp(H2_MAGIC_TOKEN, peek, 24)) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                               "h2_h2, direct mode detected");
-                if (!ctx) {
-                    ctx = h2_ctx_get(c, 1);
-                }
-                h2_ctx_protocol_set(ctx, ap_ssl_conn_is_ssl(c)? "h2" : "h2c");
+                ctx = h2_conn_ctx_create(c);
+                ctx->protocol = ap_ssl_conn_is_ssl(c)? "h2" : "h2c";
             }
             else if (APLOGctrace2(c)) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                               "h2_h2, not detected in %d bytes(base64): %s", 
                               (int)peeklen, h2_util_base64url_encode(peek, peeklen, c->pool));
             }
-            
             apr_brigade_destroy(temp);
         }
     }
 
-    if (ctx) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "process_conn");
-        
-        if (!h2_ctx_get_session(c)) {
-            status = h2_conn_setup(c, NULL, s);
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, c, "conn_setup");
-            if (status != APR_SUCCESS) {
-                h2_ctx_clear(c);
-                return !OK;
-            }
+    if (!ctx) goto declined;
+
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "process_conn");
+    if (!ctx->session) {
+        status = h2_conn_setup(c, NULL, ctx->server? ctx->server : c->base_server);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, c, "conn_setup");
+        if (status != APR_SUCCESS) {
+            h2_conn_ctx_clear(c);
+            return !OK;
         }
-        h2_conn_run(c);
-        return OK;
     }
-    
+    h2_conn_run(c);
+    return OK;
+
+declined:
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "h2_h2, declined");
     return DECLINED;
 }
 
 static int h2_h2_pre_close_conn(conn_rec *c)
 {
-    h2_ctx *ctx;
+    h2_conn_ctx_t *ctx;
 
     /* secondary connection? */
     if (c->master) {
         return DECLINED;
     }
 
-    ctx = h2_ctx_get(c, 0);
+    ctx = h2_conn_ctx_get(c);
     if (ctx) {
         /* If the session has been closed correctly already, we will not
-         * find a h2_ctx here. The presence indicates that the session
+         * find a h2_conn_ctx_there. The presence indicates that the session
          * is still ongoing. */
         return h2_conn_pre_close(ctx, c);
     }
@@ -684,7 +670,7 @@ static int h2_h2_post_read_req(request_rec *r)
 {
     /* secondary connection? */
     if (r->connection->master) {
-        struct h2_task *task = h2_ctx_get_task(r->connection);
+        struct h2_task *task = h2_conn_ctx_get_task(r->connection);
         /* This hook will get called twice on internal redirects. Take care
          * that we manipulate filters only once. */
         if (task && !task->filters_set) {
@@ -693,12 +679,12 @@ static int h2_h2_post_read_req(request_rec *r)
                           "h2_task(%s): adding request filters", task->id);
 
             /* setup the correct filters to process the request for h2 */
-            ap_add_input_filter("H2_REQUEST", task, r, r->connection);
+            ap_add_input_filter("H2_REQUEST", NULL, r, r->connection);
             
             /* replace the core http filter that formats response headers
              * in HTTP/1 with our own that collects status and headers */
             ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
-            ap_add_output_filter("H2_RESPONSE", task, r, r->connection);
+            ap_add_output_filter("H2_RESPONSE", NULL, r, r->connection);
             
             for (f = r->input_filters; f; f = f->next) {
                 if (!strcmp("H2_SECONDARY_IN", f->frec->name)) {
@@ -706,7 +692,7 @@ static int h2_h2_post_read_req(request_rec *r)
                     break;
                 }
             }
-            ap_add_output_filter("H2_TRAILERS_OUT", task, r, r->connection);
+            ap_add_output_filter("H2_TRAILERS_OUT", NULL, r, r->connection);
             task->filters_set = 1;
         }
     }
@@ -717,13 +703,13 @@ static int h2_h2_late_fixups(request_rec *r)
 {
     /* secondary connection? */
     if (r->connection->master) {
-        struct h2_task *task = h2_ctx_get_task(r->connection);
+        struct h2_task *task = h2_conn_ctx_get_task(r->connection);
         if (task) {
             /* check if we copy vs. setaside files in this location */
             task->output.copy_files = h2_config_rgeti(r, H2_CONF_COPY_FILES);
             task->output.buffered = h2_config_rgeti(r, H2_CONF_OUTPUT_BUFFER);
             if (task->output.copy_files) {
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, task->c,
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, r->connection,
                               "h2_secondary_out(%s): copy_files on", task->id);
                 h2_beam_on_file_beam(task->output.beam, h2_beam_no_files, NULL);
             }

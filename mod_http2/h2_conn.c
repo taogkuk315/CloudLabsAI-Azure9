@@ -175,7 +175,6 @@ static module *h2_conn_mpm_module(void)
 apr_status_t h2_conn_setup(conn_rec *c, request_rec *r, server_rec *s)
 {
     h2_session *session;
-    h2_ctx *ctx;
     apr_status_t status;
     
     if (!workers) {
@@ -185,9 +184,11 @@ apr_status_t h2_conn_setup(conn_rec *c, request_rec *r, server_rec *s)
     }
     
     if (APR_SUCCESS == (status = h2_session_create(&session, c, r, s, workers))) {
-        ctx = h2_ctx_get(c, 1);
-        h2_ctx_session_set(ctx, session);
-
+        h2_conn_ctx_t *ctx = h2_conn_ctx_get(c);
+        if (!ctx) {
+            ctx = h2_conn_ctx_create(c);
+        }
+        ctx->session = session;
         /* remove the input filter of mod_reqtimeout, now that the connection
          * is established and we have swtiched to h2. reqtimeout has supervised
          * possibly configured handshake timeouts and needs to get out of the way
@@ -202,7 +203,7 @@ apr_status_t h2_conn_run(conn_rec *c)
 {
     apr_status_t status;
     int mpm_state = 0;
-    h2_session *session = h2_ctx_get_session(c);
+    h2_session *session = h2_conn_ctx_get_session(c);
     
     ap_assert(session);
     do {
@@ -256,9 +257,9 @@ apr_status_t h2_conn_run(conn_rec *c)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_conn_pre_close(struct h2_ctx *ctx, conn_rec *c)
+apr_status_t h2_conn_pre_close(struct h2_conn_ctx_t *ctx, conn_rec *c)
 {
-    h2_session *session = h2_ctx_get_session(c);
+    h2_session *session = h2_conn_ctx_get_session(c);
     
     (void)c;
     if (session) {

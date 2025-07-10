@@ -197,8 +197,8 @@ apr_status_t h2_mplx_m_idle(h2_mplx *m);
 /*******************************************************************************
  * From a secondary connection processing: h2_mplx_s_*
  ******************************************************************************/
-apr_status_t h2_mplx_s_pop_task(h2_mplx *m, struct h2_task **ptask);
-void h2_mplx_s_task_done(h2_mplx *m, struct h2_task *task, struct h2_task **ptask);
+apr_status_t h2_mplx_s_pop_secondary(h2_mplx *m, conn_rec **out_c);
+void h2_mplx_s_secondary_done(conn_rec *c, conn_rec **out_c);
 
 /*******************************************************************************
  * From a h2_task owner: h2_mplx_s_*

@@ -476,19 +476,22 @@ static apr_status_t h2_status_insert(h2_task *task, apr_bucket *b)
     return APR_SUCCESS;
 }
 
-static apr_status_t status_event(void *ctx, h2_bucket_event event, 
+static apr_status_t status_event(void *userdata, h2_bucket_event event,
                                  apr_bucket *b)
 {
-    h2_task *task = ctx;
-    
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, task->c->master, 
-                  "status_event(%s): %d", task->id, event);
-    switch (event) {
-        case H2_BUCKET_EV_BEFORE_MASTER_SEND:
-            h2_status_insert(task, b);
-            break;
-        default:
-            break;
+    conn_rec *c = userdata;
+    h2_conn_ctx_t *ctx = h2_conn_ctx_get(c);
+
+    if (ctx && ctx->task) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, c->master,
+                      "status_event(%s): %d", ctx->id, event);
+        switch (event) {
+            case H2_BUCKET_EV_BEFORE_MASTER_SEND:
+                h2_status_insert(ctx->task, b);
+                break;
+            default:
+                break;
+        }
     }
     return APR_SUCCESS;
 }
@@ -554,7 +557,7 @@ int h2_filter_h2_status_handler(request_rec *r)
         return DECLINED;
     }
 
-    task = h2_ctx_get_task(r->connection);
+    task = h2_conn_ctx_get_task(r->connection);
     if (task) {
         /* In this handler, we do some special sauce to send footers back,
          * IFF we received footers in the request. This is used in our test
@@ -578,7 +581,7 @@ int h2_filter_h2_status_handler(request_rec *r)
         apr_table_setn(r->notes, H2_FILTER_DEBUG_NOTE, "on");
 
         bb = apr_brigade_create(r->pool, c->bucket_alloc);
-        b = h2_bucket_observer_create(c->bucket_alloc, status_event, task);
+        b = h2_bucket_observer_create(c->bucket_alloc, status_event, r->connection);
         APR_BRIGADE_INSERT_TAIL(bb, b);
         b = apr_bucket_eos_create(c->bucket_alloc);
         APR_BRIGADE_INSERT_TAIL(bb, b);

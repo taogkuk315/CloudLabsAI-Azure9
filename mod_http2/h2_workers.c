@@ -37,7 +37,7 @@ struct h2_slot {
     int sticks;
     h2_slot *next;
     h2_workers *workers;
-    h2_task *task;
+    conn_rec *connection;
     apr_thread_t *thread;
     apr_thread_mutex_t *lock;
     apr_thread_cond_t *not_idle;
@@ -79,7 +79,7 @@ static apr_status_t activate_slot(h2_workers *workers, h2_slot *slot)
     apr_status_t rv;
     
     slot->workers = workers;
-    slot->task = NULL;
+    slot->connection = NULL;
 
     apr_thread_mutex_lock(workers->lock);
     if (!slot->lock) {
@@ -162,8 +162,8 @@ static apr_status_t slot_pull_task(h2_slot *slot, h2_mplx *m)
 {
     apr_status_t rv;
     
-    rv = h2_mplx_s_pop_task(m, &slot->task);
-    if (slot->task) {
+    rv = h2_mplx_s_pop_secondary(m, &slot->connection);
+    if (slot->connection) {
         /* Ok, we got something to give back to the worker for execution. 
          * If we still have idle workers, we let the worker be sticky, 
          * e.g. making it poll the task's h2_mplx instance for more work 
@@ -198,7 +198,7 @@ static int get_next(h2_slot *slot)
     apr_status_t rv;
 
     while (!workers->aborted && !slot->timed_out) {
-        ap_assert(slot->task == NULL);
+        ap_assert(slot->connection == NULL);
         if (non_essential && workers->shutdown) {
             /* Terminate non-essential worker on shutdown */
             break;
@@ -208,7 +208,7 @@ static int get_next(h2_slot *slot)
              * just leave. */
             break;
         }
-        if (slot->task) {
+        if (slot->connection) {
             return 1;
         }
         
@@ -258,21 +258,21 @@ static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)
     
     /* Get the h2_task(s) from the ->mplxs queue. */
     while (get_next(slot)) {
-        ap_assert(slot->task != NULL);
+        ap_assert(slot->connection != NULL);
         do {
-            h2_task_do(slot->task, thread, slot->id);
+            h2_process_secondary(slot->connection, thread, slot->id);
             
             /* Report the task as done. If stickyness is left, offer the
              * mplx the opportunity to give us back a new task right away.
              */
             if (!slot->workers->aborted && --slot->sticks > 0) {
-                h2_mplx_s_task_done(slot->task->mplx, slot->task, &slot->task);
+                h2_mplx_s_secondary_done(slot->connection, &slot->connection);
             }
             else {
-                h2_mplx_s_task_done(slot->task->mplx, slot->task, NULL);
-                slot->task = NULL;
+                h2_mplx_s_secondary_done(slot->connection, NULL);
+                slot->connection = NULL;
             }
-        } while (slot->task);
+        } while (slot->connection);
     }
 
     if (!slot->timed_out) {

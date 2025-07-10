@@ -15,6 +15,7 @@
  */
  
 #include <assert.h>
+#include <apr_strings.h>
 
 #include <httpd.h>
 #include <http_core.h>
@@ -23,84 +24,50 @@
 #include "h2_private.h"
 #include "h2_session.h"
 #include "h2_task.h"
+#include "h2_stream.h"
 #include "h2_ctx.h"
 
-static h2_ctx *h2_ctx_create(const conn_rec *c)
+
+static h2_conn_ctx_t *ctx_create(const conn_rec *c, const char *id)
 {
-    h2_ctx *ctx = apr_pcalloc(c->pool, sizeof(h2_ctx));
-    ap_assert(ctx);
-    h2_ctx_server_update(ctx, c->base_server);
+    h2_conn_ctx_t *ctx = apr_pcalloc(c->pool, sizeof(*ctx));
+    ctx->id = id;
+    ctx->server = c->base_server;
     ap_set_module_config(c->conn_config, &http2_module, ctx);
     return ctx;
 }
 
-void h2_ctx_clear(const conn_rec *c)
+h2_conn_ctx_t *h2_conn_ctx_create(const conn_rec *c)
+{
+    return ctx_create(c, apr_psprintf(c->pool, "%ld", c->id));
+}
+
+h2_conn_ctx_t *h2_conn_ctx_create_secondary(const conn_rec *c, struct h2_stream *stream)
+{
+    /* there is sth fishy going on in some mpms that change the id of
+     * a connection when they process it in another thread. stick to
+     * the id the session was initialized with. */
+    h2_conn_ctx_t *ctx = ctx_create(c, apr_psprintf(
+        c->pool, "%ld-%d", stream->session->id, stream->id));
+    ctx->mplx = stream->session->mplx;
+    return ctx;
+}
+
+void h2_conn_ctx_clear(const conn_rec *c)
 {
     ap_assert(c);
     ap_set_module_config(c->conn_config, &http2_module, NULL);
 }
 
-h2_ctx *h2_ctx_create_for(const conn_rec *c, h2_task *task)
+h2_session *h2_conn_ctx_get_session(conn_rec *c)
 {
-    h2_ctx *ctx = h2_ctx_create(c);
-    if (ctx) {
-        ctx->task = task;
-    }
-    return ctx;
-}
-
-h2_ctx *h2_ctx_get(const conn_rec *c, int create)
-{
-    h2_ctx *ctx = (h2_ctx*)ap_get_module_config(c->conn_config, &http2_module);
-    if (ctx == NULL && create) {
-        ctx = h2_ctx_create(c);
-    }
-    return ctx;
-}
-
-h2_ctx *h2_ctx_rget(const request_rec *r)
-{
-    return h2_ctx_get(r->connection, 0);
-}
-
-const char *h2_ctx_protocol_get(const conn_rec *c)
-{
-    h2_ctx *ctx;
-    if (c->master) {
-        c = c->master;
-    }
-    ctx = (h2_ctx*)ap_get_module_config(c->conn_config, &http2_module);
-    return ctx? ctx->protocol : NULL;
-}
-
-h2_ctx *h2_ctx_protocol_set(h2_ctx *ctx, const char *proto)
-{
-    ctx->protocol = proto;
-    return ctx;
-}
-
-h2_session *h2_ctx_get_session(conn_rec *c)
-{
-    h2_ctx *ctx = h2_ctx_get(c, 0);
+    h2_conn_ctx_t *ctx = (c && !c->master)? h2_conn_ctx_get(c) : NULL;
     return ctx? ctx->session : NULL;
 }
 
-void h2_ctx_session_set(h2_ctx *ctx, struct h2_session *session)
+h2_task *h2_conn_ctx_get_task(conn_rec *c)
 {
-    ctx->session = session;
-}
-
-h2_ctx *h2_ctx_server_update(h2_ctx *ctx, server_rec *s)
-{
-    if (ctx->server != s) {
-        ctx->server = s;
-    }
-    return ctx;
-}
-
-h2_task *h2_ctx_get_task(conn_rec *c)
-{
-    h2_ctx *ctx = h2_ctx_get(c, 0);
+    h2_conn_ctx_t *ctx = (c && c->master)? h2_conn_ctx_get(c) : NULL;
     return ctx? ctx->task : NULL;
 }
 

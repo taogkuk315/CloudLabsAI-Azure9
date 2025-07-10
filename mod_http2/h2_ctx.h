@@ -18,6 +18,8 @@
 #define __mod_h2__h2_ctx__
 
 struct h2_session;
+struct h2_stream;
+struct h2_mplx;
 struct h2_task;
 struct h2_config;
 
@@ -29,46 +31,44 @@ struct h2_config;
  * - those from clients that do not use HTTP/2
  * - those created by ourself to perform work on HTTP/2 streams
  */
-typedef struct h2_ctx {
+struct h2_conn_ctx_t {
+    const char *id;                 /* our identifier of this connection */
     const char *protocol;           /* the protocol negotiated */
-    struct h2_session *session;     /* the session established */
-    struct h2_task *task;           /* the h2_task executing or NULL */
-    server_rec *server;             /* httpd server config selected. */
+    server_rec *server;             /* httpd server selected. */
+    struct h2_session *session;     /* on main: the session established */
+    struct h2_mplx *mplx;           /* on secondary: the multiplexer */
+    struct h2_task *task;           /* on secondary: the task processed */
     const struct h2_config *config; /* effective config in this context */
-} h2_ctx;
+};
+typedef struct h2_conn_ctx_t h2_conn_ctx_t;
 
 /**
- * Get (or create) a h2 context record for this connection.
+ * Get the h2 connection context.
  * @param c the connection to look at
- * @param create != 0 iff missing context shall be created
  * @return h2 context of this connection
  */
-h2_ctx *h2_ctx_get(const conn_rec *c, int create);
-void h2_ctx_clear(const conn_rec *c);
-
-h2_ctx *h2_ctx_rget(const request_rec *r);
-h2_ctx *h2_ctx_create_for(const conn_rec *c, struct h2_task *task);
-
-
-/* Set the h2 protocol established on this connection context or
- * NULL when other protocols are in place.
- */
-h2_ctx *h2_ctx_protocol_set(h2_ctx *ctx, const char *proto);
-
-/* Update the server_rec relevant for this context. A server for
- * a connection may change during SNI handling, for example.
- */
-h2_ctx *h2_ctx_server_update(h2_ctx *ctx, server_rec *s);
-
-void h2_ctx_session_set(h2_ctx *ctx, struct h2_session *session);
+#define h2_conn_ctx_get(c) \
+    ((h2_conn_ctx_t*)ap_get_module_config((c)->conn_config, &http2_module))
 
 /**
- * Get the h2 protocol negotiated for this connection, or NULL.
+ * Create the h2 connection context.
+ * @param c the connection to create it at
+ * @return created h2 context of this connection
  */
-const char *h2_ctx_protocol_get(const conn_rec *c);
+h2_conn_ctx_t *h2_conn_ctx_create(const conn_rec *c);
 
-struct h2_session *h2_ctx_get_session(conn_rec *c);
-struct h2_task *h2_ctx_get_task(conn_rec *c);
+h2_conn_ctx_t *h2_conn_ctx_create_secondary(const conn_rec *c, struct h2_stream *stream);
 
+void h2_conn_ctx_clear(const conn_rec *c);
+
+/**
+ * Get the session instance if `c` is a HTTP/2 master connection.
+ */
+struct h2_session *h2_conn_ctx_get_session(conn_rec *c);
+
+/**
+ * Get the h2_task instance of `c` is a HTTP/2 secondary connection.
+ */
+struct h2_task *h2_conn_ctx_get_task(conn_rec *c);
 
 #endif /* defined(__mod_h2__h2_ctx__) */

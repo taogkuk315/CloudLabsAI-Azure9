@@ -423,7 +423,7 @@ static void h2_config_seti64(h2_dir_config *dconf, h2_config *conf, h2_config_va
 
 static const h2_config *h2_config_get(conn_rec *c)
 {
-    h2_ctx *ctx = h2_ctx_get(c, 0);
+    h2_conn_ctx_t *ctx = h2_conn_ctx_get(c);
     
     if (ctx) {
         if (ctx->config) {

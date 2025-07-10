@@ -241,13 +241,13 @@ static void h2_hooks(apr_pool_t *pool)
 }
 
 static const char *val_HTTP2(apr_pool_t *p, server_rec *s,
-                             conn_rec *c, request_rec *r, h2_ctx *ctx)
+                             conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
 {
     return ctx? "on" : "off";
 }
 
 static const char *val_H2_PUSH(apr_pool_t *p, server_rec *s,
-                               conn_rec *c, request_rec *r, h2_ctx *ctx)
+                               conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
 {
     if (ctx) {
         if (r) {
@@ -271,7 +271,7 @@ static const char *val_H2_PUSH(apr_pool_t *p, server_rec *s,
 }
 
 static const char *val_H2_PUSHED(apr_pool_t *p, server_rec *s,
-                                 conn_rec *c, request_rec *r, h2_ctx *ctx)
+                                 conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
 {
     if (ctx) {
         if (ctx->task && !H2_STREAM_CLIENT_INITIATED(ctx->task->stream_id)) {
@@ -282,7 +282,7 @@ static const char *val_H2_PUSHED(apr_pool_t *p, server_rec *s,
 }
 
 static const char *val_H2_PUSHED_ON(apr_pool_t *p, server_rec *s,
-                                    conn_rec *c, request_rec *r, h2_ctx *ctx)
+                                    conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
 {
     if (ctx) {
         if (ctx->task && !H2_STREAM_CLIENT_INITIATED(ctx->task->stream_id)) {
@@ -296,7 +296,7 @@ static const char *val_H2_PUSHED_ON(apr_pool_t *p, server_rec *s,
 }
 
 static const char *val_H2_STREAM_TAG(apr_pool_t *p, server_rec *s,
-                                     conn_rec *c, request_rec *r, h2_ctx *ctx)
+                                     conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
 {
     if (c) {
         return apr_table_get(c->notes, H2_TASK_ID_NOTE);
@@ -305,7 +305,7 @@ static const char *val_H2_STREAM_TAG(apr_pool_t *p, server_rec *s,
 }
 
 static const char *val_H2_STREAM_ID(apr_pool_t *p, server_rec *s,
-                                    conn_rec *c, request_rec *r, h2_ctx *ctx)
+                                    conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
 {
     const char *cp = val_H2_STREAM_TAG(p, s, c, r, ctx);
     if (cp && (cp = ap_strchr_c(cp, '-'))) {
@@ -315,7 +315,7 @@ static const char *val_H2_STREAM_ID(apr_pool_t *p, server_rec *s,
 }
 
 typedef const char *h2_var_lookup(apr_pool_t *p, server_rec *s,
-                                  conn_rec *c, request_rec *r, h2_ctx *ctx);
+                                  conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx);
 typedef struct h2_var_def {
     const char *name;
     h2_var_lookup *lookup;
@@ -339,7 +339,7 @@ static h2_var_def H2_VARS[] = {
 
 static int http2_is_h2(conn_rec *c)
 {
-    return h2_ctx_get(c->master? c->master : c, 0) != NULL;
+    return h2_conn_ctx_get(c->master? c->master : c) != NULL;
 }
 
 static char *http2_var_lookup(apr_pool_t *p, server_rec *s,
@@ -350,8 +350,8 @@ static char *http2_var_lookup(apr_pool_t *p, server_rec *s,
     for (i = 0; i < H2_ALEN(H2_VARS); ++i) {
         h2_var_def *vdef = &H2_VARS[i];
         if (!strcmp(vdef->name, name)) {
-            h2_ctx *ctx = (r? h2_ctx_get(c, 0) : 
-                           h2_ctx_get(c->master? c->master : c, 0));
+            h2_conn_ctx_t *ctx = (r? h2_conn_ctx_get(c) :
+                           h2_conn_ctx_get(c->master? c->master : c));
             return (char *)vdef->lookup(p, s, c, r, ctx);
         }
     }
@@ -361,7 +361,7 @@ static char *http2_var_lookup(apr_pool_t *p, server_rec *s,
 static int h2_h2_fixups(request_rec *r)
 {
     if (r->connection->master) {
-        h2_ctx *ctx = h2_ctx_get(r->connection, 0);
+        h2_conn_ctx_t *ctx = h2_conn_ctx_get(r->connection);
         int i;
         
         for (i = 0; ctx && i < H2_ALEN(H2_VARS); ++i) {

@@ -48,18 +48,18 @@
 #include "h2_task.h"
 #include "h2_util.h"
 
-static void H2_TASK_OUT_LOG(int lvl, h2_task *task, apr_bucket_brigade *bb, 
+static void H2_TASK_OUT_LOG(int lvl, conn_rec *c, apr_bucket_brigade *bb,
                             const char *tag)
 {
-    if (APLOG_C_IS_LEVEL(task->c, lvl)) {
-        conn_rec *c = task->c;
+    if (APLOG_C_IS_LEVEL(c, lvl)) {
+        h2_conn_ctx_t *ctx = h2_conn_ctx_get(c);
         char buffer[4 * 1024];
         const char *line = "(null)";
         apr_size_t len, bmax = sizeof(buffer)/sizeof(buffer[0]);
         
         len = h2_util_bb_print(buffer, bmax, tag, "", bb);
         ap_log_cerror(APLOG_MARK, lvl, 0, c, "bb_dump(%s): %s", 
-                      task->id, len? buffer : line);
+                      ctx->id, len? buffer : line);
     }
 }
 
@@ -67,9 +67,9 @@ static void H2_TASK_OUT_LOG(int lvl, h2_task *task, apr_bucket_brigade *bb,
  * task output handling
  ******************************************************************************/
 
-static apr_status_t open_output(h2_task *task)
+static apr_status_t open_output(conn_rec *c, h2_task *task)
 {
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, task->c, APLOGNO(03348)
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(03348)
                   "h2_task(%s): open output to %s %s %s",
                   task->id, task->request->method, 
                   task->request->authority, 
@@ -80,24 +80,24 @@ static apr_status_t open_output(h2_task *task)
 
 static void output_consumed(void *ctx, h2_bucket_beam *beam, apr_off_t length)
 {
-    h2_task *task = ctx;
-    if (task && h2_task_logio_add_bytes_out) {
-        h2_task_logio_add_bytes_out(task->c, length);
+    conn_rec *c = ctx;
+    if (c && h2_task_logio_add_bytes_out) {
+        h2_task_logio_add_bytes_out(c, length);
     }
 }
 
-static apr_status_t send_out(h2_task *task, apr_bucket_brigade* bb, int block)
+static apr_status_t send_out(conn_rec *c, h2_task *task, apr_bucket_brigade* bb, int block)
 {
     apr_off_t written, left;
     apr_status_t status;
 
     apr_brigade_length(bb, 0, &written);
-    H2_TASK_OUT_LOG(APLOG_TRACE2, task, bb, "h2_task send_out");
-    h2_beam_log(task->output.beam, task->c, APLOG_TRACE2, "send_out(before)");
+    H2_TASK_OUT_LOG(APLOG_TRACE2, c, bb, "h2_task send_out");
+    h2_beam_log(task->output.beam, c, APLOG_TRACE2, "send_out(before)");
 
     status = h2_beam_send(task->output.beam, bb, 
                           block? APR_BLOCK_READ : APR_NONBLOCK_READ);
-    h2_beam_log(task->output.beam, task->c, APLOG_TRACE2, "send_out(after)");
+    h2_beam_log(task->output.beam, c, APLOG_TRACE2, "send_out(after)");
     
     if (APR_STATUS_IS_EAGAIN(status)) {
         apr_brigade_length(bb, 0, &left);
@@ -105,11 +105,11 @@ static apr_status_t send_out(h2_task *task, apr_bucket_brigade* bb, int block)
         status = APR_SUCCESS;
     }
     if (status == APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, task->c, 
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       "h2_task(%s): send_out done", task->id);
     }
     else {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, task->c,
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
                       "h2_task(%s): send_out (%ld bytes)", 
                       task->id, (long)written);
     }
@@ -147,15 +147,15 @@ send:
                 goto out;
             }
         }
-        rv = send_out(task, task->output.bb, blocking);
+        rv = send_out(f->c, task, task->output.bb, blocking);
     }
     else {
         /* no data buffered previously, pass brigade directly */
-        rv = send_out(task, bb, blocking);
+        rv = send_out(f->c, task, bb, blocking);
 
         if (APR_SUCCESS == rv && !APR_BRIGADE_EMPTY(bb)) {
             /* output refused to buffer it all, time to open? */
-            if (!task->output.opened && APR_SUCCESS == (rv = open_output(task))) {
+            if (!task->output.opened && APR_SUCCESS == (rv = open_output(f->c, task))) {
                 /* Make another attempt to send the data. With the output open,
                  * the call might be blocking and send all data, so we do not need
                  * to save the brigade */
@@ -168,7 +168,7 @@ send:
             
             if (APR_SUCCESS == rv) {
                 /* could not write all, buffer the rest */
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, rv, task->c, APLOGNO(03405)
+                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, rv, f->c, APLOGNO(03405)
                               "h2_secondary_out(%s): saving brigade", task->id);
                 ap_assert(NULL);
                 rv = ap_save_brigade(f, &task->output.bb, &bb, task->pool);
@@ -177,22 +177,22 @@ send:
         }
     }
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, task->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, f->c,
                   "h2_secondary_out(%s): buffered=%d", task->id, task->output.buffered);
     if (APR_SUCCESS == rv && !task->output.opened && (flush || !task->output.buffered)) {
         /* got a flush or could not write all, time to tell someone to read */
-        rv = open_output(task);
+        rv = open_output(f->c, task);
     }
 out:
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, task->c, 
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, f->c,
                   "h2_secondary_out(%s): secondary_out leave", task->id);    
     return rv;
 }
 
-static apr_status_t output_finish(h2_task *task)
+static apr_status_t output_finish(conn_rec *c, h2_task *task)
 {
     if (!task->output.opened) {
-        return open_output(task);
+        return open_output(c, task);
     }
     return APR_SUCCESS;
 }
@@ -215,7 +215,7 @@ static apr_status_t h2_filter_secondary_in(ap_filter_t* f,
     apr_size_t rmax = ((readbytes <= APR_SIZE_MAX)? 
                        (apr_size_t)readbytes : APR_SIZE_MAX);
     
-    task = h2_ctx_get_task(f->c);
+    task = h2_conn_ctx_get_task(f->c);
     ap_assert(task);
 
     if (trace1) {
@@ -356,27 +356,33 @@ static apr_status_t h2_filter_secondary_in(ap_filter_t* f,
 static apr_status_t h2_filter_secondary_output(ap_filter_t* filter,
                                                apr_bucket_brigade* brigade)
 {
-    h2_task *task = h2_ctx_get_task(filter->c);
+    h2_task *task = h2_conn_ctx_get_task(filter->c);
     apr_status_t status;
     
     ap_assert(task);
     status = secondary_out(task, filter, brigade);
     if (status != APR_SUCCESS) {
-        h2_task_rst(task, H2_ERR_INTERNAL_ERROR);
+        if (task->input.beam) {
+            h2_beam_leave(task->input.beam);
+        }
+        if (!task->worker_done) {
+            h2_beam_abort(task->output.beam);
+        }
+        filter->c->aborted = 1;
     }
     return status;
 }
 
 static apr_status_t h2_filter_parse_h1(ap_filter_t* f, apr_bucket_brigade* bb)
 {
-    h2_task *task = h2_ctx_get_task(f->c);
+    h2_task *task = h2_conn_ctx_get_task(f->c);
     apr_status_t status;
     
     ap_assert(task);
     /* There are cases where we need to parse a serialized http/1.1 
      * response. One example is a 100-continue answer in serialized mode
      * or via a mod_proxy setup */
-    while (bb && !task->c->aborted && !task->output.sent_response) {
+    while (bb && !f->c->aborted && !task->output.sent_response) {
         status = h2_from_h1_parse_response(task, f, bb);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, f->c,
                       "h2_task(%s): parsed response", task->id);
@@ -392,23 +398,10 @@ static apr_status_t h2_filter_parse_h1(ap_filter_t* f, apr_bucket_brigade* bb)
  * task things
  ******************************************************************************/
  
-int h2_task_is_running(h2_task *task)
+int h2_task_is_running(conn_rec *c)
 {
+    h2_task *task = h2_conn_ctx_get_task(c);
     return task && task->started_at != 0 && !task->worker_done;
-}
-
-void h2_task_rst(h2_task *task, int error)
-{
-    task->rst_error = error;
-    if (task->input.beam) {
-        h2_beam_leave(task->input.beam);
-    }
-    if (!task->worker_done) {
-        h2_beam_abort(task->output.beam);
-    }
-    if (task->c) {
-        task->c->aborted = 1;
-    }
 }
 
 /*******************************************************************************
@@ -461,13 +454,13 @@ apr_status_t h2_task_init(apr_pool_t *pool, server_rec *s)
 
 static int h2_task_pre_conn(conn_rec* c, void *arg)
 {
-    h2_ctx *ctx;
+    h2_conn_ctx_t *ctx;
     
     if (!c->master) {
         return OK;
     }
     
-    ctx = h2_ctx_get(c, 0);
+    ctx = h2_conn_ctx_get(c);
     (void)arg;
     if (ctx->task) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
@@ -479,40 +472,38 @@ static int h2_task_pre_conn(conn_rec* c, void *arg)
     return OK;
 }
 
-h2_task *h2_task_create(conn_rec *secondary, int stream_id,
-                        const h2_request *req, h2_mplx *m,
-                        h2_bucket_beam *input, 
-                        apr_size_t output_max_mem)
+h2_task *h2_task_create(conn_rec *secondary, h2_stream *stream)
 {
     apr_pool_t *pool;
     h2_task *task;
-    
+    h2_conn_ctx_t *ctx;
+
     ap_assert(secondary);
-    ap_assert(req);
+    ap_assert(stream);
+    ap_assert(stream->request);
 
     apr_pool_create(&pool, secondary->pool);
     apr_pool_tag(pool, "h2_task");
     task = apr_pcalloc(pool, sizeof(h2_task));
-    task->c = secondary;
-    task->stream_id = stream_id;
-    task->mplx = m;
+    task->stream_id = stream->id;
+    task->mplx = stream->session->mplx;
     task->pool = pool;
-    task->request = req;
-    task->input.beam = input;
-    task->output.max_buffer = output_max_mem;
+    task->request = stream->request;
+    task->input.beam = stream->input;
+    task->output.max_buffer = task->mplx->stream_max_mem;
 
-    task->id = apr_psprintf(pool, "%ld-%d", m->id, stream_id);
+    task->id = apr_psprintf(pool, "%ld-%d", stream->session->id, stream->id);
     apr_table_setn(secondary->notes, H2_TASK_ID_NOTE, task->id);
-    h2_ctx_create_for(secondary, task);
+    ctx = h2_conn_ctx_create_secondary(secondary, stream);
+    ctx->task = task;
 
     return task;
 }
 
-void h2_task_destroy(h2_task *task)
+void h2_task_destroy(conn_rec *c, h2_task *task)
 {
-    h2_ctx_clear(task->c);
     if (task->output.beam) {
-        h2_beam_log(task->output.beam, task->c, APLOG_TRACE2, "task_destroy");
+        h2_beam_log(task->output.beam, c, APLOG_TRACE2, "task_destroy");
         h2_beam_destroy(task->output.beam);
         task->output.beam = NULL;
     }
@@ -522,46 +513,43 @@ void h2_task_destroy(h2_task *task)
     }
 }
 
-apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id)
+apr_status_t h2_process_secondary(conn_rec *c, apr_thread_t *thread, int worker_id)
 {
-    conn_rec *c;
-    
-    ap_assert(task);
-    c = task->c;
+    h2_task *task = h2_conn_ctx_get_task(c);
 
-    if (c->master) {
-        /* See the discussion at <https://github.com/icing/mod_h2/issues/195>
-         *
-         * Each conn_rec->id is supposed to be unique at a point in time. Since
-         * some modules (and maybe external code) uses this id as an identifier
-         * for the request_rec they handle, it needs to be unique for secondary 
-         * connections also.
-         *
-         * The MPM module assigns the connection ids and mod_unique_id is using
-         * that one to generate identifier for requests. While the implementation
-         * works for HTTP/1.x, the parallel execution of several requests per
-         * connection will generate duplicate identifiers on load.
-         * 
-         * The original implementation for secondary connection identifiers used 
-         * to shift the master connection id up and assign the stream id to the 
-         * lower bits. This was cramped on 32 bit systems, but on 64bit there was
-         * enough space.
-         * 
-         * As issue 195 showed, mod_unique_id only uses the lower 32 bit of the
-         * connection id, even on 64bit systems. Therefore collisions in request ids.
-         *
-         * The way master connection ids are generated, there is some space "at the
-         * top" of the lower 32 bits on allmost all systems. If you have a setup
-         * with 64k threads per child and 255 child processes, you live on the edge.
-         *
-         * The new implementation shifts 8 bits and XORs in the worker
-         * id. This will experience collisions with > 256 h2 workers and heavy
-         * load still. There seems to be no way to solve this in all possible 
-         * configurations by mod_h2 alone. 
-         */
-        task->c->id = (c->master->id << 8)^worker_id;
-    }
-        
+    ap_assert(task);
+
+    /* See the discussion at <https://github.com/icing/mod_h2/issues/195>
+     *
+     * Each conn_rec->id is supposed to be unique at a point in time. Since
+     * some modules (and maybe external code) uses this id as an identifier
+     * for the request_rec they handle, it needs to be unique for secondary
+     * connections also.
+     *
+     * The MPM module assigns the connection ids and mod_unique_id is using
+     * that one to generate identifier for requests. While the implementation
+     * works for HTTP/1.x, the parallel execution of several requests per
+     * connection will generate duplicate identifiers on load.
+     *
+     * The original implementation for secondary connection identifiers used
+     * to shift the master connection id up and assign the stream id to the
+     * lower bits. This was cramped on 32 bit systems, but on 64bit there was
+     * enough space.
+     *
+     * As issue 195 showed, mod_unique_id only uses the lower 32 bit of the
+     * connection id, even on 64bit systems. Therefore collisions in request ids.
+     *
+     * The way master connection ids are generated, there is some space "at the
+     * top" of the lower 32 bits on allmost all systems. If you have a setup
+     * with 64k threads per child and 255 child processes, you live on the edge.
+     *
+     * The new implementation shifts 8 bits and XORs in the worker
+     * id. This will experience collisions with > 256 h2 workers and heavy
+     * load still. There seems to be no way to solve this in all possible
+     * configurations by mod_h2 alone.
+     */
+    c->id = (c->master->id << 8)^worker_id;
+
     h2_beam_create(&task->output.beam, c->pool, task->stream_id, "output", 
                    H2_BEAM_OWNER_SEND, 0, c->base_server->timeout);
     if (!task->output.beam) {
@@ -570,7 +558,7 @@ apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id)
     
     h2_beam_buffer_size_set(task->output.beam, task->output.max_buffer);
     h2_beam_send_from(task->output.beam, task->pool);
-    h2_beam_on_consumed(task->output.beam, NULL, output_consumed, task);
+    h2_beam_on_consumed(task->output.beam, NULL, output_consumed, c);
 
     h2_secondary_run_pre_connection(c, ap_get_conn_socket(c));
 
@@ -579,12 +567,12 @@ apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_task(%s): process connection", task->id);
                   
-    task->c->current_thread = thread; 
+    c->current_thread = thread;
     ap_run_process_connection(c);
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_task(%s): processing done", task->id);
-    return output_finish(task);
+    return output_finish(c, task);
 }
 
 static apr_status_t h2_task_process_request(h2_task *task, conn_rec *c)
@@ -648,13 +636,13 @@ static apr_status_t h2_task_process_request(h2_task *task, conn_rec *c)
 
 static int h2_task_process_conn(conn_rec* c)
 {
-    h2_ctx *ctx;
+    h2_conn_ctx_t *ctx;
     
     if (!c->master) {
         return DECLINED;
     }
     
-    ctx = h2_ctx_get(c, 0);
+    ctx = h2_conn_ctx_get(c);
     if (ctx->task) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "h2_h2, processing request directly");

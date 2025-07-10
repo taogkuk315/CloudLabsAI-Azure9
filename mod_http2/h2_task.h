@@ -52,13 +52,10 @@ typedef struct h2_task h2_task;
 struct h2_task {
     const char *id;
     int stream_id;
-    conn_rec *c;
     apr_pool_t *pool;
     
     const struct h2_request *request;
-    apr_interval_time_t timeout;
-    int rst_error;                   /* h2 related stream abort error */
-    
+
     struct {
         struct h2_bucket_beam *beam;
         unsigned int eos : 1;
@@ -85,21 +82,13 @@ struct h2_task {
     apr_time_t done_at;              /* when processing was done */
 };
 
-h2_task *h2_task_create(conn_rec *secondary, int stream_id,
-                        const h2_request *req, struct h2_mplx *m, 
-                        struct h2_bucket_beam *input, 
-                        apr_size_t output_max_mem);
+h2_task *h2_task_create(conn_rec *secondary, struct h2_stream *stream);
 
-void h2_task_destroy(h2_task *task);
+void h2_task_destroy(conn_rec *c, h2_task *task);
 
-apr_status_t h2_task_do(h2_task *task, apr_thread_t *thread, int worker_id);
+apr_status_t h2_process_secondary(conn_rec *c, apr_thread_t *thread, int worker_id);
 
-int h2_task_is_running(h2_task *task);
-
-/**
- * Reset the task with the given error code, resets all input/output.
- */
-void h2_task_rst(h2_task *task, int error);
+int h2_task_is_running(conn_rec *c);
 
 void h2_task_register_hooks(void);
 /*
