@@ -115,13 +115,14 @@ class HttpdConf(object):
             <Location \"/.well-known/h2/state\">
                 SetHandler http2-status
             </Location>""")
-        self.add_proxies("cgi", proxy_self, h2proxy_self)
+        self.add_proxies("cgi", proxy_self=proxy_self, h2proxy_self=h2proxy_self)
         self.add("      <Location \"/h2test/echo\">")
         self.add("          SetHandler h2test-echo")
         self.add("      </Location>")
         self.end_vhost()
         self.start_vhost(self.env.http_port, "cgi", aliases=["cgi-alias"], doc_root="htdocs/cgi", with_ssl=False)
         self.add("      AddHandler cgi-script .py")
+        self.add_proxies("cgi", proxy_self=proxy_self, h2proxy_self=h2proxy_self)
         self.end_vhost()
         self.add("      LogLevel proxy:info")
         self.add("      LogLevel proxy_http:info")

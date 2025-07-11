@@ -87,13 +87,13 @@ class H2TestEnv:
         H2MaxWorkers 64
         SSLSessionCache "shmcb:ssl_gcache_data(32000)"
         """
-        py_verbosity = pytestconfig.option.verbose if pytestconfig is not None else 0
-        if py_verbosity >= 2:
+        self._verbosity = pytestconfig.option.verbose if pytestconfig is not None else 0
+        if self._verbosity >= 2:
             self._httpd_base_conf += f"""
                 LogLevel http2:trace2 h2test:trace2 proxy_http2:info 
                 LogLevel core:trace5 mpm_{self.mpm_type}:trace5
                 """
-        if py_verbosity >= 1:
+        if self._verbosity >= 1:
             self._httpd_base_conf += "LogLevel http2:debug h2test:trace2 proxy_http2:debug"
         else:
             self._httpd_base_conf += "LogLevel http2:info h2test:trace2 proxy_http2:info"
@@ -101,6 +101,10 @@ class H2TestEnv:
         self._verify_certs = False
         if not os.path.exists(self.gen_dir):
             os.makedirs(self.gen_dir)
+
+    @property
+    def verbosity(self) -> int:
+        return self._verbosity
 
     @property
     def prefix(self) -> str:
