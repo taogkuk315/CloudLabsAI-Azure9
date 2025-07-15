@@ -38,48 +38,18 @@
  * of our own to disable those.
  */
 
-struct h2_bucket_beam;
-struct h2_conn;
-struct h2_mplx;
-struct h2_task;
-struct h2_request;
-struct h2_response_parser;
-struct h2_stream;
-struct h2_worker;
+/**
+ * Process a secondary connection for a HTTP/2 stream request.
+ */
+apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id);
 
-typedef struct h2_task h2_task;
-
-struct h2_task {
-    struct {
-        struct h2_bucket_beam *beam;
-        apr_bucket_brigade *bb;
-    } input;
-    struct {
-        struct h2_bucket_beam *beam;
-        unsigned int opened : 1;
-        unsigned int sent_response : 1;
-        unsigned int copy_files : 1;
-        unsigned int buffered : 1;
-        struct h2_response_parser *rparser;
-        apr_bucket_brigade *bb;
-        apr_size_t max_buffer;
-    } output;
-
-};
-
-h2_task *h2_task_create(conn_rec *secondary, struct h2_stream *stream);
-
-apr_status_t h2_process_secondary(conn_rec *c, apr_thread_t *thread, int worker_id);
-
-int h2_task_is_running(conn_rec *c);
-
-void h2_task_register_hooks(void);
+void h2_c2_register_hooks(void);
 /*
  * One time, post config initialization.
  */
-apr_status_t h2_task_init(apr_pool_t *pool, server_rec *s);
+apr_status_t h2_c2_init(apr_pool_t *pool, server_rec *s);
 
-extern APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_in) *h2_task_logio_add_bytes_in;
-extern APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_out) *h2_task_logio_add_bytes_out;
+extern APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_in) *h2_c2_logio_add_bytes_in;
+extern APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_out) *h2_c2_logio_add_bytes_out;
 
 #endif /* defined(__mod_h2__h2_task__) */

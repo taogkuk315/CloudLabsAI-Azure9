@@ -39,7 +39,7 @@
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_h2.h"
-#include "h2_task.h"
+#include "h2_c2.h"
 #include "h2_workers.h"
 #include "h2_conn.h"
 #include "h2_version.h"

@@ -43,7 +43,7 @@
 #include "h2_request.h"
 #include "h2_stream.h"
 #include "h2_session.h"
-#include "h2_task.h"
+#include "h2_c2.h"
 #include "h2_workers.h"
 #include "h2_util.h"
 
@@ -103,9 +103,15 @@ static void m_stream_input_consumed(void *ctx, h2_bucket_beam *beam, apr_off_t l
     h2_stream_in_consumed(ctx, length);
 }
 
+static int stream_is_running(h2_stream *stream)
+{
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(stream->connection);
+    return conn_ctx && conn_ctx->started_at != 0 && !conn_ctx->done;
+}
+
 static void ms_stream_joined(h2_mplx *m, h2_stream *stream)
 {
-    ap_assert(!h2_task_is_running(stream->connection));
+    ap_assert(!stream_is_running(stream));
     
     h2_ififo_remove(m->readyq, stream->id);
     h2_ihash_remove(m->shold, stream->id);
@@ -121,7 +127,7 @@ static void m_stream_cleanup(h2_mplx *m, h2_stream *stream)
     h2_iq_remove(m->q, stream->id);
     h2_ififo_remove(m->readyq, stream->id);
 
-    if (!h2_task_is_running(stream->connection)) {
+    if (!stream_is_running(stream)) {
         ms_stream_joined(m, stream);
     }
     else {
@@ -244,7 +250,7 @@ static int m_report_consumption_iter(void *ctx, void *val)
     
     m_input_consumed_signal(m, stream);
     if (stream->state == H2_SS_CLOSED_L
-        && !h2_task_is_running(stream->connection)) {
+        && !stream_is_running(stream)) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c, 
                       H2_STRM_LOG(APLOGNO(10026), stream, "remote close missing")); 
         nghttp2_submit_rst_stream(stream->session->ngh2, NGHTTP2_FLAG_NONE, 
@@ -253,10 +259,10 @@ static int m_report_consumption_iter(void *ctx, void *val)
     return 1;
 }
 
-static int s_output_consumed_signal(h2_mplx *m, h2_task *task)
+static int s_output_consumed_signal(h2_mplx *m, h2_conn_ctx_t *conn_ctx)
 {
-    if (task->output.beam) {
-        return h2_beam_report_consumption(task->output.beam);
+    if (conn_ctx->beam_out) {
+        return h2_beam_report_consumption(conn_ctx->beam_out);
     }
     return 0;
 }
@@ -494,29 +500,34 @@ static void mst_output_produced(void *ctx, h2_bucket_beam *beam, apr_off_t bytes
     mst_check_data_for(m, stream, 0);
 }
 
-static apr_status_t t_out_open(h2_mplx *m, int stream_id, h2_bucket_beam *beam)
+static apr_status_t t_out_open(h2_mplx *m, conn_rec *c)
 {
-    h2_stream *stream = h2_ihash_get(m->streams, stream_id);
-    h2_task *task;
-    
-    if (!stream || !stream->connection || m->aborted) {
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+    h2_stream *stream;
+
+    ap_assert(conn_ctx);
+    ap_assert(conn_ctx->stream_id);
+
+    stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
+    if (!stream || m->aborted) {
         return APR_ECONNABORTED;
     }
     
     ap_assert(stream->output == NULL);
-    stream->output = beam;
+    stream->output = conn_ctx->beam_out;
     
     if (APLOGctrace2(m->c)) {
-        h2_beam_log(beam, stream->connection, APLOG_TRACE2, "out_open");
+        h2_beam_log(stream->output, c, APLOG_TRACE2, "out_open");
     }
     else {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->connection,
-                      "h2_mplx(%ld-%d): out open", m->id, stream->id);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                      "h2_mplx(%s): out open", conn_ctx->id);
     }
     
     h2_beam_on_produced(stream->output, mst_output_produced, stream);
-    task = h2_conn_ctx_get_task(stream->connection);
-    if (task && task->output.copy_files) {
+    if (h2_config_sgeti(conn_ctx->server, H2_CONF_COPY_FILES)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                      "h2_mplx(%s): copy_files in output", conn_ctx->id);
         h2_beam_on_file_beam(stream->output, h2_beam_no_files, NULL);
     }
     
@@ -526,7 +537,7 @@ static apr_status_t t_out_open(h2_mplx *m, int stream_id, h2_bucket_beam *beam)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_mplx_t_out_open(h2_mplx *m, int stream_id, h2_bucket_beam *beam)
+apr_status_t h2_mplx_t_out_open(h2_mplx *m, conn_rec *secondary)
 {
     apr_status_t status;
     
@@ -536,7 +547,7 @@ apr_status_t h2_mplx_t_out_open(h2_mplx *m, int stream_id, h2_bucket_beam *beam)
         status = APR_ECONNABORTED;
     }
     else {
-        status = t_out_open(m, stream_id, beam);
+        status = t_out_open(m, secondary);
     }
 
     H2_MPLX_LEAVE(m);
@@ -560,9 +571,9 @@ static apr_status_t s_out_close(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, c,
                   "h2_mplx(%s): close", conn_ctx->id);
-    status = h2_beam_close(conn_ctx->task->output.beam);
-    h2_beam_log(conn_ctx->task->output.beam, c, APLOG_TRACE2, "out_close");
-    s_output_consumed_signal(m, conn_ctx->task);
+    status = h2_beam_close(conn_ctx->beam_out);
+    h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "out_close");
+    s_output_consumed_signal(m, conn_ctx);
     mst_check_data_for(m, stream, 1);
     return status;
 }
@@ -692,7 +703,7 @@ static conn_rec *s_next_secondary(h2_mplx *m)
         stream = h2_ihash_get(m->streams, sid);
         if (stream) {
             conn_rec *secondary, **psecondary;
-            h2_task *task;
+            h2_conn_ctx_t *conn_ctx;
 
             psecondary = (conn_rec **)apr_array_pop(m->spare_secondary);
             if (psecondary) {
@@ -712,7 +723,10 @@ static conn_rec *s_next_secondary(h2_mplx *m)
                                     m_stream_input_consumed, stream);
             }
 
-            task = h2_task_create(secondary, stream);
+            conn_ctx = h2_conn_ctx_create_secondary(secondary, stream);
+            conn_ctx->beam_in = stream->input;
+            apr_table_setn(secondary->notes, H2_TASK_ID_NOTE, conn_ctx->id);
+
             ++m->tasks_active;
             return secondary;
         }
@@ -757,7 +771,6 @@ static void s_secondary_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
     h2_stream *stream;
 
     ap_assert(conn_ctx);
-    ap_assert(conn_ctx->task);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_mplx(%s): task done", conn_ctx->id);
     s_out_close(m, c, conn_ctx);
@@ -1026,7 +1039,7 @@ static int reset_is_acceptable(h2_stream *stream)
      * The responses to such requests continue forever otherwise.
      *
      */
-    if (!h2_task_is_running(stream->connection)) return 1;
+    if (!stream_is_running(stream)) return 1;
     if (!(stream->id & 0x01)) return 1; /* stream initiated by us. acceptable. */
     if (!stream->has_response) return 0; /* no response headers produced yet. bad. */
     if (!stream->out_data_frames) return 0; /* no response body data sent yet. bad. */

@@ -106,7 +106,7 @@ static h2_config defconf = {
     0,                      /* early hints, http status 103 */
     0,                      /* padding bits */
     1,                      /* padding always */
-    1,                      /* strean output buffered */
+    1,                      /* stream output buffered */
 };
 
 static h2_dir_config defdconf = {

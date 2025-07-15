@@ -27,7 +27,7 @@
 #include "h2.h"
 #include "h2_private.h"
 #include "h2_mplx.h"
-#include "h2_task.h"
+#include "h2_c2.h"
 #include "h2_workers.h"
 #include "h2_util.h"
 
@@ -260,7 +260,7 @@ static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)
     while (get_next(slot)) {
         ap_assert(slot->connection != NULL);
         do {
-            h2_process_secondary(slot->connection, thread, slot->id);
+            h2_c2_process(slot->connection, thread, slot->id);
             
             /* Report the task as done. If stickyness is left, offer the
              * mplx the opportunity to give us back a new task right away.

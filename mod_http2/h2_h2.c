@@ -34,7 +34,7 @@
 
 #include "h2_bucket_beam.h"
 #include "h2_stream.h"
-#include "h2_task.h"
+#include "h2_c2.h"
 #include "h2_config.h"
 #include "h2_ctx.h"
 #include "h2_conn.h"
@@ -704,15 +704,7 @@ static int h2_h2_late_fixups(request_rec *r)
     /* secondary connection? */
     if (r->connection->master) {
         h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(r->connection);
-        if (conn_ctx && conn_ctx->task) {
-            /* check if we copy vs. setaside files in this location */
-            conn_ctx->task->output.copy_files = h2_config_rgeti(r, H2_CONF_COPY_FILES);
-            conn_ctx->task->output.buffered = h2_config_rgeti(r, H2_CONF_OUTPUT_BUFFER);
-            if (conn_ctx->task->output.copy_files) {
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, r->connection,
-                              "h2_secondary_out(%s): copy_files on", conn_ctx->id);
-                h2_beam_on_file_beam(conn_ctx->task->output.beam, h2_beam_no_files, NULL);
-            }
+        if (conn_ctx) {
             check_push(r, "late_fixup");
         }
     }

@@ -28,6 +28,7 @@ mod_proxy_http2_la_LDFLAGS = -module -avoid-version -export-symbols-regex proxy_
 OBJECTS = \
     h2_bucket_beam.c \
     h2_bucket_eos.c \
+    h2_c2.c \
     h2_config.c \
     h2_conn.c \
     h2_conn_io.c \
@@ -42,7 +43,6 @@ OBJECTS = \
     h2_session.c \
     h2_stream.c \
     h2_switch.c \
-    h2_task.c \
     h2_util.c \
     h2_workers.c \
     mod_http2.c
@@ -51,6 +51,7 @@ HFILES = \
     h2.h \
     h2_bucket_beam.h \
     h2_bucket_eos.h \
+    h2_c2.h \
     h2_config.h \
     h2_conn.h \
     h2_conn_io.h \
@@ -66,7 +67,6 @@ HFILES = \
     h2_session.h \
     h2_stream.h \
     h2_switch.h \
-    h2_task.h \
     h2_util.h \
     h2_version.h \
     h2_workers.h \

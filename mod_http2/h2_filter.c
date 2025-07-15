@@ -31,7 +31,7 @@
 #include "h2_ctx.h"
 #include "h2_mplx.h"
 #include "h2_push.h"
-#include "h2_task.h"
+#include "h2_c2.h"
 #include "h2_stream.h"
 #include "h2_request.h"
 #include "h2_headers.h"
@@ -482,7 +482,7 @@ static apr_status_t status_event(void *userdata, h2_bucket_event event,
     conn_rec *c = userdata;
     h2_conn_ctx_t *ctx = h2_conn_ctx_get(c);
 
-    if (ctx && ctx->task) {
+    if (ctx && ctx->stream_id) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, c->master,
                       "status_event(%s): %d", ctx->id, event);
         switch (event) {

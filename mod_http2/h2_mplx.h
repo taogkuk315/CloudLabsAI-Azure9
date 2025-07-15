@@ -207,10 +207,9 @@ void h2_mplx_s_secondary_done(conn_rec *c, conn_rec **out_c);
  ******************************************************************************/
 
 /**
- * Opens the output for the given stream with the specified response.
+ * Opens the output for a secondary (stream processing) connection to the mplx.
  */
-apr_status_t h2_mplx_t_out_open(h2_mplx *mplx, int stream_id,
-                                struct h2_bucket_beam *beam);
+apr_status_t h2_mplx_t_out_open(h2_mplx *mplx, conn_rec *secondary);
 
 /**
  * Get the stream that belongs to the given task.

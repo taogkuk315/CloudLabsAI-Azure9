@@ -31,7 +31,7 @@
 #include "h2_stream.h"
 #include "h2_conn.h"
 #include "h2_filter.h"
-#include "h2_task.h"
+#include "h2_c2.h"
 #include "h2_session.h"
 #include "h2_config.h"
 #include "h2_ctx.h"
@@ -161,7 +161,7 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
         status = h2_switch_init(p, s);
     }
     if (status == APR_SUCCESS) {
-        status = h2_task_init(p, s);
+        status = h2_c2_init(p, s);
     }
     
     return status;
@@ -230,7 +230,7 @@ static void h2_hooks(apr_pool_t *pool)
 
     h2_h2_register_hooks();
     h2_switch_register_hooks();
-    h2_task_register_hooks();
+    h2_c2_register_hooks();
 
     /* Setup subprocess env for certain variables
      */
@@ -252,7 +252,7 @@ static const char *val_H2_PUSH(apr_pool_t *p, server_rec *s,
 {
     if (conn_ctx) {
         if (r) {
-            if (conn_ctx->task) {
+            if (conn_ctx->stream_id) {
                 h2_stream *stream = h2_mplx_t_stream_get(conn_ctx->mplx, conn_ctx->stream_id);
                 if (stream && stream->push_policy != H2_PUSH_NONE) {
                     return "on";

@@ -21,6 +21,7 @@ struct h2_session;
 struct h2_stream;
 struct h2_mplx;
 struct h2_task;
+struct h2_bucket_beam;
 
 /**
  * The h2 module context associated with a connection. 
@@ -40,8 +41,15 @@ struct h2_conn_ctx_t {
     struct h2_mplx *mplx;           /* on secondary: the multiplexer */
     int stream_id;                  /* on main: 0, on secondary: stream id */
     const struct h2_request *request; /* on secondary: the request to process */
-    struct h2_task *task;           /* on secondary: the task processed */
+
     int filters_set;                 /* protocol filters have been set up */
+    int has_final_response;          /* request has produced a >= 200 response */
+    int registered_at_mplx;          /* output is registered at mplx for polling */
+    int out_unbuffered;              /* output is unbuffered */
+
+    struct h2_bucket_beam *beam_in;
+    struct h2_bucket_beam *beam_out;
+    apr_bucket_brigade *bb_in;
 
     volatile int done;               /* processing has finished */
     apr_time_t started_at;           /* when processing started */
@@ -77,10 +85,5 @@ void h2_conn_ctx_destroy(h2_conn_ctx_t *conn_ctx);
  * Get the session instance if `c` is a HTTP/2 master connection.
  */
 struct h2_session *h2_conn_ctx_get_session(conn_rec *c);
-
-/**
- * Get the h2_task instance of `c` is a HTTP/2 secondary connection.
- */
-struct h2_task *h2_conn_ctx_get_task(conn_rec *c);
 
 #endif /* defined(__mod_h2__h2_ctx__) */

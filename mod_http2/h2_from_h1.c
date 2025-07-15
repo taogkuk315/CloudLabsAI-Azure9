@@ -33,7 +33,7 @@
 #include "h2_ctx.h"
 #include "h2_headers.h"
 #include "h2_from_h1.h"
-#include "h2_task.h"
+#include "h2_c2.h"
 #include "h2_util.h"
 
 
@@ -421,7 +421,7 @@ static apr_status_t pass_response(h2_conn_ctx_t *conn_ctx, ap_filter_t *f,
     apr_array_clear(parser->hlines);
 
     if (response->status >= 200) {
-        conn_ctx->task->output.sent_response = 1;
+        conn_ctx->has_final_response = 1;
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, parser->c,
                   APLOGNO(03197) "h2_task(%s): passed response %d", 
@@ -429,10 +429,9 @@ static apr_status_t pass_response(h2_conn_ctx_t *conn_ctx, ap_filter_t *f,
     return status;
 }
 
-static apr_status_t parse_status(h2_conn_ctx_t *conn_ctx, char *line)
+static apr_status_t parse_status(h2_conn_ctx_t *conn_ctx, h2_response_parser *parser, char *line)
 {
-    h2_response_parser *parser = conn_ctx->task->output.rparser;
-    int sindex = (apr_date_checkmask(line, "HTTP/#.# ###*")? 9 : 
+    int sindex = (apr_date_checkmask(line, "HTTP/#.# ###*")? 9 :
                   (apr_date_checkmask(line, "HTTP/# ###*")? 7 : 0));
     if (sindex > 0) {
         int k = sindex + 3;
@@ -457,10 +456,10 @@ static apr_status_t parse_status(h2_conn_ctx_t *conn_ctx, char *line)
     return APR_EINVAL;
 }
 
-apr_status_t h2_from_h1_parse_response(h2_conn_ctx_t *conn_ctx, ap_filter_t *f,
-                                       apr_bucket_brigade *bb)
+static apr_status_t parse_response(ap_filter_t *f, apr_bucket_brigade *bb)
 {
-    h2_response_parser *parser = conn_ctx->task->output.rparser;
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
+    h2_response_parser *parser = f->ctx;
     char line[HUGE_STRING_LEN];
     apr_status_t status = APR_SUCCESS;
 
@@ -470,7 +469,7 @@ apr_status_t h2_from_h1_parse_response(h2_conn_ctx_t *conn_ctx, ap_filter_t *f,
         parser->conn_ctx = conn_ctx;
         parser->state = H2_RP_STATUS_LINE;
         parser->hlines = apr_array_make(conn_ctx->pool, 10, sizeof(char *));
-        conn_ctx->task->output.rparser = parser;
+        f->ctx = parser;
     }
     
     while (!APR_BRIGADE_EMPTY(bb) && status == APR_SUCCESS) {
@@ -487,7 +486,7 @@ apr_status_t h2_from_h1_parse_response(h2_conn_ctx_t *conn_ctx, ap_filter_t *f,
                 }
                 if (parser->state == H2_RP_STATUS_LINE) {
                     /* instead of parsing, just take it directly */
-                    status = parse_status(conn_ctx, line);
+                    status = parse_status(conn_ctx, parser, line);
                 }
                 else if (line[0] == '\0') {
                     /* end of headers, pass response onward */
@@ -509,6 +508,26 @@ apr_status_t h2_from_h1_parse_response(h2_conn_ctx_t *conn_ctx, ap_filter_t *f,
     return status;
 }
 
+apr_status_t h2_from_h1_parse_response(ap_filter_t* f, apr_bucket_brigade* bb)
+{
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
+    apr_status_t rv;
+
+    /* There are cases where we need to parse a serialized http/1.1 response.
+     * One example is a 100-continue answer via a mod_proxy setup. */
+    ap_assert(conn_ctx);
+    while (bb && !f->c->aborted && !conn_ctx->has_final_response) {
+        rv = parse_response(f, bb);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, f->c,
+                      "h2_task(%s): parsed response", conn_ctx->id);
+        if (APR_BRIGADE_EMPTY(bb) || APR_SUCCESS != rv) {
+            return rv;
+        }
+    }
+
+    return ap_pass_brigade(f->next, bb);
+}
+
 apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
@@ -520,7 +539,7 @@ apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
                   "h2_task(%s): output_filter called", conn_ctx->id);
     
-    if (!conn_ctx->task->output.sent_response && !f->c->aborted) {
+    if (!conn_ctx->has_final_response && !f->c->aborted) {
         /* check, if we need to send the response now. Until we actually
          * see a DATA bucket or some EOS/EOR, we do not do so. */
         for (b = APR_BRIGADE_FIRST(bb);
@@ -576,7 +595,7 @@ apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
             else {
                 APR_BRIGADE_INSERT_HEAD(bb, bresp);
             }
-            conn_ctx->task->output.sent_response = 1;
+            conn_ctx->has_final_response = 1;
             r->sent_bodyct = 1;
         }
     }
@@ -598,7 +617,7 @@ apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
             b = next;
         }
     }
-    else if (conn_ctx->task->output.sent_response) {
+    if (conn_ctx->has_final_response) {
         /* lets get out of the way, our task is done */
         ap_remove_output_filter(f);
     }
@@ -787,8 +806,8 @@ apr_status_t h2_filter_request_in(ap_filter_t* f,
                 apr_bucket_destroy(b);
                 ap_remove_input_filter(f);
                 
-                if (headers->raw_bytes && h2_task_logio_add_bytes_in) {
-                    h2_task_logio_add_bytes_in(f->c, headers->raw_bytes);
+                if (headers->raw_bytes && h2_c2_logio_add_bytes_in) {
+                    h2_c2_logio_add_bytes_in(f->c, headers->raw_bytes);
                 }
                 break;
             }
@@ -849,7 +868,7 @@ apr_status_t h2_filter_trailers_out(ap_filter_t *f, apr_bucket_brigade *bb)
     request_rec *r = f->r;
     apr_bucket *b, *e;
  
-    if (conn_ctx && conn_ctx->task && r) {
+    if (conn_ctx && r) {
         /* Detect the EOS/EOR bucket and forward any trailers that may have
          * been set to our h2_headers.
          */

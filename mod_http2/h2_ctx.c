@@ -25,7 +25,7 @@
 #include "h2_private.h"
 #include "h2_session.h"
 #include "h2_bucket_beam.h"
-#include "h2_task.h"
+#include "h2_c2.h"
 #include "h2_stream.h"
 #include "h2_ctx.h"
 
@@ -34,10 +34,10 @@ void h2_conn_ctx_detach(conn_rec *c)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
 
-    if (conn_ctx && conn_ctx->task && conn_ctx->task->output.beam) {
-        h2_beam_log(conn_ctx->task->output.beam, c, APLOG_TRACE2, "task_destroy");
-        h2_beam_destroy(conn_ctx->task->output.beam);
-        conn_ctx->task->output.beam = NULL;
+    if (conn_ctx && conn_ctx->beam_out) {
+        h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "task_destroy");
+        h2_beam_destroy(conn_ctx->beam_out);
+        conn_ctx->beam_out = NULL;
     }
     ap_set_module_config(c->conn_config, &http2_module, NULL);
 }
@@ -87,11 +87,5 @@ h2_session *h2_conn_ctx_get_session(conn_rec *c)
 {
     h2_conn_ctx_t *ctx = (c && !c->master)? h2_conn_ctx_get(c) : NULL;
     return ctx? ctx->session : NULL;
-}
-
-h2_task *h2_conn_ctx_get_task(conn_rec *c)
-{
-    h2_conn_ctx_t *ctx = (c && c->master)? h2_conn_ctx_get(c) : NULL;
-    return ctx? ctx->task : NULL;
 }
 

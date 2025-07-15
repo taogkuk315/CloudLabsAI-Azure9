@@ -43,7 +43,7 @@
 #include "h2_request.h"
 #include "h2_headers.h"
 #include "h2_stream.h"
-#include "h2_task.h"
+#include "h2_c2.h"
 #include "h2_session.h"
 #include "h2_util.h"
 #include "h2_version.h"
