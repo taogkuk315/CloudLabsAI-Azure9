@@ -20,43 +20,67 @@
 #include <httpd.h>
 #include <http_core.h>
 #include <http_config.h>
+#include <http_log.h>
 
 #include "h2_private.h"
 #include "h2_session.h"
+#include "h2_bucket_beam.h"
 #include "h2_task.h"
 #include "h2_stream.h"
 #include "h2_ctx.h"
 
 
-static h2_conn_ctx_t *ctx_create(const conn_rec *c, const char *id)
+void h2_conn_ctx_detach(conn_rec *c)
 {
-    h2_conn_ctx_t *ctx = apr_pcalloc(c->pool, sizeof(*ctx));
-    ctx->id = id;
-    ctx->server = c->base_server;
-    ap_set_module_config(c->conn_config, &http2_module, ctx);
-    return ctx;
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+
+    if (conn_ctx && conn_ctx->task && conn_ctx->task->output.beam) {
+        h2_beam_log(conn_ctx->task->output.beam, c, APLOG_TRACE2, "task_destroy");
+        h2_beam_destroy(conn_ctx->task->output.beam);
+        conn_ctx->task->output.beam = NULL;
+    }
+    ap_set_module_config(c->conn_config, &http2_module, NULL);
 }
 
-h2_conn_ctx_t *h2_conn_ctx_create(const conn_rec *c)
+static h2_conn_ctx_t *ctx_create(apr_pool_t *pool, conn_rec *c, const char *id)
 {
-    return ctx_create(c, apr_psprintf(c->pool, "%ld", c->id));
+    h2_conn_ctx_t *conn_ctx = apr_pcalloc(pool, sizeof(*conn_ctx));
+    conn_ctx->id = id;
+    conn_ctx->pool = pool;
+    conn_ctx->server = c->base_server;
+    conn_ctx->started_at = apr_time_now();
+    ap_set_module_config(c->conn_config, &http2_module, conn_ctx);
+    return conn_ctx;
 }
 
-h2_conn_ctx_t *h2_conn_ctx_create_secondary(const conn_rec *c, struct h2_stream *stream)
+void h2_conn_ctx_destroy(h2_conn_ctx_t *conn_ctx)
 {
+    apr_pool_destroy(conn_ctx->pool);
+}
+
+h2_conn_ctx_t *h2_conn_ctx_create(conn_rec *c)
+{
+    return ctx_create(c->pool, c, apr_psprintf(c->pool, "%ld", c->id));
+}
+
+h2_conn_ctx_t *h2_conn_ctx_create_secondary(conn_rec *c, struct h2_stream *stream)
+{
+    const char *id;
+    h2_conn_ctx_t *ctx;
+    apr_pool_t *pool;
+
     /* there is sth fishy going on in some mpms that change the id of
      * a connection when they process it in another thread. stick to
      * the id the session was initialized with. */
-    h2_conn_ctx_t *ctx = ctx_create(c, apr_psprintf(
-        c->pool, "%ld-%d", stream->session->id, stream->id));
+    apr_pool_create(&pool, c->pool);
+    apr_pool_tag(pool, "h2_secondary");
+    id = apr_psprintf(pool, "%ld-%d", stream->session->id, stream->id);
+    ctx = ctx_create(pool, c, id);
     ctx->mplx = stream->session->mplx;
-    return ctx;
-}
+    ctx->stream_id = stream->id;
+    ctx->request = stream->request;
 
-void h2_conn_ctx_clear(const conn_rec *c)
-{
-    ap_assert(c);
-    ap_set_module_config(c->conn_config, &http2_module, NULL);
+    return ctx;
 }
 
 h2_session *h2_conn_ctx_get_session(conn_rec *c)

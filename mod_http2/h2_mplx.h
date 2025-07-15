@@ -215,7 +215,7 @@ apr_status_t h2_mplx_t_out_open(h2_mplx *mplx, int stream_id,
 /**
  * Get the stream that belongs to the given task.
  */
-struct h2_stream *h2_mplx_t_stream_get(h2_mplx *m, struct h2_task *task);
+struct h2_stream *h2_mplx_t_stream_get(h2_mplx *m, int stream_id);
 
 
 #endif /* defined(__mod_h2__h2_mplx__) */

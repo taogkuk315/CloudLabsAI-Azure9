@@ -608,7 +608,7 @@ static int h2_h2_process_main_conn(conn_rec* c)
         status = h2_conn_setup(c, NULL, ctx->server? ctx->server : c->base_server);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, c, "conn_setup");
         if (status != APR_SUCCESS) {
-            h2_conn_ctx_clear(c);
+            h2_conn_ctx_detach(c);
             return !OK;
         }
     }
@@ -670,13 +670,13 @@ static int h2_h2_post_read_req(request_rec *r)
 {
     /* secondary connection? */
     if (r->connection->master) {
-        struct h2_task *task = h2_conn_ctx_get_task(r->connection);
+        h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(r->connection);
         /* This hook will get called twice on internal redirects. Take care
          * that we manipulate filters only once. */
-        if (task && !task->filters_set) {
+        if (conn_ctx && !conn_ctx->filters_set) {
             ap_filter_t *f;
             ap_log_rerror(APLOG_MARK, APLOG_TRACE3, 0, r, 
-                          "h2_task(%s): adding request filters", task->id);
+                          "h2_task(%s): adding request filters", conn_ctx->id);
 
             /* setup the correct filters to process the request for h2 */
             ap_add_input_filter("H2_REQUEST", NULL, r, r->connection);
@@ -693,7 +693,7 @@ static int h2_h2_post_read_req(request_rec *r)
                 }
             }
             ap_add_output_filter("H2_TRAILERS_OUT", NULL, r, r->connection);
-            task->filters_set = 1;
+            conn_ctx->filters_set = 1;
         }
     }
     return DECLINED;
@@ -703,15 +703,15 @@ static int h2_h2_late_fixups(request_rec *r)
 {
     /* secondary connection? */
     if (r->connection->master) {
-        struct h2_task *task = h2_conn_ctx_get_task(r->connection);
-        if (task) {
+        h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(r->connection);
+        if (conn_ctx && conn_ctx->task) {
             /* check if we copy vs. setaside files in this location */
-            task->output.copy_files = h2_config_rgeti(r, H2_CONF_COPY_FILES);
-            task->output.buffered = h2_config_rgeti(r, H2_CONF_OUTPUT_BUFFER);
-            if (task->output.copy_files) {
+            conn_ctx->task->output.copy_files = h2_config_rgeti(r, H2_CONF_COPY_FILES);
+            conn_ctx->task->output.buffered = h2_config_rgeti(r, H2_CONF_OUTPUT_BUFFER);
+            if (conn_ctx->task->output.copy_files) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, r->connection,
-                              "h2_secondary_out(%s): copy_files on", task->id);
-                h2_beam_on_file_beam(task->output.beam, h2_beam_no_files, NULL);
+                              "h2_secondary_out(%s): copy_files on", conn_ctx->id);
+                h2_beam_on_file_beam(conn_ctx->task->output.beam, h2_beam_no_files, NULL);
             }
             check_push(r, "late_fixup");
         }

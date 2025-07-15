@@ -787,7 +787,7 @@ static apr_status_t session_cleanup(h2_session *session, const char *trigger)
     ap_assert(session->ngh2);
     nghttp2_session_del(session->ngh2);
     session->ngh2 = NULL;
-    h2_conn_ctx_clear(c);
+    h2_conn_ctx_detach(c);
     
     return APR_SUCCESS;
 }

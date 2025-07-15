@@ -423,18 +423,11 @@ static void h2_config_seti64(h2_dir_config *dconf, h2_config *conf, h2_config_va
 
 static const h2_config *h2_config_get(conn_rec *c)
 {
-    h2_conn_ctx_t *ctx = h2_conn_ctx_get(c);
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
     
-    if (ctx) {
-        if (ctx->config) {
-            return ctx->config;
-        }
-        else if (ctx->server) {
-            ctx->config = h2_config_sget(ctx->server);
-            return ctx->config;
-        }
+    if (conn_ctx && conn_ctx->server) {
+        return h2_config_sget(conn_ctx->server);
     }
-    
     return h2_config_sget(c->base_server);
 }
 

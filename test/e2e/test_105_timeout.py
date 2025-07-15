@@ -1,4 +1,6 @@
 import socket
+import time
+
 import pytest
 
 from h2_conf import HttpdConf

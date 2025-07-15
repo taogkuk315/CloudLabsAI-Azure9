@@ -168,7 +168,7 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
             if (status != APR_SUCCESS) {
                 ap_log_rerror(APLOG_MARK, APLOG_DEBUG, status, r, APLOGNO(03088)
                               "session setup");
-                h2_conn_ctx_clear(c);
+                h2_conn_ctx_detach(c);
                 return !OK;
             }
             

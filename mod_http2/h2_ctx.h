@@ -21,7 +21,6 @@ struct h2_session;
 struct h2_stream;
 struct h2_mplx;
 struct h2_task;
-struct h2_config;
 
 /**
  * The h2 module context associated with a connection. 
@@ -33,12 +32,20 @@ struct h2_config;
  */
 struct h2_conn_ctx_t {
     const char *id;                 /* our identifier of this connection */
-    const char *protocol;           /* the protocol negotiated */
+    apr_pool_t *pool;               /* main: session pool, secondary: task pool */
     server_rec *server;             /* httpd server selected. */
+    const char *protocol;           /* the protocol negotiated */
     struct h2_session *session;     /* on main: the session established */
+
     struct h2_mplx *mplx;           /* on secondary: the multiplexer */
+    int stream_id;                  /* on main: 0, on secondary: stream id */
+    const struct h2_request *request; /* on secondary: the request to process */
     struct h2_task *task;           /* on secondary: the task processed */
-    const struct h2_config *config; /* effective config in this context */
+    int filters_set;                 /* protocol filters have been set up */
+
+    volatile int done;               /* processing has finished */
+    apr_time_t started_at;           /* when processing started */
+    apr_time_t done_at;              /* when processing was done */
 };
 typedef struct h2_conn_ctx_t h2_conn_ctx_t;
 
@@ -48,18 +55,23 @@ typedef struct h2_conn_ctx_t h2_conn_ctx_t;
  * @return h2 context of this connection
  */
 #define h2_conn_ctx_get(c) \
-    ((h2_conn_ctx_t*)ap_get_module_config((c)->conn_config, &http2_module))
+    ((c)? (h2_conn_ctx_t*)ap_get_module_config((c)->conn_config, &http2_module) : NULL)
 
 /**
  * Create the h2 connection context.
  * @param c the connection to create it at
  * @return created h2 context of this connection
  */
-h2_conn_ctx_t *h2_conn_ctx_create(const conn_rec *c);
+h2_conn_ctx_t *h2_conn_ctx_create(conn_rec *c);
 
-h2_conn_ctx_t *h2_conn_ctx_create_secondary(const conn_rec *c, struct h2_stream *stream);
+h2_conn_ctx_t *h2_conn_ctx_create_secondary(conn_rec *c, struct h2_stream *stream);
 
-void h2_conn_ctx_clear(const conn_rec *c);
+void h2_conn_ctx_detach(conn_rec *c);
+
+/**
+ * Distach from the connection and destroy all resources, e.g. the pool.
+ */
+void h2_conn_ctx_destroy(h2_conn_ctx_t *conn_ctx);
 
 /**
  * Get the session instance if `c` is a HTTP/2 master connection.

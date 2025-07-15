@@ -247,18 +247,19 @@ static const char *val_HTTP2(apr_pool_t *p, server_rec *s,
 }
 
 static const char *val_H2_PUSH(apr_pool_t *p, server_rec *s,
-                               conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
+                               conn_rec *c, request_rec *r,
+                               h2_conn_ctx_t *conn_ctx)
 {
-    if (ctx) {
+    if (conn_ctx) {
         if (r) {
-            if (ctx->task) {
-                h2_stream *stream = h2_mplx_t_stream_get(ctx->task->mplx, ctx->task);
+            if (conn_ctx->task) {
+                h2_stream *stream = h2_mplx_t_stream_get(conn_ctx->mplx, conn_ctx->stream_id);
                 if (stream && stream->push_policy != H2_PUSH_NONE) {
                     return "on";
                 }
             }
         }
-        else if (c && h2_session_push_enabled(ctx->session)) {
+        else if (c && h2_session_push_enabled(conn_ctx->session)) {
             return "on";
         }
     }
@@ -271,10 +272,11 @@ static const char *val_H2_PUSH(apr_pool_t *p, server_rec *s,
 }
 
 static const char *val_H2_PUSHED(apr_pool_t *p, server_rec *s,
-                                 conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
+                                 conn_rec *c, request_rec *r,
+                                 h2_conn_ctx_t *conn_ctx)
 {
-    if (ctx) {
-        if (ctx->task && !H2_STREAM_CLIENT_INITIATED(ctx->task->stream_id)) {
+    if (conn_ctx) {
+        if (conn_ctx->stream_id && !H2_STREAM_CLIENT_INITIATED(conn_ctx->stream_id)) {
             return "PUSHED";
         }
     }
@@ -282,11 +284,12 @@ static const char *val_H2_PUSHED(apr_pool_t *p, server_rec *s,
 }
 
 static const char *val_H2_PUSHED_ON(apr_pool_t *p, server_rec *s,
-                                    conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
+                                    conn_rec *c, request_rec *r,
+                                    h2_conn_ctx_t *conn_ctx)
 {
-    if (ctx) {
-        if (ctx->task && !H2_STREAM_CLIENT_INITIATED(ctx->task->stream_id)) {
-            h2_stream *stream = h2_mplx_t_stream_get(ctx->task->mplx, ctx->task);
+    if (conn_ctx) {
+        if (conn_ctx->stream_id && !H2_STREAM_CLIENT_INITIATED(conn_ctx->stream_id)) {
+            h2_stream *stream = h2_mplx_t_stream_get(conn_ctx->mplx, conn_ctx->stream_id);
             if (stream) {
                 return apr_itoa(p, stream->initiated_on);
             }

@@ -34,7 +34,7 @@
 struct h2_headers;
 struct h2_task;
 
-apr_status_t h2_from_h1_parse_response(struct h2_task *task, ap_filter_t *f, 
+apr_status_t h2_from_h1_parse_response(h2_conn_ctx_t *conn_ctx, ap_filter_t *f,
                                        apr_bucket_brigade *bb);
 
 apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb);

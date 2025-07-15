@@ -50,18 +50,9 @@ struct h2_worker;
 typedef struct h2_task h2_task;
 
 struct h2_task {
-    const char *id;
-    int stream_id;
-    apr_pool_t *pool;
-    
-    const struct h2_request *request;
-
     struct {
         struct h2_bucket_beam *beam;
-        unsigned int eos : 1;
         apr_bucket_brigade *bb;
-        apr_bucket_brigade *bbchunk;
-        apr_off_t chunked_total;
     } input;
     struct {
         struct h2_bucket_beam *beam;
@@ -73,18 +64,10 @@ struct h2_task {
         apr_bucket_brigade *bb;
         apr_size_t max_buffer;
     } output;
-    
-    struct h2_mplx *mplx;
-    
-    int filters_set;                 /* protocol filters have been set up */
-    volatile int worker_done;        /* h2_worker finished */
-    apr_time_t started_at;           /* when processing started */
-    apr_time_t done_at;              /* when processing was done */
+
 };
 
 h2_task *h2_task_create(conn_rec *secondary, struct h2_stream *stream);
-
-void h2_task_destroy(conn_rec *c, h2_task *task);
 
 apr_status_t h2_process_secondary(conn_rec *c, apr_thread_t *thread, int worker_id);
 

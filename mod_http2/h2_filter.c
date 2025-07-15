@@ -430,10 +430,10 @@ static void add_stats(apr_bucket_brigade *bb, h2_session *s,
     bbout(bb, "  }%s\n", last? "" : ",");
 }
 
-static apr_status_t h2_status_insert(h2_task *task, apr_bucket *b)
+static apr_status_t h2_status_insert(h2_conn_ctx_t *conn_ctx, apr_bucket *b)
 {
-    h2_mplx *m = task->mplx;
-    h2_stream *stream = h2_mplx_t_stream_get(m, task);
+    h2_mplx *m = conn_ctx->mplx;
+    h2_stream *stream = h2_mplx_t_stream_get(m, conn_ctx->stream_id);
     h2_session *s;
     conn_rec *c;
     
@@ -487,7 +487,7 @@ static apr_status_t status_event(void *userdata, h2_bucket_event event,
                       "status_event(%s): %d", ctx->id, event);
         switch (event) {
             case H2_BUCKET_EV_BEFORE_MASTER_SEND:
-                h2_status_insert(ctx->task, b);
+                h2_status_insert(ctx, b);
                 break;
             default:
                 break;
@@ -545,7 +545,7 @@ static apr_status_t discard_body(request_rec *r, apr_off_t maxlen)
 int h2_filter_h2_status_handler(request_rec *r)
 {
     conn_rec *c = r->connection;
-    h2_task *task;
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
     apr_bucket_brigade *bb;
     apr_bucket *b;
     apr_status_t status;
@@ -557,8 +557,7 @@ int h2_filter_h2_status_handler(request_rec *r)
         return DECLINED;
     }
 
-    task = h2_conn_ctx_get_task(r->connection);
-    if (task) {
+    if (conn_ctx && conn_ctx->stream_id) {
         /* In this handler, we do some special sauce to send footers back,
          * IFF we received footers in the request. This is used in our test
          * cases, since CGI has no way of handling those. */
@@ -588,11 +587,11 @@ int h2_filter_h2_status_handler(request_rec *r)
 
         ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
                       "status_handler(%s): checking for incoming trailers", 
-                      task->id);
+                      conn_ctx->id);
         if (r->trailers_in && !apr_is_empty_table(r->trailers_in)) {
             ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
                           "status_handler(%s): seeing incoming trailers", 
-                          task->id);
+                          conn_ctx->id);
             apr_table_setn(r->trailers_out, "h2-trailers-in", 
                            apr_itoa(r->pool, 1));
         }
@@ -607,7 +606,7 @@ int h2_filter_h2_status_handler(request_rec *r)
             /* no way to know what type of error occurred */
             ap_log_rerror(APLOG_MARK, APLOG_TRACE1, status, r,
                           "status_handler(%s): ap_pass_brigade failed", 
-                          task->id);
+                          conn_ctx->id);
             return AP_FILTER_ERROR;
         }
     }
