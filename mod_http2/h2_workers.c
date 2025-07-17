@@ -256,7 +256,7 @@ static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)
 {
     h2_slot *slot = wctx;
     
-    /* Get the h2_task(s) from the ->mplxs queue. */
+    /* Get the next secondary connection from the ->mplxs queue. */
     while (get_next(slot)) {
         ap_assert(slot->connection != NULL);
         do {

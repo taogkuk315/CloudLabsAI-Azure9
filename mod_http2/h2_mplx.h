@@ -43,7 +43,6 @@ struct apr_thread_cond_t;
 struct h2_bucket_beam;
 struct h2_config;
 struct h2_ihash_t;
-struct h2_task;
 struct h2_stream;
 struct h2_request;
 struct apr_thread_cond_t;
@@ -199,12 +198,6 @@ apr_status_t h2_mplx_m_idle(h2_mplx *m);
  ******************************************************************************/
 apr_status_t h2_mplx_s_pop_secondary(h2_mplx *m, conn_rec **out_c);
 void h2_mplx_s_secondary_done(conn_rec *c, conn_rec **out_c);
-
-/*******************************************************************************
- * From a h2_task owner: h2_mplx_s_*
- * (a task is transfered from master to secondary connection and back in
- * its normal lifetime).
- ******************************************************************************/
 
 /**
  * Opens the output for a secondary (stream processing) connection to the mplx.

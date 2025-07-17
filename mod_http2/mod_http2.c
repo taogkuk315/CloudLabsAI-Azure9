@@ -29,12 +29,12 @@
 
 #include <nghttp2/nghttp2.h>
 #include "h2_stream.h"
-#include "h2_conn.h"
-#include "h2_filter.h"
+#include "h2_c1.h"
+#include "h2_c1_status.h"
 #include "h2_c2.h"
 #include "h2_session.h"
 #include "h2_config.h"
-#include "h2_ctx.h"
+#include "h2_conn_ctx.h"
 #include "h2_h2.h"
 #include "h2_mplx.h"
 #include "h2_push.h"
@@ -183,7 +183,7 @@ static void h2_child_init(apr_pool_t *pchild, server_rec *s)
 {
     apr_allocator_t *allocator;
     apr_thread_mutex_t *mutex;
-    apr_status_t status;
+    apr_status_t rv;
 
     /* The allocator of pchild has no mutex with MPM prefork, but we need one
      * for h2 workers threads synchronization. Even though mod_http2 shouldn't
@@ -201,9 +201,12 @@ static void h2_child_init(apr_pool_t *pchild, server_rec *s)
     }
 
     /* Set up our connection processing */
-    status = h2_conn_child_init(pchild, s);
-    if (status != APR_SUCCESS) {
-        ap_log_error(APLOG_MARK, APLOG_ERR, status, s,
+    rv = h2_c1_child_init(pchild, s);
+    if (APR_SUCCESS == rv) {
+        rv = h2_c2_child_init(pchild, s);
+    }
+    if (APR_SUCCESS != rv) {
+        ap_log_error(APLOG_MARK, APLOG_ERR, rv, s,
                      APLOGNO(02949) "initializing connection handling");
     }
 }
@@ -237,7 +240,7 @@ static void h2_hooks(apr_pool_t *pool)
     ap_hook_fixups(h2_h2_fixups, NULL,NULL, APR_HOOK_MIDDLE);
     
     /* test http2 connection status handler */
-    ap_hook_handler(h2_filter_h2_status_handler, NULL, NULL, APR_HOOK_MIDDLE);
+    ap_hook_handler(h2_c1_status_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
 static const char *val_HTTP2(apr_pool_t *p, server_rec *s,

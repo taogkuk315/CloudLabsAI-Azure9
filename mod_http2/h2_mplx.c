@@ -36,8 +36,8 @@
 #include "h2_private.h"
 #include "h2_bucket_beam.h"
 #include "h2_config.h"
-#include "h2_conn.h"
-#include "h2_ctx.h"
+#include "h2_c1.h"
+#include "h2_conn_ctx.h"
 #include "h2_h2.h"
 #include "h2_mplx.h"
 #include "h2_request.h"
@@ -301,12 +301,12 @@ static int m_stream_destroy_iter(void *ctx, void *val)
 
         if (reuse_secondary) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c, APLOGNO(03385)
-                          "h2_task(%s), reuse secondary", conn_ctx->id);
+                          "h2_c2(%s), reuse secondary", conn_ctx->id);
             h2_conn_ctx_destroy(conn_ctx);
             APR_ARRAY_PUSH(m->spare_secondary, conn_rec*) = secondary;
         }
         else {
-            h2_secondary_destroy(secondary);
+            h2_c2_destroy(secondary);
         }
     }
     h2_stream_destroy(stream);
@@ -711,7 +711,7 @@ static conn_rec *s_next_secondary(h2_mplx *m)
                 secondary->aborted = 0;
             }
             else {
-                secondary = h2_secondary_create(m->c, stream->id, m->pool);
+                secondary = h2_c2_create(m->c, stream->id, m->pool);
             }
             stream->connection = secondary;
 
@@ -723,7 +723,7 @@ static conn_rec *s_next_secondary(h2_mplx *m)
                                     m_stream_input_consumed, stream);
             }
 
-            conn_ctx = h2_conn_ctx_create_secondary(secondary, stream);
+            conn_ctx = h2_conn_ctx_create_for_c2(secondary, stream);
             conn_ctx->beam_in = stream->input;
             apr_table_setn(secondary->notes, H2_TASK_ID_NOTE, conn_ctx->id);
 

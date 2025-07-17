@@ -17,25 +17,15 @@
 #ifndef __mod_h2__h2_session__
 #define __mod_h2__h2_session__
 
-#include "h2_conn_io.h"
+#include "h2_c1_io.h"
 
 /**
  * A HTTP/2 connection, a session with a specific client.
  * 
  * h2_session sits on top of a httpd conn_rec* instance and takes complete
  * control of the connection data. It receives protocol frames from the
- * client. For new HTTP/2 streams it creates h2_task(s) that are sent
- * via callback to a dispatcher (see h2_conn.c).
- * h2_session keeps h2_io's for each ongoing stream which buffer the
- * payload for that stream.
- *
- * New incoming HEADER frames are converted into a h2_stream+h2_task instance
- * that both represent a HTTP/2 stream, but may have separate lifetimes. This
- * allows h2_task to be scheduled in other threads without semaphores
- * all over the place. It allows task memory to be freed independent of
- * session lifetime and sessions may close down while tasks are still running.
- *
- *
+ * client. For new HTTP/2 streams it creates secondary connections
+ * to execute the requests in h2 workers.
  */
 
 #include "h2.h"
@@ -44,7 +34,7 @@ struct apr_thread_mutext_t;
 struct apr_thread_cond_t;
 struct h2_ctx;
 struct h2_config;
-struct h2_filter_cin;
+struct h2_c1_filter_ctx_t;
 struct h2_ihash_t;
 struct h2_mplx;
 struct h2_priority;
@@ -53,7 +43,6 @@ struct h2_push_diary;
 struct h2_session;
 struct h2_stream;
 struct h2_stream_monitor;
-struct h2_task;
 struct h2_workers;
 
 struct nghttp2_session;
@@ -83,8 +72,8 @@ typedef struct h2_session {
     apr_pool_t *pool;               /* pool to use in session */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
     struct h2_workers *workers;     /* for executing stream tasks */
-    struct h2_filter_cin *cin;      /* connection input filter context */
-    h2_conn_io io;                  /* io on httpd conn filters */
+    struct h2_c1_filter_ctx_t *cin;      /* connection input filter context */
+    h2_c1_io io;                  /* io on httpd conn filters */
     int padding_max;                /* max number of padding bytes */
     int padding_always;             /* padding has precedence over I/O optimizations */
     struct nghttp2_session *ngh2;   /* the nghttp2 session (internal use) */
@@ -153,7 +142,7 @@ apr_status_t h2_session_create(h2_session **psession,
                                struct h2_workers *workers);
 
 void h2_session_event(h2_session *session, h2_session_event_t ev, 
-                             int err, const char *msg);
+                      int err, const char *msg);
 
 /**
  * Process the given HTTP/2 session until it is ended or a fatal
@@ -175,11 +164,6 @@ apr_status_t h2_session_pre_close(h2_session *session, int async);
  * @param reason  the apache status that caused the abort
  */
 void h2_session_abort(h2_session *session, apr_status_t reason);
-
-/**
- * Close and deallocate the given session.
- */
-void h2_session_close(h2_session *session);
 
 /**
  * Returns if client settings have push enabled.

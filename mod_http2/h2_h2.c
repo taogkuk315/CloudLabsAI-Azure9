@@ -36,9 +36,9 @@
 #include "h2_stream.h"
 #include "h2_c2.h"
 #include "h2_config.h"
-#include "h2_ctx.h"
-#include "h2_conn.h"
-#include "h2_filter.h"
+#include "h2_conn_ctx.h"
+#include "h2_c1.h"
+#include "h2_c1_status.h"
 #include "h2_request.h"
 #include "h2_headers.h"
 #include "h2_session.h"
@@ -589,8 +589,8 @@ static int h2_h2_process_main_conn(conn_rec* c)
             if ((peeklen >= 24) && !memcmp(H2_MAGIC_TOKEN, peek, 24)) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                               "h2_h2, direct mode detected");
-                ctx = h2_conn_ctx_create(c);
-                ctx->protocol = ap_ssl_conn_is_ssl(c)? "h2" : "h2c";
+                ctx = h2_conn_ctx_create_for_c1(c, c->base_server,
+                                                ap_ssl_conn_is_ssl(c)? "h2" : "h2c");
             }
             else if (APLOGctrace2(c)) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
@@ -605,14 +605,14 @@ static int h2_h2_process_main_conn(conn_rec* c)
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "process_conn");
     if (!ctx->session) {
-        status = h2_conn_setup(c, NULL, ctx->server? ctx->server : c->base_server);
+        status = h2_c1_setup(c, NULL, ctx->server? ctx->server : c->base_server);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, c, "conn_setup");
         if (status != APR_SUCCESS) {
             h2_conn_ctx_detach(c);
             return !OK;
         }
     }
-    h2_conn_run(c);
+    h2_c1_run(c);
     return OK;
 
 declined:
@@ -634,7 +634,7 @@ static int h2_h2_pre_close_conn(conn_rec *c)
         /* If the session has been closed correctly already, we will not
          * find a h2_conn_ctx_there. The presence indicates that the session
          * is still ongoing. */
-        return h2_conn_pre_close(ctx, c);
+        return h2_c1_pre_close(ctx, c);
     }
     return DECLINED;
 }
@@ -676,7 +676,7 @@ static int h2_h2_post_read_req(request_rec *r)
         if (conn_ctx && !conn_ctx->filters_set) {
             ap_filter_t *f;
             ap_log_rerror(APLOG_MARK, APLOG_TRACE3, 0, r, 
-                          "h2_task(%s): adding request filters", conn_ctx->id);
+                          "h2_c2(%s): adding request filters", conn_ctx->id);
 
             /* setup the correct filters to process the request for h2 */
             ap_add_input_filter("H2_REQUEST", NULL, r, r->connection);

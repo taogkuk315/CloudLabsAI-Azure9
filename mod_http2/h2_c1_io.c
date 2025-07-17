@@ -29,7 +29,7 @@
 #include "h2_private.h"
 #include "h2_bucket_eos.h"
 #include "h2_config.h"
-#include "h2_conn_io.h"
+#include "h2_c1_io.h"
 #include "h2_h2.h"
 #include "h2_session.h"
 #include "h2_util.h"
@@ -56,7 +56,7 @@
 
 #define BUF_REMAIN            ((apr_size_t)(bmax-off))
 
-static void h2_conn_io_bb_log(conn_rec *c, int stream_id, int level, 
+static void h2_c1_io_bb_log(conn_rec *c, int stream_id, int level,
                               const char *tag, apr_bucket_brigade *bb)
 {
     char buffer[16 * 1024];
@@ -131,7 +131,7 @@ static void h2_conn_io_bb_log(conn_rec *c, int stream_id, int level,
 
 }
 
-apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, server_rec *s)
+apr_status_t h2_c1_io_init(h2_c1_io *io, conn_rec *c, server_rec *s)
 {
     io->c              = c;
     io->output         = apr_brigade_create(c->pool, c->bucket_alloc);
@@ -157,7 +157,7 @@ apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, server_rec *s)
 
     if (APLOGctrace1(c)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE4, 0, io->c,
-                      "h2_conn_io(%ld): init, buffering=%d, warmup_size=%ld, "
+                      "h2_c1_io(%ld): init, buffering=%d, warmup_size=%ld, "
                       "cd_secs=%f", io->c->id, io->buffer_output, 
                       (long)io->warmup_size,
                       ((double)io->cooldown_usecs/APR_USEC_PER_SEC));
@@ -166,7 +166,7 @@ apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, server_rec *s)
     return APR_SUCCESS;
 }
 
-static void append_scratch(h2_conn_io *io) 
+static void append_scratch(h2_c1_io *io)
 {
     if (io->scratch && io->slen > 0) {
         apr_bucket *b = apr_bucket_heap_create(io->scratch, io->slen,
@@ -178,7 +178,7 @@ static void append_scratch(h2_conn_io *io)
     }
 }
 
-static apr_size_t assure_scratch_space(h2_conn_io *io) {
+static apr_size_t assure_scratch_space(h2_c1_io *io) {
     apr_size_t remain = io->ssize - io->slen; 
     if (io->scratch && remain == 0) {
         append_scratch(io);
@@ -194,7 +194,7 @@ static apr_size_t assure_scratch_space(h2_conn_io *io) {
     return remain;
 }
     
-static apr_status_t read_to_scratch(h2_conn_io *io, apr_bucket *b)
+static apr_status_t read_to_scratch(h2_c1_io *io, apr_bucket *b)
 {
     apr_status_t status;
     const char *data;
@@ -235,7 +235,7 @@ static apr_status_t read_to_scratch(h2_conn_io *io, apr_bucket *b)
     return status;
 }
 
-static void check_write_size(h2_conn_io *io) 
+static void check_write_size(h2_c1_io *io)
 {
     if (io->write_size > WRITE_SIZE_INITIAL 
         && (io->cooldown_usecs > 0)
@@ -251,7 +251,7 @@ static void check_write_size(h2_conn_io *io)
     }
 }
 
-static apr_status_t pass_output(h2_conn_io *io, int flush)
+static apr_status_t pass_output(h2_c1_io *io, int flush)
 {
     conn_rec *c = io->c;
     apr_bucket_brigade *bb = io->output;
@@ -271,7 +271,7 @@ static apr_status_t pass_output(h2_conn_io *io, int flush)
     
     ap_update_child_status(c->sbh, SERVER_BUSY_WRITE, NULL);
     apr_brigade_length(bb, 0, &bblen);
-    h2_conn_io_bb_log(c, 0, APLOG_TRACE2, "out", bb);
+    h2_c1_io_bb_log(c, 0, APLOG_TRACE2, "out", bb);
     
     status = ap_pass_brigade(c->output_filters, bb);
     if (status == APR_SUCCESS) {
@@ -285,13 +285,13 @@ static apr_status_t pass_output(h2_conn_io *io, int flush)
 
     if (status != APR_SUCCESS) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c, APLOGNO(03044)
-                      "h2_conn_io(%ld): pass_out brigade %ld bytes",
+                      "h2_c1_io(%ld): pass_out brigade %ld bytes",
                       c->id, (long)bblen);
     }
     return status;
 }
 
-int h2_conn_io_needs_flush(h2_conn_io *io)
+int h2_c1_io_needs_flush(h2_c1_io *io)
 {
     if (!io->is_flushed) {
         apr_off_t len = h2_brigade_mem_size(io->output);
@@ -306,7 +306,7 @@ int h2_conn_io_needs_flush(h2_conn_io *io)
     return 0;
 }
 
-apr_status_t h2_conn_io_flush(h2_conn_io *io)
+apr_status_t h2_c1_io_flush(h2_c1_io *io)
 {
     apr_status_t status;
     status = pass_output(io, 1);
@@ -314,7 +314,7 @@ apr_status_t h2_conn_io_flush(h2_conn_io *io)
     return status;
 }
 
-apr_status_t h2_conn_io_write(h2_conn_io *io, const char *data, size_t length)
+apr_status_t h2_c1_io_write(h2_c1_io *io, const char *data, size_t length)
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t remain;
@@ -345,7 +345,7 @@ apr_status_t h2_conn_io_write(h2_conn_io *io, const char *data, size_t length)
     return status;
 }
 
-apr_status_t h2_conn_io_pass(h2_conn_io *io, apr_bucket_brigade *bb)
+apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb)
 {
     apr_bucket *b;
     apr_status_t status = APR_SUCCESS;
@@ -390,6 +390,169 @@ apr_status_t h2_conn_io_pass(h2_conn_io *io, apr_bucket_brigade *bb)
             APR_BUCKET_REMOVE(b);
             APR_BRIGADE_INSERT_TAIL(io->output, b);
         }
+    }
+    return status;
+}
+
+struct h2_c1_filter_ctx_t {
+    apr_pool_t *pool;
+    apr_socket_t *socket;
+    apr_interval_time_t timeout;
+    apr_bucket_brigade *bb;
+    struct h2_session *session;
+    apr_bucket *cur;
+};
+
+static apr_status_t recv_RAW_DATA(conn_rec *c, h2_c1_filter_ctx_t *cin,
+                                  apr_bucket *b, apr_read_type_e block)
+{
+    h2_session *session = cin->session;
+    apr_status_t status = APR_SUCCESS;
+    apr_size_t len;
+    const char *data;
+    ssize_t n;
+
+    (void)c;
+    status = apr_bucket_read(b, &data, &len, block);
+
+    while (status == APR_SUCCESS && len > 0) {
+        n = nghttp2_session_mem_recv(session->ngh2, (const uint8_t *)data, len);
+
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                      H2_SSSN_MSG(session, "fed %ld bytes to nghttp2, %ld read"),
+                      (long)len, (long)n);
+        if (n < 0) {
+            if (nghttp2_is_fatal((int)n)) {
+                h2_session_event(session, H2_SESSION_EV_PROTO_ERROR,
+                                 (int)n, nghttp2_strerror((int)n));
+                status = APR_EGENERAL;
+            }
+        }
+        else {
+            session->io.bytes_read += n;
+            if ((apr_ssize_t)len <= n) {
+                break;
+            }
+            len -= (apr_size_t)n;
+            data += n;
+        }
+    }
+
+    return status;
+}
+
+static apr_status_t recv_RAW_brigade(conn_rec *c, h2_c1_filter_ctx_t *cin,
+                                     apr_bucket_brigade *bb,
+                                     apr_read_type_e block)
+{
+    apr_status_t status = APR_SUCCESS;
+    apr_bucket* b;
+    int consumed = 0;
+
+    h2_util_bb_log(c, c->id, APLOG_TRACE2, "RAW_in", bb);
+    while (status == APR_SUCCESS && !APR_BRIGADE_EMPTY(bb)) {
+        b = APR_BRIGADE_FIRST(bb);
+
+        if (APR_BUCKET_IS_METADATA(b)) {
+            /* nop */
+        }
+        else {
+            status = recv_RAW_DATA(c, cin, b, block);
+        }
+        consumed = 1;
+        apr_bucket_delete(b);
+    }
+
+    if (!consumed && status == APR_SUCCESS && block == APR_NONBLOCK_READ) {
+        return APR_EAGAIN;
+    }
+    return status;
+}
+
+h2_c1_filter_ctx_t *h2_c1_filter_ctx_t_create(h2_session *session)
+{
+    h2_c1_filter_ctx_t *cin;
+
+    cin = apr_pcalloc(session->pool, sizeof(*cin));
+    if (!cin) {
+        return NULL;
+    }
+    cin->session = session;
+    return cin;
+}
+
+void h2_c1_filter_timeout_set(h2_c1_filter_ctx_t *cin, apr_interval_time_t timeout)
+{
+    cin->timeout = timeout;
+}
+
+apr_status_t h2_c1_filter_input(ap_filter_t* f,
+                                  apr_bucket_brigade* brigade,
+                                  ap_input_mode_t mode,
+                                  apr_read_type_e block,
+                                  apr_off_t readbytes)
+{
+    h2_c1_filter_ctx_t *cin = f->ctx;
+    apr_status_t status = APR_SUCCESS;
+    apr_interval_time_t saved_timeout = -1;
+    const int trace1 = APLOGctrace1(f->c);
+
+    if (trace1) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
+                      "h2_session(%ld): read, %s, mode=%d, readbytes=%ld",
+                      (long)f->c->id, (block == APR_BLOCK_READ)?
+                      "BLOCK_READ" : "NONBLOCK_READ", mode, (long)readbytes);
+    }
+
+    if (mode == AP_MODE_INIT || mode == AP_MODE_SPECULATIVE) {
+        return ap_get_brigade(f->next, brigade, mode, block, readbytes);
+    }
+
+    if (mode != AP_MODE_READBYTES) {
+        return (block == APR_BLOCK_READ)? APR_SUCCESS : APR_EAGAIN;
+    }
+
+    if (!cin->bb) {
+        cin->bb = apr_brigade_create(cin->session->pool, f->c->bucket_alloc);
+    }
+
+    if (!cin->socket) {
+        cin->socket = ap_get_conn_socket(f->c);
+    }
+
+    if (APR_BRIGADE_EMPTY(cin->bb)) {
+        /* We only do a blocking read when we have no streams to process. So,
+         * in httpd scoreboard lingo, we are in a KEEPALIVE connection state.
+         */
+        if (block == APR_BLOCK_READ) {
+            if (cin->timeout > 0) {
+                apr_socket_timeout_get(cin->socket, &saved_timeout);
+                apr_socket_timeout_set(cin->socket, cin->timeout);
+            }
+        }
+        status = ap_get_brigade(f->next, cin->bb, AP_MODE_READBYTES,
+                                block, readbytes);
+        if (saved_timeout != -1) {
+            apr_socket_timeout_set(cin->socket, saved_timeout);
+        }
+    }
+
+    switch (status) {
+        case APR_SUCCESS:
+            status = recv_RAW_brigade(f->c, cin, cin->bb, block);
+            break;
+        case APR_EOF:
+        case APR_EAGAIN:
+        case APR_TIMEUP:
+            if (trace1) {
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
+                              "h2_session(%ld): read", f->c->id);
+            }
+            break;
+        default:
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, f->c, APLOGNO(03046)
+                          "h2_session(%ld): error reading", f->c->id);
+            break;
     }
     return status;
 }

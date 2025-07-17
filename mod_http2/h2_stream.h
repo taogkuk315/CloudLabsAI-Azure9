@@ -39,7 +39,6 @@ struct h2_priority;
 struct h2_request;
 struct h2_headers;
 struct h2_session;
-struct h2_task;
 struct h2_bucket_beam;
 
 typedef struct h2_stream h2_stream;

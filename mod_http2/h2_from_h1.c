@@ -30,7 +30,7 @@
 #include <util_time.h>
 
 #include "h2_private.h"
-#include "h2_ctx.h"
+#include "h2_conn_ctx.h"
 #include "h2_headers.h"
 #include "h2_from_h1.h"
 #include "h2_c2.h"
@@ -312,7 +312,7 @@ static apr_status_t get_line(h2_response_parser *parser, apr_bucket_brigade *bb,
                 line[len] = '\0';
                 apr_brigade_cleanup(parser->tmp);
                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, parser->c,
-                              "h2_task(%s): read response line: %s", 
+                              "h2_c2(%s): read response line: %s",
                               conn_ctx->id, line);
             }
             else {
@@ -333,13 +333,13 @@ static apr_status_t get_line(h2_response_parser *parser, apr_bucket_brigade *bb,
                 status = apr_brigade_length(parser->tmp, 0, &brigade_length);
                 if ((status != APR_SUCCESS) || (brigade_length > len)) {
                     ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, parser->c, APLOGNO(10257)
-                                  "h2_task(%s): read response, line too long",
+                                  "h2_c2(%s): read response, line too long",
                                   conn_ctx->id);
                     return APR_ENOSPC;
                 }
                 /* this does not look like a complete line yet */
                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, parser->c,
-                              "h2_task(%s): read response, incomplete line: %s", 
+                              "h2_c2(%s): read response, incomplete line: %s",
                               conn_ctx->id, line);
                 if (!parser->saveto) {
                     parser->saveto = apr_brigade_create(conn_ctx->pool,
@@ -378,7 +378,7 @@ static apr_table_t *make_table(h2_response_parser *parser)
             char *sep = ap_strchr(hline, ':');
             if (!sep) {
                 ap_log_cerror(APLOG_MARK, APLOG_WARNING, APR_EINVAL, parser->c,
-                              APLOGNO(02955) "h2_task(%s): invalid header[%d] '%s'",
+                              APLOGNO(02955) "h2_c2(%s): invalid header[%d] '%s'",
                               conn_ctx->id, i, (char*)hline);
                 /* not valid format, abort */
                 return NULL;
@@ -424,7 +424,7 @@ static apr_status_t pass_response(h2_conn_ctx_t *conn_ctx, ap_filter_t *f,
         conn_ctx->has_final_response = 1;
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, parser->c,
-                  APLOGNO(03197) "h2_task(%s): passed response %d", 
+                  APLOGNO(03197) "h2_c2(%s): passed response %d",
                   conn_ctx->id, response->status);
     return status;
 }
@@ -451,7 +451,7 @@ static apr_status_t parse_status(h2_conn_ctx_t *conn_ctx, h2_response_parser *pa
      * waiting for. But if there is other data hanging around before
      * that, this needs to fail. */
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, parser->c, APLOGNO(03467)
-                  "h2_task(%s): unable to parse status line: %s", 
+                  "h2_c2(%s): unable to parse status line: %s",
                   conn_ctx->id, line);
     return APR_EINVAL;
 }
@@ -491,12 +491,12 @@ static apr_status_t parse_response(ap_filter_t *f, apr_bucket_brigade *bb)
                 else if (line[0] == '\0') {
                     /* end of headers, pass response onward */
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                                  "h2_task(%s): end of response", conn_ctx->id);
+                                  "h2_c2(%s): end of response", conn_ctx->id);
                     return pass_response(conn_ctx, f, parser);
                 }
                 else {
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                                  "h2_task(%s): response header %s", conn_ctx->id, line);
+                                  "h2_c2(%s): response header %s", conn_ctx->id, line);
                     status = parse_header(parser, line);
                 }
                 break;
@@ -519,7 +519,7 @@ apr_status_t h2_from_h1_parse_response(ap_filter_t* f, apr_bucket_brigade* bb)
     while (bb && !f->c->aborted && !conn_ctx->has_final_response) {
         rv = parse_response(f, bb);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, f->c,
-                      "h2_task(%s): parsed response", conn_ctx->id);
+                      "h2_c2(%s): parsed response", conn_ctx->id);
         if (APR_BRIGADE_EMPTY(bb) || APR_SUCCESS != rv) {
             return rv;
         }
@@ -537,7 +537,7 @@ apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
     h2_headers *response = NULL;
     int headers_passing = 0;
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                  "h2_task(%s): output_filter called", conn_ctx->id);
+                  "h2_c2(%s): output_filter called", conn_ctx->id);
     
     if (!conn_ctx->has_final_response && !f->c->aborted) {
         /* check, if we need to send the response now. Until we actually
@@ -555,7 +555,7 @@ apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
                  */
                 ap_remove_output_filter(f);
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, f->c,
-                              "h2_task(%s): eoc bucket passed", conn_ctx->id);
+                              "h2_c2(%s): eoc bucket passed", conn_ctx->id);
                 return ap_pass_brigade(f->next, bb);
             }
             else if (H2_BUCKET_IS_HEADERS(b)) {
@@ -570,7 +570,7 @@ apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
         if (eb) {
             int st = eb->status;
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c, APLOGNO(03047)
-                          "h2_task(%s): err bucket status=%d", conn_ctx->id, st);
+                          "h2_c2(%s): err bucket status=%d", conn_ctx->id, st);
             /* throw everything away and replace it with the error response
              * generated by ap_die() */
             apr_brigade_cleanup(bb);
@@ -584,7 +584,7 @@ apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
             response = create_response(conn_ctx, r);
             if (response == NULL) {
                 ap_log_cerror(APLOG_MARK, APLOG_NOTICE, 0, f->c, APLOGNO(03048)
-                              "h2_task(%s): unable to create response", conn_ctx->id);
+                              "h2_c2(%s): unable to create response", conn_ctx->id);
                 return APR_ENOMEM;
             }
             
@@ -602,7 +602,7 @@ apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
     
     if (r->header_only || AP_STATUS_IS_HEADER_ONLY(r->status)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                      "h2_task(%s): headers only, cleanup output brigade", 
+                      "h2_c2(%s): headers only, cleanup output brigade",
                       conn_ctx->id);
         b = body_bucket? body_bucket : APR_BRIGADE_FIRST(bb);
         while (b != APR_BRIGADE_SENTINEL(bb)) {
@@ -658,7 +658,7 @@ static void make_chunk(conn_rec *c, h2_chunk_filter_t *fctx, apr_bucket_brigade 
     }
     fctx->chunked_total += chunk_len;
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                  "h2_task(%s): added chunk %ld, total %ld", 
+                  "h2_c2(%s): added chunk %ld, total %ld",
                   fctx->id, (long)chunk_len, (long)fctx->chunked_total);
 }
 
@@ -717,7 +717,7 @@ static apr_status_t read_and_chunk(ap_filter_t *f, h2_conn_ctx_t *conn_ctx,
                     
                     ap_assert(headers);
                     ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
-                                  "h2_task(%s): receiving trailers", conn_ctx->id);
+                                  "h2_c2(%s): receiving trailers", conn_ctx->id);
                     tmp = apr_brigade_split_ex(fctx->bbchunk, b, NULL);
                     if (!apr_is_empty_table(headers->headers)) {
                         status = apr_brigade_puts(fctx->bbchunk, NULL, NULL, "0\r\n");
@@ -785,7 +785,7 @@ apr_status_t h2_filter_request_in(ap_filter_t* f,
     }
 
     ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, f->r,
-                  "h2_task(%s): request filter, exp=%d", conn_ctx->id, r->expecting_100);
+                  "h2_c2(%s): request filter, exp=%d", conn_ctx->id, r->expecting_100);
     if (!conn_ctx->request->chunked) {
         status = ap_get_brigade(f->next, bb, mode, block, readbytes);
         /* pipe data through, just take care of trailers */
@@ -796,7 +796,7 @@ apr_status_t h2_filter_request_in(ap_filter_t* f,
                 h2_headers *headers = h2_bucket_headers_get(b);
                 ap_assert(headers);
                 ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
-                              "h2_task(%s): receiving trailers", conn_ctx->id);
+                              "h2_c2(%s): receiving trailers", conn_ctx->id);
                 r->trailers_in = headers->headers;
                 if (conf && conf->merge_trailers == AP_MERGE_TRAILERS_ENABLE) {
                     r->headers_in = apr_table_overlay(r->pool, r->headers_in,
@@ -845,7 +845,7 @@ apr_status_t h2_filter_request_in(ap_filter_t* f,
             apr_brigade_flatten(bb, buffer, &len);
             buffer[len] = 0;
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
-                          "h2_task(%s): getline: %s",
+                          "h2_c2(%s): getline: %s",
                           conn_ctx->id, buffer);
         }
     }
@@ -854,7 +854,7 @@ apr_status_t h2_filter_request_in(ap_filter_t* f,
          * to support it. Seems to work. */
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOTIMPL, f->c,
                       APLOGNO(02942) 
-                      "h2_task, unsupported READ mode %d", mode);
+                      "h2_c2, unsupported READ mode %d", mode);
         status = APR_ENOTIMPL;
     }
     
@@ -882,7 +882,7 @@ apr_status_t h2_filter_trailers_out(ap_filter_t *f, apr_bucket_brigade *bb)
                 apr_table_t *trailers;
                 
                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c, APLOGNO(03049)
-                              "h2_task(%s): sending trailers", conn_ctx->id);
+                              "h2_c2(%s): sending trailers", conn_ctx->id);
                 trailers = apr_table_clone(r->pool, r->trailers_out);
                 headers = h2_headers_rcreate(r, HTTP_OK, trailers, r->pool);
                 e = h2_bucket_headers_create(bb->bucket_alloc, headers);

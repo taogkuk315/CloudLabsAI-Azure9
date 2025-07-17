@@ -31,8 +31,9 @@
 #include "h2_private.h"
 
 #include "h2_config.h"
-#include "h2_ctx.h"
-#include "h2_conn.h"
+#include "h2_conn_ctx.h"
+#include "h2_c1.h"
+#include "h2_c2.h"
 #include "h2_h2.h"
 #include "h2_switch.h"
 
@@ -145,13 +146,12 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
     }
     
     if (found) {
-        h2_conn_ctx_t *ctx = h2_conn_ctx_create(c);
-        
+        h2_conn_ctx_t *ctx;
+
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "switching protocol to '%s'", protocol);
-        ctx->protocol = protocol;
-        ctx->server = s;
-        
+        ctx = h2_conn_ctx_create_for_c1(c, s, protocol);
+
         if (r != NULL) {
             apr_status_t status;
             /* Switching in the middle of a request means that
@@ -163,7 +163,7 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
             ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
             
             /* Ok, start an h2_conn on this one. */
-            status = h2_conn_setup(c, r, s);
+            status = h2_c1_setup(c, r, s);
             
             if (status != APR_SUCCESS) {
                 ap_log_rerror(APLOG_MARK, APLOG_DEBUG, status, r, APLOGNO(03088)
@@ -172,7 +172,7 @@ static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s,
                 return !OK;
             }
             
-            h2_conn_run(c);
+            h2_c1_run(c);
         }
         return OK;
     }

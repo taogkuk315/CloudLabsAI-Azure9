@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_ctx__
-#define __mod_h2__h2_ctx__
+#ifndef __mod_h2__h2_conn_ctx__
+#define __mod_h2__h2_conn_ctx__
 
 struct h2_session;
 struct h2_stream;
 struct h2_mplx;
-struct h2_task;
 struct h2_bucket_beam;
 
 /**
@@ -32,28 +31,28 @@ struct h2_bucket_beam;
  * - those created by ourself to perform work on HTTP/2 streams
  */
 struct h2_conn_ctx_t {
-    const char *id;                 /* our identifier of this connection */
-    apr_pool_t *pool;               /* main: session pool, secondary: task pool */
-    server_rec *server;             /* httpd server selected. */
-    const char *protocol;           /* the protocol negotiated */
-    struct h2_session *session;     /* on main: the session established */
+    const char *id;                 /* c*: our identifier of this connection */
+    server_rec *server;             /* c*: httpd server selected. */
+    apr_pool_t *pool;               /* c1: session pool, c2: request processing pool */
+    const char *protocol;           /* c1: the protocol negotiated */
+    struct h2_session *session;     /* c1: the h2 session established */
+    int stream_id;                  /* c1: 0, c2: stream id processed */
 
-    struct h2_mplx *mplx;           /* on secondary: the multiplexer */
-    int stream_id;                  /* on main: 0, on secondary: stream id */
-    const struct h2_request *request; /* on secondary: the request to process */
+    struct h2_mplx *mplx;           /* c2: the multiplexer */
+    const struct h2_request *request; /* c2: the request to process */
 
-    int filters_set;                 /* protocol filters have been set up */
-    int has_final_response;          /* request has produced a >= 200 response */
-    int registered_at_mplx;          /* output is registered at mplx for polling */
-    int out_unbuffered;              /* output is unbuffered */
+    int filters_set;                 /* c2: protocol filters have been set up */
+    int has_final_response;          /* c2: request has produced a >= 200 response */
+    int registered_at_mplx;          /* c2: output is registered at mplx for polling */
+    int out_unbuffered;              /* c2: output is unbuffered */
 
-    struct h2_bucket_beam *beam_in;
-    struct h2_bucket_beam *beam_out;
-    apr_bucket_brigade *bb_in;
+    struct h2_bucket_beam *beam_in;  /* c2: data in */
+    struct h2_bucket_beam *beam_out; /* c2: data out */
+    apr_bucket_brigade *bb_in;       /* c2: data in holding area */
 
-    volatile int done;               /* processing has finished */
-    apr_time_t started_at;           /* when processing started */
-    apr_time_t done_at;              /* when processing was done */
+    volatile int done;               /* c2: processing has finished */
+    apr_time_t started_at;           /* c2: when processing started */
+    apr_time_t done_at;              /* c2: when processing was done */
 };
 typedef struct h2_conn_ctx_t h2_conn_ctx_t;
 
@@ -68,11 +67,13 @@ typedef struct h2_conn_ctx_t h2_conn_ctx_t;
 /**
  * Create the h2 connection context.
  * @param c the connection to create it at
+ * @param s the server in use
+ * @param protocol the procotol selected
  * @return created h2 context of this connection
  */
-h2_conn_ctx_t *h2_conn_ctx_create(conn_rec *c);
+h2_conn_ctx_t *h2_conn_ctx_create_for_c1(conn_rec *c, server_rec *s, const char *protocol);
 
-h2_conn_ctx_t *h2_conn_ctx_create_secondary(conn_rec *c, struct h2_stream *stream);
+h2_conn_ctx_t *h2_conn_ctx_create_for_c2(conn_rec *c, struct h2_stream *stream);
 
 void h2_conn_ctx_detach(conn_rec *c);
 
@@ -86,4 +87,4 @@ void h2_conn_ctx_destroy(h2_conn_ctx_t *conn_ctx);
  */
 struct h2_session *h2_conn_ctx_get_session(conn_rec *c);
 
-#endif /* defined(__mod_h2__h2_ctx__) */
+#endif /* defined(__mod_h2__h2_conn_ctx__) */

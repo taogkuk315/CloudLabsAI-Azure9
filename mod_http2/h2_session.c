@@ -35,8 +35,8 @@
 #include "h2_bucket_beam.h"
 #include "h2_bucket_eos.h"
 #include "h2_config.h"
-#include "h2_ctx.h"
-#include "h2_filter.h"
+#include "h2_conn_ctx.h"
+#include "h2_c1_status.h"
 #include "h2_h2.h"
 #include "h2_mplx.h"
 #include "h2_push.h"
@@ -191,7 +191,7 @@ static ssize_t send_cb(nghttp2_session *ngh2,
     (void)ngh2;
     (void)flags;
     
-    status = h2_conn_io_write(&session->io, (const char *)data, length);
+    status = h2_c1_io_write(&session->io, (const char *)data, length);
     if (status == APR_SUCCESS) {
         return length;
     }
@@ -472,7 +472,7 @@ static int h2_session_continue_data(h2_session *session) {
     if (h2_mplx_m_has_master_events(session->mplx)) {
         return 0;
     }
-    if (h2_conn_io_needs_flush(&session->io)) {
+    if (h2_c1_io_needs_flush(&session->io)) {
         return 0;
     }
     return 1;
@@ -518,10 +518,10 @@ static int on_send_data_cb(nghttp2_session *ngh2,
                   H2_STRM_MSG(stream, "send_data_cb for %ld bytes"),
                   (long)length);
                   
-    status = h2_conn_io_write(&session->io, (const char *)framehd, H2_FRAME_HDR_LEN);
+    status = h2_c1_io_write(&session->io, (const char *)framehd, H2_FRAME_HDR_LEN);
     if (padlen && status == APR_SUCCESS) {
         --padlen;
-        status = h2_conn_io_write(&session->io, (const char *)&padlen, 1);
+        status = h2_c1_io_write(&session->io, (const char *)&padlen, 1);
     }
     
     if (status != APR_SUCCESS) {
@@ -551,7 +551,7 @@ static int on_send_data_cb(nghttp2_session *ngh2,
         APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
     }
     
-    status = h2_conn_io_pass(&session->io, session->bbtmp);
+    status = h2_c1_io_pass(&session->io, session->bbtmp);
     apr_brigade_cleanup(session->bbtmp);
     
     if (status == APR_SUCCESS) {
@@ -703,7 +703,7 @@ static apr_status_t h2_session_shutdown_notice(h2_session *session)
     session->local.accepting = 0;
     status = nghttp2_session_send(session->ngh2);
     if (status == APR_SUCCESS) {
-        status = h2_conn_io_flush(&session->io);
+        status = h2_c1_io_flush(&session->io);
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 
                   H2_SSSN_LOG(APLOGNO(03457), session, "sent shutdown notice"));
@@ -748,7 +748,7 @@ static apr_status_t h2_session_shutdown(h2_session *session, int error,
                               error, (uint8_t*)msg, msg? strlen(msg):0);
         status = nghttp2_session_send(session->ngh2);
         if (status == APR_SUCCESS) {
-            status = h2_conn_io_flush(&session->io);
+            status = h2_c1_io_flush(&session->io);
         }
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 
                       H2_SSSN_LOG(APLOGNO(03069), session, 
@@ -901,10 +901,10 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     session->mplx = h2_mplx_m_create(c, s, session->pool, workers);
     
     /* connection input filter that feeds the session */
-    session->cin = h2_filter_cin_create(session);
+    session->cin = h2_c1_filter_ctx_t_create(session);
     ap_add_input_filter("H2_IN", session->cin, r, c);
     
-    h2_conn_io_init(&session->io, c, s);
+    h2_c1_io_init(&session->io, c, s);
     session->padding_max = h2_config_sgeti(s, H2_CONF_PADDING_BITS);
     if (session->padding_max) {
         session->padding_max = (0x01 << session->padding_max) - 1; 
@@ -1827,7 +1827,7 @@ static void h2_session_ev_no_io(h2_session *session, int arg, const char *msg)
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                           H2_SSSN_MSG(session, "NO_IO event, %d streams open"), 
                           session->open_streams);
-            h2_conn_io_flush(&session->io);
+            h2_c1_io_flush(&session->io);
             if (session->open_streams > 0) {
                 if (h2_mplx_m_awaits_data(session->mplx)) {
                     /* waiting for at least one stream to produce data */
@@ -1842,7 +1842,7 @@ static void h2_session_ev_no_io(h2_session *session, int arg, const char *msg)
                     transit(session, "no io (flow wait)", H2_SESSION_ST_IDLE);
                     /* Make sure we have flushed all previously written output
                      * so that the client will react. */
-                    if (h2_conn_io_flush(&session->io) != APR_SUCCESS) {
+                    if (h2_c1_io_flush(&session->io) != APR_SUCCESS) {
                         dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
                         return;
                     }
@@ -1948,7 +1948,7 @@ static void ev_stream_closed(h2_session *session, h2_stream *stream)
      * to purge all resources of the stream. */
     b = h2_bucket_eos_create(session->c->bucket_alloc, stream);
     APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
-    h2_conn_io_pass(&session->io, session->bbtmp);
+    h2_c1_io_pass(&session->io, session->bbtmp);
     apr_brigade_cleanup(session->bbtmp);
 }
 
@@ -2167,7 +2167,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                     session->idle_delay = 0;
                 }
 
-                h2_conn_io_flush(&session->io);
+                h2_c1_io_flush(&session->io);
                 if (async && !session->r && (now > session->idle_sync_until)) {
                     if (trace) {
                         ap_log_cerror(APLOG_MARK, APLOG_TRACE3, status, c,
@@ -2219,7 +2219,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                         dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 
                                        H2_ERR_ENHANCE_YOUR_CALM, "less is more");
                     }
-                    h2_filter_cin_timeout_set(session->cin, apr_time_from_sec(1));
+                    h2_c1_filter_timeout_set(session->cin, apr_time_from_sec(1));
                     status = h2_session_read(session, 1);
                     if (status == APR_SUCCESS) {
                         session->have_read = 1;
@@ -2249,7 +2249,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                     ap_update_child_status(session->c->sbh, SERVER_BUSY_WRITE, NULL);
                     status = h2_session_send(session);
                     if (status == APR_SUCCESS) {
-                        status = h2_conn_io_flush(&session->io);
+                        status = h2_c1_io_flush(&session->io);
                     }
                     if (status != APR_SUCCESS) {
                         dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 
@@ -2262,7 +2262,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
             case H2_SESSION_ST_BUSY:
                 if (nghttp2_session_want_read(session->ngh2)) {
                     ap_update_child_status(session->c->sbh, SERVER_BUSY_READ, NULL);
-                    h2_filter_cin_timeout_set(session->cin, session->s->timeout);
+                    h2_c1_filter_timeout_set(session->cin, session->s->timeout);
                     status = h2_session_read(session, 0);
                     if (status == APR_SUCCESS) {
                         session->have_read = 1;
@@ -2288,7 +2288,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                     ap_update_child_status(session->c->sbh, SERVER_BUSY_WRITE, NULL);
                     status = h2_session_send(session);
                     if (status == APR_SUCCESS) {
-                        status = h2_conn_io_flush(&session->io);
+                        status = h2_c1_io_flush(&session->io);
                     }
                     if (status != APR_SUCCESS) {
                         dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 
@@ -2310,7 +2310,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
             case H2_SESSION_ST_WAIT:
                 if (session->wait_us <= 0) {
                     session->wait_us = 10;
-                    if (h2_conn_io_flush(&session->io) != APR_SUCCESS) {
+                    if (h2_c1_io_flush(&session->io) != APR_SUCCESS) {
                         dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
                         break;
                     }

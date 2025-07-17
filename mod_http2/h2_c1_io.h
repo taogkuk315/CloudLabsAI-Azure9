@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_conn_io__
-#define __mod_h2__h2_conn_io__
+#ifndef __mod_h2__h2_c1_io__
+#define __mod_h2__h2_c1_io__
 
 struct h2_config;
 struct h2_session;
@@ -46,31 +46,45 @@ typedef struct {
     char *scratch;
     apr_size_t ssize;
     apr_size_t slen;
-} h2_conn_io;
+} h2_c1_io;
 
-apr_status_t h2_conn_io_init(h2_conn_io *io, conn_rec *c, server_rec *s);
+apr_status_t h2_c1_io_init(h2_c1_io *io, conn_rec *c, server_rec *s);
 
 /**
  * Append data to the buffered output.
  * @param buf the data to append
  * @param length the length of the data to append
  */
-apr_status_t h2_conn_io_write(h2_conn_io *io,
+apr_status_t h2_c1_io_write(h2_c1_io *io,
                          const char *buf,
                          size_t length);
 
-apr_status_t h2_conn_io_pass(h2_conn_io *io, apr_bucket_brigade *bb);
+apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb);
 
 /**
  * Pass any buffered data on to the connection output filters.
  * @param io the connection io
  * @param flush if a flush bucket should be appended to any output
  */
-apr_status_t h2_conn_io_flush(h2_conn_io *io);
+apr_status_t h2_c1_io_flush(h2_c1_io *io);
 
 /**
  * Check if the buffered amount of data needs flushing.
  */
-int h2_conn_io_needs_flush(h2_conn_io *io);
+int h2_c1_io_needs_flush(h2_c1_io *io);
 
-#endif /* defined(__mod_h2__h2_conn_io__) */
+struct h2_session;
+
+typedef struct h2_c1_filter_ctx_t h2_c1_filter_ctx_t;
+
+h2_c1_filter_ctx_t *h2_c1_filter_ctx_t_create(struct h2_session *session);
+
+void h2_c1_filter_timeout_set(h2_c1_filter_ctx_t *fctx, apr_interval_time_t timeout);
+
+apr_status_t h2_c1_filter_input(ap_filter_t* filter,
+                                apr_bucket_brigade* brigade,
+                                ap_input_mode_t mode,
+                                apr_read_type_e block,
+                                apr_off_t readbytes);
+
+#endif /* defined(__mod_h2__h2_c1_io__) */

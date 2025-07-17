@@ -27,8 +27,8 @@
 #include "h2_private.h"
 #include "h2.h"
 #include "h2_config.h"
-#include "h2_conn_io.h"
-#include "h2_ctx.h"
+#include "h2_c1_io.h"
+#include "h2_conn_ctx.h"
 #include "h2_mplx.h"
 #include "h2_push.h"
 #include "h2_c2.h"
@@ -40,168 +40,17 @@
 #include "h2_util.h"
 #include "h2_version.h"
 
-#include "h2_filter.h"
+#include "h2_c1_status.h"
 
-#define UNSET       -1
-#define H2MIN(x,y) ((x) < (y) ? (x) : (y))
 
-static apr_status_t recv_RAW_DATA(conn_rec *c, h2_filter_cin *cin, 
-                                  apr_bucket *b, apr_read_type_e block)
-{
-    h2_session *session = cin->session;
-    apr_status_t status = APR_SUCCESS;
-    apr_size_t len;
-    const char *data;
-    ssize_t n;
-    
-    (void)c;
-    status = apr_bucket_read(b, &data, &len, block);
-    
-    while (status == APR_SUCCESS && len > 0) {
-        n = nghttp2_session_mem_recv(session->ngh2, (const uint8_t *)data, len);
-        
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
-                      H2_SSSN_MSG(session, "fed %ld bytes to nghttp2, %ld read"),
-                      (long)len, (long)n);
-        if (n < 0) {
-            if (nghttp2_is_fatal((int)n)) {
-                h2_session_event(session, H2_SESSION_EV_PROTO_ERROR, 
-                                 (int)n, nghttp2_strerror((int)n));
-                status = APR_EGENERAL;
-            }
-        }
-        else {
-            session->io.bytes_read += n;
-            if ((apr_ssize_t)len <= n) {
-                break;
-            }
-            len -= (apr_size_t)n;
-            data += n;
-        }
-    }
-    
-    return status;
-}
+typedef enum {
+    H2_BUCKET_EV_BEFORE_DESTROY,
+    H2_BUCKET_EV_BEFORE_MASTER_SEND
+} h2_bucket_event;
 
-static apr_status_t recv_RAW_brigade(conn_rec *c, h2_filter_cin *cin, 
-                                     apr_bucket_brigade *bb, 
-                                     apr_read_type_e block)
-{
-    apr_status_t status = APR_SUCCESS;
-    apr_bucket* b;
-    int consumed = 0;
-    
-    h2_util_bb_log(c, c->id, APLOG_TRACE2, "RAW_in", bb);
-    while (status == APR_SUCCESS && !APR_BRIGADE_EMPTY(bb)) {
-        b = APR_BRIGADE_FIRST(bb);
+typedef apr_status_t h2_bucket_event_cb(void *ctx, h2_bucket_event event, apr_bucket *b);
 
-        if (APR_BUCKET_IS_METADATA(b)) {
-            /* nop */
-        }
-        else {
-            status = recv_RAW_DATA(c, cin, b, block);
-        }
-        consumed = 1;
-        apr_bucket_delete(b);
-    }
-    
-    if (!consumed && status == APR_SUCCESS && block == APR_NONBLOCK_READ) {
-        return APR_EAGAIN;
-    }
-    return status;
-}
-
-h2_filter_cin *h2_filter_cin_create(h2_session *session)
-{
-    h2_filter_cin *cin;
-    
-    cin = apr_pcalloc(session->pool, sizeof(*cin));
-    if (!cin) {
-        return NULL;
-    }
-    cin->session = session;
-    return cin;
-}
-
-void h2_filter_cin_timeout_set(h2_filter_cin *cin, apr_interval_time_t timeout)
-{
-    cin->timeout = timeout;
-}
-
-apr_status_t h2_filter_core_input(ap_filter_t* f,
-                                  apr_bucket_brigade* brigade,
-                                  ap_input_mode_t mode,
-                                  apr_read_type_e block,
-                                  apr_off_t readbytes) 
-{
-    h2_filter_cin *cin = f->ctx;
-    apr_status_t status = APR_SUCCESS;
-    apr_interval_time_t saved_timeout = UNSET;
-    const int trace1 = APLOGctrace1(f->c);
-    
-    if (trace1) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                      "h2_session(%ld): read, %s, mode=%d, readbytes=%ld", 
-                      (long)f->c->id, (block == APR_BLOCK_READ)? 
-                      "BLOCK_READ" : "NONBLOCK_READ", mode, (long)readbytes);
-    }
-    
-    if (mode == AP_MODE_INIT || mode == AP_MODE_SPECULATIVE) {
-        return ap_get_brigade(f->next, brigade, mode, block, readbytes);
-    }
-    
-    if (mode != AP_MODE_READBYTES) {
-        return (block == APR_BLOCK_READ)? APR_SUCCESS : APR_EAGAIN;
-    }
-    
-    if (!cin->bb) {
-        cin->bb = apr_brigade_create(cin->session->pool, f->c->bucket_alloc);
-    }
-
-    if (!cin->socket) {
-        cin->socket = ap_get_conn_socket(f->c);
-    }
-    
-    if (APR_BRIGADE_EMPTY(cin->bb)) {
-        /* We only do a blocking read when we have no streams to process. So,
-         * in httpd scoreboard lingo, we are in a KEEPALIVE connection state.
-         */
-        if (block == APR_BLOCK_READ) {
-            if (cin->timeout > 0) {
-                apr_socket_timeout_get(cin->socket, &saved_timeout);
-                apr_socket_timeout_set(cin->socket, cin->timeout);
-            }
-        }
-        status = ap_get_brigade(f->next, cin->bb, AP_MODE_READBYTES,
-                                block, readbytes);
-        if (saved_timeout != UNSET) {
-            apr_socket_timeout_set(cin->socket, saved_timeout);
-        }
-    }
-    
-    switch (status) {
-        case APR_SUCCESS:
-            status = recv_RAW_brigade(f->c, cin, cin->bb, block);
-            break;
-        case APR_EOF:
-        case APR_EAGAIN:
-        case APR_TIMEUP:
-            if (trace1) {
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
-                              "h2_session(%ld): read", f->c->id);
-            }
-            break;
-        default:
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, f->c, APLOGNO(03046)
-                          "h2_session(%ld): error reading", f->c->id);
-            break;
-    }
-    return status;
-}
-
-/*******************************************************************************
- * http2 connection status handler + stream out source
- ******************************************************************************/
+#define H2_BUCKET_IS_OBSERVER(e)     (e->type == &h2_bucket_type_observer)
 
 typedef struct {
     apr_bucket_refcount refcount;
@@ -209,6 +58,19 @@ typedef struct {
     void *ctx;
 } h2_bucket_observer;
  
+static void bucket_destroy(void *data);
+static apr_status_t bucket_read(apr_bucket *b, const char **str,
+                                apr_size_t *len, apr_read_type_e block);
+
+static const apr_bucket_type_t h2_bucket_type_observer = {
+    "H2OBS", 5, APR_BUCKET_METADATA,
+    bucket_destroy,
+    bucket_read,
+    apr_bucket_setaside_noop,
+    apr_bucket_split_notimpl,
+    apr_bucket_shared_copy
+};
+
 static apr_status_t bucket_read(apr_bucket *b, const char **str,
                                 apr_size_t *len, apr_read_type_e block)
 {
@@ -230,8 +92,8 @@ static void bucket_destroy(void *data)
     }
 }
 
-apr_bucket * h2_bucket_observer_make(apr_bucket *b, h2_bucket_event_cb *cb,
-                                 void *ctx)
+static apr_bucket * h2_bucket_observer_make(
+    apr_bucket *b, h2_bucket_event_cb *cb, void *ctx)
 {
     h2_bucket_observer *br;
 
@@ -244,8 +106,8 @@ apr_bucket * h2_bucket_observer_make(apr_bucket *b, h2_bucket_event_cb *cb,
     return b;
 } 
 
-apr_bucket * h2_bucket_observer_create(apr_bucket_alloc_t *list, 
-                                       h2_bucket_event_cb *cb, void *ctx)
+static apr_bucket * h2_bucket_observer_create(apr_bucket_alloc_t *list,
+                                              h2_bucket_event_cb *cb, void *ctx)
 {
     apr_bucket *b = apr_bucket_alloc(sizeof(*b), list);
 
@@ -256,7 +118,7 @@ apr_bucket * h2_bucket_observer_create(apr_bucket_alloc_t *list,
     return b;
 }
                                        
-apr_status_t h2_bucket_observer_fire(apr_bucket *b, h2_bucket_event event)
+static apr_status_t h2_bucket_observer_fire(apr_bucket *b, h2_bucket_event event)
 {
     if (H2_BUCKET_IS_OBSERVER(b)) {
         h2_bucket_observer *l = (h2_bucket_observer *)b->data; 
@@ -264,15 +126,6 @@ apr_status_t h2_bucket_observer_fire(apr_bucket *b, h2_bucket_event event)
     }
     return APR_EINVAL;
 }
-
-const apr_bucket_type_t h2_bucket_type_observer = {
-    "H2OBS", 5, APR_BUCKET_METADATA,
-    bucket_destroy,
-    bucket_read,
-    apr_bucket_setaside_noop,
-    apr_bucket_split_notimpl,
-    apr_bucket_shared_copy
-};
 
 apr_bucket *h2_bucket_observer_beam(struct h2_bucket_beam *beam,
                                     apr_bucket_brigade *dest,
@@ -542,7 +395,7 @@ static apr_status_t discard_body(request_rec *r, apr_off_t maxlen)
     return APR_SUCCESS;
 }
 
-int h2_filter_h2_status_handler(request_rec *r)
+int h2_c1_status_handler(request_rec *r)
 {
     conn_rec *c = r->connection;
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);

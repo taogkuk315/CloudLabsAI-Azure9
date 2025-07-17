@@ -27,7 +27,7 @@
 #include "h2_bucket_beam.h"
 #include "h2_c2.h"
 #include "h2_stream.h"
-#include "h2_ctx.h"
+#include "h2_conn_ctx.h"
 
 
 void h2_conn_ctx_detach(conn_rec *c)
@@ -35,7 +35,7 @@ void h2_conn_ctx_detach(conn_rec *c)
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
 
     if (conn_ctx && conn_ctx->beam_out) {
-        h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "task_destroy");
+        h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "c2_destroy");
         h2_beam_destroy(conn_ctx->beam_out);
         conn_ctx->beam_out = NULL;
     }
@@ -58,24 +58,27 @@ void h2_conn_ctx_destroy(h2_conn_ctx_t *conn_ctx)
     apr_pool_destroy(conn_ctx->pool);
 }
 
-h2_conn_ctx_t *h2_conn_ctx_create(conn_rec *c)
+h2_conn_ctx_t *h2_conn_ctx_create_for_c1(conn_rec *c, server_rec *s, const char *protocol)
 {
-    return ctx_create(c->pool, c, apr_psprintf(c->pool, "%ld", c->id));
+    h2_conn_ctx_t *ctx;
+    ctx = ctx_create(c->pool, c, apr_psprintf(c->pool, "%ld", c->id));
+    ctx->server = s;
+    ctx->protocol = apr_pstrdup(c->pool, protocol);
+    return ctx;
 }
 
-h2_conn_ctx_t *h2_conn_ctx_create_secondary(conn_rec *c, struct h2_stream *stream)
+h2_conn_ctx_t *h2_conn_ctx_create_for_c2(conn_rec *c, struct h2_stream *stream)
 {
     const char *id;
     h2_conn_ctx_t *ctx;
     apr_pool_t *pool;
 
-    /* there is sth fishy going on in some mpms that change the id of
-     * a connection when they process it in another thread. stick to
-     * the id the session was initialized with. */
+    ap_assert(c->master);
     apr_pool_create(&pool, c->pool);
     apr_pool_tag(pool, "h2_secondary");
     id = apr_psprintf(pool, "%ld-%d", stream->session->id, stream->id);
     ctx = ctx_create(pool, c, id);
+    ctx->server = c->master->base_server; /* will be overridden once request_rec exists */
     ctx->mplx = stream->session->mplx;
     ctx->stream_id = stream->id;
     ctx->request = stream->request;

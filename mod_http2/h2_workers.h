@@ -17,16 +17,15 @@
 #ifndef __mod_h2__h2_workers__
 #define __mod_h2__h2_workers__
 
-/* Thread pool specific to executing h2_tasks. Has a minimum and maximum 
- * number of workers it creates. Starts with minimum workers and adds
- * some on load, reduces the number again when idle.
- *
+/* Thread pool specific to executing secondary connections.
+ * Has a minimum and maximum number of workers it creates.
+ * Starts with minimum workers and adds some on load,
+ * reduces the number again when idle.
  */
 struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 struct h2_mplx;
 struct h2_request;
-struct h2_task;
 struct h2_fifo;
 
 struct h2_slot;

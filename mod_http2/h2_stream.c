@@ -29,7 +29,7 @@
 #include "h2_private.h"
 #include "h2.h"
 #include "h2_bucket_beam.h"
-#include "h2_conn.h"
+#include "h2_c1.h"
 #include "h2_config.h"
 #include "h2_h2.h"
 #include "h2_mplx.h"
@@ -39,7 +39,7 @@
 #include "h2_session.h"
 #include "h2_stream.h"
 #include "h2_c2.h"
-#include "h2_ctx.h"
+#include "h2_conn_ctx.h"
 #include "h2_c2.h"
 #include "h2_util.h"
 

@@ -14,29 +14,35 @@
  * limitations under the License.
  */
 
-#ifndef __mod_h2__h2_task__
-#define __mod_h2__h2_task__
+#ifndef __mod_h2__h2_c2__
+#define __mod_h2__h2_c2__
 
 #include <http_core.h>
 
-/**
- * A h2_task fakes a HTTP/1.1 request from the data in a HTTP/2 stream 
- * (HEADER+CONT.+DATA) the module receives.
- *
- * In order to answer a HTTP/2 stream, we want all Apache httpd infrastructure
- * to be involved as usual, as if this stream can as a separate HTTP/1.1
- * request. The basic trickery to do so was derived from google's mod_spdy
- * source. Basically, we fake a new conn_rec object, even with its own
- * socket and give it to ap_process_connection().
- *
- * Since h2_task instances are executed in separate threads, we may have
- * different lifetimes than our h2_stream or h2_session instances. Basically,
- * we would like to be as standalone as possible.
- *
- * Finally, to keep certain connection level filters, such as ourselves and
- * especially mod_ssl ones, from messing with our data, we need a filter
- * of our own to disable those.
+typedef enum {
+    H2_MPM_UNKNOWN,
+    H2_MPM_WORKER,
+    H2_MPM_EVENT,
+    H2_MPM_PREFORK,
+    H2_MPM_MOTORZ,
+    H2_MPM_SIMPLE,
+    H2_MPM_NETWARE,
+    H2_MPM_WINNT,
+} h2_mpm_type_t;
+
+/* Returns the type of MPM module detected */
+h2_mpm_type_t h2_conn_mpm_type(void);
+const char *h2_conn_mpm_name(void);
+int h2_mpm_supported(void);
+
+/* Initialize this child process for h2 secondary connection work,
+ * to be called once during child init before multi processing
+ * starts.
  */
+apr_status_t h2_c2_child_init(apr_pool_t *pool, server_rec *s);
+
+conn_rec *h2_c2_create(conn_rec *c1, int sec_id, apr_pool_t *parent);
+void h2_c2_destroy(conn_rec *c2);
 
 /**
  * Process a secondary connection for a HTTP/2 stream request.
@@ -52,4 +58,4 @@ apr_status_t h2_c2_init(apr_pool_t *pool, server_rec *s);
 extern APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_in) *h2_c2_logio_add_bytes_in;
 extern APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_out) *h2_c2_logio_add_bytes_out;
 
-#endif /* defined(__mod_h2__h2_task__) */
+#endif /* defined(__mod_h2__h2_c2__) */
