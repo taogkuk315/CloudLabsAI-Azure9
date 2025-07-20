@@ -35,7 +35,7 @@
 #include "h2_session.h"
 #include "h2_config.h"
 #include "h2_conn_ctx.h"
-#include "h2_h2.h"
+#include "h2_protocol.h"
 #include "h2_mplx.h"
 #include "h2_push.h"
 #include "h2_request.h"
@@ -156,7 +156,7 @@ static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
                      h2_conn_mpm_name());
     }
     
-    status = h2_h2_init(p, s);
+    status = h2_protocol_init(p, s);
     if (status == APR_SUCCESS) {
         status = h2_switch_init(p, s);
     }
@@ -231,7 +231,7 @@ static void h2_hooks(apr_pool_t *pool)
      */
     ap_hook_child_init(h2_child_init, NULL, NULL, APR_HOOK_MIDDLE);
 
-    h2_h2_register_hooks();
+    h2_c1_register_hooks();
     h2_switch_register_hooks();
     h2_c2_register_hooks();
 

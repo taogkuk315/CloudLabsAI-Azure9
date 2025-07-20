@@ -41,8 +41,8 @@
 #include "h2_c1.h"
 #include "h2_config.h"
 #include "h2_conn_ctx.h"
-#include "h2_from_h1.h"
-#include "h2_h2.h"
+#include "h2_c2_filter.h"
+#include "h2_protocol.h"
 #include "h2_mplx.h"
 #include "h2_request.h"
 #include "h2_headers.h"
@@ -285,7 +285,7 @@ static apr_status_t beam_out(conn_rec *c, h2_conn_ctx_t *conn_ctx, apr_bucket_br
     return rv;
 }
 
-static apr_status_t h2_filter_secondary_in(ap_filter_t* f,
+static apr_status_t h2_c2_filter_in(ap_filter_t* f,
                                            apr_bucket_brigade* bb,
                                            ap_input_mode_t mode,
                                            apr_read_type_e block,
@@ -448,7 +448,7 @@ static apr_status_t register_output_at_mplx(h2_conn_ctx_t *conn_ctx, conn_rec *c
     return h2_mplx_t_out_open(conn_ctx->mplx, c);
 }
 
-static apr_status_t h2_filter_secondary_output(ap_filter_t* f,
+static apr_status_t h2_c2_filter_out(ap_filter_t* f,
                                                apr_bucket_brigade* bb)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
@@ -502,37 +502,6 @@ cleanup:
         f->c->aborted = 1;
     }
     return rv;
-}
-
-/*******************************************************************************
- * Register various hooks
- */
-static int h2_c2_hook_process(conn_rec* c);
-
-APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_in) *h2_c2_logio_add_bytes_in;
-APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_out) *h2_c2_logio_add_bytes_out;
-
-void h2_c2_register_hooks(void)
-{
-    /* When the connection processing actually starts, we might
-     * take over, if the connection is for a task.
-     */
-    ap_hook_process_connection(h2_c2_hook_process,
-                               NULL, NULL, APR_HOOK_FIRST);
-
-    ap_register_input_filter("H2_SECONDARY_IN", h2_filter_secondary_in,
-                             NULL, AP_FTYPE_NETWORK);
-    ap_register_output_filter("H2_SECONDARY_OUT", h2_filter_secondary_output,
-                              NULL, AP_FTYPE_NETWORK);
-    ap_register_output_filter("H2_PARSE_H1", h2_from_h1_parse_response,
-                              NULL, AP_FTYPE_NETWORK);
-
-    ap_register_input_filter("H2_REQUEST", h2_filter_request_in,
-                             NULL, AP_FTYPE_PROTOCOL);
-    ap_register_output_filter("H2_RESPONSE", h2_filter_headers_out,
-                              NULL, AP_FTYPE_PROTOCOL);
-    ap_register_output_filter("H2_TRAILERS_OUT", h2_filter_trailers_out,
-                              NULL, AP_FTYPE_PROTOCOL);
 }
 
 /* post config init */
@@ -617,9 +586,9 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_secondary(%s), adding filters", conn_ctx->id);
-    ap_add_input_filter("H2_SECONDARY_IN", NULL, NULL, c);
-    ap_add_output_filter("H2_PARSE_H1", NULL, NULL, c);
-    ap_add_output_filter("H2_SECONDARY_OUT", NULL, NULL, c);
+    ap_add_input_filter("H2_C2_NET_IN", NULL, NULL, c);
+    ap_add_output_filter("H2_C2_NET_CATCH_H1", NULL, NULL, c);
+    ap_add_output_filter("H2_C2_NET_OUT", NULL, NULL, c);
 
     c2_run_pre_connection(c, ap_get_conn_socket(c));
 
@@ -722,5 +691,99 @@ static int h2_c2_hook_process(conn_rec* c)
                       "secondary_conn(%ld): has no task", c->id);
     }
     return DECLINED;
+}
+
+static void check_push(request_rec *r, const char *tag)
+{
+    apr_array_header_t *push_list = h2_config_push_list(r);
+
+    if (!r->expecting_100 && push_list && push_list->nelts > 0) {
+        int i, old_status;
+        const char *old_line;
+
+        ap_log_rerror(APLOG_MARK, APLOG_TRACE1, 0, r,
+                      "%s, early announcing %d resources for push",
+                      tag, push_list->nelts);
+        for (i = 0; i < push_list->nelts; ++i) {
+            h2_push_res *push = &APR_ARRAY_IDX(push_list, i, h2_push_res);
+            apr_table_add(r->headers_out, "Link",
+                           apr_psprintf(r->pool, "<%s>; rel=preload%s",
+                                        push->uri_ref, push->critical? "; critical" : ""));
+        }
+        old_status = r->status;
+        old_line = r->status_line;
+        r->status = 103;
+        r->status_line = "103 Early Hints";
+        ap_send_interim_response(r, 1);
+        r->status = old_status;
+        r->status_line = old_line;
+    }
+}
+
+static int h2_c2_hook_post_read_request(request_rec *r)
+{
+    /* secondary connection? */
+    if (r->connection->master) {
+        h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(r->connection);
+        /* This hook will get called twice on internal redirects. Take care
+         * that we manipulate filters only once. */
+        if (conn_ctx && !conn_ctx->filters_set) {
+            ap_log_rerror(APLOG_MARK, APLOG_TRACE3, 0, r,
+                          "h2_c2(%s): adding request filters", conn_ctx->id);
+
+            /* setup the correct filters to process the request for h2 */
+            ap_add_input_filter("H2_C2_REQUEST_IN", NULL, r, r->connection);
+
+            /* replace the core http filter that formats response headers
+             * in HTTP/1 with our own that collects status and headers */
+            ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
+            ap_add_output_filter("H2_C2_RESPONSE_OUT", NULL, r, r->connection);
+            ap_add_output_filter("H2_C2_TRAILERS_OUT", NULL, r, r->connection);
+            conn_ctx->filters_set = 1;
+        }
+    }
+    return DECLINED;
+}
+
+static int h2_c2_hook_fixups(request_rec *r)
+{
+    /* secondary connection? */
+    if (r->connection->master) {
+        h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(r->connection);
+        if (conn_ctx) {
+            check_push(r, "late_fixup");
+        }
+    }
+    return DECLINED;
+}
+
+APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_in) *h2_c2_logio_add_bytes_in;
+APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_out) *h2_c2_logio_add_bytes_out;
+
+void h2_c2_register_hooks(void)
+{
+    /* When the connection processing actually starts, we might
+     * take over, if the connection is for a task.
+     */
+    ap_hook_process_connection(h2_c2_hook_process,
+                               NULL, NULL, APR_HOOK_FIRST);
+    /* We need to manipulate the standard HTTP/1.1 protocol filters and
+     * install our own. This needs to be done very early. */
+    ap_hook_post_read_request(h2_c2_hook_post_read_request, NULL, NULL, APR_HOOK_REALLY_FIRST);
+    ap_hook_fixups(h2_c2_hook_fixups, NULL, NULL, APR_HOOK_LAST);
+
+    ap_register_input_filter("H2_C2_NET_IN", h2_c2_filter_in,
+                             NULL, AP_FTYPE_NETWORK);
+    ap_register_output_filter("H2_C2_NET_OUT", h2_c2_filter_out,
+                              NULL, AP_FTYPE_NETWORK);
+    ap_register_output_filter("H2_C2_NET_CATCH_H1", h2_c2_filter_catch_h1_out,
+                              NULL, AP_FTYPE_NETWORK);
+
+    ap_register_input_filter("H2_C2_REQUEST_IN", h2_c2_filter_request_in,
+                             NULL, AP_FTYPE_PROTOCOL);
+    ap_register_output_filter("H2_C2_RESPONSE_OUT", h2_c2_filter_response_out,
+                              NULL, AP_FTYPE_PROTOCOL);
+    ap_register_output_filter("H2_C2_TRAILERS_OUT", h2_c2_filter_trailers_out,
+                              NULL, AP_FTYPE_PROTOCOL);
 }
 

@@ -31,7 +31,7 @@
 #include "h2_bucket_beam.h"
 #include "h2_c1.h"
 #include "h2_config.h"
-#include "h2_h2.h"
+#include "h2_protocol.h"
 #include "h2_mplx.h"
 #include "h2_push.h"
 #include "h2_request.h"

@@ -33,7 +33,7 @@
 #include "h2_conn_ctx.h"
 #include "h2_c1.h"
 #include "h2_config.h"
-#include "h2_h2.h"
+#include "h2_protocol.h"
 #include "h2_private.h"
 
 #define DEF_VAL     (-1)

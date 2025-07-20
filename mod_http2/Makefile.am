@@ -32,12 +32,12 @@ OBJECTS = \
     h2_c1_io.c \
     h2_c1_status.c \
     h2_c2.c \
+    h2_c2_filter.c \
     h2_config.c \
     h2_conn_ctx.c \
-    h2_from_h1.c \
-    h2_h2.c \
     h2_headers.c \
     h2_mplx.c \
+    h2_protocol.c \
     h2_push.c \
     h2_request.c \
     h2_session.c \
@@ -55,13 +55,13 @@ HFILES = \
     h2_c1_io.h \
     h2_c1_status.h \
     h2_c2.h \
+    h2_c2_filter.h \
     h2_config.h \
     h2_conn_ctx.h \
-    h2_from_h1.h \
-    h2_h2.h \
     h2_headers.h \
     h2_mplx.h \
     h2_private.h \
+    h2_protocol.h \
     h2_push.h \
     h2_request.h \
     h2_session.h \

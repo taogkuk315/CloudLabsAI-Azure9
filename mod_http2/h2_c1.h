@@ -50,4 +50,25 @@ apr_status_t h2_c1_run(conn_rec *c);
  */
 apr_status_t h2_c1_pre_close(struct h2_conn_ctx_t *ctx, conn_rec *c);
 
+/**
+ * Check if the connection allows a direct detection of HTTPP/2,
+ * as configurable by the H2Direct directive.
+ * @param c the connection to check on
+ * @return != 0 if direct detection is enabled
+ */
+int h2_c1_allows_direct(conn_rec *c);
+
+/**
+ * Check if the "Upgrade" HTTP/1.1 mode of protocol switching is enabled
+ * for the given request.
+ * @param r the request to check
+ * @return != 0 iff Upgrade switching is enabled
+ */
+int h2_c1_can_upgrade(request_rec *r);
+
+/* Register hooks for h2 handling on primary connections.
+ */
+void h2_c1_register_hooks(void);
+
+
 #endif /* defined(__mod_h2__h2_c1__) */

@@ -30,7 +30,7 @@
 #include "h2_bucket_eos.h"
 #include "h2_config.h"
 #include "h2_c1_io.h"
-#include "h2_h2.h"
+#include "h2_protocol.h"
 #include "h2_session.h"
 #include "h2_util.h"
 

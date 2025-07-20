@@ -27,22 +27,25 @@
 #include <http_connection.h>
 #include <http_protocol.h>
 #include <http_request.h>
+#include <http_ssl.h>
 
 #include <mpm_common.h>
 
 #include "h2_private.h"
 #include "h2.h"
+#include "h2_bucket_beam.h"
 #include "h2_config.h"
 #include "h2_conn_ctx.h"
 #include "h2_c1_status.h"
+#include "h2_headers.h"
 #include "h2_mplx.h"
 #include "h2_session.h"
 #include "h2_stream.h"
-#include "h2_h2.h"
-#include "h2_c2.h"
+#include "h2_protocol.h"
 #include "h2_workers.h"
 #include "h2_c1.h"
 #include "h2_version.h"
+#include "h2_util.h"
 
 static struct h2_workers *workers;
 
@@ -73,7 +76,7 @@ apr_status_t h2_c1_child_init(apr_pool_t *pool, server_rec *s)
                  minw, maxw, max_threads_per_child, idle_secs);
     workers = h2_workers_create(s, pool, minw, maxw, idle_secs);
  
-    ap_register_input_filter("H2_IN", h2_c1_filter_input,
+    ap_register_input_filter("H2_C1_IN", h2_c1_filter_input,
                              NULL, AP_FTYPE_CONNECTION);
    
     return h2_mplx_m_child_init(pool, s);
@@ -176,5 +179,147 @@ apr_status_t h2_c1_pre_close(struct h2_conn_ctx_t *ctx, conn_rec *c)
         return (status == APR_SUCCESS)? DONE : status;
     }
     return DONE;
+}
+
+int h2_c1_allows_direct(conn_rec *c)
+{
+    if (!c->master) {
+        int is_tls = ap_ssl_conn_is_ssl(c);
+        const char *needed_protocol = is_tls? "h2" : "h2c";
+        int h2_direct = h2_config_cgeti(c, H2_CONF_DIRECT);
+
+        if (h2_direct < 0) {
+            h2_direct = is_tls? 0 : 1;
+        }
+        return (h2_direct && ap_is_allowed_protocol(c, NULL, NULL, needed_protocol));
+    }
+    return 0;
+}
+
+int h2_c1_can_upgrade(request_rec *r)
+{
+    if (!r->connection->master) {
+        int h2_upgrade = h2_config_rgeti(r, H2_CONF_UPGRADE);
+        return h2_upgrade > 0 || (h2_upgrade < 0 && !ap_ssl_conn_is_ssl(r->connection));
+    }
+    return 0;
+}
+
+static int h2_c1_hook_process_connection(conn_rec* c)
+{
+    apr_status_t status;
+    h2_conn_ctx_t *ctx;
+
+    if (c->master) goto declined;
+    ctx = h2_conn_ctx_get(c);
+
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "h2_h2, process_conn");
+    if (!ctx && c->keepalives == 0) {
+        const char *proto = ap_get_protocol(c);
+
+        if (APLOGctrace1(c)) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "h2_h2, process_conn, "
+                          "new connection using protocol '%s', direct=%d, "
+                          "tls acceptable=%d", proto, h2_c1_allows_direct(c),
+                          h2_protocol_is_acceptable_c1(c, NULL, 1));
+        }
+
+        if (!strcmp(AP_PROTOCOL_HTTP1, proto)
+            && h2_c1_allows_direct(c)
+            && h2_protocol_is_acceptable_c1(c, NULL, 1)) {
+            /* Fresh connection still is on http/1.1 and H2Direct is enabled.
+             * Otherwise connection is in a fully acceptable state.
+             * -> peek at the first 24 incoming bytes
+             */
+            apr_bucket_brigade *temp;
+            char *peek = NULL;
+            apr_size_t peeklen;
+
+            temp = apr_brigade_create(c->pool, c->bucket_alloc);
+            status = ap_get_brigade(c->input_filters, temp,
+                                    AP_MODE_SPECULATIVE, APR_BLOCK_READ, 24);
+
+            if (status != APR_SUCCESS) {
+                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c, APLOGNO(03054)
+                              "h2_h2, error reading 24 bytes speculative");
+                apr_brigade_destroy(temp);
+                return DECLINED;
+            }
+
+            apr_brigade_pflatten(temp, &peek, &peeklen, c->pool);
+            if ((peeklen >= 24) && !memcmp(H2_MAGIC_TOKEN, peek, 24)) {
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                              "h2_h2, direct mode detected");
+                ctx = h2_conn_ctx_create_for_c1(c, c->base_server,
+                                                ap_ssl_conn_is_ssl(c)? "h2" : "h2c");
+            }
+            else if (APLOGctrace2(c)) {
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
+                              "h2_h2, not detected in %d bytes(base64): %s",
+                              (int)peeklen, h2_util_base64url_encode(peek, peeklen, c->pool));
+            }
+            apr_brigade_destroy(temp);
+        }
+    }
+
+    if (!ctx) goto declined;
+
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "process_conn");
+    if (!ctx->session) {
+        status = h2_c1_setup(c, NULL, ctx->server? ctx->server : c->base_server);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, c, "conn_setup");
+        if (status != APR_SUCCESS) {
+            h2_conn_ctx_detach(c);
+            return !OK;
+        }
+    }
+    h2_c1_run(c);
+    return OK;
+
+declined:
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, "h2_h2, declined");
+    return DECLINED;
+}
+
+static int h2_c1_hook_pre_close(conn_rec *c)
+{
+    h2_conn_ctx_t *ctx;
+
+    /* secondary connection? */
+    if (c->master) {
+        return DECLINED;
+    }
+
+    ctx = h2_conn_ctx_get(c);
+    if (ctx) {
+        /* If the session has been closed correctly already, we will not
+         * find a h2_conn_ctx_there. The presence indicates that the session
+         * is still ongoing. */
+        return h2_c1_pre_close(ctx, c);
+    }
+    return DECLINED;
+}
+
+static const char* const mod_ssl[]        = { "mod_ssl.c", NULL};
+static const char* const mod_reqtimeout[] = { "mod_ssl.c", "mod_reqtimeout.c", NULL};
+
+void h2_c1_register_hooks(void)
+{
+    /* Our main processing needs to run quite late. Definitely after mod_ssl,
+     * as we need its connection filters, but also before reqtimeout as its
+     * method of timeouts is specific to HTTP/1.1 (as of now).
+     * The core HTTP/1 processing run as REALLY_LAST, so we will have
+     * a chance to take over before it.
+     */
+    ap_hook_process_connection(h2_c1_hook_process_connection,
+                               mod_reqtimeout, NULL, APR_HOOK_LAST);
+
+    /* One last chance to properly say goodbye if we have not done so
+     * already. */
+    ap_hook_pre_close_connection(h2_c1_hook_pre_close, NULL, mod_ssl, APR_HOOK_LAST);
+
+    /* special bucket type transfer through a h2_bucket_beam */
+    h2_register_bucket_beamer(h2_bucket_headers_beam);
+    h2_register_bucket_beamer(h2_bucket_observer_beam);
 }
 

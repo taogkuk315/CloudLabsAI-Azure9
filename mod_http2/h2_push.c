@@ -31,7 +31,7 @@
 #include <http_log.h>
 
 #include "h2_private.h"
-#include "h2_h2.h"
+#include "h2_protocol.h"
 #include "h2_util.h"
 #include "h2_push.h"
 #include "h2_request.h"

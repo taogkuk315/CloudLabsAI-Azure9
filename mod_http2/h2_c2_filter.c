@@ -32,7 +32,7 @@
 #include "h2_private.h"
 #include "h2_conn_ctx.h"
 #include "h2_headers.h"
-#include "h2_from_h1.h"
+#include "h2_c2_filter.h"
 #include "h2_c2.h"
 #include "h2_util.h"
 
@@ -508,7 +508,7 @@ static apr_status_t parse_response(ap_filter_t *f, apr_bucket_brigade *bb)
     return status;
 }
 
-apr_status_t h2_from_h1_parse_response(ap_filter_t* f, apr_bucket_brigade* bb)
+apr_status_t h2_c2_filter_catch_h1_out(ap_filter_t* f, apr_bucket_brigade* bb)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
     apr_status_t rv;
@@ -528,7 +528,7 @@ apr_status_t h2_from_h1_parse_response(ap_filter_t* f, apr_bucket_brigade* bb)
     return ap_pass_brigade(f->next, bb);
 }
 
-apr_status_t h2_filter_headers_out(ap_filter_t *f, apr_bucket_brigade *bb)
+apr_status_t h2_c2_filter_response_out(ap_filter_t *f, apr_bucket_brigade *bb)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
     request_rec *r = f->r;
@@ -762,7 +762,7 @@ static apr_status_t read_and_chunk(ap_filter_t *f, h2_conn_ctx_t *conn_ctx,
     return status;
 }
 
-apr_status_t h2_filter_request_in(ap_filter_t* f,
+apr_status_t h2_c2_filter_request_in(ap_filter_t* f,
                                   apr_bucket_brigade* bb,
                                   ap_input_mode_t mode,
                                   apr_read_type_e block,
@@ -862,7 +862,7 @@ apr_status_t h2_filter_request_in(ap_filter_t* f,
     return status;
 }
 
-apr_status_t h2_filter_trailers_out(ap_filter_t *f, apr_bucket_brigade *bb)
+apr_status_t h2_c2_filter_trailers_out(ap_filter_t *f, apr_bucket_brigade *bb)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
     request_rec *r = f->r;

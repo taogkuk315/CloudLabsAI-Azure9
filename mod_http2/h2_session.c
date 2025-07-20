@@ -37,7 +37,7 @@
 #include "h2_config.h"
 #include "h2_conn_ctx.h"
 #include "h2_c1_status.h"
-#include "h2_h2.h"
+#include "h2_protocol.h"
 #include "h2_mplx.h"
 #include "h2_push.h"
 #include "h2_request.h"
@@ -264,7 +264,7 @@ static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                           H2_STRM_LOG(APLOGNO(03065), stream, 
                           "closing with err=%d %s"), 
-                          (int)error_code, h2_h2_err_description(error_code));
+                          (int)error_code, h2_protocol_err_description(error_code));
             h2_stream_rst(stream, error_code);
         }
     }
@@ -902,7 +902,7 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     
     /* connection input filter that feeds the session */
     session->cin = h2_c1_filter_ctx_t_create(session);
-    ap_add_input_filter("H2_IN", session->cin, r, c);
+    ap_add_input_filter("H2_C1_IN", session->cin, r, c);
     
     h2_c1_io_init(&session->io, c, s);
     session->padding_max = h2_config_sgeti(s, H2_CONF_PADDING_BITS);
@@ -2124,7 +2124,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
         switch (session->state) {
             case H2_SESSION_ST_INIT:
                 ap_update_child_status_from_conn(c->sbh, SERVER_BUSY_READ, c);
-                if (!h2_is_acceptable_connection(c, session->r, 1)) {
+                if (!h2_protocol_is_acceptable_c1(c, session->r, 1)) {
                     update_child_status(session, SERVER_BUSY_READ, 
                                         "inadequate security");
                     h2_session_shutdown(session, 
