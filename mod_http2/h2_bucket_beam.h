@@ -182,10 +182,10 @@ struct h2_bucket_beam {
     apr_size_t buckets_sent;  /* # of beam buckets sent */
     apr_size_t files_beamed;  /* how many file handles have been set aside */
     
-    unsigned int aborted : 1;
-    unsigned int closed : 1;
-    unsigned int close_sent : 1;
-    unsigned int tx_mem_limits : 1; /* only memory size counts on transfers */
+    int aborted;
+    int closed;
+    int close_sent;
+    int tx_mem_limits; /* only memory size counts on transfers */
 
     struct apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *change;

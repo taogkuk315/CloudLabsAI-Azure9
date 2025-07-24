@@ -88,7 +88,7 @@ struct h2_stream {
     unsigned int aborted   : 1; /* was aborted */
     unsigned int scheduled : 1; /* stream has been scheduled */
     unsigned int has_response : 1; /* response headers are known */
-    unsigned int input_eof : 1; /* no more request data coming */
+    unsigned int input_closed : 1; /* no more request data/trailers coming */
     unsigned int out_checked : 1; /* output eof was double checked */
     unsigned int push_policy;   /* which push policy to use for this request */
     unsigned int input_buffering : 1; /* buffer request bodies for efficiency */

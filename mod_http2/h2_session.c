@@ -234,6 +234,9 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
     
     stream = get_stream(session, stream_id);
     if (stream) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                      "h2_stream(%ld-%d): write %ld bytes of DATA",
+                      session->id, (int)stream_id, (long)len);
         status = h2_stream_recv_DATA(stream, flags, data, len);
         dispatch_event(session, H2_SESSION_EV_STREAM_CHANGE, 0, "stream data rcvd");
     }

@@ -184,7 +184,7 @@ static void H2_STREAM_OUT_LOG(int lvl, h2_stream *s, const char *tag)
 
 static apr_status_t setup_input(h2_stream *stream) {
     if (stream->input == NULL) {
-        int empty = (stream->input_eof 
+        int empty = (stream->input_closed
                      && (!stream->in_buffer 
                          || APR_BRIGADE_EMPTY(stream->in_buffer)));
         if (!empty) {
@@ -197,48 +197,60 @@ static apr_status_t setup_input(h2_stream *stream) {
     return APR_SUCCESS;
 }
 
+static void input_append_bucket(h2_stream *stream, apr_bucket *b)
+{
+    if (!stream->in_buffer) {
+        stream->in_buffer = apr_brigade_create(
+            stream->pool, stream->session->c->bucket_alloc);
+    }
+    APR_BRIGADE_INSERT_TAIL(stream->in_buffer, b);
+}
+
+static void input_append_data(h2_stream *stream, const char *data, apr_size_t len)
+{
+    if (!stream->in_buffer) {
+        stream->in_buffer = apr_brigade_create(
+            stream->pool, stream->session->c->bucket_alloc);
+    }
+    apr_brigade_write(stream->in_buffer, NULL, NULL, data, len);
+}
+
+
 static apr_status_t close_input(h2_stream *stream)
 {
     conn_rec *c = stream->session->c;
-    apr_status_t status = APR_SUCCESS;
+    apr_status_t rv = APR_SUCCESS;
 
-    stream->input_eof = 1;
-    if (stream->input && h2_beam_is_closed(stream->input)) {
-        return APR_SUCCESS;
-    }
-    
+    if (stream->input_closed || stream->rst_error) goto cleanup;
+
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
                   H2_STRM_MSG(stream, "closing input"));
-    if (stream->rst_error) {
-        return APR_ECONNRESET;
-    }
-    
+    stream->input_closed = 1;
+
     if (stream->trailers && !apr_is_empty_table(stream->trailers)) {
         apr_bucket *b;
         h2_headers *r;
         
-        if (!stream->in_buffer) {
-            stream->in_buffer = apr_brigade_create(stream->pool, c->bucket_alloc);
-        }
-        
-        r = h2_headers_create(HTTP_OK, stream->trailers, NULL, 
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
+                      H2_STRM_MSG(stream, "adding trailers"));
+        r = h2_headers_create(HTTP_OK, stream->trailers, NULL,
             stream->in_trailer_octets, stream->pool);
         stream->trailers = NULL;        
         b = h2_bucket_headers_create(c->bucket_alloc, r);
-        APR_BRIGADE_INSERT_TAIL(stream->in_buffer, b);
-        
-        b = apr_bucket_eos_create(c->bucket_alloc);
-        APR_BRIGADE_INSERT_TAIL(stream->in_buffer, b);
-        
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
-                      H2_STRM_MSG(stream, "added trailers"));
+        input_append_bucket(stream, b);
         h2_stream_dispatch(stream, H2_SEV_IN_DATA_PENDING);
     }
-    if (stream->input) {
-        h2_stream_flush_input(stream);
-        return h2_beam_close(stream->input);
+
+    rv = h2_stream_flush_input(stream);
+    if (APR_SUCCESS != rv) goto cleanup;
+
+    if (stream->input &&  !h2_beam_is_closed(stream->input)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
+                      H2_STRM_MSG(stream, "closing input beam"));
+        rv = h2_beam_close(stream->input);
     }
-    return status;
+cleanup:
+    return rv;
 }
 
 static apr_status_t close_output(h2_stream *stream)
@@ -475,10 +487,6 @@ apr_status_t h2_stream_flush_input(h2_stream *stream)
         status = h2_beam_send(stream->input, stream->in_buffer, APR_BLOCK_READ);
         stream->in_last_write = apr_time_now();
     }
-    if (stream->input_eof 
-        && stream->input && !h2_beam_is_closed(stream->input)) {
-        status = h2_beam_close(stream->input);
-    }
     return status;
 }
 
@@ -501,11 +509,7 @@ apr_status_t h2_stream_recv_DATA(h2_stream *stream, uint8_t flags,
                           H2_STRM_MSG(stream, "recv DATA, len=%d"), (int)len);
         }
         stream->in_data_octets += len;
-        if (!stream->in_buffer) {
-            stream->in_buffer = apr_brigade_create(stream->pool, 
-                                                   session->c->bucket_alloc);
-        }
-        apr_brigade_write(stream->in_buffer, NULL, NULL, (const char *)data, len);
+        input_append_data(stream, (const char*)data, len);
         h2_stream_dispatch(stream, H2_SEV_IN_DATA_PENDING);
     }
     return status;

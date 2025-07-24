@@ -316,8 +316,12 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
         return APR_ECONNABORTED;
     }
     
-    if (!conn_ctx->bb_in) {
+    if (!conn_ctx->beam_in) {
         return APR_EOF;
+    }
+
+    if (!conn_ctx->bb_in) {
+        conn_ctx->bb_in = apr_brigade_create(conn_ctx->pool, f->c->bucket_alloc);
     }
     
     /* Cleanup brigades from those nasty 0 length non-meta buckets
@@ -591,8 +595,6 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     ap_add_output_filter("H2_C2_NET_OUT", NULL, NULL, c);
 
     c2_run_pre_connection(c, ap_get_conn_socket(c));
-
-    conn_ctx->bb_in = apr_brigade_create(conn_ctx->pool, c->bucket_alloc);
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_c2(%s): process connection", conn_ctx->id);
