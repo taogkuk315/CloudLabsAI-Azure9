@@ -274,11 +274,6 @@ apr_status_t h2_beam_receive(h2_bucket_beam *beam,
 int h2_beam_empty(h2_bucket_beam *beam);
 
 /**
- * Determine if beam has handed out proxy buckets that are not destroyed. 
- */
-int h2_beam_holds_proxies(h2_bucket_beam *beam);
-
-/**
  * Abort the beam. Will cleanup any buffered buckets and answer all send
  * and receives with APR_ECONNABORTED.
  * 
@@ -294,7 +289,7 @@ void h2_beam_abort(h2_bucket_beam *beam);
 apr_status_t h2_beam_close(h2_bucket_beam *beam);
 
 /**
- * Receives leaves the beam, e.g. will no longer read. This will
+ * Receiver leaves the beam, e.g. will no longer read. This will
  * interrupt any sender blocked writing and fail future send. 
  * 
  * Call from the receiver side only.
@@ -390,11 +385,6 @@ apr_off_t h2_beam_get_buffered(h2_bucket_beam *beam);
  * Get the memory used by the buffered buckets, approximately.
  */
 apr_off_t h2_beam_get_mem_used(h2_bucket_beam *beam);
-
-/**
- * Return != 0 iff (some) data from the beam has been received.
- */
-int h2_beam_was_received(h2_bucket_beam *beam);
 
 apr_size_t h2_beam_get_files_beamed(h2_bucket_beam *beam);
 

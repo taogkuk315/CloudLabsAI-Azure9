@@ -1223,30 +1223,6 @@ int h2_beam_empty(h2_bucket_beam *beam)
     return empty;
 }
 
-int h2_beam_holds_proxies(h2_bucket_beam *beam)
-{
-    int has_proxies = 1;
-    h2_beam_lock bl;
-    
-    if (beam && enter_yellow(beam, &bl) == APR_SUCCESS) {
-        has_proxies = !H2_BPROXY_LIST_EMPTY(&beam->proxies);
-        leave_yellow(beam, &bl);
-    }
-    return has_proxies;
-}
-
-int h2_beam_was_received(h2_bucket_beam *beam)
-{
-    int happend = 0;
-    h2_beam_lock bl;
-    
-    if (beam && enter_yellow(beam, &bl) == APR_SUCCESS) {
-        happend = (beam->received_bytes > 0);
-        leave_yellow(beam, &bl);
-    }
-    return happend;
-}
-
 apr_size_t h2_beam_get_files_beamed(h2_bucket_beam *beam)
 {
     apr_size_t n = 0;
