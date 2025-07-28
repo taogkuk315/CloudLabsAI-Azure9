@@ -180,8 +180,7 @@ struct h2_bucket_beam {
     apr_off_t received_bytes; /* amount of bytes received */
 
     apr_size_t buckets_sent;  /* # of beam buckets sent */
-    apr_size_t files_beamed;  /* how many file handles have been set aside */
-    
+
     int aborted;
     int closed;
     int close_sent;
@@ -386,9 +385,7 @@ apr_off_t h2_beam_get_buffered(h2_bucket_beam *beam);
  */
 apr_off_t h2_beam_get_mem_used(h2_bucket_beam *beam);
 
-apr_size_t h2_beam_get_files_beamed(h2_bucket_beam *beam);
-
-typedef apr_bucket *h2_bucket_beamer(h2_bucket_beam *beam, 
+typedef apr_bucket *h2_bucket_beamer(h2_bucket_beam *beam,
                                      apr_bucket_brigade *dest,
                                      const apr_bucket *src);
 

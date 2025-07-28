@@ -1029,7 +1029,6 @@ transfer:
                     if (status != APR_SUCCESS) {
                         goto leave;
                     }
-                    ++beam->files_beamed;
                 }
                 ng = apr_brigade_insert_file(bb, fd, bsender->start, (apr_off_t)bsender->length, 
                                              bb->p);
@@ -1221,18 +1220,6 @@ int h2_beam_empty(h2_bucket_beam *beam)
         leave_yellow(beam, &bl);
     }
     return empty;
-}
-
-apr_size_t h2_beam_get_files_beamed(h2_bucket_beam *beam)
-{
-    apr_size_t n = 0;
-    h2_beam_lock bl;
-    
-    if (beam && enter_yellow(beam, &bl) == APR_SUCCESS) {
-        n = beam->files_beamed;
-        leave_yellow(beam, &bl);
-    }
-    return n;
 }
 
 int h2_beam_no_files(void *ctx, h2_bucket_beam *beam, apr_file_t *file)
