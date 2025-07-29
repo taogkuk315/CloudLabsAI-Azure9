@@ -48,7 +48,6 @@ struct h2_conn_ctx_t {
 
     struct h2_bucket_beam *beam_in;  /* c2: data in */
     struct h2_bucket_beam *beam_out; /* c2: data out */
-    apr_bucket_brigade *bb_in;       /* c2: data in holding area */
 
     volatile int done;               /* c2: processing has finished */
     apr_time_t started_at;           /* c2: when processing started */

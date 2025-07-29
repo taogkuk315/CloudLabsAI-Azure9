@@ -285,6 +285,10 @@ static apr_status_t beam_out(conn_rec *c, h2_conn_ctx_t *conn_ctx, apr_bucket_br
     return rv;
 }
 
+typedef struct {
+    apr_bucket_brigade *bb;       /* c2: data in holding area */
+} h2_c2_fctx_in_t;
+
 static apr_status_t h2_c2_filter_in(ap_filter_t* f,
                                            apr_bucket_brigade* bb,
                                            ap_input_mode_t mode,
@@ -292,6 +296,7 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
                                            apr_off_t readbytes)
 {
     h2_conn_ctx_t *conn_ctx;
+    h2_c2_fctx_in_t *fctx = f->ctx;
     apr_status_t status = APR_SUCCESS;
     apr_bucket *b, *next;
     apr_off_t bblen;
@@ -320,21 +325,23 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
         return APR_EOF;
     }
 
-    if (!conn_ctx->bb_in) {
-        conn_ctx->bb_in = apr_brigade_create(conn_ctx->pool, f->c->bucket_alloc);
+    if (!fctx) {
+        fctx = apr_pcalloc(conn_ctx->pool, sizeof(*fctx));
+        f->ctx = fctx;
+        fctx->bb = apr_brigade_create(conn_ctx->pool, f->c->bucket_alloc);
     }
     
     /* Cleanup brigades from those nasty 0 length non-meta buckets
      * that apr_brigade_split_line() sometimes produces. */
-    for (b = APR_BRIGADE_FIRST(conn_ctx->bb_in);
-         b != APR_BRIGADE_SENTINEL(conn_ctx->bb_in); b = next) {
+    for (b = APR_BRIGADE_FIRST(fctx->bb);
+         b != APR_BRIGADE_SENTINEL(fctx->bb); b = next) {
         next = APR_BUCKET_NEXT(b);
         if (b->length == 0 && !APR_BUCKET_IS_METADATA(b)) {
             apr_bucket_delete(b);
         } 
     }
     
-    while (APR_BRIGADE_EMPTY(conn_ctx->bb_in)) {
+    while (APR_BRIGADE_EMPTY(fctx->bb)) {
         /* Get more input data for our request. */
         if (trace1) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
@@ -342,7 +349,7 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
                           "readbytes=%ld", conn_ctx->id, block, (long)readbytes);
         }
         if (conn_ctx->beam_in) {
-            status = h2_beam_receive(conn_ctx->beam_in, conn_ctx->bb_in, block,
+            status = h2_beam_receive(conn_ctx->beam_in, fctx->bb, block,
                                      128*1024, NULL);
         }
         else {
@@ -369,7 +376,7 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
 
         if (trace1) {
             h2_util_bb_log(f->c, conn_ctx->stream_id, APLOG_TRACE2,
-                        "input.beam recv raw", conn_ctx->bb_in);
+                        "input.beam recv raw", fctx->bb);
         }
         if (h2_c2_logio_add_bytes_in) {
             apr_brigade_length(bb, 0, &bblen);
@@ -378,16 +385,16 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
     }
     
     /* Nothing there, no more data to get. Return. */
-    if (status == APR_EOF && APR_BRIGADE_EMPTY(conn_ctx->bb_in)) {
+    if (status == APR_EOF && APR_BRIGADE_EMPTY(fctx->bb)) {
         return status;
     }
 
     if (trace1) {
         h2_util_bb_log(f->c, conn_ctx->stream_id, APLOG_TRACE2,
-                    "task_input.bb", conn_ctx->bb_in);
+                    "task_input.bb", fctx->bb);
     }
            
-    if (APR_BRIGADE_EMPTY(conn_ctx->bb_in)) {
+    if (APR_BRIGADE_EMPTY(fctx->bb)) {
         if (trace1) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
                           "h2_secondary_in(%s): no data", conn_ctx->id);
@@ -397,19 +404,19 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
     
     if (mode == AP_MODE_EXHAUSTIVE) {
         /* return all we have */
-        APR_BRIGADE_CONCAT(bb, conn_ctx->bb_in);
+        APR_BRIGADE_CONCAT(bb, fctx->bb);
     }
     else if (mode == AP_MODE_READBYTES) {
-        status = h2_brigade_concat_length(bb, conn_ctx->bb_in, rmax);
+        status = h2_brigade_concat_length(bb, fctx->bb, rmax);
     }
     else if (mode == AP_MODE_SPECULATIVE) {
-        status = h2_brigade_copy_length(bb, conn_ctx->bb_in, rmax);
+        status = h2_brigade_copy_length(bb, fctx->bb, rmax);
     }
     else if (mode == AP_MODE_GETLINE) {
         /* we are reading a single LF line, e.g. the HTTP headers. 
          * this has the nasty side effect to split the bucket, even
          * though it ends with CRLF and creates a 0 length bucket */
-        status = apr_brigade_split_line(bb, conn_ctx->bb_in, block,
+        status = apr_brigade_split_line(bb, fctx->bb, block,
                                         HUGE_STRING_LEN);
         if (APLOGctrace1(f->c)) {
             char buffer[1024];

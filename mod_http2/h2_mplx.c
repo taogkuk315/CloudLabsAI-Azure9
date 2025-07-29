@@ -718,14 +718,15 @@ static conn_rec *s_next_secondary(h2_mplx *m)
             if (sid > m->max_stream_started) {
                 m->max_stream_started = sid;
             }
+
+            conn_ctx = h2_conn_ctx_create_for_c2(secondary, stream);
+            apr_table_setn(secondary->notes, H2_TASK_ID_NOTE, conn_ctx->id);
+
             if (stream->input) {
                 h2_beam_on_consumed(stream->input, mst_stream_input_ev,
                                     m_stream_input_consumed, stream);
+                conn_ctx->beam_in = stream->input;
             }
-
-            conn_ctx = h2_conn_ctx_create_for_c2(secondary, stream);
-            conn_ctx->beam_in = stream->input;
-            apr_table_setn(secondary->notes, H2_TASK_ID_NOTE, conn_ctx->id);
 
             ++m->tasks_active;
             return secondary;
