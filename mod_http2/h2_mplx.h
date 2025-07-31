@@ -144,13 +144,20 @@ apr_status_t h2_mplx_m_keep_active(h2_mplx *m, struct h2_stream *stream);
  * Process a stream request.
  * 
  * @param m the multiplexer
- * @param stream the identifier of the stream
- * @param r the request to be processed
+ * @param read_to_process
+ * @param input_pending
  * @param cmp the stream priority compare function
- * @param ctx context data for the compare function
  */
-apr_status_t h2_mplx_m_process(h2_mplx *m, struct h2_stream *stream, 
-                               h2_stream_pri_cmp *cmp, void *ctx);
+apr_status_t h2_mplx_c1_process(h2_mplx *m,
+                                struct h2_iqueue *read_to_process,
+                                h2_stream_get_fn *get_stream,
+                                h2_stream_pri_cmp_fn *cmp,
+                                struct h2_session *session);
+
+apr_status_t h2_mplx_c1_fwd_input(h2_mplx *m, struct h2_iqueue *input_pending,
+                                  h2_stream_get_fn *get_stream,
+                                  struct h2_session *session);
+
 
 /**
  * Stream priorities have changed, reschedule pending requests.
@@ -159,7 +166,8 @@ apr_status_t h2_mplx_m_process(h2_mplx *m, struct h2_stream *stream,
  * @param cmp the stream priority compare function
  * @param ctx context data for the compare function
  */
-apr_status_t h2_mplx_m_reprioritize(h2_mplx *m, h2_stream_pri_cmp *cmp, void *ctx);
+apr_status_t h2_mplx_m_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
+                                    struct h2_session *session);
 
 typedef apr_status_t stream_ev_callback(void *ctx, struct h2_stream *stream);
 

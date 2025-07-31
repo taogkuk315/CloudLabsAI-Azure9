@@ -17,6 +17,9 @@
 #ifndef __mod_h2__h2__
 #define __mod_h2__h2__
 
+struct h2_session;
+struct h2_stream;
+
 /**
  * The magic PRIamble of RFC 7540 that is always sent when starting
  * a h2 communication.
@@ -129,7 +132,6 @@ typedef enum {
  * become a request_rec to be handled by soemone.
  */
 typedef struct h2_request h2_request;
-
 struct h2_request {
     const char *method; /* pseudo header values, see ch. 8.1.2.3 */
     const char *scheme;
@@ -154,7 +156,6 @@ struct h2_request {
 #define H2_HTTP_STATUS_UNSET (0)
 
 typedef struct h2_headers h2_headers;
-
 struct h2_headers {
     int         status;
     apr_table_t *headers;
@@ -164,7 +165,8 @@ struct h2_headers {
 
 typedef apr_status_t h2_io_data_cb(void *ctx, const char *data, apr_off_t len);
 
-typedef int h2_stream_pri_cmp(int stream_id1, int stream_id2, void *ctx);
+typedef int h2_stream_pri_cmp_fn(int stream_id1, int stream_id2, void *session);
+typedef struct h2_stream *h2_stream_get_fn(struct h2_session *session, int stream_id);
 
 /* Note key to attach connection task id to conn_rec/request_rec instances */
 

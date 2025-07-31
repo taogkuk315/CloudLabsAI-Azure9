@@ -84,6 +84,10 @@ struct h2_stream {
     apr_bucket_brigade *out_buffer;
     apr_size_t max_mem;         /* maximum amount of data buffered */
 
+    apr_pool_t *mplx_pipe_pool; /* mplx child pool for pipe ops via mplx */
+    apr_file_t *pipe_in;        /* for mplx to notifying about input data availability */
+    apr_file_t *pipe_out;       /* for mplx to poll output data availability */
+
     int rst_error;              /* stream error for RST_STREAM */
     unsigned int aborted   : 1; /* was aborted */
     unsigned int scheduled : 1; /* stream has been scheduled */
@@ -132,13 +136,9 @@ h2_stream *h2_stream_create(int id, apr_pool_t *pool,
 void h2_stream_destroy(h2_stream *stream);
 
 /**
- * Prepare the stream so that processing may start.
- * 
- * This is the time to allocated resources not needed before.
- * 
- * @param stream the stream to prep 
+ * Setup the input for the stream.
  */
-apr_status_t h2_stream_prep_processing(h2_stream *stream);
+apr_status_t h2_stream_setup_input(h2_stream *stream);
 
 /*
  * Set a new monitor for this stream, replacing any existing one. Can

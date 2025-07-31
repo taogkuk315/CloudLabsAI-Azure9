@@ -49,6 +49,9 @@ struct h2_conn_ctx_t {
     struct h2_bucket_beam *beam_in;  /* c2: data in */
     struct h2_bucket_beam *beam_out; /* c2: data out */
 
+    apr_file_t *pipe_in;             /* c2: for polling of input data availability */
+    apr_file_t *pipe_out;            /* c2: for notifying about output data availability */
+
     volatile int done;               /* c2: processing has finished */
     apr_time_t started_at;           /* c2: when processing started */
     apr_time_t done_at;              /* c2: when processing was done */

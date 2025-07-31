@@ -1971,3 +1971,26 @@ int h2_push_policy_determine(apr_table_t *headers, apr_pool_t *p, int push_enabl
     return policy;
 }
 
+void h2_util_drain_pipe(apr_file_t *pipe)
+{
+    char rb[512];
+    apr_size_t nr = sizeof(rb);
+
+    while (apr_file_read(pipe, rb, &nr) == APR_SUCCESS) {
+        /* Although we write just one byte to the other end of the pipe
+         * during wakeup, multiple threads could call the wakeup.
+         * So simply drain out from the input side of the pipe all
+         * the data.
+         */
+        if (nr != sizeof(rb))
+            break;
+    }
+}
+
+apr_status_t h2_util_wait_on_pipe(apr_file_t *pipe)
+{
+    char rb[512];
+    apr_size_t nr = sizeof(rb);
+
+    return apr_file_read(pipe, rb, &nr);
+}

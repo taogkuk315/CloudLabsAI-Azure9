@@ -73,8 +73,8 @@ apr_status_t h2_mplx_m_child_init(apr_pool_t *pool, server_rec *s)
 }
 
 #define H2_MPLX_ENTER(m)    \
-    do { apr_status_t rv; if ((rv = apr_thread_mutex_lock(m->lock)) != APR_SUCCESS) {\
-        return rv;\
+    do { apr_status_t rv_lock; if ((rv_lock = apr_thread_mutex_lock(m->lock)) != APR_SUCCESS) {\
+        return rv_lock;\
     } } while(0)
 
 #define H2_MPLX_LEAVE(m)    \
@@ -309,6 +309,11 @@ static int m_stream_destroy_iter(void *ctx, void *val)
             h2_c2_destroy(secondary);
         }
     }
+
+    if (stream->mplx_pipe_pool) {
+        apr_pool_destroy(stream->mplx_pipe_pool);
+    }
+
     h2_stream_destroy(stream);
     return 0;
 }
@@ -628,7 +633,8 @@ static void mst_check_data_for(h2_mplx *m, h2_stream *stream, int mplx_is_locked
     }
 }
 
-apr_status_t h2_mplx_m_reprioritize(h2_mplx *m, h2_stream_pri_cmp *cmp, void *ctx)
+apr_status_t h2_mplx_m_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
+                                    h2_session *session)
 {
     apr_status_t status;
     
@@ -638,7 +644,7 @@ apr_status_t h2_mplx_m_reprioritize(h2_mplx *m, h2_stream_pri_cmp *cmp, void *ct
         status = APR_ECONNABORTED;
     }
     else {
-        h2_iq_sort(m->q, cmp, ctx);
+        h2_iq_sort(m->q, cmp, session);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
                       "h2_mplx(%ld): reprioritize tasks", m->id);
         status = APR_SUCCESS;
@@ -662,41 +668,116 @@ static void ms_register_if_needed(h2_mplx *m, int from_master)
     }
 }
 
-apr_status_t h2_mplx_m_process(h2_mplx *m, struct h2_stream *stream, 
-                               h2_stream_pri_cmp *cmp, void *ctx)
+static apr_status_t c1_process_stream(h2_mplx *m,
+                                      h2_stream *stream,
+                                      h2_stream_pri_cmp_fn *cmp,
+                                      h2_session *session)
 {
-    apr_status_t status;
-    
-    H2_MPLX_ENTER(m);
+    apr_status_t rv;
 
     if (m->aborted) {
-        status = APR_ECONNABORTED;
+        rv = APR_ECONNABORTED;
+        goto cleanup;
+    }
+    if (!stream->request) {
+        rv = APR_EINVAL;
+        goto cleanup;
+    }
+    if (APLOGctrace1(m->c)) {
+        const h2_request *r = stream->request;
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+                      H2_STRM_MSG(stream, "process %s %s://%s%s chunked=%d"),
+                      r->method, r->scheme, r->authority, r->path, r->chunked);
+    }
+
+    rv = h2_stream_setup_input(stream);
+    if (APR_SUCCESS != rv) goto cleanup;
+
+    stream->scheduled = 1;
+    h2_ihash_add(m->streams, stream);
+    if (h2_stream_is_ready(stream)) {
+        /* already have a response */
+        mst_check_data_for(m, stream, 1);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+                      H2_STRM_MSG(stream, "process, add to readyq"));
     }
     else {
-        status = APR_SUCCESS;
-        h2_ihash_add(m->streams, stream);
-        if (h2_stream_is_ready(stream)) {
-            /* already have a response */
-            mst_check_data_for(m, stream, 1);
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
-                          H2_STRM_MSG(stream, "process, add to readyq")); 
+        h2_iq_add(m->q, stream->id, cmp, session);
+        ms_register_if_needed(m, 1);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+                      H2_STRM_MSG(stream, "process, added to q"));
+    }
+
+cleanup:
+    return rv;
+}
+
+apr_status_t h2_mplx_c1_process(h2_mplx *m,
+                                h2_iqueue *ready_to_process,
+                                h2_stream_get_fn *get_stream,
+                                h2_stream_pri_cmp_fn *stream_pri_cmp,
+                                h2_session *session)
+{
+    apr_status_t rv;
+    int sid;
+
+    H2_MPLX_ENTER(m);
+
+    while ((sid = h2_iq_shift(ready_to_process)) > 0) {
+        h2_stream *stream = get_stream(session, sid);
+        if (stream) {
+            ap_assert(!stream->scheduled);
+            rv = c1_process_stream(session->mplx, stream, stream_pri_cmp, session);
+            if (APR_SUCCESS != rv) {
+                h2_stream_rst(stream, H2_ERR_INTERNAL_ERROR);
+            }
         }
         else {
-            h2_iq_add(m->q, stream->id, cmp, ctx);
-            ms_register_if_needed(m, 1);                
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
-                          H2_STRM_MSG(stream, "process, added to q")); 
+                          "h2_stream(%ld-%d): not found to process", m->id, sid);
         }
     }
 
     H2_MPLX_LEAVE(m);
-    return status;
+    return rv;
 }
+
+apr_status_t h2_mplx_c1_fwd_input(h2_mplx *m, struct h2_iqueue *input_pending,
+                                  h2_stream_get_fn *get_stream,
+                                  struct h2_session *session)
+{
+    int sid;
+
+    H2_MPLX_ENTER(m);
+
+    while ((sid = h2_iq_shift(input_pending)) > 0) {
+        h2_stream *stream = get_stream(session, sid);
+        if (stream) {
+            h2_stream_flush_input(stream);
+            if (stream->input) {
+                if (stream->input_closed) {
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                                  H2_STRM_MSG(stream, "closing input beam"));
+                    h2_beam_close(stream->input);
+                }
+                if (stream->pipe_in) {
+                    apr_file_putc(1, stream->pipe_in);
+                }
+            }
+        }
+    }
+
+    H2_MPLX_LEAVE(m);
+    return APR_SUCCESS;
+}
+
 
 static conn_rec *s_next_secondary(h2_mplx *m)
 {
     h2_stream *stream;
+    apr_status_t rv;
     int sid;
+
     while (!m->aborted && (m->tasks_active < m->limit_active)
            && (sid = h2_iq_shift(m->q)) > 0) {
         
@@ -722,10 +803,33 @@ static conn_rec *s_next_secondary(h2_mplx *m)
             conn_ctx = h2_conn_ctx_create_for_c2(secondary, stream);
             apr_table_setn(secondary->notes, H2_TASK_ID_NOTE, conn_ctx->id);
 
+            apr_pool_create(&stream->mplx_pipe_pool, m->pool);
+            rv = apr_file_pipe_create_pools(&stream->pipe_out, &conn_ctx->pipe_out,
+                                            APR_FULL_NONBLOCK,
+                                            stream->mplx_pipe_pool, conn_ctx->pool);
+            if (APR_SUCCESS != rv) {
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c,
+                              H2_STRM_LOG(APLOGNO(), stream,
+                              "error creating output pipe"));
+                /* TODO: what do do here? */
+            }
+            rv = apr_file_pipe_create_pools(&conn_ctx->pipe_in, &stream->pipe_in,
+                                            APR_READ_BLOCK,
+                                            conn_ctx->pool, stream->mplx_pipe_pool);
+            if (APR_SUCCESS != rv) {
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c,
+                              H2_STRM_LOG(APLOGNO(), stream,
+                              "error creating input pipe"));
+                /* TODO: what do do here? */
+            }
+
             if (stream->input) {
                 h2_beam_on_consumed(stream->input, mst_stream_input_ev,
                                     m_stream_input_consumed, stream);
                 conn_ctx->beam_in = stream->input;
+            }
+            if (!conn_ctx->beam_in || h2_beam_is_closed(conn_ctx->beam_in)) {
+                apr_file_close(stream->pipe_in);
             }
 
             ++m->tasks_active;
@@ -779,6 +883,8 @@ static void s_secondary_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
     ap_assert(conn_ctx->done == 0);
     conn_ctx->done = 1;
     conn_ctx->done_at = apr_time_now();
+    apr_file_close(conn_ctx->pipe_in);
+    apr_file_close(conn_ctx->pipe_out);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_mplx(%s): request done, %f ms elapsed", conn_ctx->id,
                   (conn_ctx->done_at - conn_ctx->started_at) / 1000.0);

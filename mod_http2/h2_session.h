@@ -121,7 +121,7 @@ typedef struct h2_session {
     const char *last_status_msg;    /* the one already reported */
     
     struct h2_iqueue *in_pending;   /* all streams with input pending */
-    struct h2_iqueue *in_process;   /* all streams ready for processing on a secondary */
+    struct h2_iqueue *ready_to_process;  /* all streams ready for processing */
 
 } h2_session;
 

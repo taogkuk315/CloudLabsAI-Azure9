@@ -535,4 +535,14 @@ apr_status_t h2_append_brigade(apr_bucket_brigade *to,
  */
 apr_off_t h2_brigade_mem_size(apr_bucket_brigade *bb);
 
+/**
+ * Drain a pipe used for notification.
+ */
+void h2_util_drain_pipe(apr_file_t *pipe);
+
+/**
+ * Wait on data arriving on a pipe.
+ */
+apr_status_t h2_util_wait_on_pipe(apr_file_t *pipe);
+
 #endif /* defined(__mod_h2__h2_util__) */

@@ -885,8 +885,8 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
         return APR_ENOMEM;
     }
 
-    session->in_process = h2_iq_create(session->pool, (int)session->max_stream_count);
-    if (session->in_process == NULL) {
+    session->ready_to_process = h2_iq_create(session->pool, (int)session->max_stream_count);
+    if (session->ready_to_process == NULL) {
         apr_pool_destroy(pool);
         return APR_ENOMEM;
     }
@@ -1551,31 +1551,6 @@ send_headers:
     return status;
 }
 
-static void h2_session_in_flush(h2_session *session)
-{
-    int id;
-    
-    while ((id = h2_iq_shift(session->in_process)) > 0) {
-        h2_stream *stream = get_stream(session, id);
-        if (stream) {
-            ap_assert(!stream->scheduled);
-            if (h2_stream_prep_processing(stream) == APR_SUCCESS) {
-                h2_mplx_m_process(session->mplx, stream, stream_pri_cmp, session);
-            }
-            else {
-                h2_stream_rst(stream, H2_ERR_INTERNAL_ERROR);
-            }
-        }
-    }
-
-    while ((id = h2_iq_shift(session->in_pending)) > 0) {
-        h2_stream *stream = get_stream(session, id);
-        if (stream) {
-            h2_stream_flush_input(stream);
-        }
-    }
-}
-
 static apr_status_t session_read(h2_session *session, apr_size_t readlen, int block)
 {
     apr_status_t status, rstatus = APR_EAGAIN;
@@ -1642,11 +1617,22 @@ static apr_status_t session_read(h2_session *session, apr_size_t readlen, int bl
 
 static apr_status_t h2_session_read(h2_session *session, int block)
 {
-    apr_status_t status = session_read(session, session->max_stream_mem
-                                       * H2MAX(2, session->open_streams), 
-                                       block);
-    h2_session_in_flush(session);
-    return status;
+    apr_status_t rv = session_read(session, session->max_stream_mem
+                                   * H2MAX(2, session->open_streams),
+                                   block);
+    if (APR_SUCCESS != rv && !APR_STATUS_IS_EAGAIN(rv)) goto cleanup;
+
+    if (!h2_iq_empty(session->ready_to_process)) {
+        h2_mplx_c1_process(session->mplx, session->ready_to_process,
+                           get_stream, stream_pri_cmp, session);
+    }
+
+    if (!h2_iq_empty(session->in_pending)) {
+        h2_mplx_c1_fwd_input(session->mplx, session->in_pending,
+                             get_stream, session);
+    }
+cleanup:
+    return rv;
 }
 
 static const char *StateNames[] = {
@@ -1926,7 +1912,9 @@ static void h2_session_ev_pre_close(h2_session *session, int arg, const char *ms
 
 static void ev_stream_open(h2_session *session, h2_stream *stream)
 {
-    h2_iq_append(session->in_process, stream->id);
+    /* Stream state OPEN means we have received all request headers
+     * and can start processing the stream. */
+    h2_iq_append(session->ready_to_process, stream->id);
 }
 
 static void ev_stream_closed(h2_session *session, h2_stream *stream)

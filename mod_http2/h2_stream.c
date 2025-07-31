@@ -182,7 +182,8 @@ static void H2_STREAM_OUT_LOG(int lvl, h2_stream *s, const char *tag)
     }
 }
 
-static apr_status_t setup_input(h2_stream *stream) {
+apr_status_t h2_stream_setup_input(h2_stream *stream)
+{
     if (stream->input == NULL) {
         int empty = (stream->input_closed
                      && (!stream->in_buffer 
@@ -238,17 +239,9 @@ static apr_status_t close_input(h2_stream *stream)
         stream->trailers = NULL;        
         b = h2_bucket_headers_create(c->bucket_alloc, r);
         input_append_bucket(stream, b);
-        h2_stream_dispatch(stream, H2_SEV_IN_DATA_PENDING);
     }
 
-    rv = h2_stream_flush_input(stream);
-    if (APR_SUCCESS != rv) goto cleanup;
-
-    if (stream->input) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
-                      H2_STRM_MSG(stream, "closing input beam"));
-        rv = h2_beam_close(stream->input);
-    }
+    h2_stream_dispatch(stream, H2_SEV_IN_DATA_PENDING);
 cleanup:
     return rv;
 }
@@ -483,7 +476,9 @@ apr_status_t h2_stream_flush_input(h2_stream *stream)
     apr_status_t status = APR_SUCCESS;
     
     if (stream->in_buffer && !APR_BRIGADE_EMPTY(stream->in_buffer)) {
-        setup_input(stream);
+        if (!stream->input) {
+            h2_stream_setup_input(stream);
+        }
         status = h2_beam_send(stream->input, stream->in_buffer, APR_BLOCK_READ);
         stream->in_last_write = apr_time_now();
     }
@@ -583,20 +578,6 @@ void h2_stream_destroy(h2_stream *stream)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, stream->session->c, 
                   H2_STRM_MSG(stream, "destroy"));
     apr_pool_destroy(stream->pool);
-}
-
-apr_status_t h2_stream_prep_processing(h2_stream *stream)
-{
-    if (stream->request) {
-        const h2_request *r = stream->request;
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
-                      H2_STRM_MSG(stream, "schedule %s %s://%s%s chunked=%d"),
-                      r->method, r->scheme, r->authority, r->path, r->chunked);
-        setup_input(stream);
-        stream->scheduled = 1;
-        return APR_SUCCESS;
-    }
-    return APR_EINVAL;
 }
 
 void h2_stream_rst(h2_stream *stream, int error_code)
