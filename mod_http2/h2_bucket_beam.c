@@ -373,6 +373,9 @@ static apr_status_t wait_not_full(h2_bucket_beam *beam, apr_read_type_e block,
             rv = APR_EAGAIN;
         }
         else {
+            if (beam->send_block_cb) {
+                beam->send_block_cb(beam->send_block_ctx, beam);
+            }
             if (beam->timeout > 0) {
                 rv = apr_thread_cond_timedwait(beam->change, bl->mutex, beam->timeout);
             }
@@ -1146,6 +1149,17 @@ void h2_beam_on_consumed(h2_bucket_beam *beam,
         beam->cons_ev_cb = ev_cb;
         beam->cons_io_cb = io_cb;
         beam->cons_ctx = ctx;
+        leave_yellow(beam, &bl);
+    }
+}
+
+void h2_beam_on_send_block(h2_bucket_beam *beam,
+                           h2_beam_ev_callback *send_block_cb, void *ctx)
+{
+    h2_beam_lock bl;
+    if (enter_yellow(beam, &bl) == APR_SUCCESS) {
+        beam->send_block_cb = send_block_cb;
+        beam->send_block_ctx = ctx;
         leave_yellow(beam, &bl);
     }
 }

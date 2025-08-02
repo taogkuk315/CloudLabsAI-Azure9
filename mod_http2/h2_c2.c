@@ -253,39 +253,6 @@ static void H2_TASK_OUT_LOG(int lvl, conn_rec *c, apr_bucket_brigade *bb,
     }
 }
 
-static void output_consumed(void *ctx, h2_bucket_beam *beam, apr_off_t length)
-{
-    conn_rec *c = ctx;
-    if (c && h2_c2_logio_add_bytes_out) {
-        h2_c2_logio_add_bytes_out(c, length);
-    }
-}
-
-static apr_status_t beam_out(conn_rec *c, h2_conn_ctx_t *conn_ctx, apr_bucket_brigade* bb, int block)
-{
-    apr_off_t written, left;
-    apr_status_t rv;
-
-    apr_brigade_length(bb, 0, &written);
-    H2_TASK_OUT_LOG(APLOG_TRACE2, c, bb, "h2_c2 beam_out");
-    h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "beam_out(before)");
-
-    rv = h2_beam_send(conn_ctx->beam_out, bb,
-                      block? APR_BLOCK_READ : APR_NONBLOCK_READ);
-    h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "beam_out(after)");
-    
-    if (APR_STATUS_IS_EAGAIN(rv)) {
-        apr_brigade_length(bb, 0, &left);
-        written -= left;
-        rv = APR_SUCCESS;
-    }
-
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
-                  "h2_c2(%s): beam_out, added %ld bytes",
-                  conn_ctx->id, (long)written);
-    return rv;
-}
-
 typedef struct {
     apr_bucket_brigade *bb;       /* c2: data in holding area */
 } h2_c2_fctx_in_t;
@@ -467,6 +434,55 @@ static apr_status_t register_output_at_mplx(h2_conn_ctx_t *conn_ctx, conn_rec *c
     return h2_mplx_t_out_open(conn_ctx->mplx, c);
 }
 
+static void output_consumed(void *ctx, h2_bucket_beam *beam, apr_off_t length)
+{
+    conn_rec *c = ctx;
+    if (c && h2_c2_logio_add_bytes_out) {
+        h2_c2_logio_add_bytes_out(c, length);
+    }
+}
+
+static void send_blocked(void *ctx, h2_bucket_beam *beam)
+{
+    conn_rec *c2 = ctx;
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c2);
+
+    (void)beam;
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
+                  "h2_c2(%s): sending blocked, notifying pipe",
+                  conn_ctx? conn_ctx->id : "null");
+    if (conn_ctx && conn_ctx->pipe_out) {
+        apr_file_putc(1, conn_ctx->pipe_out);
+    }
+}
+
+static apr_status_t beam_out(conn_rec *c, h2_conn_ctx_t *conn_ctx, apr_bucket_brigade* bb, int block)
+{
+    apr_off_t written, left;
+    apr_status_t rv;
+
+    apr_brigade_length(bb, 0, &written);
+    H2_TASK_OUT_LOG(APLOG_TRACE2, c, bb, "h2_c2 beam_out");
+    h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "beam_out(before)");
+
+    rv = h2_beam_send(conn_ctx->beam_out, bb,
+                      block? APR_BLOCK_READ : APR_NONBLOCK_READ);
+    h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "beam_out(after)");
+
+    if (APR_STATUS_IS_EAGAIN(rv)) {
+        apr_brigade_length(bb, 0, &left);
+        written -= left;
+        rv = APR_SUCCESS;
+    }
+    /* let c1 know that it needs to check the c2 beam_out */
+    apr_file_putc(1, conn_ctx->pipe_out);
+
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
+                  "h2_c2(%s): beam_out, added %ld bytes",
+                  conn_ctx->id, (long)written);
+    return rv;
+}
+
 static apr_status_t h2_c2_filter_out(ap_filter_t* f,
                                                apr_bucket_brigade* bb)
 {
@@ -602,6 +618,7 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     h2_beam_buffer_size_set(conn_ctx->beam_out, conn_ctx->mplx->stream_max_mem);
     h2_beam_send_from(conn_ctx->beam_out, conn_ctx->pool);
     h2_beam_on_consumed(conn_ctx->beam_out, NULL, output_consumed, c);
+    h2_beam_on_send_block(conn_ctx->beam_out, send_blocked, c);
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_secondary(%s), adding filters", conn_ctx->id);
@@ -619,9 +636,12 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_c2(%s): processing done", conn_ctx->id);
+    h2_beam_on_send_block(conn_ctx->beam_out, NULL, NULL);
     if (!conn_ctx->registered_at_mplx) {
         return register_output_at_mplx(conn_ctx, c);
     }
+    apr_file_putc(1, conn_ctx->pipe_out);
+    
     return APR_SUCCESS;
 }
 
