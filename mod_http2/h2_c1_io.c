@@ -403,22 +403,21 @@ struct h2_c1_filter_ctx_t {
     apr_bucket *cur;
 };
 
-static apr_status_t recv_RAW_DATA(conn_rec *c, h2_c1_filter_ctx_t *cin,
-                                  apr_bucket *b, apr_read_type_e block)
+static apr_status_t feed_bucket(h2_session *session,
+                                apr_bucket *b, apr_read_type_e block,
+                                apr_ssize_t *inout_len)
 {
-    h2_session *session = cin->session;
     apr_status_t status = APR_SUCCESS;
     apr_size_t len;
     const char *data;
     ssize_t n;
 
-    (void)c;
     status = apr_bucket_read(b, &data, &len, block);
 
     while (status == APR_SUCCESS && len > 0) {
         n = nghttp2_session_mem_recv(session->ngh2, (const uint8_t *)data, len);
 
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE4, 0, session->c,
                       H2_SSSN_MSG(session, "fed %ld bytes to nghttp2, %ld read"),
                       (long)len, (long)n);
         if (n < 0) {
@@ -429,7 +428,7 @@ static apr_status_t recv_RAW_DATA(conn_rec *c, h2_c1_filter_ctx_t *cin,
             }
         }
         else {
-            session->io.bytes_read += n;
+            *inout_len += n;
             if ((apr_ssize_t)len <= n) {
                 break;
             }
@@ -441,31 +440,23 @@ static apr_status_t recv_RAW_DATA(conn_rec *c, h2_c1_filter_ctx_t *cin,
     return status;
 }
 
-static apr_status_t recv_RAW_brigade(conn_rec *c, h2_c1_filter_ctx_t *cin,
-                                     apr_bucket_brigade *bb,
-                                     apr_read_type_e block)
+static apr_status_t feed_brigade(h2_session *session,
+                                 apr_bucket_brigade *bb,
+                                 apr_read_type_e block,
+                                 apr_ssize_t *inout_len)
 {
     apr_status_t status = APR_SUCCESS;
     apr_bucket* b;
-    int consumed = 0;
 
-    h2_util_bb_log(c, c->id, APLOG_TRACE2, "RAW_in", bb);
-    while (status == APR_SUCCESS && !APR_BRIGADE_EMPTY(bb)) {
+    while (!APR_BRIGADE_EMPTY(bb)) {
         b = APR_BRIGADE_FIRST(bb);
-
-        if (APR_BUCKET_IS_METADATA(b)) {
-            /* nop */
+        if (!APR_BUCKET_IS_METADATA(b)) {
+            status = feed_bucket(session, b, block, inout_len);
+            if (APR_SUCCESS != status) goto cleanup;
         }
-        else {
-            status = recv_RAW_DATA(c, cin, b, block);
-        }
-        consumed = 1;
         apr_bucket_delete(b);
     }
-
-    if (!consumed && status == APR_SUCCESS && block == APR_NONBLOCK_READ) {
-        return APR_EAGAIN;
-    }
+cleanup:
     return status;
 }
 
@@ -478,12 +469,8 @@ h2_c1_filter_ctx_t *h2_c1_filter_ctx_t_create(h2_session *session)
         return NULL;
     }
     cin->session = session;
+    cin->bb = apr_brigade_create(cin->session->pool, cin->session->c->bucket_alloc);
     return cin;
-}
-
-void h2_c1_filter_timeout_set(h2_c1_filter_ctx_t *cin, apr_interval_time_t timeout)
-{
-    cin->timeout = timeout;
 }
 
 apr_status_t h2_c1_filter_input(ap_filter_t* f,
@@ -494,10 +481,8 @@ apr_status_t h2_c1_filter_input(ap_filter_t* f,
 {
     h2_c1_filter_ctx_t *cin = f->ctx;
     apr_status_t status = APR_SUCCESS;
-    apr_interval_time_t saved_timeout = -1;
-    const int trace1 = APLOGctrace1(f->c);
 
-    if (trace1) {
+    if (APLOGctrace1(f->c)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
                       "h2_session(%ld): read, %s, mode=%d, readbytes=%ld",
                       (long)f->c->id, (block == APR_BLOCK_READ)?
@@ -512,48 +497,41 @@ apr_status_t h2_c1_filter_input(ap_filter_t* f,
         return (block == APR_BLOCK_READ)? APR_SUCCESS : APR_EAGAIN;
     }
 
-    if (!cin->bb) {
-        cin->bb = apr_brigade_create(cin->session->pool, f->c->bucket_alloc);
-    }
+    while (APR_SUCCESS == status) {
+        apr_ssize_t bytes_fed = 0;
 
-    if (!cin->socket) {
-        cin->socket = ap_get_conn_socket(f->c);
-    }
-
-    if (APR_BRIGADE_EMPTY(cin->bb)) {
-        /* We only do a blocking read when we have no streams to process. So,
-         * in httpd scoreboard lingo, we are in a KEEPALIVE connection state.
-         */
-        if (block == APR_BLOCK_READ) {
-            if (cin->timeout > 0) {
-                apr_socket_timeout_get(cin->socket, &saved_timeout);
-                apr_socket_timeout_set(cin->socket, cin->timeout);
-            }
+        if (APR_BRIGADE_EMPTY(cin->bb)) {
+            status = ap_get_brigade(f->next, cin->bb, AP_MODE_READBYTES,
+                                    block, readbytes);
         }
-        status = ap_get_brigade(f->next, cin->bb, AP_MODE_READBYTES,
-                                block, readbytes);
-        if (saved_timeout != -1) {
-            apr_socket_timeout_set(cin->socket, saved_timeout);
+
+        switch (status) {
+            case APR_SUCCESS:
+                h2_util_bb_log(f->c, cin-session->id, APLOG_TRACE2, "c1 in", cin->bb);
+                status = feed_brigade(cin->session, cin->bb, block, &bytes_fed);
+                break;
+            case APR_EOF:
+            case APR_EAGAIN:
+            case APR_TIMEUP:
+                if (APLOGctrace1(f->c)) {
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
+                                  "h2_session(%ld): read", f->c->id);
+                }
+                break;
+            default:
+                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, f->c, APLOGNO(03046)
+                              "h2_session(%ld): error reading", f->c->id);
+                break;
+        }
+        if (bytes_fed > 0) {
+            cin->session->io.bytes_read += bytes_fed;
+            break;
+        }
+        else if (status == APR_SUCCESS && block == APR_NONBLOCK_READ) {
+            status = APR_EAGAIN;
         }
     }
 
-    switch (status) {
-        case APR_SUCCESS:
-            status = recv_RAW_brigade(f->c, cin, cin->bb, block);
-            break;
-        case APR_EOF:
-        case APR_EAGAIN:
-        case APR_TIMEUP:
-            if (trace1) {
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
-                              "h2_session(%ld): read", f->c->id);
-            }
-            break;
-        default:
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, f->c, APLOGNO(03046)
-                          "h2_session(%ld): error reading", f->c->id);
-            break;
-    }
     return status;
 }
 

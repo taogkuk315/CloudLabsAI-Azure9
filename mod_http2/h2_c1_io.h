@@ -79,8 +79,6 @@ typedef struct h2_c1_filter_ctx_t h2_c1_filter_ctx_t;
 
 h2_c1_filter_ctx_t *h2_c1_filter_ctx_t_create(struct h2_session *session);
 
-void h2_c1_filter_timeout_set(h2_c1_filter_ctx_t *fctx, apr_interval_time_t timeout);
-
 apr_status_t h2_c1_filter_input(ap_filter_t* filter,
                                 apr_bucket_brigade* brigade,
                                 ap_input_mode_t mode,

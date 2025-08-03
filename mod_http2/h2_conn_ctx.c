@@ -75,7 +75,7 @@ h2_conn_ctx_t *h2_conn_ctx_create_for_c2(conn_rec *c, struct h2_stream *stream)
 
     ap_assert(c->master);
     apr_pool_create(&pool, c->pool);
-    apr_pool_tag(pool, "h2_secondary");
+    apr_pool_tag(pool, "h2_c2");
     id = apr_psprintf(pool, "%ld-%d", stream->session->id, stream->id);
     ctx = ctx_create(pool, c, id);
     ctx->server = c->master->base_server; /* will be overridden once request_rec exists */

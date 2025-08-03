@@ -85,8 +85,12 @@ struct h2_stream {
     apr_size_t max_mem;         /* maximum amount of data buffered */
 
     apr_pool_t *mplx_pipe_pool; /* mplx child pool for pipe ops via mplx */
-    apr_file_t *pipe_in;        /* for mplx to notifying about input data availability */
-    apr_file_t *pipe_out;       /* for mplx to poll output data availability */
+    apr_file_t *pipe_in;        /* signal input is available */
+    apr_file_t *pipe_in_read;   /* observe input has been read by c2 */
+    apr_file_t *pipe_out;       /* observe output produced by c2 */
+
+    apr_pollfd_t *pfd_in_read;  /* poll pipe_in_read */
+    apr_pollfd_t *pfd_out;      /* poll pipe_out */
 
     int rst_error;              /* stream error for RST_STREAM */
     unsigned int aborted   : 1; /* was aborted */

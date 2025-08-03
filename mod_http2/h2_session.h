@@ -54,7 +54,6 @@ typedef enum {
     H2_SESSION_EV_CONN_ERROR,       /* connection error */
     H2_SESSION_EV_PROTO_ERROR,      /* protocol error */
     H2_SESSION_EV_CONN_TIMEOUT,     /* connection timeout */
-    H2_SESSION_EV_NO_IO,            /* nothing has been read or written */
     H2_SESSION_EV_FRAME_RCVD,       /* a frame has been received */
     H2_SESSION_EV_NGH2_DONE,        /* nghttp2 wants neither read nor write anything */
     H2_SESSION_EV_MPM_STOPPING,     /* the process is stopping */
@@ -85,8 +84,6 @@ typedef struct h2_session {
     
     unsigned int reprioritize  : 1; /* scheduled streams priority changed */
     unsigned int flush         : 1; /* flushing output necessary */
-    unsigned int have_read     : 1; /* session has read client data */
-    unsigned int have_written  : 1; /* session did write data to client */
     apr_interval_time_t  wait_us;   /* timeout during BUSY_WAIT state, micro secs */
     
     struct h2_push_diary *push_diary; /* remember pushes, avoid duplicates */

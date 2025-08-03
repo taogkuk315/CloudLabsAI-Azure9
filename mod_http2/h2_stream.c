@@ -532,9 +532,11 @@ h2_stream *h2_stream_create(int id, apr_pool_t *pool, h2_session *session,
     stream->max_mem      = session->max_stream_mem;
     
 #ifdef H2_NG2_LOCAL_WIN_SIZE
-    stream->in_window_size = 
-        nghttp2_session_get_stream_local_window_size(
-            stream->session->ngh2, stream->id);
+    if (id) {
+        stream->in_window_size =
+            nghttp2_session_get_stream_local_window_size(
+                stream->session->ngh2, stream->id);
+    }
 #endif
 
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 

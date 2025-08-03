@@ -181,7 +181,7 @@ conn_rec *h2_c2_create(conn_rec *c1, int sec_id, apr_pool_t *parent)
     }
     apr_allocator_owner_set(allocator, pool);
     apr_pool_abort_set(abort_on_oom, pool);
-    apr_pool_tag(pool, "h2_secondary_conn");
+    apr_pool_tag(pool, "h2_c2_conn");
 
     c2 = (conn_rec *) apr_palloc(pool, sizeof(conn_rec));
     memcpy(c2, c1, sizeof(conn_rec));
@@ -226,14 +226,14 @@ conn_rec *h2_c2_create(conn_rec *c1, int sec_id, apr_pool_t *parent)
     }
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, c2,
-                  "h2_secondary(%s): created", c2->log_id);
+                  "h2_c2(%s): created", c2->log_id);
     return c2;
 }
 
 void h2_c2_destroy(conn_rec *c2)
 {
     ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, c2,
-                  "h2_secondary(%s): destroy", c2->log_id);
+                  "h2_c2(%s): destroy", c2->log_id);
     c2->sbh = NULL;
     apr_pool_destroy(c2->pool);
 }
@@ -277,7 +277,7 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
 
     if (trace1) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                      "h2_secondary_in(%s): read, mode=%d, block=%d, readbytes=%ld", 
+                      "h2_c2_in(%s): read, mode=%d, block=%d, readbytes=%ld",
                       conn_ctx->id, mode, block, (long)readbytes);
     }
     
@@ -313,18 +313,21 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
         /* Get more input data for our request. */
         if (trace1) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
-                          "h2_secondary_in(%s): get more data from mplx, block=%d, "
+                          "h2_c2_in(%s): get more data from mplx, block=%d, "
                           "readbytes=%ld", conn_ctx->id, block, (long)readbytes);
         }
         if (conn_ctx->beam_in) {
 receive:
             status = h2_beam_receive(conn_ctx->beam_in, fctx->bb, APR_NONBLOCK_READ,
                                      128*1024, NULL);
+            apr_file_putc(1, conn_ctx->pipe_in_read);
             if (APR_STATUS_IS_EAGAIN(status) && APR_BLOCK_READ == block) {
                 status = h2_util_wait_on_pipe(conn_ctx->pipe_in);
                 if (APR_SUCCESS == status) {
                     goto receive;
                 }
+            }
+            else if (APR_SUCCESS == status) {
             }
         }
         else {
@@ -333,7 +336,7 @@ receive:
         
         if (trace1) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, f->c,
-                          "h2_secondary_in(%s): read returned", conn_ctx->id);
+                          "h2_c2_in(%s): read returned", conn_ctx->id);
         }
         if (APR_STATUS_IS_EAGAIN(status) 
             && (mode == AP_MODE_GETLINE || block == APR_BLOCK_READ)) {
@@ -351,7 +354,7 @@ receive:
 
         if (trace1) {
             h2_util_bb_log(f->c, conn_ctx->stream_id, APLOG_TRACE2,
-                        "input.beam recv raw", fctx->bb);
+                        "c2 input recv raw", fctx->bb);
         }
         if (h2_c2_logio_add_bytes_in) {
             apr_brigade_length(bb, 0, &bblen);
@@ -366,13 +369,13 @@ receive:
 
     if (trace1) {
         h2_util_bb_log(f->c, conn_ctx->stream_id, APLOG_TRACE2,
-                    "task_input.bb", fctx->bb);
+                    "c2 input.bb", fctx->bb);
     }
            
     if (APR_BRIGADE_EMPTY(fctx->bb)) {
         if (trace1) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                          "h2_secondary_in(%s): no data", conn_ctx->id);
+                          "h2_c2_in(%s): no data", conn_ctx->id);
         }
         return (block == APR_NONBLOCK_READ)? APR_EAGAIN : APR_EOF;
     }
@@ -400,7 +403,7 @@ receive:
             buffer[len] = 0;
             if (trace1) {
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
-                              "h2_secondary_in(%s): getline: %s",
+                              "h2_c2_in(%s): getline: %s",
                               conn_ctx->id, buffer);
             }
         }
@@ -410,7 +413,7 @@ receive:
          * to support it. Seems to work. */
         ap_log_cerror(APLOG_MARK, APLOG_ERR, APR_ENOTIMPL, f->c,
                       APLOGNO(03472) 
-                      "h2_secondary_in(%s), unsupported READ mode %d", 
+                      "h2_c2_in(%s), unsupported READ mode %d",
                       conn_ctx->id, mode);
         status = APR_ENOTIMPL;
     }
@@ -418,20 +421,24 @@ receive:
     if (trace1) {
         apr_brigade_length(bb, 0, &bblen);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
-                      "h2_secondary_in(%s): %ld data bytes", conn_ctx->id, (long)bblen);
+                      "h2_c2_in(%s): %ld data bytes", conn_ctx->id, (long)bblen);
     }
     return status;
 }
 
 static apr_status_t register_output_at_mplx(h2_conn_ctx_t *conn_ctx, conn_rec *c)
 {
+    apr_status_t rv;
+
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(03348)
                   "h2_c2(%s): open output to %s %s %s",
                   conn_ctx->id, conn_ctx->request->method,
                   conn_ctx->request->authority,
                   conn_ctx->request->path);
     conn_ctx->registered_at_mplx = 1;
-    return h2_mplx_t_out_open(conn_ctx->mplx, c);
+    rv = h2_mplx_t_out_open(conn_ctx->mplx, c);
+    apr_file_putc(1, conn_ctx->pipe_out);
+    return rv;
 }
 
 static void output_consumed(void *ctx, h2_bucket_beam *beam, apr_off_t length)
@@ -474,9 +481,6 @@ static apr_status_t beam_out(conn_rec *c, h2_conn_ctx_t *conn_ctx, apr_bucket_br
         written -= left;
         rv = APR_SUCCESS;
     }
-    /* let c1 know that it needs to check the c2 beam_out */
-    apr_file_putc(1, conn_ctx->pipe_out);
-
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
                   "h2_c2(%s): beam_out, added %ld bytes",
                   conn_ctx->id, (long)written);
@@ -522,6 +526,10 @@ send:
                       "h2_c2(%s): open output, buffered=%d",
                       conn_ctx->id, !conn_ctx->out_unbuffered);
         rv = register_output_at_mplx(conn_ctx, f->c);
+    }
+    else if (conn_ctx->registered_at_mplx) {
+        /* let c1 know that it needs to check the c2 beam_out */
+        apr_file_putc(1, conn_ctx->pipe_out);
     }
 
 cleanup:
@@ -621,7 +629,7 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     h2_beam_on_send_block(conn_ctx->beam_out, send_blocked, c);
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                  "h2_secondary(%s), adding filters", conn_ctx->id);
+                  "h2_c2(%s), adding filters", conn_ctx->id);
     ap_add_input_filter("H2_C2_NET_IN", NULL, NULL, c);
     ap_add_output_filter("H2_C2_NET_CATCH_H1", NULL, NULL, c);
     ap_add_output_filter("H2_C2_NET_OUT", NULL, NULL, c);
@@ -641,7 +649,7 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
         return register_output_at_mplx(conn_ctx, c);
     }
     apr_file_putc(1, conn_ctx->pipe_out);
-    
+
     return APR_SUCCESS;
 }
 

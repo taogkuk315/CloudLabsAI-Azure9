@@ -57,6 +57,7 @@ struct h2_mplx {
     long id;
     conn_rec *c;
     apr_pool_t *pool;
+    struct h2_stream *stream0;      /* the main connection */
     server_rec *s;                  /* server for master conn */
 
     unsigned int event_pending;
@@ -72,7 +73,7 @@ struct h2_mplx {
         
     int max_streams;        /* max # of concurrent streams */
     int max_stream_started; /* highest stream id that started processing */
-    int tasks_active;       /* # of tasks being processed from this mplx */
+    int streams_active;       /* # of tasks being processed from this mplx */
     int limit_active;       /* current limit on active tasks, dynamic */
     int max_active;         /* max, hard limit # of active tasks in a process */
     
@@ -87,8 +88,10 @@ struct h2_mplx {
     apr_size_t stream_max_mem;
     
     apr_pool_t *spare_io_pool;
-    apr_array_header_t *spare_secondary; /* spare secondary connections */
-    
+    apr_array_header_t *spare_c2; /* spare secondary connections */
+
+    apr_pollset_t *pollset;
+
     struct h2_workers *workers;
 };
 
@@ -102,7 +105,7 @@ apr_status_t h2_mplx_m_child_init(apr_pool_t *pool, server_rec *s);
  * Create the multiplexer for the given HTTP2 session. 
  * Implicitly has reference count 1.
  */
-h2_mplx *h2_mplx_m_create(conn_rec *c, server_rec *s, apr_pool_t *master, 
+h2_mplx *h2_mplx_m_create(struct h2_stream *stream0, server_rec *s, apr_pool_t *master,
                           struct h2_workers *workers);
 
 /**
@@ -130,13 +133,6 @@ int h2_mplx_m_shutdown(h2_mplx *m);
  * @param stream the stream ready for cleanup
  */
 apr_status_t h2_mplx_m_stream_cleanup(h2_mplx *m, struct h2_stream *stream);
-
-/**
- * Waits on output data from any stream in this session to become available. 
- * Returns APR_TIMEUP if no data arrived in the given time.
- */
-apr_status_t h2_mplx_m_out_trywait(h2_mplx *m, apr_interval_time_t timeout,
-                                   struct apr_thread_cond_t *iowait);
 
 apr_status_t h2_mplx_m_keep_active(h2_mplx *m, struct h2_stream *stream);
 
@@ -172,19 +168,13 @@ apr_status_t h2_mplx_m_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
 typedef apr_status_t stream_ev_callback(void *ctx, struct h2_stream *stream);
 
 /**
- * Check if the multiplexer has events for the master connection pending.
- * @return != 0 iff there are events pending
+ * Poll the primary connection for input and the active streams for output.
+ * Invoke the callback for any stream where an event happened.
  */
-int h2_mplx_m_has_master_events(h2_mplx *m);
-
-/**
- * Dispatch events for the master connection, such as
- ± @param m the multiplexer
- * @param on_resume new output data has arrived for a suspended stream 
- * @param ctx user supplied argument to invocation.
- */
-apr_status_t h2_mplx_m_dispatch_master_events(h2_mplx *m, stream_ev_callback *on_resume, 
-                                              void *ctx);
+apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
+                            stream_ev_callback *on_stream_input,
+                            stream_ev_callback *on_stream_output,
+                            void *on_ctx);
 
 int h2_mplx_m_awaits_data(h2_mplx *m);
 
@@ -194,23 +184,16 @@ apr_status_t h2_mplx_m_stream_do(h2_mplx *m, h2_mplx_stream_cb *cb, void *ctx);
 
 apr_status_t h2_mplx_m_client_rst(h2_mplx *m, int stream_id);
 
-/**
- * Master connection has entered idle mode.
- * @param m the mplx instance of the master connection
- * @return != SUCCESS iff connection should be terminated
- */
-apr_status_t h2_mplx_m_idle(h2_mplx *m);
-
 /*******************************************************************************
  * From a secondary connection processing: h2_mplx_s_*
  ******************************************************************************/
-apr_status_t h2_mplx_s_pop_secondary(h2_mplx *m, conn_rec **out_c);
-void h2_mplx_s_secondary_done(conn_rec *c, conn_rec **out_c);
+apr_status_t h2_mplx_s_pop_c2(h2_mplx *m, conn_rec **out_c);
+void h2_mplx_s_c2_done(conn_rec *c, conn_rec **out_c);
 
 /**
  * Opens the output for a secondary (stream processing) connection to the mplx.
  */
-apr_status_t h2_mplx_t_out_open(h2_mplx *mplx, conn_rec *secondary);
+apr_status_t h2_mplx_t_out_open(h2_mplx *mplx, conn_rec *c2);
 
 /**
  * Get the stream that belongs to the given task.
