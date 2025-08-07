@@ -256,7 +256,7 @@ static const char *val_H2_PUSH(apr_pool_t *p, server_rec *s,
     if (conn_ctx) {
         if (r) {
             if (conn_ctx->stream_id) {
-                h2_stream *stream = h2_mplx_t_stream_get(conn_ctx->mplx, conn_ctx->stream_id);
+                const h2_stream *stream = h2_mplx_c2_stream_get(conn_ctx->mplx, conn_ctx->stream_id);
                 if (stream && stream->push_policy != H2_PUSH_NONE) {
                     return "on";
                 }
@@ -292,7 +292,7 @@ static const char *val_H2_PUSHED_ON(apr_pool_t *p, server_rec *s,
 {
     if (conn_ctx) {
         if (conn_ctx->stream_id && !H2_STREAM_CLIENT_INITIATED(conn_ctx->stream_id)) {
-            h2_stream *stream = h2_mplx_t_stream_get(conn_ctx->mplx, conn_ctx->stream_id);
+            const h2_stream *stream = h2_mplx_c2_stream_get(conn_ctx->mplx, conn_ctx->stream_id);
             if (stream) {
                 return apr_itoa(p, stream->initiated_on);
             }

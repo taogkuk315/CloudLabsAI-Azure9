@@ -162,7 +162,7 @@ static apr_status_t slot_pull_task(h2_slot *slot, h2_mplx *m)
 {
     apr_status_t rv;
     
-    rv = h2_mplx_s_pop_c2(m, &slot->connection);
+    rv = h2_mplx_worker_pop_c2(m, &slot->connection);
     if (slot->connection) {
         /* Ok, we got something to give back to the worker for execution. 
          * If we still have idle workers, we let the worker be sticky, 
@@ -266,10 +266,10 @@ static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)
              * mplx the opportunity to give us back a new task right away.
              */
             if (!slot->workers->aborted && --slot->sticks > 0) {
-                h2_mplx_s_c2_done(slot->connection, &slot->connection);
+                h2_mplx_worker_c2_done(slot->connection, &slot->connection);
             }
             else {
-                h2_mplx_s_c2_done(slot->connection, NULL);
+                h2_mplx_worker_c2_done(slot->connection, NULL);
                 slot->connection = NULL;
             }
         } while (slot->connection);

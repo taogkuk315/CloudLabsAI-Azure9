@@ -436,7 +436,7 @@ static apr_status_t register_output_at_mplx(h2_conn_ctx_t *conn_ctx, conn_rec *c
                   conn_ctx->request->authority,
                   conn_ctx->request->path);
     conn_ctx->registered_at_mplx = 1;
-    rv = h2_mplx_t_out_open(conn_ctx->mplx, c);
+    rv = h2_mplx_c2_out_open(conn_ctx->mplx, c);
     apr_file_putc(1, conn_ctx->pipe_out);
     return rv;
 }

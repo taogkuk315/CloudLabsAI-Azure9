@@ -79,7 +79,7 @@ apr_status_t h2_c1_child_init(apr_pool_t *pool, server_rec *s)
     ap_register_input_filter("H2_C1_IN", h2_c1_filter_input,
                              NULL, AP_FTYPE_CONNECTION);
    
-    return h2_mplx_m_child_init(pool, s);
+    return h2_mplx_c1_child_init(pool, s);
 }
 
 apr_status_t h2_c1_setup(conn_rec *c, request_rec *r, server_rec *s)
@@ -102,7 +102,7 @@ apr_status_t h2_c1_setup(conn_rec *c, request_rec *r, server_rec *s)
     ap_assert(ctx);
     ctx->session = session;
     /* remove the input filter of mod_reqtimeout, now that the connection
-     * is established and we have swtiched to h2. reqtimeout has supervised
+     * is established and we have switched to h2. reqtimeout has supervised
      * possibly configured handshake timeouts and needs to get out of the way
      * now since the rest of its state handling assumes http/1.x to take place. */
     ap_remove_input_filter_byhandle(c->input_filters, "reqtimeout");

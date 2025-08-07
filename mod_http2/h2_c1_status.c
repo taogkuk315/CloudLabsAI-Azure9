@@ -195,9 +195,9 @@ typedef struct {
     int idx;
 } stream_ctx_t;
 
-static int add_stream(h2_stream *stream, void *ctx)
+static int add_stream(h2_stream *stream, void *userdata)
 {
-    stream_ctx_t *x = ctx;
+    stream_ctx_t *x = userdata;
     int32_t flowIn, flowOut;
     
     flowIn = nghttp2_session_get_stream_effective_local_window_size(x->s->ngh2, stream->id); 
@@ -223,12 +223,12 @@ static void add_streams(apr_bucket_brigade *bb, h2_session *s, int last)
     x.s = s;
     x.idx = 0;
     bbout(bb, "  \"streams\": {");
-    h2_mplx_m_stream_do(s->mplx, add_stream, &x);
+    h2_mplx_c1_streams_do(s->mplx, add_stream, &x);
     bbout(bb, "\n  }%s\n", last? "" : ",");
 }
 
 static void add_push(apr_bucket_brigade *bb, h2_session *s, 
-                     h2_stream *stream, int last) 
+                     const h2_stream *stream, int last)
 {
     h2_push_diary *diary;
     apr_status_t status;
@@ -274,7 +274,7 @@ static void add_out(apr_bucket_brigade *bb, h2_session *s, int last)
 }
 
 static void add_stats(apr_bucket_brigade *bb, h2_session *s, 
-                     h2_stream *stream, int last) 
+                     const h2_stream *stream, int last)
 {
     bbout(bb, "  \"stats\": {\n");
     add_in(bb, s, 0);
@@ -286,7 +286,7 @@ static void add_stats(apr_bucket_brigade *bb, h2_session *s,
 static apr_status_t h2_status_insert(h2_conn_ctx_t *conn_ctx, apr_bucket *b)
 {
     h2_mplx *m = conn_ctx->mplx;
-    h2_stream *stream = h2_mplx_t_stream_get(m, conn_ctx->stream_id);
+    const h2_stream *stream = h2_mplx_c2_stream_get(m, conn_ctx->stream_id);
     h2_session *s;
     conn_rec *c;
     

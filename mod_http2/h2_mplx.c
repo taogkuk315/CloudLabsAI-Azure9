@@ -76,7 +76,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                             void *on_ctx);
 
 
-apr_status_t h2_mplx_m_child_init(apr_pool_t *pool, server_rec *s)
+apr_status_t h2_mplx_c1_child_init(apr_pool_t *pool, server_rec *s)
 {
     return APR_SUCCESS;
 }
@@ -159,7 +159,7 @@ static void m_stream_cleanup(h2_mplx *m, h2_stream *stream)
  *   their HTTP/1 cousins, the separate allocator seems to work better
  *   than protecting a shared h2_session one with an own lock.
  */
-h2_mplx *h2_mplx_m_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent,
+h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent,
                           h2_workers *workers)
 {
     apr_status_t status = APR_SUCCESS;
@@ -235,7 +235,7 @@ failure:
     return NULL;
 }
 
-int h2_mplx_m_shutdown(h2_mplx *m)
+int h2_mplx_c1_shutdown(h2_mplx *m)
 {
     int max_stream_started = 0;
     
@@ -354,7 +354,7 @@ static int m_stream_iter_wrap(void *ctx, void *stream)
     return x->cb(stream, x->ctx);
 }
 
-apr_status_t h2_mplx_m_stream_do(h2_mplx *m, h2_mplx_stream_cb *cb, void *ctx)
+apr_status_t h2_mplx_c1_streams_do(h2_mplx *m, h2_mplx_stream_cb *cb, void *ctx)
 {
     stream_iter_ctx_t x;
     
@@ -420,7 +420,7 @@ static int m_stream_cancel_iter(void *ctx, void *val) {
     return 0;
 }
 
-void h2_mplx_m_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
+void h2_mplx_c1_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
 {
     apr_status_t status;
     int i, wait_secs = 60, old_aborted;
@@ -488,7 +488,7 @@ void h2_mplx_m_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c, "h2_mplx(%ld): released", m->id);
 }
 
-apr_status_t h2_mplx_m_stream_cleanup(h2_mplx *m, h2_stream *stream)
+apr_status_t h2_mplx_c1_stream_cleanup(h2_mplx *m, h2_stream *stream)
 {
     H2_MPLX_ENTER(m);
     
@@ -500,7 +500,7 @@ apr_status_t h2_mplx_m_stream_cleanup(h2_mplx *m, h2_stream *stream)
     return APR_SUCCESS;
 }
 
-h2_stream *h2_mplx_t_stream_get(h2_mplx *m, int stream_id)
+const h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id)
 {
     h2_stream *s = NULL;
     
@@ -556,7 +556,7 @@ static apr_status_t t_out_open(h2_mplx *m, conn_rec *c)
     return APR_SUCCESS;
 }
 
-apr_status_t h2_mplx_t_out_open(h2_mplx *m, conn_rec *secondary)
+apr_status_t h2_mplx_c2_out_open(h2_mplx *m, conn_rec *secondary)
 {
     apr_status_t status;
     
@@ -639,7 +639,7 @@ static void mst_check_data_for(h2_mplx *m, h2_stream *stream, int mplx_is_locked
     }
 }
 
-apr_status_t h2_mplx_m_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
+apr_status_t h2_mplx_c1_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
                                     h2_session *session)
 {
     apr_status_t status;
@@ -864,7 +864,7 @@ static conn_rec *s_next_c2(h2_mplx *m)
     return NULL;
 }
 
-apr_status_t h2_mplx_s_pop_c2(h2_mplx *m, conn_rec **out_c)
+apr_status_t h2_mplx_worker_pop_c2(h2_mplx *m, conn_rec **out_c)
 {
     apr_status_t rv = APR_EOF;
     
@@ -946,7 +946,7 @@ static void s_c2_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
     }
 }
 
-void h2_mplx_s_c2_done(conn_rec *c2, conn_rec **out_c2)
+void h2_mplx_worker_c2_done(conn_rec *c2, conn_rec **out_c2)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c2);
     h2_mplx *m;
@@ -1030,29 +1030,6 @@ static apr_status_t m_be_annoyed(h2_mplx *m)
  * mplx master events dispatching
  ******************************************************************************/
 
-apr_status_t h2_mplx_m_keep_active(h2_mplx *m, h2_stream *stream)
-{
-    mst_check_data_for(m, stream, 0);
-    return APR_SUCCESS;
-}
-
-int h2_mplx_m_awaits_data(h2_mplx *m)
-{
-    int waiting = 1;
-     
-    H2_MPLX_ENTER_ALWAYS(m);
-
-    if (h2_ihash_empty(m->streams)) {
-        waiting = 0;
-    }
-    else if (!m->streams_active && !h2_ififo_count(m->readyq) && h2_iq_empty(m->q)) {
-        waiting = 0;
-    }
-
-    H2_MPLX_LEAVE(m);
-    return waiting;
-}
-
 static int reset_is_acceptable(h2_stream *stream)
 {
     /* client may terminate a stream via H2 RST_STREAM message at any time.
@@ -1075,7 +1052,7 @@ static int reset_is_acceptable(h2_stream *stream)
     return 1; /* otherwise, be forgiving */
 }
 
-apr_status_t h2_mplx_m_client_rst(h2_mplx *m, int stream_id)
+apr_status_t h2_mplx_c1_client_rst(h2_mplx *m, int stream_id)
 {
     h2_stream *stream;
     apr_status_t status = APR_SUCCESS;

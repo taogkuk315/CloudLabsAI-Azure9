@@ -18,23 +18,16 @@
 #define __mod_h2__h2_mplx__
 
 /**
- * The stream multiplexer. It pushes buckets from the connection
- * thread to the stream threads and vice versa. It's thread-safe
- * to use.
+ * The stream multiplexer. It performs communication between the
+ * primary HTTP/2 connection (c1) to the secondary connections (c2)
+ * that process the requests, aka. HTTP/2 streams.
  *
- * There is one h2_mplx instance for each h2_session, which sits on top
- * of a particular httpd conn_rec. Input goes from the connection to
- * the stream tasks. Output goes from the stream tasks to the connection,
- * e.g. the client.
+ * There is one h2_mplx instance for each h2_session.
  *
- * For each stream, there can be at most "H2StreamMaxMemSize" output bytes
- * queued in the multiplexer. If a task thread tries to write more
- * data, it is blocked until space becomes available.
- *
- * Naming Convention: 
- * "h2_mplx_m_" are methods only to be called by the main connection
- * "h2_mplx_s_" are method only to be called by a secondary connection
- * "h2_mplx_t_" are method only to be called by a task handler (can be master or secondary)
+ * Naming Convention:
+ * "h2_mplx_c1_" are methods only to be called by the primary connection
+ * "h2_mplx_c2_" are methods only to be called by a secondary connection
+ * "h2_mplx_worker_" are methods only to be called by a h2 worker thread
  */
 
 struct apr_pool_t;
@@ -99,14 +92,14 @@ struct h2_mplx {
  * From the main connection processing: h2_mplx_m_*
  ******************************************************************************/
 
-apr_status_t h2_mplx_m_child_init(apr_pool_t *pool, server_rec *s);
+apr_status_t h2_mplx_c1_child_init(apr_pool_t *pool, server_rec *s);
 
 /**
  * Create the multiplexer for the given HTTP2 session. 
  * Implicitly has reference count 1.
  */
-h2_mplx *h2_mplx_m_create(struct h2_stream *stream0, server_rec *s, apr_pool_t *master,
-                          struct h2_workers *workers);
+h2_mplx *h2_mplx_c1_create(struct h2_stream *stream0, server_rec *s, apr_pool_t *master,
+                           struct h2_workers *workers);
 
 /**
  * Decreases the reference counter of this mplx and waits for it
@@ -116,14 +109,14 @@ h2_mplx *h2_mplx_m_create(struct h2_stream *stream0, server_rec *s, apr_pool_t *
  * @param m the mplx to be released and destroyed
  * @param wait condition var to wait on for ref counter == 0
  */ 
-void h2_mplx_m_release_and_join(h2_mplx *m, struct apr_thread_cond_t *wait);
+void h2_mplx_c1_release_and_join(h2_mplx *m, struct apr_thread_cond_t *wait);
 
 /**
  * Shut down the multiplexer gracefully. Will no longer schedule new streams
  * but let the ongoing ones finish normally.
  * @return the highest stream id being/been processed
  */
-int h2_mplx_m_shutdown(h2_mplx *m);
+int h2_mplx_c1_shutdown(h2_mplx *m);
 
 /**
  * Notifies mplx that a stream has been completely handled on the main
@@ -132,9 +125,7 @@ int h2_mplx_m_shutdown(h2_mplx *m);
  * @param m the mplx itself
  * @param stream the stream ready for cleanup
  */
-apr_status_t h2_mplx_m_stream_cleanup(h2_mplx *m, struct h2_stream *stream);
-
-apr_status_t h2_mplx_m_keep_active(h2_mplx *m, struct h2_stream *stream);
+apr_status_t h2_mplx_c1_stream_cleanup(h2_mplx *m, struct h2_stream *stream);
 
 /**
  * Process a stream request.
@@ -162,7 +153,7 @@ apr_status_t h2_mplx_c1_fwd_input(h2_mplx *m, struct h2_iqueue *input_pending,
  * @param cmp the stream priority compare function
  * @param ctx context data for the compare function
  */
-apr_status_t h2_mplx_m_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
+apr_status_t h2_mplx_c1_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
                                     struct h2_session *session);
 
 typedef apr_status_t stream_ev_callback(void *ctx, struct h2_stream *stream);
@@ -176,29 +167,49 @@ apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
                             stream_ev_callback *on_stream_output,
                             void *on_ctx);
 
-int h2_mplx_m_awaits_data(h2_mplx *m);
+typedef int h2_mplx_stream_cb(struct h2_stream *s, void *userdata);
 
-typedef int h2_mplx_stream_cb(struct h2_stream *s, void *ctx);
+/**
+ * Iterator over all streams known to mplx from the primary connection.
+ * @param m the mplx
+ * @param cb the callback to invoke on each stream
+ * @param ctx userdata passed to the callback
+ */
+apr_status_t h2_mplx_c1_streams_do(h2_mplx *m, h2_mplx_stream_cb *cb, void *ctx);
 
-apr_status_t h2_mplx_m_stream_do(h2_mplx *m, h2_mplx_stream_cb *cb, void *ctx);
+/**
+ * A stream has been RST_STREAM by the client. Abort
+ * any processing going on and remove from processing
+ * queue.
+ */
+apr_status_t h2_mplx_c1_client_rst(h2_mplx *m, int stream_id);
 
-apr_status_t h2_mplx_m_client_rst(h2_mplx *m, int stream_id);
+/**
+ * A h2 worker asks for a secondary connection to process.
+ * @param out_c2 non-NULL, a pointer where to reveive the next
+ *               secondary connection to process.
+ */
+apr_status_t h2_mplx_worker_pop_c2(h2_mplx *m, conn_rec **out_c2);
 
-/*******************************************************************************
- * From a secondary connection processing: h2_mplx_s_*
- ******************************************************************************/
-apr_status_t h2_mplx_s_pop_c2(h2_mplx *m, conn_rec **out_c);
-void h2_mplx_s_c2_done(conn_rec *c, conn_rec **out_c);
+/**
+ * A h2 worker reports a secondary connection processing done.
+ * If it is will to do more work for this mplx (this c1 connection),
+ * it provides `out_c`. Otherwise it passes NULL.
+ * @param c2 the secondary connection finished processing
+ * @param out_c2 NULL or a pointer where to reveive the next
+ *               secondary connection to process.
+ */
+void h2_mplx_worker_c2_done(conn_rec *c2, conn_rec **out_c2);
 
 /**
  * Opens the output for a secondary (stream processing) connection to the mplx.
  */
-apr_status_t h2_mplx_t_out_open(h2_mplx *mplx, conn_rec *c2);
+apr_status_t h2_mplx_c2_out_open(h2_mplx *mplx, conn_rec *c2);
 
 /**
- * Get the stream that belongs to the given task.
+ * Get readonly access to a stream for a secondary connection.
  */
-struct h2_stream *h2_mplx_t_stream_get(h2_mplx *m, int stream_id);
+const struct h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id);
 
 
 #endif /* defined(__mod_h2__h2_mplx__) */

@@ -301,7 +301,7 @@ const struct h2_priority *h2_stream_get_priority(h2_stream *stream,
  * Return a textual representation of the stream state as in RFC 7540
  * nomenclator, all caps, underscores.
  */
-const char *h2_stream_state_str(h2_stream *stream);
+const char *h2_stream_state_str(const h2_stream *stream);
 
 /**
  * Determine if stream is ready for submitting a response or a RST

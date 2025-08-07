@@ -44,7 +44,7 @@
 #include "h2_util.h"
 
 
-static const char *h2_ss_str(h2_stream_state_t state)
+static const char *h2_ss_str(const h2_stream_state_t state)
 {
     switch (state) {
         case H2_SS_IDLE:
@@ -68,7 +68,7 @@ static const char *h2_ss_str(h2_stream_state_t state)
     }
 }
 
-const char *h2_stream_state_str(h2_stream *stream) 
+const char *h2_stream_state_str(const h2_stream *stream)
 {
     return h2_ss_str(stream->state);
 }
@@ -918,8 +918,6 @@ apr_status_t h2_stream_out_prepare(h2_stream *stream, apr_off_t *plen,
     status = add_buffered_data(stream, requested, plen, peos, &complete, pheaders);
     
     if (status == APR_EAGAIN) {
-        /* TODO: ugly, someone needs to retrieve the response first */
-        h2_mplx_m_keep_active(stream->session->mplx, stream);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       H2_STRM_MSG(stream, "prep, response eagain"));
         return status;
