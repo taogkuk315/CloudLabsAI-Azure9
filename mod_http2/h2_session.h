@@ -54,11 +54,9 @@ typedef enum {
     H2_SESSION_EV_CONN_ERROR,       /* connection error */
     H2_SESSION_EV_PROTO_ERROR,      /* protocol error */
     H2_SESSION_EV_CONN_TIMEOUT,     /* connection timeout */
-    H2_SESSION_EV_FRAME_RCVD,       /* a frame has been received */
     H2_SESSION_EV_NGH2_DONE,        /* nghttp2 wants neither read nor write anything */
     H2_SESSION_EV_MPM_STOPPING,     /* the process is stopping */
     H2_SESSION_EV_PRE_CLOSE,        /* connection will close after this */
-    H2_SESSION_EV_STREAM_CHANGE,    /* a stream (state/input/output) changed */
 } h2_session_event_t;
 
 typedef struct h2_session {

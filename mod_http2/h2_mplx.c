@@ -98,15 +98,6 @@ apr_status_t h2_mplx_c1_child_init(apr_pool_t *pool, server_rec *s)
 #define H2_MPLX_LEAVE_MAYBE(m, dolock)    \
     if (dolock) apr_thread_mutex_unlock(m->lock)
 
-static void mst_check_data_for(h2_mplx *m, h2_stream *stream, int mplx_is_locked);
-
-static void mst_stream_input_ev(void *ctx, h2_bucket_beam *beam)
-{
-    h2_stream *stream = ctx;
-    h2_mplx *m = stream->session->mplx;
-    apr_atomic_set32(&m->event_pending, 1); 
-}
-
 static void m_stream_input_consumed(void *ctx, h2_bucket_beam *beam, apr_off_t length)
 {
     h2_stream_in_consumed(ctx, length);
@@ -420,7 +411,7 @@ static int m_stream_cancel_iter(void *ctx, void *val) {
     return 0;
 }
 
-void h2_mplx_c1_release_and_join(h2_mplx *m, apr_thread_cond_t *wait)
+void h2_mplx_c1_destroy(h2_mplx *m, apr_thread_cond_t *wait)
 {
     apr_status_t status;
     int i, wait_secs = 60, old_aborted;
@@ -511,14 +502,6 @@ const h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id)
     return s;
 }
 
-static void mst_output_produced(void *ctx, h2_bucket_beam *beam, apr_off_t bytes)
-{
-    h2_stream *stream = ctx;
-    h2_mplx *m = stream->session->mplx;
-    
-    mst_check_data_for(m, stream, 0);
-}
-
 static apr_status_t t_out_open(h2_mplx *m, conn_rec *c)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
@@ -543,16 +526,12 @@ static apr_status_t t_out_open(h2_mplx *m, conn_rec *c)
                       "h2_mplx(%s): out open", conn_ctx->id);
     }
     
-    h2_beam_on_produced(stream->output, mst_output_produced, stream);
     if (h2_config_sgeti(conn_ctx->server, H2_CONF_COPY_FILES)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "h2_mplx(%s): copy_files in output", conn_ctx->id);
         h2_beam_on_file_beam(stream->output, h2_beam_no_files, NULL);
     }
     
-    /* we might see some file buckets in the output, see
-     * if we have enough handles reserved. */
-    mst_check_data_for(m, stream, 1);
     return APR_SUCCESS;
 }
 
@@ -593,7 +572,6 @@ static apr_status_t s_out_close(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx
     status = h2_beam_close(conn_ctx->beam_out);
     h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "out_close");
     s_output_consumed_signal(m, conn_ctx);
-    mst_check_data_for(m, stream, 1);
     return status;
 }
 
@@ -617,26 +595,6 @@ apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
 cleanup:
     H2_MPLX_LEAVE(m);
     return rv;
-}
-
-static void mst_check_data_for(h2_mplx *m, h2_stream *stream, int mplx_is_locked)
-{
-    /* If m->lock is already held, we must release during h2_ififo_push()
-     * which can wait on its not_full condition, causing a deadlock because
-     * no one would then be able to acquire m->lock to empty the fifo.
-     */
-    H2_MPLX_LEAVE_MAYBE(m, mplx_is_locked);
-    if (h2_ififo_push(m->readyq, stream->id) == APR_SUCCESS) {
-        H2_MPLX_ENTER_ALWAYS(m);
-        apr_atomic_set32(&m->event_pending, 1);
-        if (m->added_output) {
-            apr_thread_cond_signal(m->added_output);
-        }
-        H2_MPLX_LEAVE_MAYBE(m, !mplx_is_locked);
-    }
-    else {
-        H2_MPLX_ENTER_MAYBE(m, mplx_is_locked);
-    }
 }
 
 apr_status_t h2_mplx_c1_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
@@ -703,7 +661,6 @@ static apr_status_t c1_process_stream(h2_mplx *m,
     h2_ihash_add(m->streams, stream);
     if (h2_stream_is_ready(stream)) {
         /* already have a response */
-        mst_check_data_for(m, stream, 1);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
                       H2_STRM_MSG(stream, "process, add to readyq"));
     }
@@ -841,7 +798,7 @@ static conn_rec *s_next_c2(h2_mplx *m)
                     /* TODO: what do do here? */
                 }
 
-                h2_beam_on_consumed(stream->input, mst_stream_input_ev,
+                h2_beam_on_consumed(stream->input, NULL,
                                     m_stream_input_consumed, stream);
                 conn_ctx->beam_in = stream->input;
             }
@@ -921,8 +878,6 @@ static void s_c2_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
         if (stream->input) {
             h2_beam_leave(stream->input);
         }
-        /* more data will not arrive, resume the stream */
-        mst_check_data_for(m, stream, 1);
     }
     else if ((stream = h2_ihash_get(m->shold, conn_ctx->stream_id)) != NULL) {
         /* stream is done, was just waiting for this. */

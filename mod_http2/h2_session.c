@@ -239,7 +239,6 @@ static int on_data_chunk_recv_cb(nghttp2_session *ngh2, uint8_t flags,
                       "h2_stream(%ld-%d): write %ld bytes of DATA",
                       session->id, (int)stream_id, (long)len);
         status = h2_stream_recv_DATA(stream, flags, data, len);
-        dispatch_event(session, H2_SESSION_EV_STREAM_CHANGE, 0, "stream data rcvd");
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03064)
@@ -385,9 +384,6 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                           "h2_stream(%ld-%d): WINDOW_UPDATE incr=%d", 
                           session->id, (int)frame->hd.stream_id,
                           frame->window_update.window_size_increment);
-            if (nghttp2_session_want_write(session->ngh2)) {
-                dispatch_event(session, H2_SESSION_EV_FRAME_RCVD, 0, "window update");
-            }
             break;
         case NGHTTP2_RST_STREAM:
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, APLOGNO(03067)
@@ -779,7 +775,7 @@ static apr_status_t session_cleanup(h2_session *session, const char *trigger)
     }
 
     transit(session, trigger, H2_SESSION_ST_CLEANUP);
-    h2_mplx_c1_release_and_join(session->mplx, session->iowait);
+    h2_mplx_c1_destroy(session->mplx, session->iowait);
     session->mplx = NULL;
 
     ap_assert(session->ngh2);
@@ -1666,19 +1662,7 @@ static apr_status_t h2_session_read(h2_session *session, int block)
                              get_stream, session);
     }
 cleanup:
-    if (APR_SUCCESS == rv) {
-        /* got something, more might be coming */
-        transit(session, "no io", H2_SESSION_ST_BUSY);
-    }
-    else if (APR_STATUS_IS_EAGAIN(rv)) {
-        if (session->state == H2_SESSION_ST_BUSY) {
-            /* if we were busy polling and reading session input,
-             * we have now exhausted all c1 input buffer and can
-             * switch to WAIT state where we poll only. */
-            transit(session, "no io", H2_SESSION_ST_WAIT);
-        }
-    }
-    else {
+    if (APR_SUCCESS != rv && !APR_STATUS_IS_EAGAIN(rv)) {
         dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
     }
     return rv;
@@ -1852,32 +1836,6 @@ static void h2_session_ev_conn_timeout(h2_session *session, int arg, const char 
     }
 }
 
-static void h2_session_ev_frame_rcvd(h2_session *session, int arg, const char *msg)
-{
-    switch (session->state) {
-        case H2_SESSION_ST_IDLE:
-        case H2_SESSION_ST_WAIT:
-            transit(session, "frame received", H2_SESSION_ST_BUSY);
-            break;
-        default:
-            /* nop */
-            break;
-    }
-}
-
-static void h2_session_ev_stream_change(h2_session *session, int arg, const char *msg)
-{
-    switch (session->state) {
-        case H2_SESSION_ST_IDLE:
-        case H2_SESSION_ST_WAIT:
-            transit(session, "stream change", H2_SESSION_ST_BUSY);
-            break;
-        default:
-            /* nop */
-            break;
-    }
-}
-
 static void h2_session_ev_ngh2_done(h2_session *session, int arg, const char *msg)
 {
     switch (session->state) {
@@ -1983,7 +1941,6 @@ static void on_stream_state_enter(void *ctx, h2_stream *stream)
         default:
             break;
     }
-    dispatch_event(session, H2_SESSION_EV_STREAM_CHANGE, 0, "stream state change");
 }
 
 static void on_stream_event(void *ctx, h2_stream *stream, 
@@ -2039,9 +1996,6 @@ static void dispatch_event(h2_session *session, h2_session_event_t ev,
         case H2_SESSION_EV_CONN_TIMEOUT:
             h2_session_ev_conn_timeout(session, arg, msg);
             break;
-        case H2_SESSION_EV_FRAME_RCVD:
-            h2_session_ev_frame_rcvd(session, arg, msg);
-            break;
         case H2_SESSION_EV_NGH2_DONE:
             h2_session_ev_ngh2_done(session, arg, msg);
             break;
@@ -2050,9 +2004,6 @@ static void dispatch_event(h2_session *session, h2_session_event_t ev,
             break;
         case H2_SESSION_EV_PRE_CLOSE:
             h2_session_ev_pre_close(session, arg, msg);
-            break;
-        case H2_SESSION_EV_STREAM_CHANGE:
-            h2_session_ev_stream_change(session, arg, msg);
             break;
         default:
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
@@ -2130,7 +2081,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
              * to be reliable until session read sees APR_EAGAIN. */
             ap_assert(nghttp2_session_want_read(session->ngh2));
             status = h2_session_read(session, 0);
-            h2_mplx_c1_poll(session->mplx, 0,
+            h2_mplx_c1_poll(session->mplx, apr_time_from_msec(1),
                             on_stream_input, on_stream_output, session);
             break;
 

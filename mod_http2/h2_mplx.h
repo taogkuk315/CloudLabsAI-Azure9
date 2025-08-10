@@ -53,7 +53,6 @@ struct h2_mplx {
     struct h2_stream *stream0;      /* the main connection */
     server_rec *s;                  /* server for master conn */
 
-    unsigned int event_pending;
     unsigned int aborted;
     unsigned int is_registered;     /* is registered at h2_workers */
 
@@ -75,7 +74,6 @@ struct h2_mplx {
     int irritations_since; /* irritations (>0) or happy events (<0) since last mood change */
 
     apr_thread_mutex_t *lock;
-    struct apr_thread_cond_t *added_output;
     struct apr_thread_cond_t *join_wait;
     
     apr_size_t stream_max_mem;
@@ -102,14 +100,11 @@ h2_mplx *h2_mplx_c1_create(struct h2_stream *stream0, server_rec *s, apr_pool_t 
                            struct h2_workers *workers);
 
 /**
- * Decreases the reference counter of this mplx and waits for it
- * to reached 0, destroy the mplx afterwards.
- * This is to be called from the thread that created the mplx in
- * the first place.
- * @param m the mplx to be released and destroyed
+ * Destroy the mplx, shutting down all ongoing processing.
+ * @param m the mplx destroyed
  * @param wait condition var to wait on for ref counter == 0
  */ 
-void h2_mplx_c1_release_and_join(h2_mplx *m, struct apr_thread_cond_t *wait);
+void h2_mplx_c1_destroy(h2_mplx *m, struct apr_thread_cond_t *wait);
 
 /**
  * Shut down the multiplexer gracefully. Will no longer schedule new streams
@@ -170,7 +165,7 @@ apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
 typedef int h2_mplx_stream_cb(struct h2_stream *s, void *userdata);
 
 /**
- * Iterator over all streams known to mplx from the primary connection.
+ * Iterate over all streams known to mplx from the primary connection.
  * @param m the mplx
  * @param cb the callback to invoke on each stream
  * @param ctx userdata passed to the callback
