@@ -260,11 +260,12 @@ static apr_status_t pass_output(h2_c1_io *io, int flush)
     apr_status_t status;
     
     append_scratch(io);
-    if (flush && !io->is_flushed) {
-        b = apr_bucket_flush_create(c->bucket_alloc);
-        APR_BRIGADE_INSERT_TAIL(bb, b);
+    if (flush) {
+        if (!APR_BUCKET_IS_FLUSH(APR_BRIGADE_LAST(io->output))) {
+            b = apr_bucket_flush_create(io->c->bucket_alloc);
+            APR_BRIGADE_INSERT_TAIL(io->output, b);
+        }
     }
-    
     if (APR_BRIGADE_EMPTY(bb)) {
         return APR_SUCCESS;
     }
@@ -277,9 +278,6 @@ static apr_status_t pass_output(h2_c1_io *io, int flush)
     if (status == APR_SUCCESS) {
         io->bytes_written += (apr_size_t)bblen;
         io->last_write = apr_time_now();
-        if (flush) {
-            io->is_flushed = 1;
-        }
     }
     apr_brigade_cleanup(bb);
 
@@ -293,7 +291,7 @@ static apr_status_t pass_output(h2_c1_io *io, int flush)
 
 int h2_c1_io_needs_flush(h2_c1_io *io)
 {
-    if (!io->is_flushed) {
+    if (!APR_BRIGADE_EMPTY(io->output)) {
         apr_off_t len = h2_brigade_mem_size(io->output);
         if (len > (apr_off_t)io->flush_threshold) {
             return 1;
@@ -306,11 +304,19 @@ int h2_c1_io_needs_flush(h2_c1_io *io)
     return 0;
 }
 
-apr_status_t h2_c1_io_flush(h2_c1_io *io)
+int h2_c1_io_pending(h2_c1_io *io)
 {
-    apr_status_t status;
-    status = pass_output(io, 1);
-    check_write_size(io);
+    return !APR_BRIGADE_EMPTY(io->output);
+}
+
+apr_status_t h2_c1_io_flush(h2_c1_io *io, int force)
+{
+    apr_status_t status = APR_SUCCESS;
+
+    if (force || !APR_BRIGADE_EMPTY(io->output)) {
+        status = pass_output(io, 1);
+        check_write_size(io);
+    }
     return status;
 }
 
@@ -318,10 +324,6 @@ apr_status_t h2_c1_io_write(h2_c1_io *io, const char *data, size_t length)
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t remain;
-    
-    if (length > 0) {
-        io->is_flushed = 0;
-    }
     
     if (io->buffer_output) {
         while (length > 0) {
@@ -345,15 +347,11 @@ apr_status_t h2_c1_io_write(h2_c1_io *io, const char *data, size_t length)
     return status;
 }
 
-apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb)
+apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb, int flush)
 {
     apr_bucket *b;
     apr_status_t status = APR_SUCCESS;
     
-    if (!APR_BRIGADE_EMPTY(bb)) {
-        io->is_flushed = 0;
-    }
-
     while (!APR_BRIGADE_EMPTY(bb) && status == APR_SUCCESS) {
         b = APR_BRIGADE_FIRST(bb);
         
@@ -390,6 +388,10 @@ apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb)
             APR_BUCKET_REMOVE(b);
             APR_BRIGADE_INSERT_TAIL(io->output, b);
         }
+    }
+    if (flush) {
+        b = apr_bucket_flush_create(io->c->bucket_alloc);
+        APR_BRIGADE_INSERT_TAIL(io->output, b);
     }
     return status;
 }

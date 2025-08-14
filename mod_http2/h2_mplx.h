@@ -56,39 +56,31 @@ struct h2_mplx {
     unsigned int aborted;
     unsigned int is_registered;     /* is registered at h2_workers */
 
-    struct h2_ihash_t *streams;     /* all streams currently processing */
-    struct h2_ihash_t *shold;       /* all streams done with task ongoing */
+    struct h2_ihash_t *streams;     /* all streams active */
+    struct h2_ihash_t *shold;       /* all streams done with c2 processing ongoing */
     struct h2_ihash_t *spurge;      /* all streams done, ready for destroy */
     
     struct h2_iqueue *q;            /* all stream ids that need to be started */
-    struct h2_ififo *readyq;        /* all stream ids ready for output */
-        
-    int max_streams;        /* max # of concurrent streams */
-    int max_stream_started; /* highest stream id that started processing */
-    int streams_active;       /* # of tasks being processed from this mplx */
-    int limit_active;       /* current limit on active tasks, dynamic */
-    int max_active;         /* max, hard limit # of active tasks in a process */
+
+    apr_size_t stream_max_mem;      /* max memory to buffer for a stream */
+    int max_streams;                /* max # of concurrent streams */
+    int max_stream_id_started;      /* highest stream id that started processing */
+
+    int processing_count;           /* # of c2 working for this mplx */
+    int processing_limit;           /* current limit on processing c2s, dynamic */
+    int processing_max;             /* max, hard limit of processing c2s */
     
-    apr_time_t last_mood_change; /* last time, we worker limit changed */
+    apr_time_t last_mood_change;    /* last time, processing limit changed */
     apr_interval_time_t mood_update_interval; /* how frequent we update at most */
     int irritations_since; /* irritations (>0) or happy events (<0) since last mood change */
 
     apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *join_wait;
     
-    apr_size_t stream_max_mem;
-    
-    apr_pool_t *spare_io_pool;
-    apr_array_header_t *spare_c2; /* spare secondary connections */
-
-    apr_pollset_t *pollset;
-
-    struct h2_workers *workers;
+    apr_array_header_t *spare_c2;   /* spare secondary connections */
+    apr_pollset_t *pollset;         /* pollset for c1/c2 IO events */
+    struct h2_workers *workers;     /* h2 workers process wide instance */
 };
-
-/*******************************************************************************
- * From the main connection processing: h2_mplx_m_*
- ******************************************************************************/
 
 apr_status_t h2_mplx_c1_child_init(apr_pool_t *pool, server_rec *s);
 
@@ -104,7 +96,7 @@ h2_mplx *h2_mplx_c1_create(struct h2_stream *stream0, server_rec *s, apr_pool_t 
  * @param m the mplx destroyed
  * @param wait condition var to wait on for ref counter == 0
  */ 
-void h2_mplx_c1_destroy(h2_mplx *m, struct apr_thread_cond_t *wait);
+void h2_mplx_c1_destroy(h2_mplx *m);
 
 /**
  * Shut down the multiplexer gracefully. Will no longer schedule new streams
@@ -180,6 +172,16 @@ apr_status_t h2_mplx_c1_streams_do(h2_mplx *m, h2_mplx_stream_cb *cb, void *ctx)
 apr_status_t h2_mplx_c1_client_rst(h2_mplx *m, int stream_id);
 
 /**
+ * Opens the output for a secondary (stream processing) connection to the mplx.
+ */
+apr_status_t h2_mplx_c2_out_open(h2_mplx *mplx, conn_rec *c2);
+
+/**
+ * Get readonly access to a stream for a secondary connection.
+ */
+const struct h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id);
+
+/**
  * A h2 worker asks for a secondary connection to process.
  * @param out_c2 non-NULL, a pointer where to reveive the next
  *               secondary connection to process.
@@ -195,16 +197,5 @@ apr_status_t h2_mplx_worker_pop_c2(h2_mplx *m, conn_rec **out_c2);
  *               secondary connection to process.
  */
 void h2_mplx_worker_c2_done(conn_rec *c2, conn_rec **out_c2);
-
-/**
- * Opens the output for a secondary (stream processing) connection to the mplx.
- */
-apr_status_t h2_mplx_c2_out_open(h2_mplx *mplx, conn_rec *c2);
-
-/**
- * Get readonly access to a stream for a secondary connection.
- */
-const struct h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id);
-
 
 #endif /* defined(__mod_h2__h2_mplx__) */

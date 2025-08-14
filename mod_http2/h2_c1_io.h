@@ -59,19 +59,24 @@ apr_status_t h2_c1_io_write(h2_c1_io *io,
                          const char *buf,
                          size_t length);
 
-apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb);
+apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb, int flush);
 
 /**
  * Pass any buffered data on to the connection output filters.
  * @param io the connection io
  * @param flush if a flush bucket should be appended to any output
  */
-apr_status_t h2_c1_io_flush(h2_c1_io *io);
+apr_status_t h2_c1_io_flush(h2_c1_io *io, int force);
 
 /**
  * Check if the buffered amount of data needs flushing.
  */
 int h2_c1_io_needs_flush(h2_c1_io *io);
+
+/**
+ * Check if we have output pending.
+ */
+int h2_c1_io_pending(h2_c1_io *io);
 
 struct h2_session;
 

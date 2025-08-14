@@ -570,8 +570,8 @@ class LoadTest:
                 "row0_title": "protocol  max",
                 "row_title": "{protocol}   {max_parallel:3d}",
                 "rows": [
-                    #{"protocol": 'h2', "max_parallel": 1},
-                    #{"protocol": 'h2', "max_parallel": 2},
+                    {"protocol": 'h2', "max_parallel": 1},
+                    {"protocol": 'h2', "max_parallel": 2},
                     {"protocol": 'h2', "max_parallel": 6},
                     {"protocol": 'h2', "max_parallel": 20},
                     {"protocol": 'h2', "max_parallel": 50},

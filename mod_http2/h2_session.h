@@ -109,8 +109,7 @@ typedef struct h2_session {
     apr_interval_time_t idle_delay; /* Time we delay processing rcvd frames in idle state */
     
     apr_bucket_brigade *bbtmp;      /* brigade for keeping temporary data */
-    struct apr_thread_cond_t *iowait; /* our cond when trywaiting for data */
-    
+
     char status[64];                /* status message for scoreboard */
     int last_status_code;           /* the one already reported */
     const char *last_status_msg;    /* the one already reported */

@@ -113,7 +113,6 @@ static void ms_stream_joined(h2_mplx *m, h2_stream *stream)
 {
     ap_assert(!stream_is_running(stream));
     
-    h2_ififo_remove(m->readyq, stream->id);
     h2_ihash_remove(m->shold, stream->id);
     h2_ihash_add(m->spurge, stream);
 }
@@ -126,7 +125,6 @@ static void m_stream_cleanup(h2_mplx *m, h2_stream *stream)
     h2_stream_cleanup(stream);
     h2_ihash_remove(m->streams, stream->id);
     h2_iq_remove(m->q, stream->id);
-    h2_ififo_remove(m->readyq, stream->id);
 
     if (!stream_is_running(stream)) {
         ms_stream_joined(m, stream);
@@ -192,6 +190,9 @@ h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent
                                      m->pool);
     if (APR_SUCCESS != status) goto failure;
 
+    status = apr_thread_cond_create(&m->join_wait, m->pool);
+    if (APR_SUCCESS != status) goto failure;
+
     m->max_streams = h2_config_sgeti(s, H2_CONF_MAX_STREAMS);
     m->stream_max_mem = h2_config_sgeti(s, H2_CONF_STREAM_MAX_MEM);
 
@@ -200,12 +201,9 @@ h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent
     m->spurge = h2_ihash_create(m->pool, offsetof(h2_stream,id));
     m->q = h2_iq_create(m->pool, m->max_streams);
 
-    status = h2_ififo_set_create(&m->readyq, m->pool, m->max_streams);
-    if (APR_SUCCESS != status) goto failure;
-
     m->workers = workers;
-    m->max_active = workers->max_workers;
-    m->limit_active = 6; /* the original h1 max parallel connections */
+    m->processing_max = workers->max_workers;
+    m->processing_limit = 6; /* the original h1 max parallel connections */
     m->last_mood_change = apr_time_now();
     m->mood_update_interval = apr_time_from_msec(100);
 
@@ -228,16 +226,16 @@ failure:
 
 int h2_mplx_c1_shutdown(h2_mplx *m)
 {
-    int max_stream_started = 0;
+    int max_stream_id_started = 0;
     
     H2_MPLX_ENTER(m);
 
-    max_stream_started = m->max_stream_started;
+    max_stream_id_started = m->max_stream_id_started;
     /* Clear schedule queue, disabling existing streams from starting */ 
     h2_iq_clear(m->q);
 
     H2_MPLX_LEAVE(m);
-    return max_stream_started;
+    return max_stream_id_started;
 }
 
 static int m_input_consumed_signal(h2_mplx *m, h2_stream *stream)
@@ -300,7 +298,7 @@ static int m_stream_destroy_iter(void *ctx, void *val)
         h2_conn_ctx_detach(secondary);
         if (conn_ctx && (m->s->keep_alive_max == 0
                          || secondary->keepalives < m->s->keep_alive_max)) {
-            reuse_c2 = ((m->spare_c2->nelts < (m->limit_active * 3 / 2))
+            reuse_c2 = ((m->spare_c2->nelts < (m->processing_limit * 3 / 2))
                                && !secondary->aborted);
         }
 
@@ -323,14 +321,12 @@ static int m_stream_destroy_iter(void *ctx, void *val)
     return 0;
 }
 
-static void m_purge_streams(h2_mplx *m, int lock)
+static void c1_purge_streams(h2_mplx *m, int lock)
 {
     if (!h2_ihash_empty(m->spurge)) {
-        H2_MPLX_ENTER_MAYBE(m, lock);
         while (!h2_ihash_iter(m->spurge, m_stream_destroy_iter, m)) {
             /* repeat until empty */
         }
-        H2_MPLX_LEAVE_MAYBE(m, lock);
     }
 }
 
@@ -411,7 +407,7 @@ static int m_stream_cancel_iter(void *ctx, void *val) {
     return 0;
 }
 
-void h2_mplx_c1_destroy(h2_mplx *m, apr_thread_cond_t *wait)
+void h2_mplx_c1_destroy(h2_mplx *m)
 {
     apr_status_t status;
     int i, wait_secs = 60, old_aborted;
@@ -436,7 +432,7 @@ void h2_mplx_c1_destroy(h2_mplx *m, apr_thread_cond_t *wait)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c, 
                   "h2_mplx(%ld): release, %d/%d/%d streams (total/hold/purge), %d active tasks", 
                   m->id, (int)h2_ihash_count(m->streams),
-                  (int)h2_ihash_count(m->shold), (int)h2_ihash_count(m->spurge), m->streams_active);
+                  (int)h2_ihash_count(m->shold), (int)h2_ihash_count(m->spurge), m->processing_count);
     while (!h2_ihash_iter(m->streams, m_stream_cancel_iter, m)) {
         /* until empty */
     }
@@ -449,9 +445,8 @@ void h2_mplx_c1_destroy(h2_mplx *m, apr_thread_cond_t *wait)
      *    are processing tasks from this connection, wait on them finishing
      *    in order to wake us and let us check again. 
      *    Eventually, this has to succeed. */    
-    m->join_wait = wait;
-    for (i = 0; h2_ihash_count(m->shold) > 0; ++i) {        
-        status = apr_thread_cond_timedwait(wait, m->lock, apr_time_from_sec(wait_secs));
+    for (i = 0; h2_ihash_count(m->shold) > 0; ++i) {
+        status = apr_thread_cond_timedwait(m->join_wait, m->lock, apr_time_from_sec(wait_secs));
         
         if (APR_STATUS_IS_TIMEUP(status)) {
             /* This can happen if we have very long running requests
@@ -465,7 +460,7 @@ void h2_mplx_c1_destroy(h2_mplx *m, apr_thread_cond_t *wait)
     m->join_wait = NULL;
 
     /* 4. With all workers done, all streams should be in spurge */
-    ap_assert(m->streams_active == 0);
+    ap_assert(m->processing_count == 0);
     if (!h2_ihash_empty(m->shold)) {
         ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c, APLOGNO(03516)
                       "h2_mplx(%ld): unexpected %d streams in hold", 
@@ -502,52 +497,40 @@ const h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id)
     return s;
 }
 
-static apr_status_t t_out_open(h2_mplx *m, conn_rec *c)
+apr_status_t h2_mplx_c2_out_open(h2_mplx *m, conn_rec *c2)
 {
-    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
-    h2_stream *stream;
-
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c2);
+    apr_status_t status = APR_SUCCESS;
+    
     ap_assert(conn_ctx);
     ap_assert(conn_ctx->stream_id);
 
-    stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
-    if (!stream || m->aborted) {
-        return APR_ECONNABORTED;
-    }
-    
-    ap_assert(stream->output == NULL);
-    stream->output = conn_ctx->beam_out;
-    
-    if (APLOGctrace2(m->c)) {
-        h2_beam_log(stream->output, c, APLOG_TRACE2, "out_open");
-    }
-    else {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                      "h2_mplx(%s): out open", conn_ctx->id);
-    }
-    
-    if (h2_config_sgeti(conn_ctx->server, H2_CONF_COPY_FILES)) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                      "h2_mplx(%s): copy_files in output", conn_ctx->id);
-        h2_beam_on_file_beam(stream->output, h2_beam_no_files, NULL);
-    }
-    
-    return APR_SUCCESS;
-}
-
-apr_status_t h2_mplx_c2_out_open(h2_mplx *m, conn_rec *secondary)
-{
-    apr_status_t status;
-    
     H2_MPLX_ENTER(m);
 
     if (m->aborted) {
         status = APR_ECONNABORTED;
     }
     else {
-        status = t_out_open(m, secondary);
+        h2_stream *stream;
+
+        stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
+        if (!stream || m->aborted) {
+            status = APR_ECONNABORTED;
+            goto leave;
+        }
+        ap_assert(stream->output == NULL);  /* should be called only once */
+        stream->output = conn_ctx->beam_out;
+
+        if (APLOGctrace2(m->c)) {
+            h2_beam_log(stream->output, c2, APLOG_TRACE2, "out_open");
+        }
+        else {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c2,
+                          "h2_mplx(%s): out open", conn_ctx->id);
+        }
     }
 
+leave:
     H2_MPLX_LEAVE(m);
     return status;
 }
@@ -588,7 +571,7 @@ apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
         rv = APR_ECONNABORTED;
         goto cleanup;
     }
-    m_purge_streams(m, 0);
+    c1_purge_streams(m, 0);
     h2_ihash_iter(m->streams, m_report_consumption_iter, m);
     rv = mplx_pollset_poll(m, timeout, on_stream_input, on_stream_output, on_ctx);
 
@@ -662,7 +645,7 @@ static apr_status_t c1_process_stream(h2_mplx *m,
     if (h2_stream_is_ready(stream)) {
         /* already have a response */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
-                      H2_STRM_MSG(stream, "process, add to readyq"));
+                      H2_STRM_MSG(stream, "process, ready already"));
     }
     else {
         h2_iq_add(m->q, stream->id, cmp, session);
@@ -741,7 +724,7 @@ static conn_rec *s_next_c2(h2_mplx *m)
     apr_status_t rv;
     int sid;
 
-    while (!m->aborted && (m->streams_active < m->limit_active)
+    while (!m->aborted && (m->processing_count < m->processing_limit)
            && (sid = h2_iq_shift(m->q)) > 0) {
         
         stream = h2_ihash_get(m->streams, sid);
@@ -759,8 +742,8 @@ static conn_rec *s_next_c2(h2_mplx *m)
             }
             stream->connection = c2;
 
-            if (sid > m->max_stream_started) {
-                m->max_stream_started = sid;
+            if (sid > m->max_stream_id_started) {
+                m->max_stream_id_started = sid;
             }
 
             conn_ctx = h2_conn_ctx_create_for_c2(c2, stream);
@@ -807,16 +790,16 @@ static conn_rec *s_next_c2(h2_mplx *m)
             }
 
             mplx_pollset_add(m, stream);
-            ++m->streams_active;
+            ++m->processing_count;
             return c2;
         }
     }
 
-    if (m->streams_active >= m->limit_active && !h2_iq_empty(m->q)) {
+    if (m->processing_count >= m->processing_limit && !h2_iq_empty(m->q)) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
                       "h2_session(%ld): delaying request processing. "
                       "Current limit is %d and %d workers are in use.",
-                      m->id, m->limit_active, m->streams_active);
+                      m->id, m->processing_limit, m->processing_count);
     }
     return NULL;
 }
@@ -911,7 +894,7 @@ void h2_mplx_worker_c2_done(conn_rec *c2, conn_rec **out_c2)
 
     H2_MPLX_ENTER_ALWAYS(m);
 
-    --m->streams_active;
+    --m->processing_count;
     s_c2_done(m, c2, conn_ctx);
     
     if (m->join_wait) {
@@ -936,15 +919,15 @@ static apr_status_t s_mplx_be_happy(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn
 
     --m->irritations_since;
     now = apr_time_now();
-    if (m->limit_active < m->max_active 
+    if (m->processing_limit < m->processing_max
         && (now - m->last_mood_change >= m->mood_update_interval
-            || m->irritations_since < -m->limit_active)) {
-        m->limit_active = H2MIN(m->limit_active * 2, m->max_active);
+            || m->irritations_since < -m->processing_limit)) {
+        m->processing_limit = H2MIN(m->processing_limit * 2, m->processing_max);
         m->last_mood_change = now;
         m->irritations_since = 0;
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "h2_mplx(%ld): mood update, increasing worker limit to %d",
-                      m->id, m->limit_active);
+                      m->id, m->processing_limit);
     }
     return APR_SUCCESS;
 }
@@ -956,27 +939,27 @@ static apr_status_t m_be_annoyed(h2_mplx *m)
 
     ++m->irritations_since;
     now = apr_time_now();
-    if (m->limit_active > 2 && 
+    if (m->processing_limit > 2 &&
         ((now - m->last_mood_change >= m->mood_update_interval)
-         || (m->irritations_since >= m->limit_active))) {
+         || (m->irritations_since >= m->processing_limit))) {
             
-        if (m->limit_active > 16) {
-            m->limit_active = 16;
+        if (m->processing_limit > 16) {
+            m->processing_limit = 16;
         }
-        else if (m->limit_active > 8) {
-            m->limit_active = 8;
+        else if (m->processing_limit > 8) {
+            m->processing_limit = 8;
         }
-        else if (m->limit_active > 4) {
-            m->limit_active = 4;
+        else if (m->processing_limit > 4) {
+            m->processing_limit = 4;
         }
-        else if (m->limit_active > 2) {
-            m->limit_active = 2;
+        else if (m->processing_limit > 2) {
+            m->processing_limit = 2;
         }
         m->last_mood_change = now;
         m->irritations_since = 0;
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
                       "h2_mplx(%ld): mood update, decreasing worker limit to %d",
-                      m->id, m->limit_active);
+                      m->id, m->processing_limit);
     }
     return status;
 }
@@ -1027,7 +1010,7 @@ static apr_status_t mplx_pollset_create(h2_mplx *m)
     int max_pdfs;
 
     /* stream0 output, pdf_out+pfd_in_consume per active streams */
-    max_pdfs = 1 + 2 * H2MIN(m->max_active, m->max_streams);
+    max_pdfs = 1 + 2 * H2MIN(m->processing_max, m->max_streams);
     rv = apr_pollset_create(&m->pollset, max_pdfs, m->pool, APR_POLLSET_NOCOPY);
     if (APR_SUCCESS != rv) goto cleanup;
 

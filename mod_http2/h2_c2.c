@@ -441,14 +441,6 @@ static apr_status_t register_output_at_mplx(h2_conn_ctx_t *conn_ctx, conn_rec *c
     return rv;
 }
 
-static void output_consumed(void *ctx, h2_bucket_beam *beam, apr_off_t length)
-{
-    conn_rec *c = ctx;
-    if (c && h2_c2_logio_add_bytes_out) {
-        h2_c2_logio_add_bytes_out(c, length);
-    }
-}
-
 static void send_blocked(void *ctx, h2_bucket_beam *beam)
 {
     conn_rec *c2 = ctx;
@@ -463,25 +455,26 @@ static void send_blocked(void *ctx, h2_bucket_beam *beam)
     }
 }
 
-static apr_status_t beam_out(conn_rec *c, h2_conn_ctx_t *conn_ctx, apr_bucket_brigade* bb, int block)
+static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_brigade* bb, int block)
 {
     apr_off_t written, left;
     apr_status_t rv;
 
     apr_brigade_length(bb, 0, &written);
-    H2_TASK_OUT_LOG(APLOG_TRACE2, c, bb, "h2_c2 beam_out");
-    h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "beam_out(before)");
+    H2_TASK_OUT_LOG(APLOG_TRACE2, c2, bb, "h2_c2 beam_out");
+    h2_beam_log(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(before)");
 
     rv = h2_beam_send(conn_ctx->beam_out, bb,
                       block? APR_BLOCK_READ : APR_NONBLOCK_READ);
-    h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "beam_out(after)");
+    h2_beam_log(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(after)");
 
     if (APR_STATUS_IS_EAGAIN(rv)) {
         apr_brigade_length(bb, 0, &left);
         written -= left;
         rv = APR_SUCCESS;
     }
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
+    h2_c2_logio_add_bytes_out(c2, written);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c2,
                   "h2_c2(%s): beam_out, added %ld bytes",
                   conn_ctx->id, (long)written);
     return rv;
@@ -622,10 +615,9 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     if (!conn_ctx->beam_out) {
         return APR_ENOMEM;
     }
-    
+
     h2_beam_buffer_size_set(conn_ctx->beam_out, conn_ctx->mplx->stream_max_mem);
     h2_beam_send_from(conn_ctx->beam_out, conn_ctx->pool);
-    h2_beam_on_consumed(conn_ctx->beam_out, NULL, output_consumed, c);
     h2_beam_on_send_block(conn_ctx->beam_out, send_blocked, c);
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
@@ -681,6 +673,11 @@ static apr_status_t c2_process(h2_conn_ctx_t *conn_ctx, conn_rec *c)
     h2_beam_timeout_set(conn_ctx->beam_out, r->server->timeout);
     if (conn_ctx->beam_in) {
         h2_beam_timeout_set(conn_ctx->beam_in, r->server->timeout);
+    }
+    if (h2_config_sgeti(conn_ctx->server, H2_CONF_COPY_FILES)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+                      "h2_mplx(%s): copy_files in output", conn_ctx->id);
+        h2_beam_on_file_beam(conn_ctx->beam_out, h2_beam_no_files, NULL);
     }
 
     ap_update_child_status(c->sbh, SERVER_BUSY_WRITE, r);
