@@ -76,7 +76,7 @@ apr_status_t h2_c1_child_init(apr_pool_t *pool, server_rec *s)
                  minw, maxw, max_threads_per_child, idle_secs);
     workers = h2_workers_create(s, pool, minw, maxw, idle_secs);
  
-    ap_register_input_filter("H2_C1_IN", h2_c1_filter_input,
+    ap_register_input_filter("H2_C1_IN", h2_c1_io_filter_in,
                              NULL, AP_FTYPE_CONNECTION);
    
     return h2_mplx_c1_child_init(pool, s);

@@ -238,30 +238,6 @@ int h2_mplx_c1_shutdown(h2_mplx *m)
     return max_stream_id_started;
 }
 
-static int m_input_consumed_signal(h2_mplx *m, h2_stream *stream)
-{
-    if (stream->input) {
-        return h2_beam_report_consumption(stream->input);
-    }
-    return 0;
-}
-
-static int m_report_consumption_iter(void *ctx, void *val)
-{
-    h2_stream *stream = val;
-    h2_mplx *m = ctx;
-    
-    m_input_consumed_signal(m, stream);
-    if (stream->state == H2_SS_CLOSED_L
-        && !stream_is_running(stream)) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c, 
-                      H2_STRM_LOG(APLOGNO(10026), stream, "remote close missing")); 
-        nghttp2_submit_rst_stream(stream->session->ngh2, NGHTTP2_FLAG_NONE, 
-                                  stream->id, NGHTTP2_NO_ERROR);
-    }
-    return 1;
-}
-
 static int s_output_consumed_signal(h2_mplx *m, h2_conn_ctx_t *conn_ctx)
 {
     if (conn_ctx->beam_out) {
@@ -280,8 +256,6 @@ static int m_stream_destroy_iter(void *ctx, void *val)
     ap_assert(stream->state == H2_SS_CLEANUP);
     
     if (stream->input) {
-        /* Process outstanding events before destruction */
-        m_input_consumed_signal(m, stream);    
         h2_beam_log(stream->input, m->c, APLOG_TRACE2, "stream_destroy");
         h2_beam_destroy(stream->input);
         stream->input = NULL;
@@ -572,7 +546,6 @@ apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
         goto cleanup;
     }
     c1_purge_streams(m, 0);
-    h2_ihash_iter(m->streams, m_report_consumption_iter, m);
     rv = mplx_pollset_poll(m, timeout, on_stream_input, on_stream_output, on_ctx);
 
 cleanup:

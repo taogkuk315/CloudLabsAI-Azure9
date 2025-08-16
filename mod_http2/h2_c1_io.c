@@ -139,14 +139,14 @@ apr_status_t h2_c1_io_init(h2_c1_io *io, conn_rec *c, server_rec *s)
     io->buffer_output  = io->is_tls;
     io->flush_threshold = (apr_size_t)h2_config_sgeti64(s, H2_CONF_STREAM_MAX_MEM);
 
-    if (io->is_tls) {
+    if (io->buffer_output) {
         /* This is what we start with, 
          * see https://issues.apache.org/jira/browse/TS-2503 
          */
         io->warmup_size    = h2_config_sgeti64(s, H2_CONF_TLS_WARMUP_SIZE);
         io->cooldown_usecs = (h2_config_sgeti(s, H2_CONF_TLS_COOLDOWN_SECS) 
                               * APR_USEC_PER_SEC);
-        io->write_size     = (io->cooldown_usecs > 0? 
+        io->write_size     = (io->cooldown_usecs > 0?
                               WRITE_SIZE_INITIAL : WRITE_SIZE_MAX); 
     }
     else {
@@ -254,39 +254,36 @@ static void check_write_size(h2_c1_io *io)
 static apr_status_t pass_output(h2_c1_io *io, int flush)
 {
     conn_rec *c = io->c;
-    apr_bucket_brigade *bb = io->output;
-    apr_bucket *b;
     apr_off_t bblen;
-    apr_status_t status;
+    apr_status_t rv;
     
     append_scratch(io);
     if (flush) {
         if (!APR_BUCKET_IS_FLUSH(APR_BRIGADE_LAST(io->output))) {
-            b = apr_bucket_flush_create(io->c->bucket_alloc);
+            apr_bucket *b = apr_bucket_flush_create(io->c->bucket_alloc);
             APR_BRIGADE_INSERT_TAIL(io->output, b);
         }
     }
-    if (APR_BRIGADE_EMPTY(bb)) {
+    if (APR_BRIGADE_EMPTY(io->output)) {
         return APR_SUCCESS;
     }
     
     ap_update_child_status(c->sbh, SERVER_BUSY_WRITE, NULL);
-    apr_brigade_length(bb, 0, &bblen);
-    h2_c1_io_bb_log(c, 0, APLOG_TRACE2, "out", bb);
+    apr_brigade_length(io->output, 0, &bblen);
+    h2_c1_io_bb_log(c, 0, APLOG_TRACE2, "out", io->output);
     
-    status = ap_pass_brigade(c->output_filters, bb);
-    if (status == APR_SUCCESS) {
+    rv = ap_pass_brigade(c->output_filters, io->output);
+    if (APR_SUCCESS == rv) {
         io->bytes_written += (apr_size_t)bblen;
         io->last_write = apr_time_now();
+        apr_brigade_cleanup(io->output);
     }
-    apr_brigade_cleanup(bb);
-
-    if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c, APLOGNO(03044)
+    else {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, rv, c, APLOGNO(03044)
                       "h2_c1_io(%ld): pass_out brigade %ld bytes",
                       c->id, (long)bblen);
     }
-    return status;
+    return rv;
 }
 
 int h2_c1_io_needs_flush(h2_c1_io *io)
@@ -306,25 +303,28 @@ int h2_c1_io_needs_flush(h2_c1_io *io)
 
 int h2_c1_io_pending(h2_c1_io *io)
 {
-    return !APR_BRIGADE_EMPTY(io->output);
+    return !APR_BRIGADE_EMPTY(io->output) || (io->scratch && io->slen > 0);
 }
 
-apr_status_t h2_c1_io_flush(h2_c1_io *io, int force)
+apr_status_t h2_c1_io_flush(h2_c1_io *io)
 {
     apr_status_t status = APR_SUCCESS;
 
-    if (force || !APR_BRIGADE_EMPTY(io->output)) {
+    if (h2_c1_io_pending(io)) {
         status = pass_output(io, 1);
         check_write_size(io);
     }
     return status;
 }
 
-apr_status_t h2_c1_io_write(h2_c1_io *io, const char *data, size_t length)
+apr_status_t h2_c1_io_add_data(h2_c1_io *io, const char *data, size_t length)
 {
     apr_status_t status = APR_SUCCESS;
     apr_size_t remain;
     
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->c,
+                  "h2_c1_io(%ld): adding %ld data bytes",
+                  io->c->id, (long)length);
     if (io->buffer_output) {
         while (length > 0) {
             remain = assure_scratch_space(io);
@@ -347,16 +347,19 @@ apr_status_t h2_c1_io_write(h2_c1_io *io, const char *data, size_t length)
     return status;
 }
 
-apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb, int flush)
+apr_status_t h2_c1_io_append(h2_c1_io *io, apr_bucket_brigade *bb)
 {
     apr_bucket *b;
-    apr_status_t status = APR_SUCCESS;
-    
-    while (!APR_BRIGADE_EMPTY(bb) && status == APR_SUCCESS) {
+    apr_status_t rv = APR_SUCCESS;
+    int buckets = 0;
+    apr_size_t length = 0;
+
+    while (!APR_BRIGADE_EMPTY(bb)) {
         b = APR_BRIGADE_FIRST(bb);
-        
+        ++buckets;
+        length += b->length;
         if (APR_BUCKET_IS_METADATA(b)) {
-            /* need to finish any open scratch bucket, as meta data 
+            /* need to finish any open scratch bucket, as meta data
              * needs to be forward "in order". */
             append_scratch(io);
             APR_BUCKET_REMOVE(b);
@@ -375,8 +378,9 @@ apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb, int flush)
             }
             else {
                 /* bucket fits in remain, copy to scratch */
-                status = read_to_scratch(io, b);
+                rv = read_to_scratch(io, b);
                 apr_bucket_delete(b);
+                if (APR_SUCCESS != rv) goto cleanup;
                 continue;
             }
         }
@@ -389,14 +393,14 @@ apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb, int flush)
             APR_BRIGADE_INSERT_TAIL(io->output, b);
         }
     }
-    if (flush) {
-        b = apr_bucket_flush_create(io->c->bucket_alloc);
-        APR_BRIGADE_INSERT_TAIL(io->output, b);
-    }
-    return status;
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->c,
+                  "h2_c1_io(%ld): added %d buckets with %ld data bytes",
+                  io->c->id, buckets, (long)length);
+cleanup:
+    return rv;
 }
 
-struct h2_c1_filter_ctx_t {
+struct h2_c1_io_in_ctx_t {
     apr_pool_t *pool;
     apr_socket_t *socket;
     apr_interval_time_t timeout;
@@ -462,9 +466,9 @@ cleanup:
     return status;
 }
 
-h2_c1_filter_ctx_t *h2_c1_filter_ctx_t_create(h2_session *session)
+h2_c1_io_in_ctx_t *h2_c1_io_in_ctx_create(h2_session *session)
 {
-    h2_c1_filter_ctx_t *cin;
+    h2_c1_io_in_ctx_t *cin;
 
     cin = apr_pcalloc(session->pool, sizeof(*cin));
     if (!cin) {
@@ -475,13 +479,13 @@ h2_c1_filter_ctx_t *h2_c1_filter_ctx_t_create(h2_session *session)
     return cin;
 }
 
-apr_status_t h2_c1_filter_input(ap_filter_t* f,
-                                  apr_bucket_brigade* brigade,
-                                  ap_input_mode_t mode,
-                                  apr_read_type_e block,
-                                  apr_off_t readbytes)
+apr_status_t h2_c1_io_filter_in(ap_filter_t* f,
+                                apr_bucket_brigade* brigade,
+                                ap_input_mode_t mode,
+                                apr_read_type_e block,
+                                apr_off_t readbytes)
 {
-    h2_c1_filter_ctx_t *cin = f->ctx;
+    h2_c1_io_in_ctx_t *cin = f->ctx;
     apr_status_t status = APR_SUCCESS;
 
     if (APLOGctrace1(f->c)) {

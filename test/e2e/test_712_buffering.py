@@ -117,7 +117,8 @@ class CurlPiper:
             last_mics = mics
         stutter_td = datetime.timedelta(seconds=stutter.total_seconds() * 0.9)  # 10% leeway
         for idx, td in enumerate(recv_deltas[1:]):
-            assert stutter_td < td, "chunk {0} arrived too early after {1}".format(idx, td)
+            assert stutter_td < td, \
+                f"chunk {idx} arrived too early after {td}\n{recv_err}"
 
 
 class TestStore:

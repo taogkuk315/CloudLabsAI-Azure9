@@ -55,18 +55,19 @@ apr_status_t h2_c1_io_init(h2_c1_io *io, conn_rec *c, server_rec *s);
  * @param buf the data to append
  * @param length the length of the data to append
  */
-apr_status_t h2_c1_io_write(h2_c1_io *io,
+apr_status_t h2_c1_io_add_data(h2_c1_io *io,
                          const char *buf,
                          size_t length);
 
-apr_status_t h2_c1_io_pass(h2_c1_io *io, apr_bucket_brigade *bb, int flush);
+apr_status_t h2_c1_io_add(h2_c1_io *io, apr_bucket *b);
+
+apr_status_t h2_c1_io_append(h2_c1_io *io, apr_bucket_brigade *bb);
 
 /**
  * Pass any buffered data on to the connection output filters.
  * @param io the connection io
- * @param flush if a flush bucket should be appended to any output
  */
-apr_status_t h2_c1_io_flush(h2_c1_io *io, int force);
+apr_status_t h2_c1_io_flush(h2_c1_io *io);
 
 /**
  * Check if the buffered amount of data needs flushing.
@@ -80,11 +81,11 @@ int h2_c1_io_pending(h2_c1_io *io);
 
 struct h2_session;
 
-typedef struct h2_c1_filter_ctx_t h2_c1_filter_ctx_t;
+typedef struct h2_c1_io_in_ctx_t h2_c1_io_in_ctx_t;
 
-h2_c1_filter_ctx_t *h2_c1_filter_ctx_t_create(struct h2_session *session);
+h2_c1_io_in_ctx_t *h2_c1_io_in_ctx_create(struct h2_session *session);
 
-apr_status_t h2_c1_filter_input(ap_filter_t* filter,
+apr_status_t h2_c1_io_filter_in(ap_filter_t* filter,
                                 apr_bucket_brigade* brigade,
                                 ap_input_mode_t mode,
                                 apr_read_type_e block,
