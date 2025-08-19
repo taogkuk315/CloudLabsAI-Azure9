@@ -469,7 +469,11 @@ static apr_status_t beam_close(h2_bucket_beam *beam)
 {
     if (!beam->closed) {
         beam->closed = 1;
+        if (beam->was_empty_cb && buffer_is_empty(beam)) {
+            beam->was_empty_cb(beam->was_empty_ctx, beam);
+        }
         apr_thread_cond_broadcast(beam->change);
+
     }
     return APR_SUCCESS;
 }
@@ -713,6 +717,9 @@ void h2_beam_abort(h2_bucket_beam *beam)
     
     if (beam && enter_yellow(beam, &bl) == APR_SUCCESS) {
         beam->aborted = 1;
+        if (beam->was_empty_cb && buffer_is_empty(beam)) {
+            beam->was_empty_cb(beam->was_empty_ctx, beam);
+        }
         r_purge_sent(beam);
         h2_blist_cleanup(&beam->send_list);
         report_consumption(beam, &bl);
@@ -923,6 +930,7 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam,
             rv = APR_ECONNABORTED;
         }
         else if (sender_bb) {
+            int was_empty = buffer_is_empty(beam);
             int force_report = !APR_BRIGADE_EMPTY(sender_bb);
             
             space_left = calc_space_left(beam);
@@ -938,7 +946,10 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam,
                 b = APR_BRIGADE_FIRST(sender_bb);
                 rv = append_bucket(beam, b, block, &space_left, &bl);
             }
-            
+
+            if (was_empty && beam->was_empty_cb && !buffer_is_empty(beam)) {
+                beam->was_empty_cb(beam->was_empty_ctx, beam);
+            }
             report_prod_io(beam, force_report, &bl);
             apr_thread_cond_broadcast(beam->change);
         }
@@ -1152,6 +1163,18 @@ void h2_beam_on_consumed(h2_bucket_beam *beam,
         leave_yellow(beam, &bl);
     }
 }
+
+void h2_beam_on_was_empty(h2_bucket_beam *beam,
+                          h2_beam_ev_callback *was_empty_cb, void *ctx)
+{
+    h2_beam_lock bl;
+    if (enter_yellow(beam, &bl) == APR_SUCCESS) {
+        beam->was_empty_cb = was_empty_cb;
+        beam->was_empty_ctx = ctx;
+        leave_yellow(beam, &bl);
+    }
+}
+
 
 void h2_beam_on_send_block(h2_bucket_beam *beam,
                            h2_beam_ev_callback *send_block_cb, void *ctx)

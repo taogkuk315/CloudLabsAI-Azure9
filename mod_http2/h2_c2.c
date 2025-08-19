@@ -426,36 +426,18 @@ receive:
     return status;
 }
 
-static apr_status_t register_output_at_mplx(h2_conn_ctx_t *conn_ctx, conn_rec *c)
-{
-    apr_status_t rv;
-
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c, APLOGNO(03348)
-                  "h2_c2(%s): open output to %s %s %s",
-                  conn_ctx->id, conn_ctx->request->method,
-                  conn_ctx->request->authority,
-                  conn_ctx->request->path);
-    conn_ctx->registered_at_mplx = 1;
-    rv = h2_mplx_c2_out_open(conn_ctx->mplx, c);
-    apr_file_putc(1, conn_ctx->pipe_out);
-    return rv;
-}
-
-static void send_blocked(void *ctx, h2_bucket_beam *beam)
+static void send_notify(void *ctx, h2_bucket_beam *beam)
 {
     conn_rec *c2 = ctx;
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c2);
 
     (void)beam;
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
-                  "h2_c2(%s): sending blocked, notifying pipe",
-                  conn_ctx? conn_ctx->id : "null");
     if (conn_ctx && conn_ctx->pipe_out) {
         apr_file_putc(1, conn_ctx->pipe_out);
     }
 }
 
-static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_brigade* bb, int block)
+static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_brigade* bb)
 {
     apr_off_t written, left;
     apr_status_t rv;
@@ -464,8 +446,7 @@ static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_b
     H2_TASK_OUT_LOG(APLOG_TRACE2, c2, bb, "h2_c2 beam_out");
     h2_beam_log(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(before)");
 
-    rv = h2_beam_send(conn_ctx->beam_out, bb,
-                      block? APR_BLOCK_READ : APR_NONBLOCK_READ);
+    rv = h2_beam_send(conn_ctx->beam_out, bb, APR_BLOCK_READ);
     h2_beam_log(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(after)");
 
     if (APR_STATUS_IS_EAGAIN(rv)) {
@@ -484,48 +465,11 @@ static apr_status_t h2_c2_filter_out(ap_filter_t* f,
                                                apr_bucket_brigade* bb)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
-    apr_bucket *b;
     apr_status_t rv;
-    int flush = 0;
 
     ap_assert(conn_ctx);
+    rv = beam_out(f->c, conn_ctx, bb);
 
-    for (b = APR_BRIGADE_FIRST(bb);
-         b != APR_BRIGADE_SENTINEL(bb);
-         b = APR_BUCKET_NEXT(b)) {
-        if (APR_BUCKET_IS_FLUSH(b) || APR_BUCKET_IS_EOS(b) || AP_BUCKET_IS_EOR(b)) {
-            flush = 1;
-            break;
-        }
-    }
-
-send:
-    rv = beam_out(f->c, conn_ctx, bb, conn_ctx->registered_at_mplx);
-    if (APR_SUCCESS != rv) goto cleanup;
-
-    if (!APR_BRIGADE_EMPTY(bb)) {
-        /* We did not add all buckets to the beam. This can only happen
-         * if added non-blocking, e.g. when we have not registered the
-         * output to be polled at the h2_mplx. */
-        ap_assert(!conn_ctx->registered_at_mplx);
-        rv = register_output_at_mplx(conn_ctx, f->c);
-        if (APR_SUCCESS == rv) goto send;
-    }
-    else if (!conn_ctx->registered_at_mplx
-        && (flush || conn_ctx->out_unbuffered)) {
-        /* on flush or disabled buffering, register the output
-         * at the mplx for processing right away. */
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, f->c,
-                      "h2_c2(%s): open output, buffered=%d",
-                      conn_ctx->id, !conn_ctx->out_unbuffered);
-        rv = register_output_at_mplx(conn_ctx, f->c);
-    }
-    else if (conn_ctx->registered_at_mplx) {
-        /* let c1 know that it needs to check the c2 beam_out */
-        apr_file_putc(1, conn_ctx->pipe_out);
-    }
-
-cleanup:
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, f->c,
                   "h2_c2(%s): output leave", conn_ctx->id);
     if (APR_SUCCESS != rv) {
@@ -575,6 +519,7 @@ static apr_status_t c2_run_pre_connection(conn_rec *secondary, apr_socket_t *csd
 apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+    apr_status_t rv;
 
     ap_assert(conn_ctx);
     ap_assert(conn_ctx->mplx);
@@ -615,10 +560,16 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     if (!conn_ctx->beam_out) {
         return APR_ENOMEM;
     }
+    rv = h2_mplx_c2_set_stream_output(conn_ctx->mplx, conn_ctx->stream_id,
+                                      conn_ctx->beam_out);
+    if (APR_SUCCESS != rv) {
+        return rv;
+    }
 
     h2_beam_buffer_size_set(conn_ctx->beam_out, conn_ctx->mplx->stream_max_mem);
     h2_beam_send_from(conn_ctx->beam_out, conn_ctx->pool);
-    h2_beam_on_send_block(conn_ctx->beam_out, send_blocked, c);
+    h2_beam_on_was_empty(conn_ctx->beam_out, send_notify, c);
+    h2_beam_on_send_block(conn_ctx->beam_out, send_notify, c);
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_c2(%s), adding filters", conn_ctx->id);
@@ -637,9 +588,6 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_c2(%s): processing done", conn_ctx->id);
     h2_beam_on_send_block(conn_ctx->beam_out, NULL, NULL);
-    if (!conn_ctx->registered_at_mplx) {
-        return register_output_at_mplx(conn_ctx, c);
-    }
     apr_file_putc(1, conn_ctx->pipe_out);
 
     return APR_SUCCESS;

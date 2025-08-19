@@ -2039,6 +2039,16 @@ apr_status_t h2_session_process(h2_session *session, int async)
         }
         session->status[0] = '\0';
         
+        if (!h2_iq_empty(session->ready_to_process)) {
+            h2_mplx_c1_process(session->mplx, session->ready_to_process,
+                               get_stream, stream_pri_cmp, session);
+        }
+
+        if (!h2_iq_empty(session->in_pending)) {
+            h2_mplx_c1_fwd_input(session->mplx, session->in_pending,
+                                 get_stream, session);
+        }
+
         switch (session->state) {
         case H2_SESSION_ST_INIT:
             ap_update_child_status_from_conn(c->sbh, SERVER_BUSY_READ, c);
@@ -2151,16 +2161,6 @@ apr_status_t h2_session_process(h2_session *session, int async)
         }
         else if (!nghttp2_session_want_read(session->ngh2)) {
             dispatch_event(session, H2_SESSION_EV_NGH2_DONE, 0, NULL);
-        }
-
-        if (!h2_iq_empty(session->ready_to_process)) {
-            h2_mplx_c1_process(session->mplx, session->ready_to_process,
-                               get_stream, stream_pri_cmp, session);
-        }
-
-        if (!h2_iq_empty(session->in_pending)) {
-            h2_mplx_c1_fwd_input(session->mplx, session->in_pending,
-                                 get_stream, session);
         }
 
         if (session->reprioritize) {

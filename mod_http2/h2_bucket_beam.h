@@ -194,9 +194,10 @@ struct h2_bucket_beam {
     h2_beam_io_callback *cons_io_cb;
     void *cons_ctx;
 
+    h2_beam_ev_callback *was_empty_cb;
+    void *was_empty_ctx;
     h2_beam_ev_callback *send_block_cb;
     void *send_block_ctx;
-
     apr_off_t prod_bytes_reported;    /* amount of bytes reported as produced */
     h2_beam_io_callback *prod_io_cb;
     void *prod_ctx;
@@ -353,6 +354,17 @@ void h2_beam_on_consumed(h2_bucket_beam *beam,
  */
 void h2_beam_on_send_block(h2_bucket_beam *beam,
                            h2_beam_ev_callback *send_block_cb, void *ctx);
+
+/**
+ * Register a call back from the sender side to be invoked when send
+ * has added to a previously empty beam.
+ * Unregister by passing a NULL was_empty_cb.
+ * @param beam the beam to set the callback on
+ * @param was_empty_cb the callback to invoke on blocked send
+ * @param ctx  the context to use in callback invocation
+ */
+void h2_beam_on_was_empty(h2_bucket_beam *beam,
+                          h2_beam_ev_callback *was_empty_cb, void *ctx);
 
 /**
  * Call any registered consumed handler, if any changes have happened

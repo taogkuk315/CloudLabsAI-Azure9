@@ -172,14 +172,19 @@ apr_status_t h2_mplx_c1_streams_do(h2_mplx *m, h2_mplx_stream_cb *cb, void *ctx)
 apr_status_t h2_mplx_c1_client_rst(h2_mplx *m, int stream_id);
 
 /**
- * Opens the output for a secondary (stream processing) connection to the mplx.
- */
-apr_status_t h2_mplx_c2_out_open(h2_mplx *mplx, conn_rec *c2);
-
-/**
  * Get readonly access to a stream for a secondary connection.
  */
 const struct h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id);
+
+/**
+ * Register the output at the stream once it has been created.
+ * @param m the mplx
+ * @param stream_id id of the stream
+ * @param output the bucket_beam where output will arrive
+ * @return APR_SUCCESS when set, APR_EINVAL if stream is not known.
+ */
+apr_status_t h2_mplx_c2_set_stream_output(
+    h2_mplx *m, int stream_id, struct h2_bucket_beam *output);
 
 /**
  * A h2 worker asks for a secondary connection to process.

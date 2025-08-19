@@ -471,42 +471,22 @@ const h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id)
     return s;
 }
 
-apr_status_t h2_mplx_c2_out_open(h2_mplx *m, conn_rec *c2)
+apr_status_t h2_mplx_c2_set_stream_output(
+    h2_mplx *m, int stream_id, h2_bucket_beam *output)
 {
-    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c2);
-    apr_status_t status = APR_SUCCESS;
-    
-    ap_assert(conn_ctx);
-    ap_assert(conn_ctx->stream_id);
+    h2_stream *s = NULL;
+    apr_status_t rv = APR_EINVAL;
 
-    H2_MPLX_ENTER(m);
-
-    if (m->aborted) {
-        status = APR_ECONNABORTED;
+    H2_MPLX_ENTER_ALWAYS(m);
+    s = h2_ihash_get(m->streams, stream_id);
+    if (s && !m->aborted) {
+        ap_assert(s->output == NULL);  /* should be called only once */
+        s->output = output;
+        rv = APR_SUCCESS;
     }
-    else {
-        h2_stream *stream;
-
-        stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
-        if (!stream || m->aborted) {
-            status = APR_ECONNABORTED;
-            goto leave;
-        }
-        ap_assert(stream->output == NULL);  /* should be called only once */
-        stream->output = conn_ctx->beam_out;
-
-        if (APLOGctrace2(m->c)) {
-            h2_beam_log(stream->output, c2, APLOG_TRACE2, "out_open");
-        }
-        else {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c2,
-                          "h2_mplx(%s): out open", conn_ctx->id);
-        }
-    }
-
-leave:
     H2_MPLX_LEAVE(m);
-    return status;
+
+    return rv;
 }
 
 static apr_status_t s_out_close(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
@@ -622,7 +602,6 @@ static apr_status_t c1_process_stream(h2_mplx *m,
     }
     else {
         h2_iq_add(m->q, stream->id, cmp, session);
-        ms_register_if_needed(m, 1);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
                       H2_STRM_MSG(stream, "process, added to q"));
     }
@@ -656,6 +635,7 @@ apr_status_t h2_mplx_c1_process(h2_mplx *m,
                           "h2_stream(%ld-%d): not found to process", m->id, sid);
         }
     }
+    ms_register_if_needed(m, 1);
 
     H2_MPLX_LEAVE(m);
     return rv;
@@ -1117,7 +1097,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                     H2_MPLX_ENTER(m);
                 }
             }
-            else if (stream->pfd_out->desc.f == pfd->desc.f) {
+            else if (stream->pfd_out && stream->pfd_out->desc.f == pfd->desc.f) {
                 /* output is available */
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
                               H2_STRM_MSG(stream, "poll output event %hx/%hx"),
@@ -1147,7 +1127,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                     H2_MPLX_ENTER(m);
                 }
             }
-            else if (stream->pfd_in_read->desc.f == pfd->desc.f) {
+            else if (stream->pfd_in_read && stream->pfd_in_read->desc.f == pfd->desc.f) {
                 /* input has been consumed */
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
                               H2_STRM_MSG(stream, "poll input event %hx/%hx"),

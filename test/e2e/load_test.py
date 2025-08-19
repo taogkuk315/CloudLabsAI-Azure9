@@ -595,7 +595,7 @@ class LoadTest:
                 "file_sizes": [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 10000],
                 "requests": 20000,
                 "protocol": "h2",
-                "max_parallel": 20,
+                "max_parallel": 50,
                 "clients": 32,
                 "cooldown": timedelta(seconds=20),
                 "row0_title": "protocol",
