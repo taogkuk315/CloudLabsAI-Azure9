@@ -137,7 +137,7 @@ apr_status_t h2_c1_io_init(h2_c1_io *io, conn_rec *c, server_rec *s)
     io->output         = apr_brigade_create(c->pool, c->bucket_alloc);
     io->is_tls         = ap_ssl_conn_is_ssl(c);
     io->buffer_output  = io->is_tls;
-    io->flush_threshold = (apr_size_t)h2_config_sgeti64(s, H2_CONF_STREAM_MAX_MEM);
+    io->flush_threshold = 4 * (apr_size_t)h2_config_sgeti64(s, H2_CONF_STREAM_MAX_MEM);
 
     if (io->buffer_output) {
         /* This is what we start with, 
@@ -173,6 +173,7 @@ static void append_scratch(h2_c1_io *io)
                                                apr_bucket_free,
                                                io->c->bucket_alloc);
         APR_BRIGADE_INSERT_TAIL(io->output, b);
+        io->buffered_len += io->slen;
         io->scratch = NULL;
         io->slen = io->ssize = 0;
     }
@@ -269,11 +270,13 @@ static apr_status_t pass_output(h2_c1_io *io, int flush)
     }
     
     ap_update_child_status(c->sbh, SERVER_BUSY_WRITE, NULL);
+    io->unflushed = !APR_BUCKET_IS_FLUSH(APR_BRIGADE_LAST(io->output));
     apr_brigade_length(io->output, 0, &bblen);
     h2_c1_io_bb_log(c, 0, APLOG_TRACE2, "out", io->output);
     
     rv = ap_pass_brigade(c->output_filters, io->output);
     if (APR_SUCCESS == rv) {
+        io->buffered_len = 0;
         io->bytes_written += (apr_size_t)bblen;
         io->last_write = apr_time_now();
         apr_brigade_cleanup(io->output);
@@ -288,17 +291,7 @@ static apr_status_t pass_output(h2_c1_io *io, int flush)
 
 int h2_c1_io_needs_flush(h2_c1_io *io)
 {
-    if (!APR_BRIGADE_EMPTY(io->output)) {
-        apr_off_t len = h2_brigade_mem_size(io->output);
-        if (len > (apr_off_t)io->flush_threshold) {
-            return 1;
-        }
-        /* if we do not exceed flush length due to memory limits,
-         * we want at least flush when we have that amount of data. */
-        apr_brigade_length(io->output, 0, &len);
-        return len > (apr_off_t)(4 * io->flush_threshold);
-    }
-    return 0;
+    return io->buffered_len >= io->flush_threshold;
 }
 
 int h2_c1_io_pending(h2_c1_io *io)
@@ -306,15 +299,28 @@ int h2_c1_io_pending(h2_c1_io *io)
     return !APR_BRIGADE_EMPTY(io->output) || (io->scratch && io->slen > 0);
 }
 
-apr_status_t h2_c1_io_flush(h2_c1_io *io)
+apr_status_t h2_c1_io_pass(h2_c1_io *io)
 {
-    apr_status_t status = APR_SUCCESS;
+    apr_status_t rv = APR_SUCCESS;
 
     if (h2_c1_io_pending(io)) {
-        status = pass_output(io, 1);
+        rv = pass_output(io, 0);
         check_write_size(io);
     }
-    return status;
+    return rv;
+}
+
+apr_status_t h2_c1_io_assure_flushed(h2_c1_io *io)
+{
+    apr_status_t rv = APR_SUCCESS;
+
+    if (h2_c1_io_pending(io) || io->unflushed) {
+        rv = pass_output(io, 1);
+        if (APR_SUCCESS != rv) goto cleanup;
+        check_write_size(io);
+    }
+cleanup:
+    return rv;
 }
 
 apr_status_t h2_c1_io_add_data(h2_c1_io *io, const char *data, size_t length)
@@ -343,6 +349,7 @@ apr_status_t h2_c1_io_add_data(h2_c1_io *io, const char *data, size_t length)
     }
     else {
         status = apr_brigade_write(io->output, NULL, NULL, data, length);
+        io->buffered_len += length;
     }
     return status;
 }
@@ -351,13 +358,9 @@ apr_status_t h2_c1_io_append(h2_c1_io *io, apr_bucket_brigade *bb)
 {
     apr_bucket *b;
     apr_status_t rv = APR_SUCCESS;
-    int buckets = 0;
-    apr_size_t length = 0;
 
     while (!APR_BRIGADE_EMPTY(bb)) {
         b = APR_BRIGADE_FIRST(bb);
-        ++buckets;
-        length += b->length;
         if (APR_BUCKET_IS_METADATA(b)) {
             /* need to finish any open scratch bucket, as meta data
              * needs to be forward "in order". */
@@ -373,6 +376,7 @@ apr_status_t h2_c1_io_append(h2_c1_io *io, apr_bucket_brigade *bb)
                     /* complete write_size bucket, append unchanged */
                     APR_BUCKET_REMOVE(b);
                     APR_BRIGADE_INSERT_TAIL(io->output, b);
+                    io->buffered_len += b->length;
                     continue;
                 }
             }
@@ -391,11 +395,9 @@ apr_status_t h2_c1_io_append(h2_c1_io *io, apr_bucket_brigade *bb)
             }
             APR_BUCKET_REMOVE(b);
             APR_BRIGADE_INSERT_TAIL(io->output, b);
+            io->buffered_len += b->length;
         }
     }
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, io->c,
-                  "h2_c1_io(%ld): added %d buckets with %ld data bytes",
-                  io->c->id, buckets, (long)length);
 cleanup:
     return rv;
 }

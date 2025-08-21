@@ -53,8 +53,9 @@ struct h2_mplx {
     struct h2_stream *stream0;      /* the main connection */
     server_rec *s;                  /* server for master conn */
 
-    unsigned int aborted;
-    unsigned int is_registered;     /* is registered at h2_workers */
+    int aborted;
+    int polling;           /* is waiting/processing pollset events */
+    int is_registered;     /* is registered at h2_workers */
 
     struct h2_ihash_t *streams;     /* all streams active */
     struct h2_ihash_t *shold;       /* all streams done with c2 processing ongoing */

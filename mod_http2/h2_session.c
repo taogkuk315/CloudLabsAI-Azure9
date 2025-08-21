@@ -492,10 +492,6 @@ static int on_send_data_cb(nghttp2_session *ngh2,
     
     (void)ngh2;
     (void)source;
-/*    if (h2_c1_io_needs_flush(&session->io)) {
-        return NGHTTP2_ERR_WOULDBLOCK;
-    }
-*/
     ap_assert(frame->data.padlen <= (H2_MAX_PADLEN+1));
     padlen = (unsigned char)frame->data.padlen;
     
@@ -697,7 +693,7 @@ static apr_status_t h2_session_shutdown_notice(h2_session *session)
     session->local.accepting = 0;
     status = nghttp2_session_send(session->ngh2);
     if (status == APR_SUCCESS) {
-        status = h2_c1_io_flush(&session->io);
+        status = h2_c1_io_assure_flushed(&session->io);
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 
                   H2_SSSN_LOG(APLOGNO(03457), session, "sent shutdown notice"));
@@ -742,7 +738,7 @@ static apr_status_t h2_session_shutdown(h2_session *session, int error,
                               error, (uint8_t*)msg, msg? strlen(msg):0);
         status = nghttp2_session_send(session->ngh2);
         if (status == APR_SUCCESS) {
-            status = h2_c1_io_flush(&session->io);
+            status = h2_c1_io_assure_flushed(&session->io);
         }
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 
                       H2_SSSN_LOG(APLOGNO(03069), session, 
@@ -1328,7 +1324,7 @@ static apr_status_t h2_session_send(h2_session *session, int flush)
                 rv = APR_EGENERAL;
             }
         }
-        rv = h2_c1_io_flush(&session->io);
+        rv = h2_c1_io_pass(&session->io);
     }
     session->unsent_promises = 0;
     session->unsent_submits = 0;
@@ -2108,10 +2104,15 @@ apr_status_t h2_session_process(h2_session *session, int async)
             break;
 
         case H2_SESSION_ST_WAIT:
-            /* We have seen APR_EAGAIN on reading from our primary connection,
-             * and are certain that the input buffers are empty now. This means
-             * we can rely on polling events for c1/c2s and do not need to read
-             * session input explicitly. */
+            /* We want to wait on pollset events on the c1 socket or
+             * the c2 pipes only. For this to work, we need to make sure:
+             * 1. there are no H2 frames to send any more or we need
+             *    to return to BUSY state
+             * 2. we have still open streams that we process or we transit
+             *    to IDLE or DONE
+             * 3. all c1 output is FLUSHed and not idling in some buffers.
+             *    (stalled H2 window updates can stall c1 completely)
+             */
             if (h2_session_want_send(session)) {
                 /* there is more to write, we cannot go into a timeout poll */
                 transit(session, "c1 io out pending", H2_SESSION_ST_BUSY);
@@ -2131,8 +2132,11 @@ apr_status_t h2_session_process(h2_session *session, int async)
                     break;
                 }
             }
-            status = h2_mplx_c1_poll(session->mplx, session->s->timeout,
-                                     on_stream_input, on_stream_output, session);
+            status = h2_c1_io_assure_flushed(&session->io);
+            if (APR_SUCCESS == status) {
+                status = h2_mplx_c1_poll(session->mplx, session->s->timeout,
+                                         on_stream_input, on_stream_output, session);
+            }
             if (APR_STATUS_IS_TIMEUP(status)) {
                 dispatch_event(session, H2_SESSION_EV_CONN_TIMEOUT, 0, NULL);
                 break;

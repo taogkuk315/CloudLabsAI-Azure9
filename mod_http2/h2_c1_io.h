@@ -31,6 +31,7 @@ typedef struct {
     apr_bucket_brigade *output;
 
     int is_tls;
+    int unflushed;
     apr_time_t cooldown_usecs;
     apr_int64_t warmup_size;
     
@@ -40,7 +41,8 @@ typedef struct {
     apr_int64_t bytes_written;
     
     int buffer_output;
-    apr_size_t flush_threshold;
+    apr_off_t buffered_len;
+    apr_off_t flush_threshold;
     unsigned int is_flushed : 1;
     
     char *scratch;
@@ -67,7 +69,13 @@ apr_status_t h2_c1_io_append(h2_c1_io *io, apr_bucket_brigade *bb);
  * Pass any buffered data on to the connection output filters.
  * @param io the connection io
  */
-apr_status_t h2_c1_io_flush(h2_c1_io *io);
+apr_status_t h2_c1_io_pass(h2_c1_io *io);
+
+/**
+ * if there is any data pendiong or was any data send
+ * since the last FLUSH, send out a FLUSH now.
+ */
+apr_status_t h2_c1_io_assure_flushed(h2_c1_io *io);
 
 /**
  * Check if the buffered amount of data needs flushing.

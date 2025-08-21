@@ -246,7 +246,7 @@ static int s_output_consumed_signal(h2_mplx *m, h2_conn_ctx_t *conn_ctx)
     return 0;
 }
 
-static int m_stream_destroy_iter(void *ctx, void *val) 
+static int m_stream_purge_iter(void *ctx, void *val)
 {   
     h2_mplx *m = ctx;
     h2_conn_ctx_t *conn_ctx = NULL;
@@ -293,15 +293,6 @@ static int m_stream_destroy_iter(void *ctx, void *val)
 
     h2_stream_destroy(stream);
     return 0;
-}
-
-static void c1_purge_streams(h2_mplx *m, int lock)
-{
-    if (!h2_ihash_empty(m->spurge)) {
-        while (!h2_ihash_iter(m->spurge, m_stream_destroy_iter, m)) {
-            /* repeat until empty */
-        }
-    }
 }
 
 typedef struct {
@@ -525,7 +516,17 @@ apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
         rv = APR_ECONNABORTED;
         goto cleanup;
     }
-    c1_purge_streams(m, 0);
+    /* Purge (destroy) streams outside of pollset processing.
+     * Streams that are registered in the pollset, will be removed
+     * when they are destroyed, but the pollset works on copies
+     * of these registrations. So, if we destroy streams while
+     * processing pollset events, we might access freed memory.
+     */
+    if (!h2_ihash_empty(m->spurge)) {
+        while (!h2_ihash_iter(m->spurge, m_stream_purge_iter, m)) {
+            /* repeat until empty */
+        }
+    }
     rv = mplx_pollset_poll(m, timeout, on_stream_input, on_stream_output, on_ctx);
 
 cleanup:
@@ -1067,6 +1068,9 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
     const apr_pollfd_t *results;
     apr_int32_t nresults, i;
 
+    /* Make sure we are not called recursively. */
+    ap_assert(!m->polling);
+    m->polling = 1;
     do {
         H2_MPLX_LEAVE(m);
         do {
@@ -1144,5 +1148,6 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
     } while(1);
 
 cleanup:
+    m->polling = 0;
     return rv;
 }
