@@ -1306,7 +1306,7 @@ static int h2_session_want_send(h2_session *session)
         || h2_c1_io_pending(&session->io);
 }
 
-static apr_status_t h2_session_send(h2_session *session, int flush)
+static apr_status_t h2_session_send(h2_session *session)
 {
     int ngrv;
     apr_status_t rv = APR_EAGAIN;
@@ -1482,7 +1482,7 @@ leave:
      */
     if (status == APR_SUCCESS 
         && (session->unsent_promises || session->unsent_submits > 10)) {
-        status = h2_session_send(session, 1);
+        status = h2_session_send(session);
     }
     return status;
 }
@@ -1555,7 +1555,6 @@ static apr_status_t on_stream_output(void *ctx, h2_stream *stream)
         goto cleanup;
     }
 
-send_headers:
     headers = NULL;
     status = h2_stream_out_prepare(stream, &len, &eos, &headers);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, session->c, 
@@ -1568,7 +1567,6 @@ send_headers:
                           H2_STRM_MSG(stream, "prepared on_headers leave"));
             return status;
         }
-        goto send_headers;
     }
     else if (status != APR_EAGAIN) {
         /* we have DATA to send */
@@ -2156,7 +2154,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
 
         if (h2_session_want_send(session)) {
             ap_update_child_status(session->c->sbh, SERVER_BUSY_WRITE, NULL);
-            status = h2_session_send(session, 1);
+            status = h2_session_send(session);
             if (status != APR_SUCCESS) {
                 dispatch_event(session, H2_SESSION_EV_CONN_ERROR,
                                H2_ERR_INTERNAL_ERROR, "c1 out writing");

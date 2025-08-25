@@ -510,13 +510,6 @@ apr_status_t h2_stream_recv_DATA(h2_stream *stream, uint8_t flags,
     return status;
 }
 
-static void prep_output(h2_stream *stream) {
-    conn_rec *c = stream->session->c;
-    if (!stream->out_buffer) {
-        stream->out_buffer = apr_brigade_create(stream->pool, c->bucket_alloc);
-    }
-}
-
 h2_stream *h2_stream_create(int id, apr_pool_t *pool, h2_session *session,
                             h2_stream_monitor *monitor, int initiated_on)
 {
@@ -904,7 +897,9 @@ apr_status_t h2_stream_out_prepare(h2_stream *stream, apr_off_t *plen,
     }
     
     c = stream->session->c;
-    prep_output(stream);
+    if (!stream->out_buffer) {
+        stream->out_buffer = apr_brigade_create(stream->pool, c->bucket_alloc);
+    }
 
     /* determine how much we'd like to send. We cannot send more than
      * is requested. But we can reduce the size in case the master
