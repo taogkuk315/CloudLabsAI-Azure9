@@ -444,10 +444,10 @@ static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_b
 
     apr_brigade_length(bb, 0, &written);
     H2_TASK_OUT_LOG(APLOG_TRACE2, c2, bb, "h2_c2 beam_out");
-    h2_beam_log(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(before)");
+    H2_BEAM_LOG(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(before)");
 
     rv = h2_beam_send(conn_ctx->beam_out, bb, APR_BLOCK_READ);
-    h2_beam_log(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(after)");
+    H2_BEAM_LOG(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(after)");
 
     if (APR_STATUS_IS_EAGAIN(rv)) {
         apr_brigade_length(bb, 0, &left);

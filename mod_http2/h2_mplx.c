@@ -256,7 +256,7 @@ static int m_stream_purge_iter(void *ctx, void *val)
     ap_assert(stream->state == H2_SS_CLEANUP);
     
     if (stream->input) {
-        h2_beam_log(stream->input, m->c, APLOG_TRACE2, "stream_destroy");
+        H2_BEAM_LOG(stream->input, m->c, APLOG_TRACE2, "stream_destroy");
         h2_beam_destroy(stream->input);
         stream->input = NULL;
     }
@@ -498,7 +498,7 @@ static apr_status_t s_out_close(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, c,
                   "h2_mplx(%s): close", conn_ctx->id);
     status = h2_beam_close(conn_ctx->beam_out);
-    h2_beam_log(conn_ctx->beam_out, c, APLOG_TRACE2, "out_close");
+    H2_BEAM_LOG(conn_ctx->beam_out, c, APLOG_TRACE2, "out_close");
     s_output_consumed_signal(m, conn_ctx);
     return status;
 }

@@ -935,11 +935,11 @@ apr_status_t h2_stream_out_prepare(h2_stream *stream, apr_off_t *plen,
         
         if (stream->output) {
             H2_STREAM_OUT_LOG(APLOG_TRACE2, stream, "pre");
-            h2_beam_log(stream->output, c, APLOG_TRACE2, "pre read output");
+            H2_BEAM_LOG(stream->output, c, APLOG_TRACE2, "pre read output");
             rv = h2_beam_receive(stream->output, stream->out_buffer,
                                  APR_NONBLOCK_READ, stream->max_mem - *plen, &was_closed);
             H2_STREAM_OUT_LOG(APLOG_TRACE2, stream, "post");
-            h2_beam_log(stream->output, c, APLOG_TRACE2, "post read output");
+            H2_BEAM_LOG(stream->output, c, APLOG_TRACE2, "post read output");
         }
         
         if (rv == APR_SUCCESS) {
