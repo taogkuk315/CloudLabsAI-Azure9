@@ -30,6 +30,28 @@
 #include "h2_util.h"
 #include "h2_bucket_beam.h"
 
+
+#define H2_BLIST_INIT(b)        APR_RING_INIT(&(b)->list, apr_bucket, link);
+#define H2_BLIST_SENTINEL(b)    APR_RING_SENTINEL(&(b)->list, apr_bucket, link)
+#define H2_BLIST_EMPTY(b)       APR_RING_EMPTY(&(b)->list, apr_bucket, link)
+#define H2_BLIST_FIRST(b)       APR_RING_FIRST(&(b)->list)
+#define H2_BLIST_LAST(b)	APR_RING_LAST(&(b)->list)
+#define H2_BLIST_INSERT_HEAD(b, e) do {				\
+	apr_bucket *ap__b = (e);                                        \
+	APR_RING_INSERT_HEAD(&(b)->list, ap__b, apr_bucket, link);	\
+    } while (0)
+#define H2_BLIST_INSERT_TAIL(b, e) do {				\
+	apr_bucket *ap__b = (e);					\
+	APR_RING_INSERT_TAIL(&(b)->list, ap__b, apr_bucket, link);	\
+    } while (0)
+#define H2_BLIST_CONCAT(a, b) do {					\
+        APR_RING_CONCAT(&(a)->list, &(b)->list, apr_bucket, link);	\
+    } while (0)
+#define H2_BLIST_PREPEND(a, b) do {					\
+        APR_RING_PREPEND(&(a)->list, &(b)->list, apr_bucket, link);	\
+    } while (0)
+
+
 static void h2_beam_emitted(h2_bucket_beam *beam, h2_beam_proxy *proxy);
 
 #define H2_BPROXY_NEXT(e)             APR_RING_NEXT((e), link)
@@ -253,22 +275,6 @@ static int report_consumption(h2_bucket_beam *beam, h2_beam_lock *pbl)
     return rv;
 }
 
-static void report_prod_io(h2_bucket_beam *beam, int force, h2_beam_lock *pbl)
-{
-    apr_off_t len = beam->sent_bytes - beam->prod_bytes_reported;
-    if (force || len > 0) {
-        h2_beam_io_callback *cb = beam->prod_io_cb; 
-        if (cb) {
-            void *ctx = beam->prod_ctx;
-            
-            leave_yellow(beam, pbl);
-            cb(ctx, beam, len);
-            enter_yellow(beam, pbl);
-        }
-        beam->prod_bytes_reported += len;
-    }
-}
-
 static apr_size_t calc_buffered(h2_bucket_beam *beam)
 {
     apr_size_t len = 0;
@@ -437,7 +443,7 @@ static void h2_beam_emitted(h2_bucket_beam *beam, h2_beam_proxy *proxy)
             }
             else {
                 /* it should be there unless we screwed up */
-                ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, beam->send_pool, 
+                ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, beam->pool,
                               APLOGNO(03384) "h2_beam(%d-%s): emitted bucket not "
                               "in hold, n=%d", beam->id, beam->tag, 
                               (int)proxy->n);
@@ -502,15 +508,6 @@ static int pool_kill(h2_bucket_beam *beam, apr_pool_t *pool,
     return 0;
 }
 
-static apr_status_t beam_recv_cleanup(void *data)
-{
-    h2_bucket_beam *beam = data;
-    /* receiver pool has gone away, clear references */
-    beam->recv_buffer = NULL;
-    beam->recv_pool = NULL;
-    return APR_SUCCESS;
-}
-
 static apr_status_t beam_send_cleanup(void *data)
 {
     h2_bucket_beam *beam = data;
@@ -526,20 +523,7 @@ static apr_status_t beam_send_cleanup(void *data)
     }
     h2_blist_cleanup(&beam->purge_list);
     h2_blist_cleanup(&beam->hold_list);
-    beam->send_pool = NULL;
     return APR_SUCCESS;
-}
-
-static void beam_set_send_pool(h2_bucket_beam *beam, apr_pool_t *pool) 
-{
-    if (beam->send_pool != pool) {
-        if (beam->send_pool && beam->send_pool != beam->pool) {
-            pool_kill(beam, beam->send_pool, beam_send_cleanup);
-            beam_send_cleanup(beam);
-        }
-        beam->send_pool = pool;
-        pool_register(beam, beam->send_pool, beam_send_cleanup);
-    }
 }
 
 static void recv_buffer_cleanup(h2_bucket_beam *beam, h2_beam_lock *bl)
@@ -567,11 +551,7 @@ static void recv_buffer_cleanup(h2_bucket_beam *beam, h2_beam_lock *bl)
 
 static apr_status_t beam_cleanup(h2_bucket_beam *beam, int from_pool)
 {
-    apr_status_t status = APR_SUCCESS;
-    int safe_send = (beam->owner == H2_BEAM_OWNER_SEND);
-    int safe_recv = (beam->owner == H2_BEAM_OWNER_RECV);
-    
-    /* 
+    /*
      * Owner of the beam is going away, depending on which side it owns,
      * cleanup strategies will differ.
      *
@@ -580,43 +560,13 @@ static apr_status_t beam_cleanup(h2_bucket_beam *beam, int from_pool)
      */
      
      /* When called from pool destroy, io callbacks are disabled */
-     if (from_pool) {
-         beam->cons_io_cb = NULL;
-     }
-     
-    /* When modify send is not safe, this means we still have multi-thread
-     * protection and the owner is receiving the buckets. If the sending
-     * side has not gone away, this means we could have dangling buckets
-     * in our lists that never get destroyed. This should not happen. */
-    ap_assert(safe_send || !beam->send_pool);
-    if (!H2_BLIST_EMPTY(&beam->send_list)) {
-        ap_assert(beam->send_pool);
+    if (from_pool) {
+        beam->cons_io_cb = NULL;
     }
-    
-    if (safe_recv) {
-        if (beam->recv_pool) {
-            pool_kill(beam, beam->recv_pool, beam_recv_cleanup);
-            beam->recv_pool = NULL;
-        }
-        recv_buffer_cleanup(beam, NULL);
-    }
-    else {
-        beam->recv_buffer = NULL;
-        beam->recv_pool = NULL;
-    }
-    
-    if (safe_send && beam->send_pool) {
-        pool_kill(beam, beam->send_pool, beam_send_cleanup);
-        status = beam_send_cleanup(beam);
-    }
-    
-    if (safe_recv) {
-        ap_assert(H2_BPROXY_LIST_EMPTY(&beam->proxies));
-        ap_assert(H2_BLIST_EMPTY(&beam->send_list));
-        ap_assert(H2_BLIST_EMPTY(&beam->hold_list));
-        ap_assert(H2_BLIST_EMPTY(&beam->purge_list));
-    }
-    return status;
+    beam->recv_buffer = NULL;
+    beam->recv_pool = NULL;
+    pool_kill(beam, beam->pool, beam_send_cleanup);
+    return beam_send_cleanup(beam);
 }
 
 static apr_status_t beam_pool_cleanup(void *data)
@@ -632,7 +582,6 @@ apr_status_t h2_beam_destroy(h2_bucket_beam *beam)
 
 apr_status_t h2_beam_create(h2_bucket_beam **pbeam, apr_pool_t *pool, 
                             int id, const char *tag, 
-                            h2_beam_owner_t owner,
                             apr_size_t max_buf_size,
                             apr_interval_time_t timeout)
 {
@@ -647,7 +596,8 @@ apr_status_t h2_beam_create(h2_bucket_beam **pbeam, apr_pool_t *pool,
     beam->id = id;
     beam->tag = tag;
     beam->pool = pool;
-    beam->owner = owner;
+    pool_register(beam, beam->pool, beam_send_cleanup);
+
     H2_BLIST_INIT(&beam->send_list);
     H2_BLIST_INIT(&beam->hold_list);
     H2_BLIST_INIT(&beam->purge_list);
@@ -853,7 +803,7 @@ static apr_status_t append_bucket(h2_bucket_beam *beam,
         /* this takes care of transient buckets and converts them
          * into heap ones. Other bucket types might or might not be
          * affected by this. */
-        status = apr_bucket_setaside(b, beam->send_pool);
+        status = apr_bucket_setaside(b, beam->pool);
     }
     else if (APR_BUCKET_IS_HEAP(b)) {
         /* For heap buckets read from a receiver thread is fine. The
@@ -873,7 +823,7 @@ static apr_status_t append_bucket(h2_bucket_beam *beam,
         }
     }
     else if (APR_BUCKET_IS_FILE(b) && can_beam) {
-        status = apr_bucket_setaside(b, beam->send_pool);
+        status = apr_bucket_setaside(b, beam->pool);
     }
     
     if (status == APR_ENOTIMPL) {
@@ -885,7 +835,7 @@ static apr_status_t append_bucket(h2_bucket_beam *beam,
          * use pools/allocators safely. */
         status = apr_bucket_read(b, &data, &len, APR_BLOCK_READ);
         if (status == APR_SUCCESS) {
-            status = apr_bucket_setaside(b, beam->send_pool);
+            status = apr_bucket_setaside(b, beam->pool);
         }
     }
     
@@ -900,18 +850,7 @@ static apr_status_t append_bucket(h2_bucket_beam *beam,
     return APR_SUCCESS;
 }
 
-void h2_beam_send_from(h2_bucket_beam *beam, apr_pool_t *p)
-{
-    h2_beam_lock bl;
-    /* Called from the sender thread to add buckets to the beam */
-    if (enter_yellow(beam, &bl) == APR_SUCCESS) {
-        r_purge_sent(beam);
-        beam_set_send_pool(beam, p);
-        leave_yellow(beam, &bl);
-    }
-}
-
-apr_status_t h2_beam_send(h2_bucket_beam *beam, 
+apr_status_t h2_beam_send(h2_bucket_beam *beam,
                           apr_bucket_brigade *sender_bb, 
                           apr_read_type_e block)
 {
@@ -922,7 +861,6 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam,
 
     /* Called from the sender thread to add buckets to the beam */
     if (enter_yellow(beam, &bl) == APR_SUCCESS) {
-        ap_assert(beam->send_pool);
         r_purge_sent(beam);
         
         if (beam->aborted) {
@@ -931,12 +869,10 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam,
         }
         else if (sender_bb) {
             int was_empty = buffer_is_empty(beam);
-            int force_report = !APR_BRIGADE_EMPTY(sender_bb);
-            
+
             space_left = calc_space_left(beam);
             while (!APR_BRIGADE_EMPTY(sender_bb) && APR_SUCCESS == rv) {
                 if (space_left <= 0) {
-                    report_prod_io(beam, force_report, &bl);
                     r_purge_sent(beam);
                     rv = wait_not_full(beam, block, &space_left, &bl);
                     if (APR_SUCCESS != rv) {
@@ -950,7 +886,6 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam,
             if (was_empty && beam->was_empty_cb && !buffer_is_empty(beam)) {
                 beam->was_empty_cb(beam->was_empty_ctx, beam);
             }
-            report_prod_io(beam, force_report, &bl);
             apr_thread_cond_broadcast(beam->change);
         }
         report_consumption(beam, &bl);
@@ -1187,18 +1122,7 @@ void h2_beam_on_send_block(h2_bucket_beam *beam,
     }
 }
 
-void h2_beam_on_produced(h2_bucket_beam *beam, 
-                         h2_beam_io_callback *io_cb, void *ctx)
-{
-    h2_beam_lock bl;
-    if (enter_yellow(beam, &bl) == APR_SUCCESS) {
-        beam->prod_io_cb = io_cb;
-        beam->prod_ctx = ctx;
-        leave_yellow(beam, &bl);
-    }
-}
-
-void h2_beam_on_file_beam(h2_bucket_beam *beam, 
+void h2_beam_on_file_beam(h2_bucket_beam *beam,
                           h2_beam_can_beam_callback *cb, void *ctx)
 {
     h2_beam_lock bl;

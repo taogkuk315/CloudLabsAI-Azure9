@@ -443,11 +443,9 @@ static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_b
     apr_status_t rv;
 
     apr_brigade_length(bb, 0, &written);
-    H2_TASK_OUT_LOG(APLOG_TRACE2, c2, bb, "h2_c2 beam_out");
-    H2_BEAM_LOG(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(before)");
-
+    H2_TASK_OUT_LOG(APLOG_TRACE2, c2, bb, "h2_c2 send output");
     rv = h2_beam_send(conn_ctx->beam_out, bb, APR_BLOCK_READ);
-    H2_BEAM_LOG(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out(after)");
+    H2_BEAM_LOG(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out after send");
 
     if (APR_STATUS_IS_EAGAIN(rv)) {
         apr_brigade_length(bb, 0, &left);
@@ -556,7 +554,7 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     c->id = (c->master->id << 8)^worker_id;
 
     h2_beam_create(&conn_ctx->beam_out, conn_ctx->pool, conn_ctx->stream_id, "output",
-                   H2_BEAM_OWNER_SEND, 0, c->base_server->timeout);
+                   0, c->base_server->timeout);
     if (!conn_ctx->beam_out) {
         return APR_ENOMEM;
     }
@@ -567,7 +565,6 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     }
 
     h2_beam_buffer_size_set(conn_ctx->beam_out, conn_ctx->mplx->stream_max_mem);
-    h2_beam_send_from(conn_ctx->beam_out, conn_ctx->pool);
     h2_beam_on_was_empty(conn_ctx->beam_out, send_notify, c);
     h2_beam_on_send_block(conn_ctx->beam_out, send_notify, c);
 

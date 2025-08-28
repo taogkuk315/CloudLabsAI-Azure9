@@ -190,9 +190,7 @@ apr_status_t h2_stream_setup_input(h2_stream *stream)
                          || APR_BRIGADE_EMPTY(stream->in_buffer)));
         if (!empty) {
             h2_beam_create(&stream->input, stream->pool, stream->id, 
-                           "input", H2_BEAM_OWNER_SEND, 0, 
-                           stream->session->s->timeout);
-            h2_beam_send_from(stream->input, stream->pool);
+                           "input", 0, stream->session->s->timeout);
         }
     }
     return APR_SUCCESS;
@@ -562,7 +560,6 @@ void h2_stream_cleanup(h2_stream *stream)
         }
     }
     if (stream->output) {
-        h2_beam_on_produced(stream->output, NULL, NULL);
         h2_beam_leave(stream->output);
     }
 }
