@@ -785,6 +785,12 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam,
         move_to_hold(beam, sender_bb);
         rv = APR_ECONNABORTED;
     }
+    else if (beam->closed) {
+        /* we just take in buckets after an EOS directly
+         * to the hold and do not complain. */
+        move_to_hold(beam, sender_bb);
+        rv = APR_SUCCESS;
+    }
     else if (sender_bb) {
         int was_empty = buffer_is_empty(beam);
 
@@ -806,6 +812,7 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam,
         }
         apr_thread_cond_broadcast(beam->change);
     }
+
     report_consumption(beam, 1);
     apr_thread_mutex_unlock(beam->lock);
     return rv;
