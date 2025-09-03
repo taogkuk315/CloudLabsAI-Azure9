@@ -30,7 +30,6 @@
 #include <nghttp2/nghttp2.h>
 #include "h2_stream.h"
 #include "h2_c1.h"
-#include "h2_c1_status.h"
 #include "h2_c2.h"
 #include "h2_session.h"
 #include "h2_config.h"
@@ -238,9 +237,6 @@ static void h2_hooks(apr_pool_t *pool)
     /* Setup subprocess env for certain variables
      */
     ap_hook_fixups(h2_h2_fixups, NULL,NULL, APR_HOOK_MIDDLE);
-    
-    /* test http2 connection status handler */
-    ap_hook_handler(h2_c1_status_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
 static const char *val_HTTP2(apr_pool_t *p, server_rec *s,

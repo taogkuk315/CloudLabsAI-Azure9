@@ -1,3 +1,5 @@
+ * The HTTP/2 connection state handler, based on an experiment and draft
+   at the IETF http working group (abandoned for some time), has been removed.
  * H2SerializeHeaders no longer has an effect. A warning is logged when it is
    set to "on". The switch enabled the internal writing of requests to be parsed
    by the internal HTTP/1.1 protocol handler and was introduced to avoid

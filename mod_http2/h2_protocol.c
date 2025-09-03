@@ -38,7 +38,6 @@
 #include "h2_config.h"
 #include "h2_conn_ctx.h"
 #include "h2_c1.h"
-#include "h2_c1_status.h"
 #include "h2_request.h"
 #include "h2_headers.h"
 #include "h2_session.h"

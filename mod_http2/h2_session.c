@@ -36,7 +36,6 @@
 #include "h2_bucket_eos.h"
 #include "h2_config.h"
 #include "h2_conn_ctx.h"
-#include "h2_c1_status.h"
 #include "h2_protocol.h"
 #include "h2_mplx.h"
 #include "h2_push.h"

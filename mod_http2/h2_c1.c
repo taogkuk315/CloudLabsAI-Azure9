@@ -36,7 +36,6 @@
 #include "h2_bucket_beam.h"
 #include "h2_config.h"
 #include "h2_conn_ctx.h"
-#include "h2_c1_status.h"
 #include "h2_headers.h"
 #include "h2_mplx.h"
 #include "h2_session.h"
@@ -320,6 +319,5 @@ void h2_c1_register_hooks(void)
 
     /* special bucket type transfer through a h2_bucket_beam */
     h2_register_bucket_beamer(h2_bucket_headers_beam);
-    h2_register_bucket_beamer(h2_bucket_observer_beam);
 }
 

@@ -30,7 +30,6 @@ OBJECTS = \
     h2_bucket_eos.c \
     h2_c1.c \
     h2_c1_io.c \
-    h2_c1_status.c \
     h2_c2.c \
     h2_c2_filter.c \
     h2_config.c \
@@ -53,7 +52,6 @@ HFILES = \
     h2_bucket_eos.h \
     h2_c1.h \
     h2_c1_io.h \
-    h2_c1_status.h \
     h2_c2.h \
     h2_c2_filter.h \
     h2_config.h \
