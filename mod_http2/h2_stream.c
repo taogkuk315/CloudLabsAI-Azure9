@@ -169,6 +169,10 @@ static int on_event(h2_stream* stream, h2_stream_event_t ev)
     return stream->state;
 }
 
+static apr_status_t on_stream_headers(h2_stream *stream,
+                                      h2_headers *headers, apr_off_t len,
+                                      int eos);
+
 static void H2_STREAM_OUT_LOG(int lvl, h2_stream *s, const char *tag)
 {
     if (APLOG_C_IS_LEVEL(s->session->c, lvl)) {
@@ -522,13 +526,11 @@ h2_stream *h2_stream_create(int id, apr_pool_t *pool, h2_session *session,
     stream->monitor      = monitor;
     stream->max_mem      = session->max_stream_mem;
     
-#ifdef H2_NG2_LOCAL_WIN_SIZE
     if (id) {
         stream->in_window_size =
             nghttp2_session_get_stream_local_window_size(
                 stream->session->ngh2, stream->id);
     }
-#endif
 
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 
                   H2_STRM_LOG(APLOGNO(03082), stream, "created"));
@@ -877,7 +879,7 @@ static apr_status_t add_buffered_data(h2_stream *stream, apr_off_t requested,
     return APR_SUCCESS;
 }
 
-apr_status_t h2_stream_out_prepare(h2_stream *stream, apr_off_t *plen, 
+apr_status_t h2_stream_out_prepare(h2_stream *stream, apr_off_t *plen,
                                    int *peos, h2_headers **pheaders)
 {
     apr_status_t status = APR_SUCCESS;
@@ -998,6 +1000,70 @@ apr_status_t h2_stream_read_to(h2_stream *stream, apr_bucket_brigade *bb,
     return status;
 }
 
+apr_status_t h2_stream_read_output(h2_stream *stream)
+{
+    h2_session *session = stream->session;
+    apr_status_t status = APR_EAGAIN;
+    int rv;
+    apr_off_t len = 0;
+    int eos = 0;
+    h2_headers *headers;
+
+    ap_assert(stream);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                  H2_STRM_MSG(stream, "read_output"));
+
+    if (h2_stream_was_closed(stream)) {
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+                      H2_STRM_LOG(APLOGNO(), stream, "already closed"));
+        status = APR_EINVAL;
+        goto cleanup;
+    }
+    else if (stream->state == H2_SS_CLOSED_L) {
+        /* We have delivered a response to a stream that was not closed
+         * by the client. This could be a POST with body that we negate
+         * and we need to RST_STREAM to end if. */
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                      H2_STRM_LOG(APLOGNO(10026), stream, "remote close missing"));
+        nghttp2_submit_rst_stream(session->ngh2, NGHTTP2_FLAG_NONE,
+                                  stream->id, NGHTTP2_NO_ERROR);
+        status = APR_EOF;
+        goto cleanup;
+    }
+
+    headers = NULL;
+    status = h2_stream_out_prepare(stream, &len, &eos, &headers);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, session->c,
+                  H2_STRM_MSG(stream, "prepared len=%ld, eos=%d"),
+                  (long)len, eos);
+    if (headers) {
+        status = on_stream_headers(stream, headers, len, eos);
+        if (status != APR_SUCCESS || stream->rst_error) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, session->c,
+                          H2_STRM_MSG(stream, "prepared on_headers leave"));
+            return status;
+        }
+    }
+    else if (status != APR_EAGAIN) {
+        /* we have DATA to send */
+        if (!stream->has_response) {
+            /* but no response */
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                          H2_STRM_LOG(APLOGNO(03466), stream,
+                          "no response, RST_STREAM"));
+            h2_stream_rst(stream, H2_ERR_PROTOCOL_ERROR);
+            return APR_SUCCESS;
+        }
+        else if (!h2_stream_was_closed(stream)) {
+            rv = nghttp2_session_resume_data(session->ngh2, stream->id);
+            ap_log_cerror(APLOG_MARK, nghttp2_is_fatal(rv)?
+                          APLOG_ERR : APLOG_DEBUG, 0, session->c,
+                          H2_STRM_LOG(APLOGNO(02936), stream, "resumed"));
+        }
+    }
+cleanup:
+    return status;
+}
 
 apr_status_t h2_stream_submit_pushes(h2_stream *stream, h2_headers *response)
 {
@@ -1075,7 +1141,6 @@ apr_status_t h2_stream_in_consumed(h2_stream *stream, apr_off_t amount)
             consumed -= len;
         }
 
-#ifdef H2_NG2_LOCAL_WIN_SIZE
         if (1) {
             int cur_size = nghttp2_session_get_stream_local_window_size(
                 session->ngh2, stream->id);
@@ -1118,8 +1183,227 @@ apr_status_t h2_stream_in_consumed(h2_stream *stream, apr_off_t amount)
                           session->id, stream->id, (long)amount, 
                           cur_size, stream->in_window_size);
         }
-#endif
     }
     return APR_SUCCESS;   
+}
+
+static ssize_t stream_data_cb(nghttp2_session *ng2s,
+                              int32_t stream_id,
+                              uint8_t *buf,
+                              size_t length,
+                              uint32_t *data_flags,
+                              nghttp2_data_source *source,
+                              void *puser)
+{
+    h2_session *session = (h2_session *)puser;
+    apr_off_t nread = length;
+    int eos = 0;
+    apr_status_t status;
+    h2_stream *stream;
+    ap_assert(session);
+
+    /* The session wants to send more DATA for the stream. We need
+     * to find out how much of the requested length we can send without
+     * blocking.
+     * Indicate EOS when we encounter it or DEFERRED if the stream
+     * should be suspended. Beware of trailers.
+     */
+
+    (void)ng2s;
+    (void)buf;
+    (void)source;
+    stream = nghttp2_session_get_stream_user_data(session->ngh2, stream_id);
+    if (!stream) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, session->c,
+                      APLOGNO(02937)
+                      "h2_stream(%ld-%d): data_cb, stream not found",
+                      session->id, (int)stream_id);
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+
+    status = h2_stream_out_prepare(stream, &nread, &eos, NULL);
+    if (nread) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, session->c,
+                      H2_STRM_MSG(stream, "prepared no_copy, len=%ld, eos=%d"),
+                      (long)nread, eos);
+        *data_flags |=  NGHTTP2_DATA_FLAG_NO_COPY;
+    }
+
+    switch (status) {
+        case APR_SUCCESS:
+            break;
+
+        case APR_EOF:
+            eos = 1;
+            break;
+
+        case APR_ECONNRESET:
+        case APR_ECONNABORTED:
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
+
+        case APR_EAGAIN:
+            /* If there is no data available, our session will automatically
+             * suspend this stream and not ask for more data until we resume
+             * it. Remember at our h2_stream that we need to do this.
+             */
+            nread = 0;
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                          H2_STRM_LOG(APLOGNO(03071), stream, "suspending"));
+            return NGHTTP2_ERR_DEFERRED;
+
+        default:
+            nread = 0;
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                          H2_STRM_LOG(APLOGNO(02938), stream, "reading data"));
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+
+    if (eos) {
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    }
+    return (ssize_t)nread;
+}
+
+/**
+ * headers for the stream are ready.
+ */
+static apr_status_t on_stream_headers(h2_stream *stream,
+                                      h2_headers *headers, apr_off_t len,
+                                      int eos)
+{
+    h2_session *session = stream->session;
+    apr_status_t status = APR_SUCCESS;
+    const char *s;
+    int rv = 0;
+
+    ap_assert(session);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                  H2_STRM_MSG(stream, "on_headers"));
+    if (headers->status < 100) {
+        h2_stream_rst(stream, headers->status);
+        goto leave;
+    }
+    else if (stream->has_response) {
+        h2_ngheader *nh;
+
+        status = h2_res_create_ngtrailer(&nh, stream->pool, headers);
+
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+                      H2_STRM_LOG(APLOGNO(03072), stream, "submit %d trailers"),
+                      (int)nh->nvlen);
+        if (status == APR_SUCCESS) {
+            rv = nghttp2_submit_trailer(session->ngh2, stream->id,
+                                        nh->nv, nh->nvlen);
+        }
+        else {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+                          H2_STRM_LOG(APLOGNO(10024), stream, "invalid trailers"));
+            h2_stream_rst(stream, NGHTTP2_PROTOCOL_ERROR);
+        }
+        goto leave;
+    }
+    else {
+        nghttp2_data_provider provider, *pprovider = NULL;
+        h2_ngheader *ngh;
+        const char *note;
+
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                      H2_STRM_LOG(APLOGNO(03073), stream, "submit response %d, REMOTE_WINDOW_SIZE=%u"),
+                      headers->status,
+                      (unsigned int)nghttp2_session_get_stream_remote_window_size(session->ngh2, stream->id));
+
+        if (!eos || len > 0) {
+            memset(&provider, 0, sizeof(provider));
+            provider.source.fd = stream->id;
+            provider.read_callback = stream_data_cb;
+            pprovider = &provider;
+        }
+
+        /* If this stream is not a pushed one itself,
+         * and HTTP/2 server push is enabled here,
+         * and the response HTTP status is not sth >= 400,
+         * and the remote side has pushing enabled,
+         * -> find and perform any pushes on this stream
+         *    *before* we submit the stream response itself.
+         *    This helps clients avoid opening new streams on Link
+         *    headers that get pushed right afterwards.
+         *
+         * *) the response code is relevant, as we do not want to
+         *    make pushes on 401 or 403 codes and friends.
+         *    And if we see a 304, we do not push either
+         *    as the client, having this resource in its cache, might
+         *    also have the pushed ones as well.
+         */
+        if (!stream->initiated_on
+            && !stream->has_response
+            && stream->request && stream->request->method
+            && !strcmp("GET", stream->request->method)
+            && (headers->status < 400)
+            && (headers->status != 304)
+            && h2_session_push_enabled(session)) {
+            /* PUSH is possible and enabled on server, unless the request
+             * denies it, submit resources to push */
+            s = apr_table_get(headers->notes, H2_PUSH_MODE_NOTE);
+            if (!s || strcmp(s, "0")) {
+                h2_stream_submit_pushes(stream, headers);
+            }
+        }
+
+        if (!stream->pref_priority) {
+            stream->pref_priority = h2_stream_get_priority(stream, headers);
+        }
+        h2_session_set_prio(session, stream, stream->pref_priority);
+
+        note = apr_table_get(headers->notes, H2_FILTER_DEBUG_NOTE);
+        if (note && !strcmp("on", note)) {
+            int32_t connFlowIn, connFlowOut;
+
+            connFlowIn = nghttp2_session_get_effective_local_window_size(session->ngh2);
+            connFlowOut = nghttp2_session_get_remote_window_size(session->ngh2);
+            headers = h2_headers_copy(stream->pool, headers);
+            apr_table_setn(headers->headers, "conn-flow-in",
+                           apr_itoa(stream->pool, connFlowIn));
+            apr_table_setn(headers->headers, "conn-flow-out",
+                           apr_itoa(stream->pool, connFlowOut));
+        }
+
+        if (headers->status == 103
+            && !h2_config_sgeti(session->s, H2_CONF_EARLY_HINTS)) {
+            /* suppress sending this to the client, it might have triggered
+             * pushes and served its purpose nevertheless */
+            rv = 0;
+            goto leave;
+        }
+
+        status = h2_res_create_ngheader(&ngh, stream->pool, headers);
+        if (status == APR_SUCCESS) {
+            rv = nghttp2_submit_response(session->ngh2, stream->id,
+                                         ngh->nv, ngh->nvlen, pprovider);
+            stream->has_response = h2_headers_are_response(headers);
+
+            if (stream->initiated_on) {
+                ++session->pushes_submitted;
+            }
+            else {
+                ++session->responses_submitted;
+            }
+        }
+        else {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, session->c,
+                          H2_STRM_LOG(APLOGNO(10025), stream, "invalid response"));
+            h2_stream_rst(stream, NGHTTP2_PROTOCOL_ERROR);
+        }
+    }
+
+leave:
+    if (nghttp2_is_fatal(rv)) {
+        status = APR_EGENERAL;
+        h2_session_dispatch_event(session, H2_SESSION_EV_PROTO_ERROR, rv, nghttp2_strerror(rv));
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, session->c,
+                      APLOGNO(02940) "submit_response: %s",
+                      nghttp2_strerror(rv));
+    }
+
+    return status;
 }
 

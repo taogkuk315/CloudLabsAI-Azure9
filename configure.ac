@@ -127,18 +127,9 @@ AC_CHECK_LIB([nghttp2], [nghttp2_session_server_new2], ,
 [AC_MSG_ERROR("library nghttp2 not found")])
 
 AC_CHECK_HEADERS([nghttp2/nghttp2.h])
-# nghttp2 >= 1.3.0: access to stream weights
-AC_CHECK_FUNCS([nghttp2_stream_get_weight], 
-        [CPPFLAGS="$CPPFLAGS -DH2_NG2_STREAM_API"], [])
-# nghttp2 >= 1.5.0: changing stream priorities
-AC_CHECK_FUNCS([nghttp2_session_change_stream_priority], 
-        [CPPFLAGS="$CPPFLAGS -DH2_NG2_CHANGE_PRIO"], [])
-# nghttp2 >= 1.14.0: invalid header callback
-AC_CHECK_FUNCS([nghttp2_session_callbacks_set_on_invalid_header_callback], 
-        [CPPFLAGS="$CPPFLAGS -DH2_NG2_INVALID_HEADER_CB"], [])
 dnl # nghttp2 >= 1.15.0: get/set stream window sizes
-AC_CHECK_FUNCS([nghttp2_session_get_stream_local_window_size], 
-        [CPPFLAGS="$CPPFLAGS -DH2_NG2_LOCAL_WIN_SIZE"], [])
+AC_CHECK_FUNCS([nghttp2_session_get_stream_local_window_size],
+        [], [AC_MSG_ERROR("nghttp2 version >= 1.15.0 required")])
 
 AC_PATH_PROG([NGHTTP], [nghttp])
 if test "x${NGHTTP}" = "x"; then

@@ -242,6 +242,12 @@ void h2_stream_rst(h2_stream *stream, int error_code);
 int h2_stream_was_closed(const h2_stream *stream);
 
 /**
+ * Inspect the c2 output for response(s) and data.
+ * @param stream the stream to read output for
+ */
+apr_status_t h2_stream_read_output(h2_stream *stream);
+
+/**
  * Do a speculative read on the stream output to determine the 
  * amount of data that can be read.
  * 

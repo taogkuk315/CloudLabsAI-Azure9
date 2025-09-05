@@ -1,3 +1,6 @@
+ * Removed work-arounds for older versions of libnghttp2 and checking
+   during configure that at least version 1.15.0 is present. Which, due
+   to its age, should not make a difference to anyone.
  * The HTTP/2 connection state handler, based on an experiment and draft
    at the IETF http working group (abandoned for some time), has been removed.
  * H2SerializeHeaders no longer has an effect. A warning is logged when it is

@@ -88,9 +88,7 @@ typedef struct h2_session {
     
     struct h2_stream_monitor *monitor;/* monitor callbacks for streams */
     int open_streams;               /* number of client streams open */
-    int unsent_submits;             /* number of submitted, but not yet written responses. */
-    int unsent_promises;            /* number of submitted, but not yet written push promises */
-                                         
+
     int responses_submitted;        /* number of http/2 responses submitted */
     int streams_reset;              /* number of http/2 streams reset by client */
     int pushes_promised;            /* number of http/2 push promises submitted */
@@ -180,6 +178,21 @@ struct h2_stream *h2_session_push(h2_session *session,
 apr_status_t h2_session_set_prio(h2_session *session, 
                                  struct h2_stream *stream, 
                                  const struct h2_priority *prio);
+
+/**
+ * Dispatch a event happending during session processing.
+ * @param session the sessiont
+ * @param ev the event that happened
+ * @param arg integer argument (event type dependant)
+ * @param msg destriptive message
+ */
+void h2_session_dispatch_event(h2_session *session, h2_session_event_t ev,
+                               int arg, const char *msg);
+
+/**
+ * Send any session HTTP/2 data out that is pending.
+ */
+apr_status_t h2_session_send(h2_session *session);
 
 #define H2_SSSN_MSG(s, msg)     \
     "h2_session(%ld,%s,%d): "msg, s->id, h2_session_state_str(s->state), \
