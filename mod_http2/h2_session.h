@@ -189,10 +189,6 @@ apr_status_t h2_session_set_prio(h2_session *session,
 void h2_session_dispatch_event(h2_session *session, h2_session_event_t ev,
                                int arg, const char *msg);
 
-/**
- * Send any session HTTP/2 data out that is pending.
- */
-apr_status_t h2_session_send(h2_session *session);
 
 #define H2_SSSN_MSG(s, msg)     \
     "h2_session(%ld,%s,%d): "msg, s->id, h2_session_state_str(s->state), \

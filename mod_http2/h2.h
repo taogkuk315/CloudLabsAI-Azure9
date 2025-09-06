@@ -171,7 +171,6 @@ typedef struct h2_stream *h2_stream_get_fn(struct h2_session *session, int strea
 /* Note key to attach connection task id to conn_rec/request_rec instances */
 
 #define H2_TASK_ID_NOTE         "http2-task-id"
-#define H2_FILTER_DEBUG_NOTE    "http2-debug"
 #define H2_HDR_CONFORMANCE      "http2-hdr-conformance"
 #define H2_HDR_CONFORMANCE_UNSAFE      "unsafe"
 #define H2_PUSH_MODE_NOTE       "http2-push-mode"

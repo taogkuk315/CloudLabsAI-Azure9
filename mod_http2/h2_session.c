@@ -1210,7 +1210,7 @@ static int h2_session_want_send(h2_session *session)
         || h2_c1_io_pending(&session->io);
 }
 
-apr_status_t h2_session_send(h2_session *session)
+static apr_status_t h2_session_send(h2_session *session)
 {
     int ngrv;
     apr_status_t rv = APR_EAGAIN;

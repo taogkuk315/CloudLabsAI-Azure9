@@ -72,9 +72,11 @@ struct h2_stream {
     
     const struct h2_request *request; /* the request made in this stream */
     struct h2_request *rtmp;    /* request being assembled */
-    apr_table_t *trailers;      /* optional incoming trailers */
+    apr_table_t *trailers_in;   /* optional, incoming trailers */
     int request_headers_added;  /* number of request headers added */
-    
+
+    struct h2_headers *response; /* the final, non-interim response or NULL */
+
     struct h2_bucket_beam *input;
     apr_bucket_brigade *in_buffer;
     int in_window_size;
@@ -95,7 +97,6 @@ struct h2_stream {
     int rst_error;              /* stream error for RST_STREAM */
     unsigned int aborted   : 1; /* was aborted */
     unsigned int scheduled : 1; /* stream has been scheduled */
-    unsigned int has_response : 1; /* response headers are known */
     unsigned int input_closed : 1; /* no more request data/trailers coming */
     unsigned int out_checked : 1; /* output eof was double checked */
     unsigned int push_policy;   /* which push policy to use for this request */

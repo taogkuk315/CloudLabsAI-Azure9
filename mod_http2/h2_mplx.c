@@ -939,7 +939,7 @@ static int reset_is_acceptable(h2_stream *stream)
      */
     if (!stream_is_running(stream)) return 1;
     if (!(stream->id & 0x01)) return 1; /* stream initiated by us. acceptable. */
-    if (!stream->has_response) return 0; /* no response headers produced yet. bad. */
+    if (!stream->response) return 0; /* no response headers produced yet. bad. */
     if (!stream->out_data_frames) return 0; /* no response body data sent yet. bad. */
     return 1; /* otherwise, be forgiving */
 }
