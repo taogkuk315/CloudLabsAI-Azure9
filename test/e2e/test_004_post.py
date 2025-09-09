@@ -20,7 +20,7 @@ class TestStore:
         url = env.mkurl("https", "cgi", "/upload.py")
         fpath = os.path.join(env.gen_dir, fname)
         r = env.curl_upload(url, fpath, options=options)
-        assert r.exit_code == 0
+        assert r.exit_code == 0, r.stderr
         assert r.response["status"] >= 200 and r.response["status"] < 300
 
         r2 = env.curl_get(r.response["header"]["location"])

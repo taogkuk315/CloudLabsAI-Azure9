@@ -249,23 +249,6 @@ int h2_stream_was_closed(const h2_stream *stream);
 apr_status_t h2_stream_read_output(h2_stream *stream);
 
 /**
- * Do a speculative read on the stream output to determine the 
- * amount of data that can be read.
- * 
- * @param stream the stream to speculatively read from
- * @param plen (in-/out) number of bytes requested and on return amount of bytes that
- *        may be read without blocking
- * @param peos (out) != 0 iff end of stream will be reached when reading plen
- *        bytes (out value).
- * @param presponse (out) the response of one became available
- * @return APR_SUCCESS if out information was computed successfully.
- *         APR_EAGAIN if not data is available and end of stream has not been
- *         reached yet.
- */
-apr_status_t h2_stream_out_prepare(h2_stream *stream, apr_off_t *plen, 
-                                   int *peos, h2_headers **presponse);
-
-/**
  * Read a maximum number of bytes into the bucket brigade.
  * 
  * @param stream the stream to read from

@@ -47,9 +47,6 @@ typedef struct {
     APR_RING_HEAD(h2_beam_proxy_list, h2_beam_proxy) list;
 } h2_bproxy_list;
 
-typedef int h2_beam_can_beam_callback(void *ctx, h2_bucket_beam *beam,
-                                      apr_file_t *file);
-
 /**
  * Will deny all transfer of apr_file_t across the beam and force
  * a data copy instead.
@@ -87,6 +84,7 @@ struct h2_bucket_beam {
     int closed;
     int close_sent;
     int tx_mem_limits; /* only memory size counts on transfers */
+    int copy_files;
 
     struct apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *change;
@@ -103,9 +101,6 @@ struct h2_bucket_beam {
     apr_off_t prod_bytes_reported;    /* amount of bytes reported as produced */
     h2_beam_io_callback *prod_io_cb;
     void *prod_ctx;
-
-    h2_beam_can_beam_callback *can_beam_fn;
-    void *can_beam_ctx;
 };
 
 /**
@@ -133,6 +128,11 @@ apr_status_t h2_beam_create(h2_bucket_beam **pbeam,
  * Destroys the beam immediately without cleanup.
  */ 
 apr_status_t h2_beam_destroy(h2_bucket_beam *beam);
+
+/**
+ * Switch copying of file buckets on/off.
+ */
+void h2_beam_set_copy_files(h2_bucket_beam * beam, int enabled);
 
 /**
  * Send buckets from the given brigade through the beam. Will hold buckets 
@@ -266,19 +266,6 @@ void h2_beam_on_was_empty(h2_bucket_beam *beam,
  * Needs to be invoked from the sending side.
  */
 int h2_beam_report_consumption(h2_bucket_beam *beam);
-
-/**
- * Register a callback that may prevent a file from being beam as
- * file handle, forcing the file content to be copied. Then no callback
- * is set (NULL), file handles are transferred directly.
- * @param beam the beam to set the callback on
- * @param io_cb the callback or NULL, called on receiver with bytes produced
- * @param ctx  the context to use in callback invocation
- * 
- * Call from the receiver side, callbacks invoked on either side.
- */
-void h2_beam_on_file_beam(h2_bucket_beam *beam, 
-                          h2_beam_can_beam_callback *cb, void *ctx);
 
 /**
  * Get the amount of bytes currently buffered in the beam (unread).

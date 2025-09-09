@@ -163,6 +163,17 @@ static apr_bucket *h2_beam_bucket_create(h2_bucket_beam *beam,
     return h2_beam_bucket_make(b, beam, bsender, n);
 }
 
+static apr_off_t h2_beam_bucket_mem_used(apr_bucket *b)
+{
+    h2_beam_proxy *d = b->data;
+    if (d->bsender) {
+        if (APR_BUCKET_IS_FILE(d->bsender) || APR_BUCKET_IS_MMAP(d->bsender)) {
+            return 0;
+        }
+    }
+    return (apr_off_t)b->length;
+}
+
 const apr_bucket_type_t h2_bucket_type_beam = {
     "BEAM", 5, APR_BUCKET_DATA,
     beam_bucket_destroy,
@@ -216,8 +227,11 @@ static apr_bucket *h2_beam_bucket(h2_bucket_beam *beam,
 
 static apr_off_t bucket_mem_used(apr_bucket *b)
 {
-    if (APR_BUCKET_IS_FILE(b)) {
+    if (APR_BUCKET_IS_FILE(b) || APR_BUCKET_IS_MMAP(b)) {
         return 0;
+    }
+    else if (H2_BUCKET_IS_BEAM(b)) {
+        return h2_beam_bucket_mem_used(b);
     }
     else {
         /* should all have determinate length */
@@ -255,7 +269,7 @@ static apr_size_t calc_buffered(h2_bucket_beam *beam)
         if (b->length == ((apr_size_t)-1)) {
             /* do not count */
         }
-        else if (APR_BUCKET_IS_FILE(b)) {
+        else if (APR_BUCKET_IS_FILE(b) || APR_BUCKET_IS_MMAP(b)) {
             /* if unread, has no real mem footprint. */
         }
         else {
@@ -582,6 +596,13 @@ void h2_beam_buffer_size_set(h2_bucket_beam *beam, apr_size_t buffer_size)
     apr_thread_mutex_unlock(beam->lock);
 }
 
+void h2_beam_set_copy_files(h2_bucket_beam * beam, int enabled)
+{
+    apr_thread_mutex_lock(beam->lock);
+    beam->copy_files = enabled;
+    apr_thread_mutex_unlock(beam->lock);
+}
+
 apr_size_t h2_beam_buffer_size_get(h2_bucket_beam *beam)
 {
     apr_size_t buffer_size = 0;
@@ -708,11 +729,11 @@ static apr_status_t append_bucket(h2_bucket_beam *beam,
          * of open file handles and rather use a less efficient beam
          * transport. */
         apr_bucket_file *bf = b->data;
-        apr_file_t *fd = bf->fd;
-        can_beam = (bf->refcount.refcount == 1);
-        if (can_beam && beam->can_beam_fn) {
-            can_beam = beam->can_beam_fn(beam->can_beam_ctx, beam, fd);
-        }
+        can_beam = !beam->copy_files && (bf->refcount.refcount == 1);
+        check_len = !can_beam;
+    }
+    else if (APR_BUCKET_IS_MMAP(b)) {
+        can_beam = !beam->copy_files;
         check_len = !can_beam;
     }
     else {
@@ -748,7 +769,7 @@ static apr_status_t append_bucket(h2_bucket_beam *beam,
         status = apr_bucket_setaside(b, beam->pool);
         if (status != APR_SUCCESS) goto cleanup;
     }
-    else if (APR_BUCKET_IS_FILE(b) && can_beam) {
+    else if (can_beam && (APR_BUCKET_IS_FILE(b) || APR_BUCKET_IS_MMAP(b))) {
         status = apr_bucket_setaside(b, beam->pool);
         if (status != APR_SUCCESS) goto cleanup;
     }
@@ -798,10 +819,14 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam,
         while (!APR_BRIGADE_EMPTY(sender_bb) && APR_SUCCESS == rv) {
             if (space_left <= 0) {
                 r_purge_sent(beam);
+                if (was_empty && beam->was_empty_cb) {
+                    beam->was_empty_cb(beam->was_empty_ctx, beam);
+                }
                 rv = wait_not_full(beam, block, &space_left);
                 if (APR_SUCCESS != rv) {
                     break;
                 }
+                was_empty = buffer_is_empty(beam);
             }
             b = APR_BRIGADE_FIRST(sender_bb);
             rv = append_bucket(beam, b, block, &space_left);
@@ -1035,16 +1060,6 @@ void h2_beam_on_send_block(h2_bucket_beam *beam,
     beam->send_block_ctx = ctx;
     apr_thread_mutex_unlock(beam->lock);
 }
-
-void h2_beam_on_file_beam(h2_bucket_beam *beam,
-                          h2_beam_can_beam_callback *cb, void *ctx)
-{
-    apr_thread_mutex_lock(beam->lock);
-    beam->can_beam_fn = cb;
-    beam->can_beam_ctx = ctx;
-    apr_thread_mutex_unlock(beam->lock);
-}
-
 
 apr_off_t h2_beam_get_buffered(h2_bucket_beam *beam)
 {

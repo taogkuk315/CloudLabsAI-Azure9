@@ -566,7 +566,7 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
 
     h2_beam_buffer_size_set(conn_ctx->beam_out, conn_ctx->mplx->stream_max_mem);
     h2_beam_on_was_empty(conn_ctx->beam_out, send_notify, c);
-    h2_beam_on_send_block(conn_ctx->beam_out, send_notify, c);
+    /*h2_beam_on_send_block(conn_ctx->beam_out, send_notify, c);*/
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_c2(%s), adding filters", conn_ctx->id);
@@ -622,7 +622,7 @@ static apr_status_t c2_process(h2_conn_ctx_t *conn_ctx, conn_rec *c)
     if (h2_config_sgeti(conn_ctx->server, H2_CONF_COPY_FILES)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "h2_mplx(%s): copy_files in output", conn_ctx->id);
-        h2_beam_on_file_beam(conn_ctx->beam_out, h2_beam_no_files, NULL);
+        h2_beam_set_copy_files(conn_ctx->beam_out, 1);
     }
 
     ap_update_child_status(c->sbh, SERVER_BUSY_WRITE, r);
