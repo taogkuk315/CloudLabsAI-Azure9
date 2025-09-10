@@ -49,7 +49,7 @@
 #include "h2_workers.h"
 
 
-static apr_status_t h2_session_read(h2_session *session, int block);
+static apr_status_t h2_session_read(h2_session *session);
 static void transit(h2_session *session, const char *action, 
                     h2_session_state nstate);
 
@@ -854,22 +854,10 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     session->max_stream_mem = h2_config_sgeti(s, H2_CONF_STREAM_MAX_MEM);
     
     session->in_pending = h2_iq_create(session->pool, (int)session->max_stream_count);
-    if (session->in_pending == NULL) {
-        apr_pool_destroy(pool);
-        return APR_ENOMEM;
-    }
-
+    session->out_c1_blocked = h2_iq_create(session->pool, (int)session->max_stream_count);
     session->ready_to_process = h2_iq_create(session->pool, (int)session->max_stream_count);
-    if (session->ready_to_process == NULL) {
-        apr_pool_destroy(pool);
-        return APR_ENOMEM;
-    }
-    
+
     session->monitor = apr_pcalloc(pool, sizeof(h2_stream_monitor));
-    if (session->monitor == NULL) {
-        apr_pool_destroy(pool);
-        return APR_ENOMEM;
-    }
     session->monitor->ctx = session;
     session->monitor->on_state_enter = on_stream_state_enter;
     session->monitor->on_state_event = on_stream_state_event;
@@ -1213,10 +1201,10 @@ static int h2_session_want_send(h2_session *session)
 static apr_status_t h2_session_send(h2_session *session)
 {
     int ngrv;
-    apr_status_t rv = APR_EAGAIN;
+    apr_status_t rv = APR_SUCCESS;
 
+    ap_update_child_status(session->c->sbh, SERVER_BUSY_WRITE, NULL);
     while (nghttp2_session_want_write(session->ngh2)) {
-        rv = APR_SUCCESS;
         ngrv = nghttp2_session_send(session->ngh2);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                       "nghttp2_session_send: %d", (int)ngrv);
@@ -1226,11 +1214,16 @@ static apr_status_t h2_session_send(h2_session *session)
                 h2_session_dispatch_event(session, H2_SESSION_EV_PROTO_ERROR,
                                ngrv, nghttp2_strerror(ngrv));
                 rv = APR_EGENERAL;
+                goto cleanup;
             }
         }
         rv = h2_c1_io_pass(&session->io);
     }
-
+cleanup:
+    if (rv != APR_SUCCESS) {
+        h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR,
+                       H2_ERR_INTERNAL_ERROR, "c1 out writing");
+    }
     return rv;
 }
 
@@ -1248,19 +1241,12 @@ static apr_status_t on_stream_input(void *ctx, h2_stream *stream)
 
     if (stream->id == 0) {
         /* input on primary connection available? read */
-        rv = h2_session_read(session, 0);
-        if (!APR_STATUS_IS_EAGAIN(rv)) {
-            /* we have not consumed all data, there might be more in buffers
-             * and we will not get a poll event for that. Need to switch the
-             * session to BUSY monitoring. */
-            transit(session, "c1 io none", H2_SESSION_ST_BUSY);
-        }
+        rv = h2_session_read(session);
     }
     else {
         ap_assert(stream->input);
         h2_beam_report_consumption(stream->input);
     }
-
     return rv;
 }
 
@@ -1281,33 +1267,27 @@ static apr_status_t on_stream_output(void *ctx, h2_stream *stream)
     return h2_stream_read_output(stream);
 }
 
-static apr_status_t session_read(h2_session *session, apr_size_t readlen, int block)
+static apr_status_t h2_session_read(h2_session *session)
 {
-    apr_status_t status, rstatus = APR_EAGAIN;
+    apr_status_t rv;
     conn_rec *c = session->c;
     apr_off_t read_start = session->io.bytes_read;
-    
+    apr_size_t readlen = session->max_stream_mem * 4;
+
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   H2_SSSN_MSG(session, "session_read start"));
     while (1) {
         /* H2_IN filter handles all incoming data against the session.
          * We just pull at the filter chain to make it happen */
-        status = ap_get_brigade(c->input_filters,
-                                session->bbtmp, AP_MODE_READBYTES,
-                                block? APR_BLOCK_READ : APR_NONBLOCK_READ,
-                                H2MAX(APR_BUCKET_BUFF_SIZE, readlen));
+        rv = ap_get_brigade(c->input_filters,
+                            session->bbtmp, AP_MODE_READBYTES,
+                            APR_NONBLOCK_READ,
+                            H2MAX(APR_BUCKET_BUFF_SIZE, readlen));
         /* get rid of any possible data we do not expect to get */
         apr_brigade_cleanup(session->bbtmp); 
 
-        switch (status) {
+        switch (rv) {
             case APR_SUCCESS:
-                /* successful read, reset our idle timers */
-                rstatus = APR_SUCCESS;
-                if (block) {
-                    /* successful blocked read, try unblocked to
-                     * get more. */
-                    block = 0;
-                }
                 break;
             case APR_EAGAIN:
                 goto cleanup;
@@ -1316,18 +1296,18 @@ static apr_status_t session_read(h2_session *session, apr_size_t readlen, int bl
             default:
                 if (session->io.bytes_read == read_start) {
                     /* first attempt failed */
-                    if (APR_STATUS_IS_ETIMEDOUT(status)
-                        || APR_STATUS_IS_ECONNABORTED(status)
-                        || APR_STATUS_IS_ECONNRESET(status)
-                        || APR_STATUS_IS_EOF(status)
-                        || APR_STATUS_IS_EBADF(status)) {
+                    if (APR_STATUS_IS_ETIMEDOUT(rv)
+                        || APR_STATUS_IS_ECONNABORTED(rv)
+                        || APR_STATUS_IS_ECONNRESET(rv)
+                        || APR_STATUS_IS_EOF(rv)
+                        || APR_STATUS_IS_EBADF(rv)) {
                         /* common status for a client that has left */
-                        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, c,
+                        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, rv, c,
                                       H2_SSSN_MSG(session, "input gone"));
                     }
                     else {
                         /* uncommon status, log on INFO so that we see this */
-                        ap_log_cerror( APLOG_MARK, APLOG_DEBUG, status, c,
+                        ap_log_cerror( APLOG_MARK, APLOG_DEBUG, rv, c,
                                       H2_SSSN_LOG(APLOGNO(02950), session, 
                                       "error reading, terminating"));
                     }
@@ -1339,27 +1319,23 @@ static apr_status_t session_read(h2_session *session, apr_size_t readlen, int bl
         }
         if ((session->io.bytes_read - read_start) > readlen) {
             /* read enough in one go, give write a chance */
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
                           H2_SSSN_MSG(session, "read enough, returning"));
-            break;
+            goto cleanup;
         }
     }
 cleanup:
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, c,
+    if (APR_STATUS_IS_EAGAIN(rv)) {
+        if ((session->io.bytes_read > read_start)
+            || (ap_run_input_pending(session->c) == OK)) {
+            h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_READ, 0, NULL);
+        }
+        else {
+            h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_EAGAIN, 0, NULL);
+        }
+    }
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
                   H2_SSSN_MSG(session, "session_read done"));
-    return rstatus;
-}
-
-static apr_status_t h2_session_read(h2_session *session, int block)
-{
-    apr_status_t rv = session_read(session, session->max_stream_mem
-                                   * H2MAX(2, session->open_streams),
-                                   block);
-    if (APR_SUCCESS == rv || APR_STATUS_IS_EAGAIN(rv)) {
-    }
-    else {
-        h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
-    }
     return rv;
 }
 
@@ -1413,7 +1389,7 @@ static void transit(h2_session *session, const char *action, h2_session_state ns
             || (ostate == H2_SESSION_ST_WAIT && nstate == H2_SESSION_ST_BUSY)){
             loglvl = APLOG_TRACE1;
         }
-        ap_log_cerror(APLOG_MARK, loglvl, 0, session->c, 
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
                       H2_SSSN_LOG(APLOGNO(03078), session, 
                       "transit [%s] -- %s --> [%s]"), 
                       h2_session_state_str(ostate), action, 
@@ -1470,6 +1446,46 @@ static void h2_session_ev_init(h2_session *session, int arg, const char *msg)
             break;
         default:
             /* nop */
+            break;
+    }
+}
+
+static void h2_session_ev_input_read(h2_session *session, int arg, const char *msg)
+{
+    switch (session->state) {
+        case H2_SESSION_ST_INIT:
+        case H2_SESSION_ST_IDLE:
+        case H2_SESSION_ST_WAIT:
+            transit(session, "input read", H2_SESSION_ST_BUSY);
+            break;
+        default:
+            break;
+    }
+}
+
+static void h2_session_ev_input_eagain(h2_session *session, int arg, const char *msg)
+{
+    switch (session->state) {
+        case H2_SESSION_ST_BUSY:
+            if (!h2_session_want_send(session)) {
+                if (session->open_streams == 0) {
+                    if (session->local.accepting) {
+                        /* We wait for new frames on c1 only. */
+                        transit(session, "c1 keepalive", H2_SESSION_ST_IDLE);
+                    }
+                    else {
+                        /* We are no longer accepting new streams.
+                         * Time to leave. */
+                        h2_session_shutdown(session, 0, "done", 0);
+                        transit(session, "c1 done after goaway", H2_SESSION_ST_DONE);
+                    }
+                }
+                else {
+                    transit(session, "input exhausted", H2_SESSION_ST_WAIT);
+                }
+            }
+            break;
+        default:
             break;
     }
 }
@@ -1641,6 +1657,9 @@ static void on_stream_event(void *ctx, h2_stream *stream,
         case H2_SEV_IN_DATA_PENDING:
             h2_iq_append(session->in_pending, stream->id);
             break;
+        case H2_SEV_OUT_C1_BLOCK:
+            h2_iq_append(session->out_c1_blocked, stream->id);
+            break;
         default:
             /* NOP */
             break;
@@ -1671,6 +1690,12 @@ void h2_session_dispatch_event(h2_session *session, h2_session_event_t ev,
         case H2_SESSION_EV_INIT:
             h2_session_ev_init(session, arg, msg);
             break;            
+        case H2_SESSION_EV_INPUT_READ:
+            h2_session_ev_input_read(session, arg, msg);
+            break;
+        case H2_SESSION_EV_INPUT_EAGAIN:
+            h2_session_ev_input_eagain(session, arg, msg);
+            break;
         case H2_SESSION_EV_LOCAL_GOAWAY:
             h2_session_ev_local_goaway(session, arg, msg);
             break;
@@ -1702,18 +1727,52 @@ void h2_session_dispatch_event(h2_session *session, h2_session_event_t ev,
     }
 }
 
+static void unblock_c1_out(h2_session *session) {
+    int sid;
+
+    while ((sid = h2_iq_shift(session->out_c1_blocked)) > 0) {
+        nghttp2_session_resume_data(session->ngh2, sid);
+    }
+}
+
 apr_status_t h2_session_process(h2_session *session, int async)
 {
     apr_status_t status = APR_SUCCESS;
     conn_rec *c = session->c;
     int rv, mpm_state, trace = APLOGctrace3(c);
     apr_time_t now;
-    
+
     if (trace) {
         ap_log_cerror( APLOG_MARK, APLOG_TRACE3, status, c,
                       H2_SSSN_MSG(session, "process start, async=%d"), async);
     }
-                  
+
+    if (H2_SESSION_ST_INIT == session->state) {
+        ap_update_child_status_from_conn(c->sbh, SERVER_BUSY_READ, c);
+        if (!h2_protocol_is_acceptable_c1(c, session->r, 1)) {
+            update_child_status(session, SERVER_BUSY_READ,
+                                "inadequate security");
+            h2_session_shutdown(session,
+                                NGHTTP2_INADEQUATE_SECURITY, NULL, 1);
+        }
+        else {
+            update_child_status(session, SERVER_BUSY_READ, "init");
+            status = h2_session_start(session, &rv);
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
+                          H2_SSSN_LOG(APLOGNO(03079), session,
+                          "started on %s:%d"),
+                          session->s->server_hostname,
+                          c->local_addr->port);
+            if (status != APR_SUCCESS) {
+                h2_session_dispatch_event(session,
+                               H2_SESSION_EV_CONN_ERROR, 0, NULL);
+            }
+            else {
+                h2_session_dispatch_event(session, H2_SESSION_EV_INIT, 0, NULL);
+            }
+        }
+    }
+
     while (session->state != H2_SESSION_ST_DONE) {
         now = apr_time_now();
 
@@ -1725,53 +1784,66 @@ apr_status_t h2_session_process(h2_session *session, int async)
         }
         session->status[0] = '\0';
         
+        h2_session_read(session);
+
+        if (h2_session_want_send(session)) {
+            h2_session_send(session);
+        }
+        else if (!nghttp2_session_want_read(session->ngh2)) {
+            h2_session_dispatch_event(session, H2_SESSION_EV_NGH2_DONE, 0, NULL);
+        }
+
         if (!h2_iq_empty(session->ready_to_process)) {
             h2_mplx_c1_process(session->mplx, session->ready_to_process,
                                get_stream, stream_pri_cmp, session);
+            transit(session, "scheduled stream", H2_SESSION_ST_BUSY);
         }
 
         if (!h2_iq_empty(session->in_pending)) {
             h2_mplx_c1_fwd_input(session->mplx, session->in_pending,
                                  get_stream, session);
+            transit(session, "forwarded input", H2_SESSION_ST_BUSY);
+        }
+
+        if (!h2_iq_empty(session->out_c1_blocked)) {
+            unblock_c1_out(session);
+            transit(session, "unblocked output", H2_SESSION_ST_BUSY);
+        }
+
+        if (session->reprioritize) {
+            h2_mplx_c1_reprioritize(session->mplx, stream_pri_cmp, session);
+            session->reprioritize = 0;
+        }
+
+        if (h2_session_want_send(session)) {
+            h2_session_send(session);
+        }
+
+        status = h2_c1_io_assure_flushed(&session->io);
+        if (APR_SUCCESS != status) {
+            h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
         }
 
         switch (session->state) {
         case H2_SESSION_ST_INIT:
-            ap_update_child_status_from_conn(c->sbh, SERVER_BUSY_READ, c);
-            if (!h2_protocol_is_acceptable_c1(c, session->r, 1)) {
-                update_child_status(session, SERVER_BUSY_READ,
-                                    "inadequate security");
-                h2_session_shutdown(session,
-                                    NGHTTP2_INADEQUATE_SECURITY, NULL, 1);
-            }
-            else {
-                update_child_status(session, SERVER_BUSY_READ, "init");
-                status = h2_session_start(session, &rv);
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
-                              H2_SSSN_LOG(APLOGNO(03079), session,
-                              "started on %s:%d"),
-                              session->s->server_hostname,
-                              c->local_addr->port);
-                if (status != APR_SUCCESS) {
-                    h2_session_dispatch_event(session,
-                                   H2_SESSION_EV_CONN_ERROR, 0, NULL);
-                }
-                else {
-                    h2_session_dispatch_event(session, H2_SESSION_EV_INIT, 0, NULL);
-                }
-            }
+            ap_assert(0);
             break;
 
         case H2_SESSION_ST_IDLE:
             ap_assert(session->open_streams == 0);
             ap_assert(nghttp2_session_want_read(session->ngh2));
-            status = h2_session_read(session, 0);
-            if (APR_STATUS_IS_EAGAIN(status)
-                && !h2_session_want_send(session)) {
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
-                              H2_SSSN_LOG(APLOGNO(), session,
-                              "returning to mpm c1 monitoring"));
-                goto leaving;
+            if (!h2_session_want_send(session)) {
+                /* Give any new incoming request a short grace period to
+                 * arrive while we are still hot and return to the mpm
+                 * connection handling when nothing really happened. */
+                h2_mplx_c1_poll(session->mplx, apr_time_from_msec(500),
+                                on_stream_input, on_stream_output, session);
+                if (H2_SESSION_ST_IDLE == session->state) {
+                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
+                                  H2_SSSN_LOG(APLOGNO(), session,
+                                  "returning to mpm c1 monitoring"));
+                    goto leaving;
+                }
             }
             else {
                 transit(session, "c1 io pending", H2_SESSION_ST_BUSY);
@@ -1779,61 +1851,37 @@ apr_status_t h2_session_process(h2_session *session, int async)
             break;
 
         case H2_SESSION_ST_BUSY:
-            /* We have not exhausted our primary connection input and
-             * data might still be in buffers. So we cannot rely on polling
-             * to be reliable until session read sees APR_EAGAIN. */
-            ap_assert(nghttp2_session_want_read(session->ngh2));
-            status = h2_session_read(session, 0);
-            if (APR_STATUS_IS_EAGAIN(status)
-                && !h2_session_want_send(session)) {
-                transit(session, "c1 io none", H2_SESSION_ST_WAIT);
+            /* IO happening in and out. Make sure we react to c2 events
+             * inbetween send and receive. */
+            status = h2_mplx_c1_poll(session->mplx, 0,
+                                     on_stream_input, on_stream_output, session);
+            if (APR_SUCCESS != status && !APR_STATUS_IS_TIMEUP(status)) {
+                h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
                 break;
             }
-            h2_mplx_c1_poll(session->mplx, 0,
-                            on_stream_input, on_stream_output, session);
             break;
 
         case H2_SESSION_ST_WAIT:
-            /* We want to wait on pollset events on the c1 socket or
-             * the c2 pipes only. For this to work, we need to make sure:
-             * 1. there are no H2 frames to send any more or we need
-             *    to return to BUSY state
-             * 2. we have still open streams that we process or we transit
-             *    to IDLE or DONE
-             * 3. all c1 output is FLUSHed and not idling in some buffers.
-             *    (stalled H2 window updates can stall c1 completely)
-             */
-            if (h2_session_want_send(session)) {
-                /* there is more to write, we cannot go into a timeout poll */
-                transit(session, "c1 io out pending", H2_SESSION_ST_BUSY);
+            if (ap_run_input_pending(session->c) == OK) {
+                transit(session, "c1 input pending", H2_SESSION_ST_BUSY);
                 break;
             }
-            else if (session->open_streams == 0) {
-                if (session->local.accepting) {
-                    /* We wait for new frames on c1 only. */
-                    transit(session, "c1 keepalive", H2_SESSION_ST_IDLE);
-                    break;
-                }
-                else {
-                    /* We are no longer accepting new streams.
-                     * Time to leave. */
-                    h2_session_shutdown(session, 0, "done", 0);
-                    transit(session, "c1 done after goaway", H2_SESSION_ST_DONE);
-                    break;
-                }
-            }
-            status = h2_c1_io_assure_flushed(&session->io);
-            if (APR_SUCCESS == status) {
-                status = h2_mplx_c1_poll(session->mplx, session->s->timeout,
-                                         on_stream_input, on_stream_output, session);
-            }
+            /* No IO happening and input is exhausted. Make sure we have
+             * flushed any possibly pending output and then wait with
+             * the c1 connection timeout for sth to happen in our c1/c2 sockets/pipes */
+            status = h2_mplx_c1_poll(session->mplx, session->s->timeout,
+                                     on_stream_input, on_stream_output, session);
             if (APR_STATUS_IS_TIMEUP(status)) {
                 h2_session_dispatch_event(session, H2_SESSION_EV_CONN_TIMEOUT, 0, NULL);
                 break;
             }
             else if (APR_SUCCESS != status) {
                 h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
+                break;
             }
+            break;
+
+        case H2_SESSION_ST_DONE:
             break;
 
         default:
@@ -1842,24 +1890,6 @@ apr_status_t h2_session_process(h2_session *session, int async)
                           "unknown state"));
             h2_session_dispatch_event(session, H2_SESSION_EV_PROTO_ERROR, 0, NULL);
             break;
-        }
-
-        if (h2_session_want_send(session)) {
-            ap_update_child_status(session->c->sbh, SERVER_BUSY_WRITE, NULL);
-            status = h2_session_send(session);
-            if (status != APR_SUCCESS) {
-                h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR,
-                               H2_ERR_INTERNAL_ERROR, "c1 out writing");
-                break;
-            }
-        }
-        else if (!nghttp2_session_want_read(session->ngh2)) {
-            h2_session_dispatch_event(session, H2_SESSION_EV_NGH2_DONE, 0, NULL);
-        }
-
-        if (session->reprioritize) {
-            h2_mplx_c1_reprioritize(session->mplx, stream_pri_cmp, session);
-            session->reprioritize = 0;
         }
     }
 

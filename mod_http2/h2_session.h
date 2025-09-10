@@ -49,6 +49,8 @@ struct nghttp2_session;
 
 typedef enum {
     H2_SESSION_EV_INIT,             /* session was initialized */
+    H2_SESSION_EV_INPUT_READ,       /* c1 input read */
+    H2_SESSION_EV_INPUT_EAGAIN,     /* c1 input exhausted */
     H2_SESSION_EV_LOCAL_GOAWAY,     /* we send a GOAWAY */
     H2_SESSION_EV_REMOTE_GOAWAY,    /* remote send us a GOAWAY */
     H2_SESSION_EV_CONN_ERROR,       /* connection error */
@@ -113,6 +115,7 @@ typedef struct h2_session {
     const char *last_status_msg;    /* the one already reported */
     
     struct h2_iqueue *in_pending;   /* all streams with input pending */
+    struct h2_iqueue *out_c1_blocked;  /* all streams with output blocked on c1 buffer full */
     struct h2_iqueue *ready_to_process;  /* all streams ready for processing */
 
 } h2_session;

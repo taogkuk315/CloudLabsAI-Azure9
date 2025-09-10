@@ -1250,7 +1250,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     if (!stream->response) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, 0, c1,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c1,
                       APLOGNO()
                       "h2_stream(%ld-%d): data_cb, no response seen yet",
                       session->id, (int)stream_id);
@@ -1263,6 +1263,13 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c1,
                       "h2_stream(%ld-%d): suspending",
                       session->id, (int)stream_id);
+        return NGHTTP2_ERR_DEFERRED;
+    }
+    if (h2_c1_io_needs_flush(&session->io)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c1,
+                      "h2_stream(%ld-%d): suspending on c1 out needs flush",
+                      session->id, (int)stream_id);
+        h2_stream_dispatch(stream, H2_SEV_OUT_C1_BLOCK);
         return NGHTTP2_ERR_DEFERRED;
     }
 
