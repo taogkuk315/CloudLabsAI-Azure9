@@ -64,6 +64,7 @@ typedef struct {
 struct h2_bucket_beam {
     int id;
     const char *tag;
+    conn_rec *from;
     apr_pool_t *pool;
     h2_blist send_list;
     h2_blist hold_list;
@@ -111,6 +112,7 @@ struct h2_bucket_beam {
  * that is only used inside that same mutex.
  *
  * @param pbeam         will hold the created beam on return
+ * @param c_from        connection from which buchets are sent
  * @param pool          pool owning the beam, beam will cleanup when pool released
  * @param id            identifier of the beam
  * @param tag           tag identifying beam for logging
@@ -119,6 +121,7 @@ struct h2_bucket_beam {
  * @param timeout       timeout for blocking operations
  */
 apr_status_t h2_beam_create(h2_bucket_beam **pbeam,
+                            conn_rec *from,
                             apr_pool_t *pool, 
                             int id, const char *tag,
                             apr_size_t buffer_size,
@@ -135,30 +138,41 @@ apr_status_t h2_beam_destroy(h2_bucket_beam *beam);
 void h2_beam_set_copy_files(h2_bucket_beam * beam, int enabled);
 
 /**
- * Send buckets from the given brigade through the beam. Will hold buckets 
- * internally as long as they have not been processed by the receiving side.
- * All accepted buckets are removed from the given brigade. Will return with
- * APR_EAGAIN on non-blocking sends when not all buckets could be accepted.
- * 
- * Call from the sender side only.
+ * Send buckets from the given brigade through the beam.
+ * This can block of the amount of bucket data is above the buffer limit.
+ * @param beam the beam to add buckets to
+ * @param from the connection the sender operates on, must be the same as
+ *             used to create the beam
+ * @param bb the brigade to take buckets from
+ * @param block if the sending should block when the buffer is full
+ * @return APR_SUCCESS when buckets were added to the beam. This can be
+ *                     a partial transfer and other buckets may still remain in bb
+ *         APR_EAGAIN on non-blocking send when the buffer is full
+ *         APR_TIMEUP on blocking semd that time out
+ *         APR_ECONNABORTED when beam has been aborted
  */
-apr_status_t h2_beam_send(h2_bucket_beam *beam,  
+apr_status_t h2_beam_send(h2_bucket_beam *beam, conn_rec *from,
                           apr_bucket_brigade *bb, 
                           apr_read_type_e block);
 
 /**
- * Receive buckets from the beam into the given brigade. Will return APR_EOF
- * when reading past an EOS bucket. Reads can be blocking until data is 
- * available or the beam has been closed. Non-blocking calls return APR_EAGAIN
- * if no data is available.
- *
- * Call from the receiver side only.
- * @param pclosed  on return != 0 iff the beam has been closed by the sender. It
- *                 may still hold untransfered data. Maybe NULL if the caller is
- *                 not interested in this.
+ * Receive buckets from the beam into the given brigade. The caller is
+ * operating on connection `to`.
+ * @param beam the beam to receive buckets from
+ * @param to the connection the receiver is working with
+ * @param bb the bucket brigade to append to
+ * @param block if the read should block when buckets are unavailable
+ * @param readbytes the amount of data the receiver wants
+ * @param pclosed  on return != 0 iff the beam has been closed by the sender.
+ *                 Maybe NULL if the caller is not interested in this.
+ * @return APR_SUCCESS when buckets were appended
+ *         APR_EOF when no buckets were transfered and the beam is closed
+ *         APR_EAGAIN on non-blocking read when no buckets are available
+ *         APR_TIMEUP on blocking reads that time out
+ *         APR_ECONNABORTED when beam has been aborted
  */
-apr_status_t h2_beam_receive(h2_bucket_beam *beam, 
-                             apr_bucket_brigade *green_buckets, 
+apr_status_t h2_beam_receive(h2_bucket_beam *beam, conn_rec *to,
+                             apr_bucket_brigade *bb,
                              apr_read_type_e block,
                              apr_off_t readbytes,
                              int *pclosed);
@@ -169,27 +183,21 @@ apr_status_t h2_beam_receive(h2_bucket_beam *beam,
 int h2_beam_empty(h2_bucket_beam *beam);
 
 /**
- * Abort the beam. Will cleanup any buffered buckets and answer all send
- * and receives with APR_ECONNABORTED.
- * 
- * Call from the sender side only.
+ * Abort the beam, either from receiving or sending side.
+ *
+ * @param beam the beam to abort
+ * @param c the connection the caller is working with
  */
-void h2_beam_abort(h2_bucket_beam *beam);
+void h2_beam_abort(h2_bucket_beam *beam, conn_rec *c);
 
 /**
- * Close the beam. Sending an EOS bucket serves the same purpose. 
+ * Close the beam. If this is called from any other than
+ * the beam#s `from` connection, it is an implicit abort.
  * 
- * Call from the sender side only.
+ * @param beam the beam to close
+ * @param c the connection the caller is working with
  */
-apr_status_t h2_beam_close(h2_bucket_beam *beam);
-
-/**
- * Receiver leaves the beam, e.g. will no longer read. This will
- * interrupt any sender blocked writing and fail future send. 
- * 
- * Call from the receiver side only.
- */
-apr_status_t h2_beam_leave(h2_bucket_beam *beam);
+apr_status_t h2_beam_close(h2_bucket_beam *beam, conn_rec *c);
 
 int h2_beam_is_closed(h2_bucket_beam *beam);
 
@@ -211,7 +219,6 @@ apr_status_t h2_beam_wait_empty(h2_bucket_beam *beam, apr_read_type_e block);
  */
 void h2_beam_timeout_set(h2_bucket_beam *beam, 
                          apr_interval_time_t timeout);
-apr_interval_time_t h2_beam_timeout_get(h2_bucket_beam *beam);
 
 /**
  * Set/get the maximum buffer size for beam data (memory footprint).

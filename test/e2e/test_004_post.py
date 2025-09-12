@@ -105,17 +105,17 @@ class TestStore:
             src = file.read()
         assert src == r.response["body"]
 
-    def test_004_21(self, env):
-        self.nghttp_post_and_verify(env, "data-1k", [])
-        self.nghttp_post_and_verify(env, "data-10k", [])
-        self.nghttp_post_and_verify(env, "data-100k", [])
-        self.nghttp_post_and_verify(env, "data-1m", [])
+    @pytest.mark.parametrize("name", [
+        "data-1k", "data-10k", "data-100k", "data-1m"
+    ])
+    def test_004_21(self, env, name):
+        self.nghttp_post_and_verify(env, name, [])
 
-    def test_004_22(self, env):
-        self.nghttp_post_and_verify(env, "data-1k", ["--no-content-length"])
-        self.nghttp_post_and_verify(env, "data-10k", ["--no-content-length"])
-        self.nghttp_post_and_verify(env, "data-100k", ["--no-content-length"])
-        self.nghttp_post_and_verify(env, "data-1m", ["--no-content-length"])
+    @pytest.mark.parametrize("name", [
+        "data-1k", "data-10k", "data-100k", "data-1m"
+    ])
+    def test_004_22(self, env, name):
+        self.nghttp_post_and_verify(env, name, ["--no-content-length"])
 
     # upload and GET again using nghttp, compare to original content
     def nghttp_upload_and_verify(self, env, fname, options=None):

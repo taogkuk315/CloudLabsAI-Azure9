@@ -197,7 +197,8 @@ apr_status_t h2_stream_setup_input(h2_stream *stream)
                      && (!stream->in_buffer 
                          || APR_BRIGADE_EMPTY(stream->in_buffer)));
         if (!empty) {
-            h2_beam_create(&stream->input, stream->pool, stream->id, 
+            h2_beam_create(&stream->input, stream->session->c,
+                           stream->pool, stream->id,
                            "input", 0, stream->session->s->timeout);
         }
     }
@@ -252,14 +253,13 @@ cleanup:
     return rv;
 }
 
-static apr_status_t close_output(h2_stream *stream)
+static void close_output(h2_stream *stream)
 {
-    if (!stream->output || h2_beam_is_closed(stream->output)) {
-        return APR_SUCCESS;
+    if (stream->output && !h2_beam_is_closed(stream->output)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
+                      H2_STRM_MSG(stream, "aborting output"));
+        h2_beam_abort(stream->output, stream->session->c);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
-                  H2_STRM_MSG(stream, "closing output"));
-    return h2_beam_leave(stream->output);
 }
 
 static void on_state_enter(h2_stream *stream) 
@@ -483,7 +483,8 @@ apr_status_t h2_stream_flush_input(h2_stream *stream)
         if (!stream->input) {
             h2_stream_setup_input(stream);
         }
-        status = h2_beam_send(stream->input, stream->in_buffer, APR_BLOCK_READ);
+        status = h2_beam_send(stream->input, stream->session->c,
+                              stream->in_buffer, APR_BLOCK_READ);
         stream->in_last_write = apr_time_now();
     }
     return status;
@@ -551,9 +552,7 @@ void h2_stream_cleanup(h2_stream *stream)
         apr_brigade_cleanup(stream->out_buffer);
     }
     if (stream->input) {
-        h2_beam_on_consumed(stream->input, NULL, NULL, NULL);
-        h2_beam_abort(stream->input);
-        h2_beam_abort(stream->input);
+        h2_beam_abort(stream->input, stream->session->c);
         status = h2_beam_wait_empty(stream->input, APR_NONBLOCK_READ);
         if (status == APR_EAGAIN) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c, 
@@ -564,7 +563,7 @@ void h2_stream_cleanup(h2_stream *stream)
         }
     }
     if (stream->output) {
-        h2_beam_leave(stream->output);
+        h2_beam_abort(stream->output, stream->session->c);
     }
 }
 
@@ -580,10 +579,10 @@ void h2_stream_rst(h2_stream *stream, int error_code)
 {
     stream->rst_error = error_code;
     if (stream->input) {
-        h2_beam_abort(stream->input);
+        h2_beam_abort(stream->input, stream->session->c);
     }
     if (stream->output) {
-        h2_beam_leave(stream->output);
+        h2_beam_abort(stream->output, stream->session->c);
     }
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
                   H2_STRM_MSG(stream, "reset, error=%d"), error_code);
@@ -854,10 +853,9 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
         goto cleanup;
     }
 
-    b = APR_BRIGADE_LAST(stream->out_buffer);
     H2_STREAM_OUT_LOG(APLOG_TRACE2, stream, "pre");
     H2_BEAM_LOG(stream->output, c1, APLOG_TRACE2, "out_buffer, pre receive");
-    rv = h2_beam_receive(stream->output, stream->out_buffer,
+    rv = h2_beam_receive(stream->output, stream->session->c, stream->out_buffer,
                          APR_NONBLOCK_READ, stream->max_mem - buf_len, &was_closed);
     if (APR_SUCCESS != rv) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, rv, c1,
@@ -867,20 +865,22 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
     H2_BEAM_LOG(stream->output, c1, APLOG_TRACE2, "out_buffer, post receive");
 
     /* get rid of buckets we have no need for */
-    b = APR_BUCKET_NEXT(b); /* the first new bucket */
-    while (b != APR_BRIGADE_SENTINEL(stream->out_buffer)) {
-        e = APR_BUCKET_NEXT(b);
-        if (APR_BUCKET_IS_METADATA(b)) {
-            if (APR_BUCKET_IS_FLUSH(b)) {  /* we flush any c1 data already */
+    if (!APR_BRIGADE_EMPTY(stream->out_buffer)) {
+        b = APR_BRIGADE_FIRST(stream->out_buffer);
+        while (b != APR_BRIGADE_SENTINEL(stream->out_buffer)) {
+            e = APR_BUCKET_NEXT(b);
+            if (APR_BUCKET_IS_METADATA(b)) {
+                if (APR_BUCKET_IS_FLUSH(b)) {  /* we flush any c1 data already */
+                    APR_BUCKET_REMOVE(b);
+                    apr_bucket_destroy(b);
+                }
+            }
+            else if (b->length == 0) {  /* zero length data */
                 APR_BUCKET_REMOVE(b);
                 apr_bucket_destroy(b);
             }
+            b = e;
         }
-        else if (b->length == 0) {  /* zero length data */
-            APR_BUCKET_REMOVE(b);
-            apr_bucket_destroy(b);
-        }
-        b = e;
     }
     H2_STREAM_OUT_LOG(APLOG_TRACE2, stream, "out_buffer, after receive");
 
@@ -913,7 +913,7 @@ static apr_status_t buffer_output_process_headers(h2_stream *stream)
     conn_rec *c1 = stream->session->c;
     h2_headers *headers = NULL;
     apr_status_t rv = APR_SUCCESS;
-    int ngrv = 0, is_empty = 0;
+    int ngrv = 0, is_empty;
     h2_ngheader *nh = NULL;
     apr_bucket *b, *e;
 
@@ -1018,6 +1018,7 @@ static apr_status_t buffer_output_process_headers(h2_stream *stream)
         }
 
         /* Do we know if this stream has no response body? */
+        is_empty = 0;
         while (b != APR_BRIGADE_SENTINEL(stream->out_buffer)) {
             if (APR_BUCKET_IS_METADATA(b)) {
                 if (APR_BUCKET_IS_EOS(b)) {
@@ -1028,6 +1029,7 @@ static apr_status_t buffer_output_process_headers(h2_stream *stream)
             else {  /* data, not empty */
                 break;
             }
+            b = APR_BUCKET_NEXT(b);
         }
 
         if (!is_empty) {

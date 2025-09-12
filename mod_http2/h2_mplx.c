@@ -360,7 +360,7 @@ static int m_stream_cancel_iter(void *ctx, void *val) {
 
     /* disable input consumed reporting */
     if (stream->input) {
-        h2_beam_on_consumed(stream->input, NULL, NULL, NULL);
+        h2_beam_abort(stream->input, m->c);
     }
     /* take over event monitoring */
     h2_stream_set_monitor(stream, NULL);
@@ -497,7 +497,7 @@ static apr_status_t s_out_close(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, c,
                   "h2_mplx(%s): close", conn_ctx->id);
-    status = h2_beam_close(conn_ctx->beam_out);
+    status = h2_beam_close(conn_ctx->beam_out, c);
     H2_BEAM_LOG(conn_ctx->beam_out, c, APLOG_TRACE2, "out_close");
     s_output_consumed_signal(m, conn_ctx);
     return status;
@@ -658,7 +658,7 @@ apr_status_t h2_mplx_c1_fwd_input(h2_mplx *m, struct h2_iqueue *input_pending,
                 if (stream->input_closed) {
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
                                   H2_STRM_MSG(stream, "closing input beam"));
-                    h2_beam_close(stream->input);
+                    h2_beam_close(stream->input, m->c);
                 }
                 if (stream->pipe_in) {
                     apr_file_putc(1, stream->pipe_in);
@@ -813,7 +813,7 @@ static void s_c2_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       H2_STRM_MSG(stream, "task_done, stream open"));
         if (stream->input) {
-            h2_beam_leave(stream->input);
+            h2_beam_abort(stream->input, c);
         }
     }
     else if ((stream = h2_ihash_get(m->shold, conn_ctx->stream_id)) != NULL) {
@@ -821,7 +821,7 @@ static void s_c2_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                       H2_STRM_MSG(stream, "task_done, in hold"));
         if (stream->input) {
-            h2_beam_leave(stream->input);
+            h2_beam_abort(stream->input, c);
         }
         ms_stream_joined(m, stream);
     }

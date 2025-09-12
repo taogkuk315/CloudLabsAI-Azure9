@@ -318,7 +318,7 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
         }
         if (conn_ctx->beam_in) {
 receive:
-            status = h2_beam_receive(conn_ctx->beam_in, fctx->bb, APR_NONBLOCK_READ,
+            status = h2_beam_receive(conn_ctx->beam_in, f->c, fctx->bb, APR_NONBLOCK_READ,
                                      128*1024, NULL);
             apr_file_putc(1, conn_ctx->pipe_in_read);
             if (APR_STATUS_IS_EAGAIN(status) && APR_BLOCK_READ == block) {
@@ -444,7 +444,7 @@ static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_b
 
     apr_brigade_length(bb, 0, &written);
     H2_TASK_OUT_LOG(APLOG_TRACE2, c2, bb, "h2_c2 send output");
-    rv = h2_beam_send(conn_ctx->beam_out, bb, APR_BLOCK_READ);
+    rv = h2_beam_send(conn_ctx->beam_out, c2, bb, APR_BLOCK_READ);
     H2_BEAM_LOG(conn_ctx->beam_out, c2, APLOG_TRACE2, "beam_out after send");
 
     if (APR_STATUS_IS_EAGAIN(rv)) {
@@ -472,10 +472,10 @@ static apr_status_t h2_c2_filter_out(ap_filter_t* f,
                   "h2_c2(%s): output leave", conn_ctx->id);
     if (APR_SUCCESS != rv) {
         if (conn_ctx->beam_in) {
-            h2_beam_leave(conn_ctx->beam_in);
+            h2_beam_abort(conn_ctx->beam_in, f->c);
         }
         if (!conn_ctx->done) {
-            h2_beam_abort(conn_ctx->beam_out);
+            h2_beam_abort(conn_ctx->beam_out, f->c);
         }
         f->c->aborted = 1;
     }
@@ -553,7 +553,7 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
      */
     c->id = (c->master->id << 8)^worker_id;
 
-    h2_beam_create(&conn_ctx->beam_out, conn_ctx->pool, conn_ctx->stream_id, "output",
+    h2_beam_create(&conn_ctx->beam_out, c, conn_ctx->pool, conn_ctx->stream_id, "output",
                    0, c->base_server->timeout);
     if (!conn_ctx->beam_out) {
         return APR_ENOMEM;
