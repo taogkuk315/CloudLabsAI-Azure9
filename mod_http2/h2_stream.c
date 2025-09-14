@@ -854,7 +854,6 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
     }
 
     H2_STREAM_OUT_LOG(APLOG_TRACE2, stream, "pre");
-    H2_BEAM_LOG(stream->output, c1, APLOG_TRACE2, "out_buffer, pre receive");
     rv = h2_beam_receive(stream->output, stream->session->c, stream->out_buffer,
                          APR_NONBLOCK_READ, stream->max_mem - buf_len, &was_closed);
     if (APR_SUCCESS != rv) {
@@ -862,7 +861,6 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
                       H2_STRM_MSG(stream, "out_buffer, receive unsuccessful"));
         goto cleanup;
     }
-    H2_BEAM_LOG(stream->output, c1, APLOG_TRACE2, "out_buffer, post receive");
 
     /* get rid of buckets we have no need for */
     if (!APR_BRIGADE_EMPTY(stream->out_buffer)) {
@@ -1289,6 +1287,9 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     buf_len = buffer_output_data_to_send(stream, &eos);
     if (buf_len < length && !eos) {
         /* read more? */
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c1,
+                      "h2_stream(%ld-%d): need more (read len=%ld, %ld in buffer)",
+                      session->id, (int)stream_id, (long)length, (long)buf_len);
         rv = buffer_output_receive(stream);
         if (APR_SUCCESS == rv) {
             /* process any headers sitting at the buffer head. */
@@ -1370,18 +1371,21 @@ apr_status_t h2_stream_read_output(h2_stream *stream)
         goto cleanup;
     }
 
-    rv = buffer_output_receive(stream);
-    if (APR_SUCCESS == rv) {
-        /* process any headers sitting at the buffer head. */
-        rv = buffer_output_process_headers(stream);
-        if (APR_SUCCESS != rv) goto cleanup;
-    }
     buf_len = buffer_output_data_to_send(stream, &eos);
-    if (buf_len || eos) {
-        nghttp2_session_resume_data(stream->session->ngh2, stream->id);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c1,
-                      "h2_stream(%ld-%d): resumed",
-                      stream->session->id, (int)stream->id);
+    if (buf_len < stream->session->io.write_size) {
+        rv = buffer_output_receive(stream);
+        if (APR_SUCCESS == rv) {
+            /* process any headers sitting at the buffer head. */
+            rv = buffer_output_process_headers(stream);
+            if (APR_SUCCESS != rv) goto cleanup;
+        }
+        buf_len = buffer_output_data_to_send(stream, &eos);
+        if (buf_len || eos) {
+            nghttp2_session_resume_data(stream->session->ngh2, stream->id);
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c1,
+                          "h2_stream(%ld-%d): resumed",
+                          stream->session->id, (int)stream->id);
+        }
     }
 
 cleanup:

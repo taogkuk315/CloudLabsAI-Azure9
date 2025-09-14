@@ -35,8 +35,7 @@ void h2_conn_ctx_detach(conn_rec *c)
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
 
     if (conn_ctx && conn_ctx->beam_out) {
-        H2_BEAM_LOG(conn_ctx->beam_out, c, APLOG_TRACE2, "c2_destroy");
-        h2_beam_destroy(conn_ctx->beam_out);
+        h2_beam_destroy(conn_ctx->beam_out, c);
         conn_ctx->beam_out = NULL;
     }
     ap_set_module_config(c->conn_config, &http2_module, NULL);

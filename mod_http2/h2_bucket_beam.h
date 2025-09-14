@@ -63,7 +63,7 @@ typedef struct {
 
 struct h2_bucket_beam {
     int id;
-    const char *tag;
+    const char *name;
     conn_rec *from;
     apr_pool_t *pool;
     h2_blist send_list;
@@ -130,7 +130,7 @@ apr_status_t h2_beam_create(h2_bucket_beam **pbeam,
 /**
  * Destroys the beam immediately without cleanup.
  */ 
-apr_status_t h2_beam_destroy(h2_bucket_beam *beam);
+apr_status_t h2_beam_destroy(h2_bucket_beam *beam, conn_rec *c);
 
 /**
  * Switch copying of file buckets on/off.
@@ -289,19 +289,5 @@ typedef apr_bucket *h2_bucket_beamer(h2_bucket_beam *beam,
                                      const apr_bucket *src);
 
 void h2_register_bucket_beamer(h2_bucket_beamer *beamer);
-
-#define H2_BEAM_LOG(beam, c, level, msg) \
-    do { \
-        if (beam && APLOG_C_IS_LEVEL((c),(level))) { \
-            h2_conn_ctx_t *h2_bl_ctx = h2_conn_ctx_get((c)); \
-            ap_log_cerror(APLOG_MARK, (level), 0, (c), \
-                          "beam(%s,%s,closed=%d,aborted=%d,empty=%d,buf=%ld): %s", \
-                          h2_bl_ctx? h2_bl_ctx->id : "unknown", (beam)->tag, \
-                          (beam)->closed, (beam)->aborted, h2_beam_empty(beam), \
-                          (long)h2_beam_get_buffered(beam), (msg)); \
-        } \
-    } while (0)
-
-
 
 #endif /* h2_bucket_beam_h */
