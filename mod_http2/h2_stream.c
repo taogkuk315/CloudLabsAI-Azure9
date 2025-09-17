@@ -543,27 +543,28 @@ h2_stream *h2_stream_create(int id, apr_pool_t *pool, h2_session *session,
 
 void h2_stream_cleanup(h2_stream *stream)
 {
-    apr_status_t status;
-    
+    /* Stream is done on c1. There might still be processing on a c2
+     * going on. The input/output beams get aborted and the stream's
+     * end of the in/out notifications get closed.
+     */
     ap_assert(stream);
     if (stream->out_buffer) {
-        /* remove any left over output buckets that may still have
-         * references into request pools */
         apr_brigade_cleanup(stream->out_buffer);
     }
     if (stream->input) {
         h2_beam_abort(stream->input, stream->session->c);
-        status = h2_beam_wait_empty(stream->input, APR_NONBLOCK_READ);
-        if (status == APR_EAGAIN) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c, 
-                          H2_STRM_MSG(stream, "wait on input drain"));
-            status = h2_beam_wait_empty(stream->input, APR_BLOCK_READ);
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, stream->session->c, 
-                          H2_STRM_MSG(stream, "input drain returned"));
-        }
     }
     if (stream->output) {
         h2_beam_abort(stream->output, stream->session->c);
+    }
+    if (stream->pin_send_write) {
+        apr_file_close(stream->pin_send_write);
+    }
+    if (stream->pin_recv_read) {
+        apr_file_close(stream->pin_recv_read);
+    }
+    if (stream->pout_recv_write) {
+        apr_file_close(stream->pout_recv_write);
     }
 }
 
@@ -1347,9 +1348,15 @@ apr_status_t h2_stream_read_output(h2_stream *stream)
     apr_off_t buf_len;
     int eos;
 
-    /* stream->output signalled a change. Check what has happend, read
+    /* stream->pout_recv_write signalled a change. Check what has happend, read
      * from it and act on seeing a response/data. */
-    ap_assert(stream->output);
+    if (!stream->output) {
+        /* c2 has not assigned the output beam to the stream (yet). */
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, c1,
+                      H2_STRM_MSG(stream, "read_output, no output beam registered"));
+        rv = APR_SUCCESS;
+        goto cleanup;
+    }
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c1,
                   H2_STRM_MSG(stream, "read_output"));
 

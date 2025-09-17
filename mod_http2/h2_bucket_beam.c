@@ -323,25 +323,7 @@ static int buffer_is_empty(h2_bucket_beam *beam)
             && H2_BLIST_EMPTY(&beam->send_list));
 }
 
-static apr_status_t wait_empty(h2_bucket_beam *beam, apr_read_type_e block)
-{
-    apr_status_t rv = APR_SUCCESS;
-    
-    while (!buffer_is_empty(beam) && APR_SUCCESS == rv) {
-        if (APR_BLOCK_READ != block) {
-            rv = APR_EAGAIN;
-        }
-        else if (beam->timeout > 0) {
-            rv = apr_thread_cond_timedwait(beam->change, beam->lock, beam->timeout);
-        }
-        else {
-            rv = apr_thread_cond_wait(beam->change, beam->lock);
-        }
-    }
-    return rv;
-}
-
-static apr_status_t wait_not_empty(h2_bucket_beam *beam, apr_read_type_e block)
+static apr_status_t wait_not_empty(h2_bucket_beam *beam, conn_rec *c, apr_read_type_e block)
 {
     apr_status_t rv = APR_SUCCESS;
     
@@ -356,16 +338,19 @@ static apr_status_t wait_not_empty(h2_bucket_beam *beam, apr_read_type_e block)
             rv = APR_EAGAIN;
         }
         else if (beam->timeout > 0) {
+            H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_empty, timeout");
             rv = apr_thread_cond_timedwait(beam->change, beam->lock, beam->timeout);
         }
         else {
+            H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_empty, forever");
             rv = apr_thread_cond_wait(beam->change, beam->lock);
         }
     }
     return rv;
 }
 
-static apr_status_t wait_not_full(h2_bucket_beam *beam, apr_read_type_e block, 
+static apr_status_t wait_not_full(h2_bucket_beam *beam, conn_rec *c,
+                                  apr_read_type_e block,
                                   apr_size_t *pspace_left)
 {
     apr_status_t rv = APR_SUCCESS;
@@ -383,9 +368,11 @@ static apr_status_t wait_not_full(h2_bucket_beam *beam, apr_read_type_e block,
                 beam->send_block_cb(beam->send_block_ctx, beam);
             }
             if (beam->timeout > 0) {
+                H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_full, timeout");
                 rv = apr_thread_cond_timedwait(beam->change, beam->lock, beam->timeout);
             }
             else {
+                H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_full, forever");
                 rv = apr_thread_cond_wait(beam->change, beam->lock);
             }
         }
@@ -686,17 +673,7 @@ apr_status_t h2_beam_close(h2_bucket_beam *beam, conn_rec *c)
     return rv;
 }
 
-apr_status_t h2_beam_wait_empty(h2_bucket_beam *beam, apr_read_type_e block)
-{
-    apr_status_t status;
-
-    apr_thread_mutex_lock(beam->lock);
-    status = wait_empty(beam, block);
-    apr_thread_mutex_unlock(beam->lock);
-    return status;
-}
-
-static void move_to_hold(h2_bucket_beam *beam, 
+static void move_to_hold(h2_bucket_beam *beam,
                          apr_bucket_brigade *sender_bb)
 {
     apr_bucket *b;
@@ -843,7 +820,7 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam, conn_rec *from,
                 if (was_empty && beam->was_empty_cb) {
                     beam->was_empty_cb(beam->was_empty_ctx, beam);
                 }
-                rv = wait_not_full(beam, block, &space_left);
+                rv = wait_not_full(beam, from, block, &space_left);
                 if (APR_SUCCESS != rv) {
                     break;
                 }
@@ -1043,7 +1020,7 @@ transfer:
         rv = APR_EOF;
     }
     else {
-        rv = wait_not_empty(beam, block);
+        rv = wait_not_empty(beam, to, block);
         if (rv != APR_SUCCESS) {
             goto leave;
         }

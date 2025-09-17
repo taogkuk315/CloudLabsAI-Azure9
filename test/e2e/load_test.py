@@ -345,6 +345,7 @@ class UrlsLoadTest(LoadTestCase):
             args = [
                 'h2load',
                 '--clients={0}'.format(self._clients),
+                '--threads={0}'.format(min(self._clients, 2)),
                 '--requests={0}'.format(self._requests),
                 '--input-file={0}'.format(self._url_file),
                 '--log-file={0}'.format(log_file),
@@ -433,7 +434,7 @@ class StressTest(LoadTestCase):
         LoadTestCase.server_setup(env=self.env, extras={
             'base': f"""
             H2MinWorkers    32
-            H2MaxWorkers    512
+            H2MaxWorkers    128
             H2MaxWorkerIdleSeconds 5
             """
         })
@@ -473,6 +474,7 @@ class StressTest(LoadTestCase):
             args = [
                 'h2load',
                 '--clients={0}'.format(self._clients),
+                '--threads={0}'.format(min(self._clients, 2)),
                 '--requests={0}'.format(self._requests),
                 '--input-file={0}'.format(self._url_file),
                 '--log-file={0}'.format(log_file),

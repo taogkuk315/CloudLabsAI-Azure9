@@ -1412,7 +1412,7 @@ static void transit(h2_session *session, const char *action, h2_session_state ns
                                   H2_SSSN_LOG("", session, "enter idle, timeout = %d sec"), 
                                   (int)apr_time_sec(H2MAX(session->s->timeout, session->s->keep_alive_timeout)));
                 }
-                else if (session->open_streams) {
+                else if (session->stream_count) {
                     s = "timeout";
                     timeout = session->s->timeout;
                     update_child_status(session, SERVER_BUSY_READ, "idle");
@@ -1468,21 +1468,7 @@ static void h2_session_ev_input_eagain(h2_session *session, int arg, const char 
     switch (session->state) {
         case H2_SESSION_ST_BUSY:
             if (!h2_session_want_send(session)) {
-                if (session->open_streams == 0) {
-                    if (session->local.accepting) {
-                        /* We wait for new frames on c1 only. */
-                        transit(session, "c1 keepalive", H2_SESSION_ST_IDLE);
-                    }
-                    else {
-                        /* We are no longer accepting new streams.
-                         * Time to leave. */
-                        h2_session_shutdown(session, 0, "done", 0);
-                        transit(session, "c1 done after goaway", H2_SESSION_ST_DONE);
-                    }
-                }
-                else {
-                    transit(session, "input exhausted", H2_SESSION_ST_WAIT);
-                }
+                transit(session, "input exhausted", H2_SESSION_ST_WAIT);
             }
             break;
         default:
@@ -1577,10 +1563,57 @@ static void h2_session_ev_pre_close(h2_session *session, int arg, const char *ms
     h2_session_shutdown(session, arg, msg, 1);
 }
 
+static void h2_session_ev_no_more_streams(h2_session *session)
+{
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                  H2_SSSN_LOG(APLOGNO(), session, "no more streams"));
+    switch (session->state) {
+        case H2_SESSION_ST_BUSY:
+            transit(session, "no more streams", H2_SESSION_ST_WAIT);
+            break;
+        case H2_SESSION_ST_WAIT:
+            if (!h2_session_want_send(session)) {
+                if (session->local.accepting) {
+                    /* We wait for new frames on c1 only. */
+                    transit(session, "c1 keepalive", H2_SESSION_ST_IDLE);
+                }
+                else {
+                    /* We are no longer accepting new streams.
+                     * Time to leave. */
+                    h2_session_shutdown(session, 0, "done", 0);
+                    transit(session, "c1 done after goaway", H2_SESSION_ST_DONE);
+                }
+            }
+            break;
+        default:
+            /* nop */
+            break;
+    }
+}
+
+static void ev_stream_created(h2_session *session, h2_stream *stream)
+{
+    ++session->stream_count;
+}
+
 static void ev_stream_open(h2_session *session, h2_stream *stream)
 {
+    if (H2_STREAM_CLIENT_INITIATED(stream->id)) {
+        ++session->remote.emitted_count;
+        if (stream->id > session->remote.emitted_max) {
+            session->remote.emitted_max = stream->id;
+            session->local.accepted_max = stream->id;
+        }
+    }
+    else {
+        if (stream->id > session->local.emitted_max) {
+            ++session->local.emitted_count;
+            session->remote.emitted_max = stream->id;
+        }
+    }
     /* Stream state OPEN means we have received all request headers
      * and can start processing the stream. */
+    ++session->open_streams;
     h2_iq_append(session->ready_to_process, stream->id);
 }
 
@@ -1603,33 +1636,27 @@ static void ev_stream_closed(h2_session *session, h2_stream *stream)
     APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
     h2_c1_io_append(&session->io, session->bbtmp);
     apr_brigade_cleanup(session->bbtmp);
+
+    --session->open_streams;
+    --session->stream_count;
+    if (session->open_streams == 0) {
+        h2_session_dispatch_event(session, H2_SESSION_EV_NO_MORE_STREAMS,
+                                  0, "stream done");
+    }
 }
 
 static void on_stream_state_enter(void *ctx, h2_stream *stream)
 {
     h2_session *session = ctx;
-    /* stream entered a new state */
+
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
                   H2_STRM_MSG(stream, "entered state"));
     switch (stream->state) {
         case H2_SS_IDLE: /* stream was created */
-            ++session->open_streams;
-            if (H2_STREAM_CLIENT_INITIATED(stream->id)) {
-                ++session->remote.emitted_count;
-                if (stream->id > session->remote.emitted_max) {
-                    session->remote.emitted_max = stream->id;
-                    session->local.accepted_max = stream->id;
-                }
-            }
-            else {
-                if (stream->id > session->local.emitted_max) {
-                    ++session->local.emitted_count;
-                    session->remote.emitted_max = stream->id;
-                }
-            }
+            ev_stream_created(session, stream);
             break;
         case H2_SS_OPEN: /* stream has request headers */
-        case H2_SS_RSVD_L: /* stream has request headers */
+        case H2_SS_RSVD_L:
             ev_stream_open(session, stream);
             break;
         case H2_SS_CLOSED_L: /* stream output was closed */
@@ -1637,7 +1664,6 @@ static void on_stream_state_enter(void *ctx, h2_stream *stream)
         case H2_SS_CLOSED_R: /* stream input was closed */
             break;
         case H2_SS_CLOSED: /* stream in+out were closed */
-            --session->open_streams;
             ev_stream_closed(session, stream);
             break;
         case H2_SS_CLEANUP:
@@ -1719,6 +1745,9 @@ void h2_session_dispatch_event(h2_session *session, h2_session_event_t ev,
             break;
         case H2_SESSION_EV_PRE_CLOSE:
             h2_session_ev_pre_close(session, arg, msg);
+            break;
+        case H2_SESSION_EV_NO_MORE_STREAMS:
+            h2_session_ev_no_more_streams(session);
             break;
         default:
             ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
@@ -1863,7 +1892,22 @@ apr_status_t h2_session_process(h2_session *session, int async)
 
         case H2_SESSION_ST_WAIT:
             if (ap_run_input_pending(session->c) == OK) {
+                /* input buffers non-empty, can not poll with timeout */
                 transit(session, "c1 input pending", H2_SESSION_ST_BUSY);
+                break;
+            }
+            else if (session->open_streams == 0) {
+                /* without streams open, we should not be in WAIT state, but
+                 * progress to IDLE or DONE. However, this may stall on the
+                 * session having more to write first.
+                 * Leave here and trigger read/write on c1. Either we get new
+                 * things to do or we should transit to another state. */
+                status = h2_c1_io_assure_flushed(&session->io);
+                if (APR_SUCCESS != status) {
+                    h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
+                }
+                h2_session_dispatch_event(session, H2_SESSION_EV_NO_MORE_STREAMS,
+                                          0, "stream done");
                 break;
             }
             /* No IO happening and input is exhausted. Make sure we have

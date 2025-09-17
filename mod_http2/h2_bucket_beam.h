@@ -202,18 +202,6 @@ apr_status_t h2_beam_close(h2_bucket_beam *beam, conn_rec *c);
 int h2_beam_is_closed(h2_bucket_beam *beam);
 
 /**
- * Return APR_SUCCESS when all buckets in transit have been handled. 
- * When called with APR_BLOCK_READ and a mutex set, will wait until the green
- * side has consumed all data. Otherwise APR_EAGAIN is returned.
- * With clear_buffers set, any queued data is discarded.
- * If a timeout is set on the beam, waiting might also time out and
- * return APR_ETIMEUP.
- *
- * Call from the sender side only.
- */
-apr_status_t h2_beam_wait_empty(h2_bucket_beam *beam, apr_read_type_e block);
-
-/** 
  * Set/get the timeout for blocking read/write operations. Only works
  * if a mutex has been set for the beam.
  */

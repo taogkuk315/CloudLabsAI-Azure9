@@ -49,9 +49,9 @@ struct h2_conn_ctx_t {
     struct h2_bucket_beam *beam_in;  /* c2: data in */
     struct h2_bucket_beam *beam_out; /* c2: data out */
 
-    apr_file_t *pipe_in;             /* poll for input from c1 */
-    apr_file_t *pipe_in_read;        /* signal input has been read to c1 */
-    apr_file_t *pipe_out;            /* signal output is available to c1 */
+    apr_file_t *pin_recv_write;      /* reveive input write notifications */
+    apr_file_t *pin_send_read;       /* send input read notifications */
+    apr_file_t *put_send_write;            /* signal output is available to c1 */
 
     volatile int done;               /* c2: processing has finished */
     apr_time_t started_at;           /* c2: when processing started */
