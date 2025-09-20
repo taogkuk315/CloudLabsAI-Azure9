@@ -13,11 +13,7 @@ class Dummy:
 
 def pytest_report_header(config, startdir):
     env = H2TestEnv()
-    return "mod_h2 [apache: {aversion}({prefix}), mpm: {mpm}]".format(
-        prefix=env.prefix,
-        aversion=env.get_httpd_version(),
-        mpm=env.mpm_type
-    )
+    return f"mod_h2 [apache: {env.get_httpd_version()}, mpm: {env.mpm_type}, {env.prefix}]"
 
 
 @pytest.fixture(scope="session")

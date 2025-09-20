@@ -1327,7 +1327,10 @@ static apr_status_t h2_session_read(h2_session *session)
 cleanup:
     if (APR_STATUS_IS_EAGAIN(rv)) {
         if ((session->io.bytes_read > read_start)
-            || (ap_run_input_pending(session->c) == OK)) {
+#if AP_MODULE_MAGIC_AT_LEAST(20160312, 0)
+            || (ap_run_input_pending(session->c) == OK)
+#endif
+            ) {
             h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_READ, 0, NULL);
         }
         else {
@@ -1891,12 +1894,14 @@ apr_status_t h2_session_process(h2_session *session, int async)
             break;
 
         case H2_SESSION_ST_WAIT:
+#if AP_MODULE_MAGIC_AT_LEAST(20160312, 0)
             if (ap_run_input_pending(session->c) == OK) {
                 /* input buffers non-empty, can not poll with timeout */
                 transit(session, "c1 input pending", H2_SESSION_ST_BUSY);
                 break;
             }
-            else if (session->open_streams == 0) {
+#endif
+            if (session->open_streams == 0) {
                 /* without streams open, we should not be in WAIT state, but
                  * progress to IDLE or DONE. However, this may stall on the
                  * session having more to write first.
