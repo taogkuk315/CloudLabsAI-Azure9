@@ -672,7 +672,7 @@ static int h2_c2_hook_process(conn_rec* c)
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c, 
-                      "secondary_conn(%ld): has no task", c->id);
+                      "secondary_conn(%ld): no h2 stream assing?", c->id);
     }
     return DECLINED;
 }
@@ -747,7 +747,7 @@ APR_OPTIONAL_FN_TYPE(ap_logio_add_bytes_out) *h2_c2_logio_add_bytes_out;
 void h2_c2_register_hooks(void)
 {
     /* When the connection processing actually starts, we might
-     * take over, if the connection is for a task.
+     * take over, if the connection is for a h2 stream.
      */
     ap_hook_process_connection(h2_c2_hook_process,
                                NULL, NULL, APR_HOOK_FIRST);

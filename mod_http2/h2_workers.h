@@ -69,9 +69,9 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pool,
                               int min_size, int max_size, int idle_secs);
 
 /**
- * Registers a h2_mplx for task scheduling. If this h2_mplx runs
- * out of tasks, it will be automatically be unregistered. Should
- * new tasks arrive, it needs to be registered again.
+ * Registers a h2_mplx for scheduling. If this h2_mplx runs
+ * out of work, it will be automatically be unregistered. Should
+ * new work arrive, it needs to be registered again.
  */
 apr_status_t h2_workers_register(h2_workers *workers, struct h2_mplx *m);
 

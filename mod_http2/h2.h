@@ -92,7 +92,7 @@ typedef enum {
     H2_SESSION_ST_DONE,             /* finished, connection close */
     H2_SESSION_ST_IDLE,             /* nothing to write, expecting data inc */
     H2_SESSION_ST_BUSY,             /* read/write without stop */
-    H2_SESSION_ST_WAIT,             /* waiting for tasks reporting back */
+    H2_SESSION_ST_WAIT,             /* waiting for c1 incoming + c2s output */
     H2_SESSION_ST_CLEANUP,          /* pool is being cleaned up */
 } h2_session_state;
 
@@ -169,9 +169,8 @@ typedef apr_status_t h2_io_data_cb(void *ctx, const char *data, apr_off_t len);
 typedef int h2_stream_pri_cmp_fn(int stream_id1, int stream_id2, void *session);
 typedef struct h2_stream *h2_stream_get_fn(struct h2_session *session, int stream_id);
 
-/* Note key to attach connection task id to conn_rec/request_rec instances */
-
-#define H2_TASK_ID_NOTE         "http2-task-id"
+/* Note key to attach stream id to conn_rec/request_rec instances */
+#define H2_STREAM_ID_NOTE       "http2-stream-id"
 #define H2_HDR_CONFORMANCE      "http2-hdr-conformance"
 #define H2_HDR_CONFORMANCE_UNSAFE      "unsafe"
 #define H2_PUSH_MODE_NOTE       "http2-push-mode"

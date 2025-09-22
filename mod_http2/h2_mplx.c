@@ -56,14 +56,6 @@ typedef struct {
     apr_size_t count;
 } stream_iter_ctx;
 
-/**
- * Naming convention for static functions:
- * - m_*: function only called from the master connection
- * - s_*: function only called from a secondary connection
- * - t_*: function only called from a h2_task holder
- * - mst_*: function called from everyone
- */
-
 static apr_status_t s_mplx_be_happy(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx);
 static apr_status_t m_be_annoyed(h2_mplx *m);
 
@@ -339,7 +331,7 @@ static int m_report_stream_iter(void *ctx, void *val) {
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c, /* NO APLOGNO */
-                      H2_STRM_MSG(stream, "->03198: no task"));
+                      H2_STRM_MSG(stream, "->03198: not started"));
     }
     return 1;
 }
@@ -379,7 +371,7 @@ void h2_mplx_c1_destroy(h2_mplx *m)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
                   "h2_mplx(%ld): start release", m->id);
     /* How to shut down a h2 connection:
-     * 0. abort and tell the workers that no more tasks will come from us */
+     * 0. abort and tell the workers that no more work will come from us */
     m->aborted = 1;
     h2_workers_unregister(m->workers, m);
     
@@ -394,7 +386,7 @@ void h2_mplx_c1_destroy(h2_mplx *m)
     /* How to shut down a h2 connection:
      * 1. cancel all streams still active */
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c, 
-                  "h2_mplx(%ld): release, %d/%d/%d streams (total/hold/purge), %d active tasks", 
+                  "h2_mplx(%ld): release, %d/%d/%d streams (total/hold/purge), %d streams",
                   m->id, (int)h2_ihash_count(m->streams),
                   (int)h2_ihash_count(m->shold), (int)h2_ihash_count(m->spurge), m->processing_count);
     while (!h2_ihash_iter(m->streams, m_stream_cancel_iter, m)) {
@@ -406,7 +398,7 @@ void h2_mplx_c1_destroy(h2_mplx *m)
     ap_assert(h2_iq_empty(m->q));
     
     /* 3. while workers are busy on this connection, meaning they
-     *    are processing tasks from this connection, wait on them finishing
+     *    are processing streams from this connection, wait on them finishing
      *    in order to wake us and let us check again. 
      *    Eventually, this has to succeed. */    
     for (i = 0; h2_ihash_count(m->shold) > 0; ++i) {
@@ -416,7 +408,7 @@ void h2_mplx_c1_destroy(h2_mplx *m)
             /* This can happen if we have very long running requests
              * that do not time out on IO. */
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c, APLOGNO(03198)
-                          "h2_mplx(%ld): waited %d sec for %d tasks", 
+                          "h2_mplx(%ld): waited %d sec for %d streams",
                           m->id, i*wait_secs, (int)h2_ihash_count(m->shold));
             h2_ihash_iter(m->shold, m_report_stream_iter, m);
         }
@@ -545,7 +537,7 @@ apr_status_t h2_mplx_c1_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
     else {
         h2_iq_sort(m->q, cmp, session);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
-                      "h2_mplx(%ld): reprioritize tasks", m->id);
+                      "h2_mplx(%ld): reprioritize streams", m->id);
         status = APR_SUCCESS;
     }
 
@@ -699,7 +691,7 @@ static conn_rec *s_next_c2(h2_mplx *m)
             }
 
             conn_ctx = h2_conn_ctx_create_for_c2(c2, stream);
-            apr_table_setn(c2->notes, H2_TASK_ID_NOTE, conn_ctx->id);
+            apr_table_setn(c2->notes, H2_STREAM_ID_NOTE, conn_ctx->id);
 
             apr_pool_create(&stream->mplx_pipe_pool, m->pool);
             apr_pool_tag(stream->mplx_pipe_pool, "H2_MPLX_PIPE");
@@ -788,7 +780,7 @@ static void s_c2_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
 
     ap_assert(conn_ctx);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
-                  "h2_mplx(%s): task done", conn_ctx->id);
+                  "h2_mplx(%s): c2 done", conn_ctx->id);
     s_out_close(m, c, conn_ctx);
     
     ap_assert(conn_ctx->done == 0);
@@ -809,7 +801,7 @@ static void s_c2_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
         /* stream not done yet. */
         /* stream not cleaned up, stay around */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                      H2_STRM_MSG(stream, "task_done, stream open"));
+                      H2_STRM_MSG(stream, "c2_done, stream open"));
         if (stream->input) {
             h2_beam_abort(stream->input, c);
         }
@@ -817,7 +809,7 @@ static void s_c2_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
     else if ((stream = h2_ihash_get(m->shold, conn_ctx->stream_id)) != NULL) {
         /* stream is done, was just waiting for this. */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                      H2_STRM_MSG(stream, "task_done, in hold"));
+                      H2_STRM_MSG(stream, "c2_done, in hold"));
         if (stream->input) {
             h2_beam_abort(stream->input, c);
         }
@@ -830,7 +822,7 @@ static void s_c2_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, c, APLOGNO(03518)
-                      "h2_mplx(%s): task_done, stream not found", 
+                      "h2_mplx(%s): c2_done, stream not found",
                       conn_ctx->id);
         ap_assert("stream should still be available" == NULL);
     }

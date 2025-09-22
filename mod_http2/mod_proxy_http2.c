@@ -324,7 +324,7 @@ static int proxy_http2_handler(request_rec *r,
             return DECLINED;
     }
 
-    task_id = apr_table_get(r->connection->notes, H2_TASK_ID_NOTE);
+    task_id = apr_table_get(r->connection->notes, H2_STREAM_ID_NOTE);
     
     ctx = apr_pcalloc(r->pool, sizeof(*ctx));
     ctx->master = r->connection->master? r->connection->master : r->connection;

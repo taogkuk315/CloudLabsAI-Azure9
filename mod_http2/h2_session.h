@@ -71,7 +71,7 @@ typedef struct h2_session {
     server_rec *s;                  /* server/vhost we're starting on */
     apr_pool_t *pool;               /* pool to use in session */
     struct h2_mplx *mplx;           /* multiplexer for stream data */
-    struct h2_workers *workers;     /* for executing stream tasks */
+    struct h2_workers *workers;     /* for executing streams */
     struct h2_c1_io_in_ctx_t *cin;  /* connection input filter context */
     h2_c1_io io;                    /* io on httpd conn filters */
     int padding_max;                /* max number of padding bytes */

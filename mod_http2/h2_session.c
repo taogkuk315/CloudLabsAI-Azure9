@@ -122,7 +122,7 @@ static h2_stream *h2_session_open_stream(h2_session *session, int stream_id,
 }
 
 /**
- * Determine the importance of streams when scheduling tasks.
+ * Determine the priority order of streams.
  * - if both stream depend on the same one, compare weights
  * - if one stream is closer to the root, prioritize that one
  * - if both are on the same level, use the weight of their root
@@ -1332,6 +1332,7 @@ cleanup:
 #endif
             ) {
             h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_READ, 0, NULL);
+            rv = APR_SUCCESS;
         }
         else {
             h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_EAGAIN, 0, NULL);
@@ -1898,6 +1899,10 @@ apr_status_t h2_session_process(h2_session *session, int async)
             if (ap_run_input_pending(session->c) == OK) {
                 /* input buffers non-empty, can not poll with timeout */
                 transit(session, "c1 input pending", H2_SESSION_ST_BUSY);
+                break;
+            }
+#else
+            if (APR_SUCCESS == h2_session_read(session)) {
                 break;
             }
 #endif

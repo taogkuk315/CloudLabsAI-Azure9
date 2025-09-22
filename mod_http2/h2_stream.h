@@ -275,7 +275,7 @@ apr_table_t *h2_stream_get_trailers(h2_stream *stream);
 
 /**
  * Submit any server push promises on this stream and schedule
- * the tasks connection with these.
+ * the streams for these.
  *
  * @param stream the stream for which to submit
  */

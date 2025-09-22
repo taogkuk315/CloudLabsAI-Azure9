@@ -301,7 +301,7 @@ static const char *val_H2_STREAM_TAG(apr_pool_t *p, server_rec *s,
                                      conn_rec *c, request_rec *r, h2_conn_ctx_t *ctx)
 {
     if (c) {
-        return apr_table_get(c->notes, H2_TASK_ID_NOTE);
+        return apr_table_get(c->notes, H2_STREAM_ID_NOTE);
     }
     return "";
 }

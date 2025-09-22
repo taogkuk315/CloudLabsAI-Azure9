@@ -102,7 +102,7 @@ typedef int h2_iq_cmp(int i1, int i2, void *ctx);
 h2_iqueue *h2_iq_create(apr_pool_t *pool, int capacity);
 
 /**
- * Return != 0 iff there are no tasks in the queue.
+ * Return != 0 iff there are no ints in the queue.
  * @param q the queue to check
  */
 int h2_iq_empty(h2_iqueue *q);
@@ -134,11 +134,10 @@ int h2_iq_add(h2_iqueue *q, int sid, h2_iq_cmp *cmp, void *ctx);
 int h2_iq_append(h2_iqueue *q, int sid);
 
 /**
- * Remove the stream id from the queue. Return != 0 iff task
- * was found in queue.
- * @param q the task queue
+ * Remove the int from the queue. Return != 0 iff it was found.
+ * @param q the queue
  * @param sid the stream id to remove
- * @return != 0 iff task was found in queue
+ * @return != 0 iff int was found in queue
  */
 int h2_iq_remove(h2_iqueue *q, int sid);
 
@@ -148,7 +147,7 @@ int h2_iq_remove(h2_iqueue *q, int sid);
 void h2_iq_clear(h2_iqueue *q);
 
 /**
- * Sort the stream idqueue again. Call if the task ordering
+ * Sort the stream idqueue again. Call if the int ordering
  * has changed.
  *
  * @param q the queue to sort
@@ -169,7 +168,7 @@ int h2_iq_shift(h2_iqueue *q);
 /**
  * Get the first max ids from the queue. All these ids will be removed.
  *
- * @param q the queue to get the first task from
+ * @param q the queue to get the first ids from
  * @param pint the int array to receive the values
  * @param max the maximum number of ids to shift
  * @return the actual number of ids shifted

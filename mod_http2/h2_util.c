@@ -439,7 +439,7 @@ void h2_iq_sort(h2_iqueue *q, h2_iq_cmp *cmp, void *ctx)
             ni = iq_bubble_up(q, i, prev, cmp, ctx);
             if (ni == prev) {
                 /* i bubbled one up, bubble the new i down, which
-                 * keeps all tasks below i sorted. */
+                 * keeps all ints below i sorted. */
                 iq_bubble_down(q, i, last, cmp, ctx);
             }
             i = prev;

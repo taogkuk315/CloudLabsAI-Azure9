@@ -34,7 +34,6 @@
 typedef struct h2_slot h2_slot;
 struct h2_slot {
     int id;
-    int sticks;
     h2_slot *next;
     h2_workers *workers;
     conn_rec *connection;
@@ -158,20 +157,14 @@ static void join_zombies(h2_workers *workers)
     }
 }
 
-static apr_status_t slot_pull_task(h2_slot *slot, h2_mplx *m)
+static apr_status_t slot_pull_c2(h2_slot *slot, h2_mplx *m)
 {
     apr_status_t rv;
     
     rv = h2_mplx_worker_pop_c2(m, &slot->connection);
     if (slot->connection) {
-        /* Ok, we got something to give back to the worker for execution. 
-         * If we still have idle workers, we let the worker be sticky, 
-         * e.g. making it poll the task's h2_mplx instance for more work 
-         * before asking back here. */
-        slot->sticks = slot->workers->max_workers;
-        return rv;            
+        return rv;
     }
-    slot->sticks = 0;
     return APR_EOF;
 }
 
@@ -180,7 +173,7 @@ static h2_fifo_op_t mplx_peek(void *head, void *ctx)
     h2_mplx *m = head;
     h2_slot *slot = ctx;
     
-    if (slot_pull_task(slot, m) == APR_EAGAIN) {
+    if (slot_pull_c2(slot, m) == APR_EAGAIN) {
         wake_idle_worker(slot->workers);
         return H2_FIFO_OP_REPUSH;
     } 
@@ -188,7 +181,7 @@ static h2_fifo_op_t mplx_peek(void *head, void *ctx)
 }
 
 /**
- * Get the next task for the given worker. Will block until a task arrives
+ * Get the next c2 for the given worker. Will block until a c2 arrives
  * or the max_wait timer expires and more than min workers exist.
  */
 static int get_next(h2_slot *slot)
@@ -259,20 +252,9 @@ static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)
     /* Get the next secondary connection from the ->mplxs queue. */
     while (get_next(slot)) {
         ap_assert(slot->connection != NULL);
-        do {
-            h2_c2_process(slot->connection, thread, slot->id);
-            
-            /* Report the task as done. If stickyness is left, offer the
-             * mplx the opportunity to give us back a new task right away.
-             */
-            if (!slot->workers->aborted && --slot->sticks > 0) {
-                h2_mplx_worker_c2_done(slot->connection, &slot->connection);
-            }
-            else {
-                h2_mplx_worker_c2_done(slot->connection, NULL);
-                slot->connection = NULL;
-            }
-        } while (slot->connection);
+        h2_c2_process(slot->connection, thread, slot->id);
+        h2_mplx_worker_c2_done(slot->connection, NULL);
+        slot->connection = NULL;
     }
 
     if (!slot->timed_out) {
@@ -397,17 +379,9 @@ h2_workers *h2_workers_create(server_rec *s, apr_pool_t *pchild,
                  workers->min_workers, workers->max_workers,
                  (int)apr_time_sec(workers->max_idle_duration));
     /* FIXME: the fifo set we use here has limited capacity. Once the
-     * set is full, connections with new requests do a wait. Unfortunately,
-     * we have optimizations in place there that makes such waiting "unfair"
-     * in the sense that it may take connections a looong time to get scheduled.
-     *
-     * Need to rewrite this to use one of our double-linked lists and a mutex
-     * to have unlimited capacity and fair scheduling.
-     *
-     * For now, we just make enough room to have many connections inside one
-     * process.
+     * set is full, connections with new requests do a wait.
      */
-    rv = h2_fifo_set_create(&workers->mplxs, pool, 8 * 1024);
+    rv = h2_fifo_set_create(&workers->mplxs, pool, 16 * 1024);
     if (rv != APR_SUCCESS) goto cleanup;
 
     rv = apr_threadattr_create(&workers->thread_attr, workers->pool);
