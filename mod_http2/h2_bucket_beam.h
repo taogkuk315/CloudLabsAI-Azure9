@@ -82,8 +82,6 @@ struct h2_bucket_beam {
     apr_size_t buckets_sent;  /* # of beam buckets sent */
 
     int aborted;
-    int closed;
-    int close_sent;
     int tx_mem_limits; /* only memory size counts on transfers */
     int copy_files;
 
@@ -163,10 +161,7 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam, conn_rec *from,
  * @param bb the bucket brigade to append to
  * @param block if the read should block when buckets are unavailable
  * @param readbytes the amount of data the receiver wants
- * @param pclosed  on return != 0 iff the beam has been closed by the sender.
- *                 Maybe NULL if the caller is not interested in this.
  * @return APR_SUCCESS when buckets were appended
- *         APR_EOF when no buckets were transfered and the beam is closed
  *         APR_EAGAIN on non-blocking read when no buckets are available
  *         APR_TIMEUP on blocking reads that time out
  *         APR_ECONNABORTED when beam has been aborted
@@ -174,8 +169,7 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam, conn_rec *from,
 apr_status_t h2_beam_receive(h2_bucket_beam *beam, conn_rec *to,
                              apr_bucket_brigade *bb,
                              apr_read_type_e block,
-                             apr_off_t readbytes,
-                             int *pclosed);
+                             apr_off_t readbytes);
 
 /**
  * Determine if beam is empty. 
@@ -189,17 +183,6 @@ int h2_beam_empty(h2_bucket_beam *beam);
  * @param c the connection the caller is working with
  */
 void h2_beam_abort(h2_bucket_beam *beam, conn_rec *c);
-
-/**
- * Close the beam. If this is called from any other than
- * the beam#s `from` connection, it is an implicit abort.
- * 
- * @param beam the beam to close
- * @param c the connection the caller is working with
- */
-apr_status_t h2_beam_close(h2_bucket_beam *beam, conn_rec *c);
-
-int h2_beam_is_closed(h2_bucket_beam *beam);
 
 /**
  * Set/get the timeout for blocking read/write operations. Only works

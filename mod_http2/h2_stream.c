@@ -190,6 +190,16 @@ static void H2_STREAM_OUT_LOG(int lvl, h2_stream *s, const char *tag)
     }
 }
 
+static void input_notify(void *ctx, h2_bucket_beam *beam)
+{
+    h2_stream *stream = ctx;
+
+    (void)beam;
+    if (stream->pin_send_write) {
+        apr_file_putc(1, stream->pin_send_write);
+    }
+}
+
 apr_status_t h2_stream_setup_input(h2_stream *stream)
 {
     if (stream->input == NULL) {
@@ -200,6 +210,8 @@ apr_status_t h2_stream_setup_input(h2_stream *stream)
             h2_beam_create(&stream->input, stream->session->c,
                            stream->pool, stream->id,
                            "input", 0, stream->session->s->timeout);
+            h2_beam_on_was_empty(stream->input, input_notify, stream);
+
         }
     }
     return APR_SUCCESS;
@@ -228,15 +240,14 @@ static apr_status_t close_input(h2_stream *stream)
 {
     conn_rec *c = stream->session->c;
     apr_status_t rv = APR_SUCCESS;
+    apr_bucket *b;
 
     if (stream->input_closed || stream->rst_error) goto cleanup;
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
                   H2_STRM_MSG(stream, "closing input"));
-    stream->input_closed = 1;
 
     if (stream->trailers_in && !apr_is_empty_table(stream->trailers_in)) {
-        apr_bucket *b;
         h2_headers *r;
         
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
@@ -248,21 +259,16 @@ static apr_status_t close_input(h2_stream *stream)
         input_append_bucket(stream, b);
     }
 
+    stream->input_closed = 1;
+    b = apr_bucket_eos_create(c->bucket_alloc);
+    input_append_bucket(stream, b);
+
     h2_stream_dispatch(stream, H2_SEV_IN_DATA_PENDING);
 cleanup:
     return rv;
 }
 
-static void close_output(h2_stream *stream)
-{
-    if (stream->output && !h2_beam_is_closed(stream->output)) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
-                      H2_STRM_MSG(stream, "aborting output"));
-        h2_beam_abort(stream->output, stream->session->c);
-    }
-}
-
-static void on_state_enter(h2_stream *stream) 
+static void on_state_enter(h2_stream *stream)
 {
     if (stream->monitor && stream->monitor->on_state_enter) {
         stream->monitor->on_state_enter(stream->monitor->ctx, stream);
@@ -323,14 +329,12 @@ static apr_status_t transit(h2_stream *stream, int new_state)
         case H2_SS_OPEN:
             break;
         case H2_SS_CLOSED_L:
-            close_output(stream);
             break;
         case H2_SS_CLOSED_R:
             close_input(stream);
             break;
         case H2_SS_CLOSED:
             close_input(stream);
-            close_output(stream);
             if (stream->out_buffer) {
                 apr_brigade_cleanup(stream->out_buffer);
             }
@@ -823,7 +827,6 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
     apr_status_t rv = APR_EAGAIN;
     apr_off_t buf_len;
     conn_rec *c1 = stream->session->c;
-    int was_closed;
     apr_bucket *b, *e;
 
     if (!stream->output) {
@@ -856,7 +859,7 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
 
     H2_STREAM_OUT_LOG(APLOG_TRACE2, stream, "pre");
     rv = h2_beam_receive(stream->output, stream->session->c, stream->out_buffer,
-                         APR_NONBLOCK_READ, stream->max_mem - buf_len, &was_closed);
+                         APR_NONBLOCK_READ, stream->max_mem - buf_len);
     if (APR_SUCCESS != rv) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, rv, c1,
                       H2_STRM_MSG(stream, "out_buffer, receive unsuccessful"));

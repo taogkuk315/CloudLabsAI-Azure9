@@ -319,7 +319,7 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
         if (conn_ctx->beam_in) {
 receive:
             status = h2_beam_receive(conn_ctx->beam_in, f->c, fctx->bb, APR_NONBLOCK_READ,
-                                     128*1024, NULL);
+                                     128*1024);
             apr_file_putc(1, conn_ctx->pin_send_read);
             if (APR_STATUS_IS_EAGAIN(status) && APR_BLOCK_READ == block) {
                 status = h2_util_wait_on_pipe(conn_ctx->pin_recv_write);
@@ -432,8 +432,8 @@ static void send_notify(void *ctx, h2_bucket_beam *beam)
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c2);
 
     (void)beam;
-    if (conn_ctx && conn_ctx->put_send_write) {
-        apr_file_putc(1, conn_ctx->put_send_write);
+    if (conn_ctx && conn_ctx->pout_send_write) {
+        apr_file_putc(1, conn_ctx->pout_send_write);
     }
 }
 
@@ -582,7 +582,6 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_c2(%s): processing done", conn_ctx->id);
-    apr_file_putc(1, conn_ctx->put_send_write);
 
     return APR_SUCCESS;
 }

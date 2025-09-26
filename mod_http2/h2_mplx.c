@@ -230,14 +230,6 @@ int h2_mplx_c1_shutdown(h2_mplx *m)
     return max_stream_id_started;
 }
 
-static int s_output_consumed_signal(h2_mplx *m, h2_conn_ctx_t *conn_ctx)
-{
-    if (conn_ctx->beam_out) {
-        return h2_beam_report_consumption(conn_ctx->beam_out);
-    }
-    return 0;
-}
-
 static int m_stream_purge_iter(void *ctx, void *val)
 {   
     h2_mplx *m = ctx;
@@ -471,28 +463,6 @@ apr_status_t h2_mplx_c2_set_stream_output(
     return rv;
 }
 
-static apr_status_t s_out_close(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
-{
-    apr_status_t status = APR_SUCCESS;
-    h2_stream *stream;
-    
-    if (!conn_ctx) {
-        return APR_ECONNABORTED;
-    }
-
-    ++c->keepalives;
-    stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
-    if (!stream) {
-        return APR_ECONNABORTED;
-    }
-
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, c,
-                  "h2_mplx(%s): close", conn_ctx->id);
-    status = h2_beam_close(conn_ctx->beam_out, c);
-    s_output_consumed_signal(m, conn_ctx);
-    return status;
-}
-
 apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
                             stream_ev_callback *on_stream_input,
                             stream_ev_callback *on_stream_output,
@@ -644,16 +614,6 @@ apr_status_t h2_mplx_c1_fwd_input(h2_mplx *m, struct h2_iqueue *input_pending,
         h2_stream *stream = get_stream(session, sid);
         if (stream) {
             h2_stream_flush_input(stream);
-            if (stream->input) {
-                if (stream->input_closed) {
-                    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
-                                  H2_STRM_MSG(stream, "closing input beam"));
-                    h2_beam_close(stream->input, m->c);
-                }
-                if (stream->pin_send_write) {
-                    apr_file_putc(1, stream->pin_send_write);
-                }
-            }
         }
     }
 
@@ -695,7 +655,7 @@ static conn_rec *s_next_c2(h2_mplx *m)
 
             apr_pool_create(&stream->mplx_pipe_pool, m->pool);
             apr_pool_tag(stream->mplx_pipe_pool, "H2_MPLX_PIPE");
-            rv = apr_file_pipe_create_pools(&stream->pout_recv_write, &conn_ctx->put_send_write,
+            rv = apr_file_pipe_create_pools(&stream->pout_recv_write, &conn_ctx->pout_send_write,
                                             APR_FULL_NONBLOCK,
                                             stream->mplx_pipe_pool, conn_ctx->pool);
             if (APR_SUCCESS != rv) {
@@ -704,17 +664,17 @@ static conn_rec *s_next_c2(h2_mplx *m)
                               "error creating output pipe"));
                 /* TODO: what do do here? */
             }
-            rv = apr_file_pipe_create_pools(&conn_ctx->pin_recv_write, &stream->pin_send_write,
-                                            APR_READ_BLOCK,
-                                            conn_ctx->pool, stream->mplx_pipe_pool);
-            if (APR_SUCCESS != rv) {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c,
-                              H2_STRM_LOG(APLOGNO(), stream,
-                              "error creating input pipe"));
-                /* TODO: what do do here? */
-            }
-
             if (stream->input) {
+                rv = apr_file_pipe_create_pools(&conn_ctx->pin_recv_write, &stream->pin_send_write,
+                                                APR_READ_BLOCK,
+                                                conn_ctx->pool, stream->mplx_pipe_pool);
+                if (APR_SUCCESS != rv) {
+                    ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c,
+                                  H2_STRM_LOG(APLOGNO(), stream,
+                                  "error creating input pipe"));
+                    /* TODO: what do do here? */
+                }
+
                 rv = apr_file_pipe_create_pools(&stream->pin_recv_read, &conn_ctx->pin_send_read,
                                                 APR_FULL_NONBLOCK,
                                                 conn_ctx->pool, stream->mplx_pipe_pool);
@@ -728,9 +688,6 @@ static conn_rec *s_next_c2(h2_mplx *m)
                 h2_beam_on_consumed(stream->input, NULL,
                                     m_stream_input_consumed, stream);
                 conn_ctx->beam_in = stream->input;
-            }
-            if (!conn_ctx->beam_in || h2_beam_is_closed(conn_ctx->beam_in)) {
-                apr_file_close(stream->pin_send_write);
             }
 
             mplx_pollset_add(m, stream);
@@ -781,13 +738,15 @@ static void s_c2_done(h2_mplx *m, conn_rec *c, h2_conn_ctx_t *conn_ctx)
     ap_assert(conn_ctx);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_mplx(%s): c2 done", conn_ctx->id);
-    s_out_close(m, c, conn_ctx);
-    
+
     ap_assert(conn_ctx->done == 0);
     conn_ctx->done = 1;
     conn_ctx->done_at = apr_time_now();
-    apr_file_close(conn_ctx->pin_recv_write);
-    apr_file_close(conn_ctx->put_send_write);
+    ++c->keepalives;
+    if (conn_ctx->pin_recv_write) {
+        apr_file_close(conn_ctx->pin_recv_write);
+    }
+    apr_file_close(conn_ctx->pout_send_write);
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
                   "h2_mplx(%s): request done, %f ms elapsed", conn_ctx->id,
                   (conn_ctx->done_at - conn_ctx->started_at) / 1000.0);

@@ -51,7 +51,7 @@ struct h2_conn_ctx_t {
 
     apr_file_t *pin_recv_write;      /* reveive input write notifications */
     apr_file_t *pin_send_read;       /* send input read notifications */
-    apr_file_t *put_send_write;            /* signal output is available to c1 */
+    apr_file_t *pout_send_write;     /* signal output is available to c1 */
 
     volatile int done;               /* c2: processing has finished */
     apr_time_t started_at;           /* c2: when processing started */

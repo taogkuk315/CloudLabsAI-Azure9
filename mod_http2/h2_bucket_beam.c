@@ -230,9 +230,8 @@ static apr_off_t get_buffered_data_len(h2_bucket_beam *beam);
         if (APLOG_C_IS_LEVEL((c),(level))) { \
             h2_conn_ctx_t *bl_ctx = h2_conn_ctx_get(c); \
             ap_log_cerror(APLOG_MARK, (level), rv, (c), \
-                          "BEAM[%s,%s%s%sdata=%ld] conn=%s: %s", \
+                          "BEAM[%s,%s%sdata=%ld] conn=%s: %s", \
                           (beam)->name, \
-                          (beam)->closed? "closed," : "", \
                           (beam)->aborted? "aborted," : "", \
                           is_empty(beam)? "empty," : "", \
                           (long)get_buffered_data_len(beam), \
@@ -330,9 +329,6 @@ static apr_status_t wait_not_empty(h2_bucket_beam *beam, conn_rec *c, apr_read_t
     while (buffer_is_empty(beam) && APR_SUCCESS == rv) {
         if (beam->aborted) {
             rv = APR_ECONNABORTED;
-        }
-        else if (beam->closed) {
-            rv = APR_EOF;
         }
         else if (APR_BLOCK_READ != block) {
             rv = APR_EAGAIN;
@@ -452,12 +448,7 @@ static void h2_blist_cleanup(h2_blist *bl)
     }
 }
 
-int h2_beam_is_closed(h2_bucket_beam *beam)
-{
-    return beam->closed;
-}
-
-static int pool_register(h2_bucket_beam *beam, apr_pool_t *pool, 
+static int pool_register(h2_bucket_beam *beam, apr_pool_t *pool,
                          apr_status_t (*cleanup)(void *))
 {
     if (pool && pool != beam->pool) {
@@ -646,33 +637,6 @@ void h2_beam_abort(h2_bucket_beam *beam, conn_rec *c)
     apr_thread_mutex_unlock(beam->lock);
 }
 
-apr_status_t h2_beam_close(h2_bucket_beam *beam, conn_rec *c)
-{
-    apr_status_t rv;
-
-    apr_thread_mutex_lock(beam->lock);
-    H2_BEAM_LOG(beam, c, APLOG_TRACE2, 0, "start close");
-    beam->closed = 1;
-    if (beam->from == c) {
-        /* sender closes, receiver may still read */
-        r_purge_sent(beam);
-        report_consumption(beam, 1);
-        if (beam->was_empty_cb && buffer_is_empty(beam)) {
-            beam->was_empty_cb(beam->was_empty_ctx, beam);
-        }
-        apr_thread_cond_broadcast(beam->change);
-    }
-    else {
-        /* receiver closes, equal to an abort */
-        recv_buffer_cleanup(beam);
-        beam->aborted = 1;
-    }
-    rv = beam->aborted? APR_ECONNABORTED : APR_SUCCESS;
-    H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "end close");
-    apr_thread_mutex_unlock(beam->lock);
-    return rv;
-}
-
 static void move_to_hold(h2_bucket_beam *beam,
                          apr_bucket_brigade *sender_bb)
 {
@@ -700,9 +664,6 @@ static apr_status_t append_bucket(h2_bucket_beam *beam,
     }
     
     if (APR_BUCKET_IS_METADATA(b)) {
-        if (APR_BUCKET_IS_EOS(b)) {
-            /*beam->closed = 1;*/
-        }
         APR_BUCKET_REMOVE(b);
         apr_bucket_setaside(b, beam->pool);
         H2_BLIST_INSERT_TAIL(&beam->send_list, b);
@@ -804,12 +765,6 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam, conn_rec *from,
         move_to_hold(beam, sender_bb);
         rv = APR_ECONNABORTED;
     }
-    else if (beam->closed) {
-        /* we just take in buckets after an EOS directly
-         * to the hold and do not complain. */
-        move_to_hold(beam, sender_bb);
-        rv = APR_SUCCESS;
-    }
     else if (sender_bb) {
         int was_empty = buffer_is_empty(beam);
 
@@ -846,8 +801,7 @@ apr_status_t h2_beam_receive(h2_bucket_beam *beam,
                              conn_rec *to,
                              apr_bucket_brigade *bb, 
                              apr_read_type_e block,
-                             apr_off_t readbytes,
-                             int *pclosed)
+                             apr_off_t readbytes)
 {
     apr_bucket *bsender, *brecv, *ng;
     int transferred = 0;
@@ -898,7 +852,6 @@ transfer:
             /* we need a real copy into the receivers bucket_alloc */
             if (APR_BUCKET_IS_EOS(bsender)) {
                 brecv = apr_bucket_eos_create(bb->bucket_alloc);
-                beam->close_sent = 1;
             }
             else if (APR_BUCKET_IS_FLUSH(bsender)) {
                 brecv = apr_bucket_flush_create(bb->bucket_alloc);
@@ -999,15 +952,6 @@ transfer:
         }
     }
 
-    if (beam->closed && buffer_is_empty(beam) && !beam->close_sent) {
-        /* beam is closed and we have nothing more to receive */
-        apr_bucket *b = apr_bucket_eos_create(bb->bucket_alloc);
-        APR_BRIGADE_INSERT_TAIL(bb, b);
-        beam->close_sent = 1;
-        ++transferred;
-        rv = APR_SUCCESS;
-    }
-
     if (beam->cons_ev_cb && transferred_buckets > 0) {
         beam->cons_ev_cb(beam->cons_ctx, beam);
     }
@@ -1016,8 +960,8 @@ transfer:
         apr_thread_cond_broadcast(beam->change);
         rv = APR_SUCCESS;
     }
-    else if (beam->closed) {
-        rv = APR_EOF;
+    else if (beam->aborted) {
+        rv = APR_ECONNABORTED;
     }
     else {
         rv = wait_not_empty(beam, to, block);
@@ -1028,7 +972,6 @@ transfer:
     }
 
 leave:
-    if (pclosed) *pclosed = beam->closed? 1 : 0;
     H2_BEAM_LOG(beam, to, APLOG_TRACE2, rv, "end receive");
     apr_thread_mutex_unlock(beam->lock);
     return rv;
