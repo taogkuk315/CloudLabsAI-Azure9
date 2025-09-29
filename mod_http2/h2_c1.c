@@ -114,20 +114,21 @@ apr_status_t h2_c1_run(conn_rec *c)
 {
     apr_status_t status;
     int mpm_state = 0;
-    h2_session *session = h2_conn_ctx_get_session(c);
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
     
-    ap_assert(session);
+    ap_assert(conn_ctx);
+    ap_assert(conn_ctx->session);
     do {
         if (c->cs) {
             c->cs->sense = CONN_SENSE_DEFAULT;
             c->cs->state = CONN_STATE_HANDLER;
         }
     
-        status = h2_session_process(session, async_mpm);
+        status = h2_session_process(conn_ctx->session, async_mpm);
         
         if (APR_STATUS_IS_EOF(status)) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c, 
-                          H2_SSSN_LOG(APLOGNO(03045), session, 
+                          H2_SSSN_LOG(APLOGNO(03045), conn_ctx->session,
                           "process, closing conn"));
             c->keepalive = AP_CONN_CLOSE;
         }
@@ -143,13 +144,14 @@ apr_status_t h2_c1_run(conn_rec *c)
              && mpm_state != AP_MPMQ_STOPPING);
 
     if (c->cs) {
-        switch (session->state) {
+        switch (conn_ctx->session->state) {
             case H2_SESSION_ST_INIT:
             case H2_SESSION_ST_IDLE:
             case H2_SESSION_ST_BUSY:
             case H2_SESSION_ST_WAIT:
                 c->cs->state = CONN_STATE_WRITE_COMPLETION;
-                if (c->cs && (session->stream_count || !session->remote.emitted_count)) {
+                if (c->cs && (conn_ctx->session->stream_count
+                              || !conn_ctx->session->remote.emitted_count)) {
                     /* let the MPM know that we are not done and want
                      * the Timeout behaviour instead of a KeepAliveTimeout
                      * See PR 63534. 
@@ -170,11 +172,10 @@ apr_status_t h2_c1_run(conn_rec *c)
 
 apr_status_t h2_c1_pre_close(struct h2_conn_ctx_t *ctx, conn_rec *c)
 {
-    h2_session *session = h2_conn_ctx_get_session(c);
-    
-    (void)c;
-    if (session) {
-        apr_status_t status = h2_session_pre_close(session, async_mpm);
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+
+    if (conn_ctx && conn_ctx->session) {
+        apr_status_t status = h2_session_pre_close(conn_ctx->session, async_mpm);
         return (status == APR_SUCCESS)? DONE : status;
     }
     return DONE;

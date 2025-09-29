@@ -190,16 +190,6 @@ static void H2_STREAM_OUT_LOG(int lvl, h2_stream *s, const char *tag)
     }
 }
 
-static void input_notify(void *ctx, h2_bucket_beam *beam)
-{
-    h2_stream *stream = ctx;
-
-    (void)beam;
-    if (stream->pin_send_write) {
-        apr_file_putc(1, stream->pin_send_write);
-    }
-}
-
 apr_status_t h2_stream_setup_input(h2_stream *stream)
 {
     if (stream->input == NULL) {
@@ -210,8 +200,6 @@ apr_status_t h2_stream_setup_input(h2_stream *stream)
             h2_beam_create(&stream->input, stream->session->c,
                            stream->pool, stream->id,
                            "input", 0, stream->session->s->timeout);
-            h2_beam_on_was_empty(stream->input, input_notify, stream);
-
         }
     }
     return APR_SUCCESS;
@@ -531,8 +519,7 @@ h2_stream *h2_stream_create(int id, apr_pool_t *pool, h2_session *session,
     stream->pool         = pool;
     stream->session      = session;
     stream->monitor      = monitor;
-    stream->max_mem      = session->max_stream_mem;
-    
+
     if (id) {
         stream->in_window_size =
             nghttp2_session_get_stream_local_window_size(
@@ -560,15 +547,6 @@ void h2_stream_cleanup(h2_stream *stream)
     }
     if (stream->output) {
         h2_beam_abort(stream->output, stream->session->c);
-    }
-    if (stream->pin_send_write) {
-        apr_file_close(stream->pin_send_write);
-    }
-    if (stream->pin_recv_read) {
-        apr_file_close(stream->pin_recv_read);
-    }
-    if (stream->pout_recv_write) {
-        apr_file_close(stream->pout_recv_write);
     }
 }
 
@@ -844,7 +822,7 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
         buf_len = h2_brigade_mem_size(stream->out_buffer);
     }
 
-    if (buf_len >= stream->max_mem) {
+    if (buf_len >= stream->session->max_stream_mem) {
         /* we have buffered enough. No need to read more.
          * However, we have now output pending for which we may not
          * receive another poll event. We need to make sure that this
@@ -859,7 +837,7 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
 
     H2_STREAM_OUT_LOG(APLOG_TRACE2, stream, "pre");
     rv = h2_beam_receive(stream->output, stream->session->c, stream->out_buffer,
-                         APR_NONBLOCK_READ, stream->max_mem - buf_len);
+                         APR_NONBLOCK_READ, stream->session->max_stream_mem - buf_len);
     if (APR_SUCCESS != rv) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, rv, c1,
                       H2_STRM_MSG(stream, "out_buffer, receive unsuccessful"));

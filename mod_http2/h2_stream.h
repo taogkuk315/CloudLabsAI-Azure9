@@ -84,25 +84,14 @@ struct h2_stream {
     
     struct h2_bucket_beam *output;
     apr_bucket_brigade *out_buffer;
-    apr_size_t max_mem;         /* maximum amount of data buffered */
-
-    apr_pool_t *mplx_pipe_pool; /* mplx child pool for pipe ops via mplx */
-    apr_file_t *pin_send_write; /* send input written notifications */
-    apr_file_t *pin_recv_read;  /* receive input read notifications */
-    apr_file_t *pout_recv_write; /* receive output write notifications */
-
-    apr_pollfd_t *pfd_in_read;  /* poll input read notifications */
-    apr_pollfd_t *pfd_out_write; /* poll output write notifications */
 
     int rst_error;              /* stream error for RST_STREAM */
     unsigned int aborted   : 1; /* was aborted */
     unsigned int scheduled : 1; /* stream has been scheduled */
     unsigned int input_closed : 1; /* no more request data/trailers coming */
-    unsigned int out_checked : 1; /* output eof was double checked */
     unsigned int push_policy;   /* which push policy to use for this request */
-    unsigned int input_buffering : 1; /* buffer request bodies for efficiency */
 
-    conn_rec *connection;       /* assigned connection to handle stream */
+    conn_rec *c2;               /* connection processing stream */
     
     const h2_priority *pref_priority; /* preferred priority for this stream */
     apr_off_t out_frames;       /* # of frames sent out */

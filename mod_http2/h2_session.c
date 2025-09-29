@@ -777,9 +777,10 @@ static apr_status_t session_cleanup(h2_session *session, const char *trigger)
 static apr_status_t session_pool_cleanup(void *data)
 {
     conn_rec *c = data;
-    h2_session *session;
-    
-    if ((session = h2_conn_ctx_get_session(c))) {
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+    h2_session *session = conn_ctx? conn_ctx->session : NULL;
+
+    if (session) {
         int mpm_state = 0;
         int level;
 
@@ -791,7 +792,7 @@ static apr_status_t session_pool_cleanup(void *data)
          * However, when the server is stopping, it may shutdown connections
          * without running the pre_close hooks. Do not want about that. */
         ap_log_cerror(APLOG_MARK, level, 0, c,
-                      H2_SSSN_LOG(APLOGNO(10020), session, 
+                      H2_SSSN_LOG(APLOGNO(10020), session,
                       "session cleanup triggered by pool cleanup. "
                       "this should have happened earlier already."));
         return session_cleanup(session, "pool cleanup");
@@ -864,7 +865,7 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     session->monitor->on_event = on_stream_event;
 
     stream0 = h2_stream_create(0, session->pool, session, NULL, 0);
-    stream0->connection = session->c;
+    stream0->c2 = session->c;
     session->mplx = h2_mplx_c1_create(stream0, s, session->pool, workers);
     
     /* connection input filter that feeds the session */

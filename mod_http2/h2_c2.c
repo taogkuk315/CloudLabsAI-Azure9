@@ -238,21 +238,6 @@ void h2_c2_destroy(conn_rec *c2)
     apr_pool_destroy(c2->pool);
 }
 
-static void H2_TASK_OUT_LOG(int lvl, conn_rec *c, apr_bucket_brigade *bb,
-                            const char *tag)
-{
-    if (APLOG_C_IS_LEVEL(c, lvl)) {
-        h2_conn_ctx_t *ctx = h2_conn_ctx_get(c);
-        char buffer[4 * 1024];
-        const char *line = "(null)";
-        apr_size_t len, bmax = sizeof(buffer)/sizeof(buffer[0]);
-        
-        len = h2_util_bb_print(buffer, bmax, tag, "", bb);
-        ap_log_cerror(APLOG_MARK, lvl, 0, c, "bb_dump(%s): %s", 
-                      ctx->id, len? buffer : line);
-    }
-}
-
 typedef struct {
     apr_bucket_brigade *bb;       /* c2: data in holding area */
 } h2_c2_fctx_in_t;
@@ -294,9 +279,9 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
     }
 
     if (!fctx) {
-        fctx = apr_pcalloc(conn_ctx->pool, sizeof(*fctx));
+        fctx = apr_pcalloc(f->c->pool, sizeof(*fctx));
         f->ctx = fctx;
-        fctx->bb = apr_brigade_create(conn_ctx->pool, f->c->bucket_alloc);
+        fctx->bb = apr_brigade_create(f->c->pool, f->c->bucket_alloc);
     }
     
     /* Cleanup brigades from those nasty 0 length non-meta buckets
@@ -443,7 +428,6 @@ static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_b
     apr_status_t rv;
 
     apr_brigade_length(bb, 0, &written);
-    H2_TASK_OUT_LOG(APLOG_TRACE2, c2, bb, "h2_c2 send output");
     rv = h2_beam_send(conn_ctx->beam_out, c2, bb, APR_BLOCK_READ);
 
     if (APR_STATUS_IS_EAGAIN(rv)) {
@@ -513,9 +497,9 @@ static apr_status_t c2_run_pre_connection(conn_rec *secondary, apr_socket_t *csd
     return APR_SUCCESS;
 }
 
-apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
+apr_status_t h2_c2_process(conn_rec *c2, apr_thread_t *thread, int worker_id)
 {
-    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c2);
     apr_status_t rv;
 
     ap_assert(conn_ctx);
@@ -550,10 +534,10 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
      * load still. There seems to be no way to solve this in all possible
      * configurations by mod_h2 alone.
      */
-    c->id = (c->master->id << 8)^worker_id;
+    c2->id = (c2->master->id << 8)^worker_id;
 
-    rv = h2_beam_create(&conn_ctx->beam_out, c, conn_ctx->pool, conn_ctx->stream_id, "output",
-                        0, c->base_server->timeout);
+    rv = h2_beam_create(&conn_ctx->beam_out, c2, c2->pool, conn_ctx->stream_id, "output",
+                        0, c2->base_server->timeout);
     if (APR_SUCCESS != rv) {
         return rv;
     }
@@ -564,23 +548,23 @@ apr_status_t h2_c2_process(conn_rec *c, apr_thread_t *thread, int worker_id)
     }
 
     h2_beam_buffer_size_set(conn_ctx->beam_out, conn_ctx->mplx->stream_max_mem);
-    h2_beam_on_was_empty(conn_ctx->beam_out, send_notify, c);
+    h2_beam_on_was_empty(conn_ctx->beam_out, send_notify, c2);
 
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
                   "h2_c2(%s), adding filters", conn_ctx->id);
-    ap_add_input_filter("H2_C2_NET_IN", NULL, NULL, c);
-    ap_add_output_filter("H2_C2_NET_CATCH_H1", NULL, NULL, c);
-    ap_add_output_filter("H2_C2_NET_OUT", NULL, NULL, c);
+    ap_add_input_filter("H2_C2_NET_IN", NULL, NULL, c2);
+    ap_add_output_filter("H2_C2_NET_CATCH_H1", NULL, NULL, c2);
+    ap_add_output_filter("H2_C2_NET_OUT", NULL, NULL, c2);
 
-    c2_run_pre_connection(c, ap_get_conn_socket(c));
+    c2_run_pre_connection(c2, ap_get_conn_socket(c2));
 
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c2,
                   "h2_c2(%s): process connection", conn_ctx->id);
                   
-    c->current_thread = thread;
-    ap_run_process_connection(c);
+    c2->current_thread = thread;
+    ap_run_process_connection(c2);
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c2,
                   "h2_c2(%s): processing done", conn_ctx->id);
 
     return APR_SUCCESS;
@@ -608,7 +592,6 @@ static apr_status_t c2_process(h2_conn_ctx_t *conn_ctx, conn_rec *c)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_c2(%s): created request_rec", conn_ctx->id);
     conn_ctx->server = r->server;
-    conn_ctx->out_unbuffered = !h2_config_rgeti(r, H2_CONF_OUTPUT_BUFFER);
 
     /* the request_rec->server carries the timeout value that applies */
     h2_beam_timeout_set(conn_ctx->beam_out, r->server->timeout);
@@ -705,25 +688,24 @@ static void check_push(request_rec *r, const char *tag)
 
 static int h2_c2_hook_post_read_request(request_rec *r)
 {
-    /* secondary connection? */
-    if (r->connection->master) {
-        h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(r->connection);
-        /* This hook will get called twice on internal redirects. Take care
-         * that we manipulate filters only once. */
-        if (conn_ctx && !conn_ctx->filters_set) {
-            ap_log_rerror(APLOG_MARK, APLOG_TRACE3, 0, r,
-                          "h2_c2(%s): adding request filters", conn_ctx->id);
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(r->connection);
 
-            /* setup the correct filters to process the request for h2 */
-            ap_add_input_filter("H2_C2_REQUEST_IN", NULL, r, r->connection);
+    if (conn_ctx && conn_ctx->stream_id) {
+        h2_c2_fctx_out_t *out_ctx;
 
-            /* replace the core http filter that formats response headers
-             * in HTTP/1 with our own that collects status and headers */
-            ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
-            ap_add_output_filter("H2_C2_RESPONSE_OUT", NULL, r, r->connection);
-            ap_add_output_filter("H2_C2_TRAILERS_OUT", NULL, r, r->connection);
-            conn_ctx->filters_set = 1;
-        }
+        ap_log_rerror(APLOG_MARK, APLOG_TRACE3, 0, r,
+                      "h2_c2(%s): adding request filters", conn_ctx->id);
+
+        /* setup the correct filters to process the request for h2 */
+        ap_add_input_filter("H2_C2_REQUEST_IN", NULL, r, r->connection);
+
+        /* replace the core http filter that formats response headers
+         * in HTTP/1 with our own that collects status and headers */
+        ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
+
+        out_ctx = apr_pcalloc(r->pool, sizeof(*out_ctx));
+        ap_add_output_filter("H2_C2_RESPONSE_OUT", out_ctx, r, r->connection);
+        ap_add_output_filter("H2_C2_TRAILERS_OUT", out_ctx, r, r->connection);
     }
     return DECLINED;
 }

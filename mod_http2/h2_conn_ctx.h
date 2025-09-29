@@ -36,22 +36,23 @@ struct h2_conn_ctx_t {
     apr_pool_t *pool;               /* c1: session pool, c2: request processing pool */
     const char *protocol;           /* c1: the protocol negotiated */
     struct h2_session *session;     /* c1: the h2 session established */
-    int stream_id;                  /* c1: 0, c2: stream id processed */
-
     struct h2_mplx *mplx;           /* c2: the multiplexer */
+
+    int stream_id;                  /* c1: 0, c2: stream id processed */
     const struct h2_request *request; /* c2: the request to process */
 
-    int filters_set;                 /* c2: protocol filters have been set up */
-    int has_final_response;          /* c2: request has produced a >= 200 response */
-    int registered_at_mplx;          /* c2: output is registered at mplx for polling */
-    int out_unbuffered;              /* c2: output is unbuffered */
+    apr_pool_t *mplx_pool;           /* c2: an mplx child use for safe use inside mplx lock */
+    struct h2_bucket_beam *beam_in;  /* c2: data in or NULL */
+    apr_file_t *pin_send_write;      /* c2: send input write notifications or NULL */
+    apr_file_t *pin_recv_write;      /* c2: reveive input write notifications or NULL */
+    apr_file_t *pin_send_read;       /* c2: send input read notifications or NULL */
+    apr_file_t *pin_recv_read;       /* c2: receive input read notifications or NULL */
+    apr_pollfd_t *pfd_in_read;       /* poll input read notifications or NULL */
 
-    struct h2_bucket_beam *beam_in;  /* c2: data in */
     struct h2_bucket_beam *beam_out; /* c2: data out */
-
-    apr_file_t *pin_recv_write;      /* reveive input write notifications */
-    apr_file_t *pin_send_read;       /* send input read notifications */
-    apr_file_t *pout_send_write;     /* signal output is available to c1 */
+    apr_file_t *pout_send_write;     /* c2: send output write notifications */
+    apr_file_t *pout_recv_write;     /* c2: receive output write notifications */
+    apr_pollfd_t *pfd_out_write;     /* poll output write notifications */
 
     volatile int done;               /* c2: processing has finished */
     apr_time_t started_at;           /* c2: when processing started */
@@ -84,10 +85,5 @@ void h2_conn_ctx_detach(conn_rec *c);
  * Distach from the connection and destroy all resources, e.g. the pool.
  */
 void h2_conn_ctx_destroy(h2_conn_ctx_t *conn_ctx);
-
-/**
- * Get the session instance if `c` is a HTTP/2 master connection.
- */
-struct h2_session *h2_conn_ctx_get_session(conn_rec *c);
 
 #endif /* defined(__mod_h2__h2_conn_ctx__) */

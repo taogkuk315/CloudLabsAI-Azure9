@@ -54,6 +54,9 @@ static h2_conn_ctx_t *ctx_create(apr_pool_t *pool, conn_rec *c, const char *id)
 
 void h2_conn_ctx_destroy(h2_conn_ctx_t *conn_ctx)
 {
+    if (conn_ctx->mplx_pool) {
+        apr_pool_destroy(conn_ctx->mplx_pool);
+    }
     apr_pool_destroy(conn_ctx->pool);
 }
 
@@ -83,11 +86,5 @@ h2_conn_ctx_t *h2_conn_ctx_create_for_c2(conn_rec *c, struct h2_stream *stream)
     ctx->request = stream->request;
 
     return ctx;
-}
-
-h2_session *h2_conn_ctx_get_session(conn_rec *c)
-{
-    h2_conn_ctx_t *ctx = (c && !c->master)? h2_conn_ctx_get(c) : NULL;
-    return ctx? ctx->session : NULL;
 }
 

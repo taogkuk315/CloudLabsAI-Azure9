@@ -170,7 +170,6 @@ typedef int h2_stream_pri_cmp_fn(int stream_id1, int stream_id2, void *session);
 typedef struct h2_stream *h2_stream_get_fn(struct h2_session *session, int stream_id);
 
 /* Note key to attach stream id to conn_rec/request_rec instances */
-#define H2_STREAM_ID_NOTE       "http2-stream-id"
 #define H2_HDR_CONFORMANCE      "http2-hdr-conformance"
 #define H2_HDR_CONFORMANCE_UNSAFE      "unsafe"
 #define H2_PUSH_MODE_NOTE       "http2-push-mode"
