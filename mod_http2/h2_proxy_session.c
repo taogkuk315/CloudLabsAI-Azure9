@@ -1356,8 +1356,7 @@ static void ev_stream_done(h2_proxy_session *session, int stream_id,
         else if (!stream->data_received) {
             apr_bucket *b;
             /* if the response had no body, this is the time to flush
-             * an empty brigade which will also write the resonse
-             * headers */
+             * an empty brigade which will also write the response headers */
             h2_proxy_stream_end_headers_out(stream);
             stream->data_received = 1;
             b = apr_bucket_flush_create(stream->r->connection->bucket_alloc);

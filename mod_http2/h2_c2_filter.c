@@ -34,6 +34,7 @@
 #include "h2_headers.h"
 #include "h2_c2_filter.h"
 #include "h2_c2.h"
+#include "h2_mplx.h"
 #include "h2_util.h"
 
 
@@ -635,7 +636,7 @@ apr_status_t h2_c2_filter_response_out(ap_filter_t *f, apr_bucket_brigade *bb)
 
 struct h2_chunk_filter_t {
     const char *id;
-    unsigned int eos : 1;
+    int eos_chunk_added;
     apr_bucket_brigade *bbchunk;
     apr_off_t chunked_total;
 };
@@ -695,23 +696,13 @@ static apr_status_t read_and_chunk(ap_filter_t *f, h2_conn_ctx_t *conn_ctx,
         /* get more data from the lower layer filters. Always do this
          * in larger pieces, since we handle the read modes ourself. */
         status = ap_get_brigade(f->next, fctx->bbchunk,
-                                AP_MODE_READBYTES, block, 32*1024);
-        if (status == APR_EOF) {
-            if (!fctx->eos) {
-                status = apr_brigade_puts(fctx->bbchunk, NULL, NULL, "0\r\n\r\n");
-                fctx->eos = 1;
-                return APR_SUCCESS;
-            }
-            ap_remove_input_filter(f);
-            return status;
-            
-        }
-        else if (status != APR_SUCCESS) {
+                                AP_MODE_READBYTES, block, conn_ctx->mplx->stream_max_mem);
+        if (status != APR_SUCCESS) {
             return status;
         }
 
         for (b = APR_BRIGADE_FIRST(fctx->bbchunk);
-             b != APR_BRIGADE_SENTINEL(fctx->bbchunk) && !fctx->eos;
+             b != APR_BRIGADE_SENTINEL(fctx->bbchunk);
              b = next) {
             next = APR_BUCKET_NEXT(b);
             if (APR_BUCKET_IS_METADATA(b)) {
@@ -740,14 +731,18 @@ static apr_status_t read_and_chunk(ap_filter_t *f, h2_conn_ctx_t *conn_ctx,
                     apr_bucket_destroy(b);
                     APR_BRIGADE_CONCAT(fctx->bbchunk, tmp);
                     apr_brigade_destroy(tmp);
-                    fctx->eos = 1;
+                    fctx->eos_chunk_added = 1;
                 }
                 else if (APR_BUCKET_IS_EOS(b)) {
-                    tmp = apr_brigade_split_ex(fctx->bbchunk, b, NULL);
-                    status = apr_brigade_puts(fctx->bbchunk, NULL, NULL, "0\r\n\r\n");
-                    APR_BRIGADE_CONCAT(fctx->bbchunk, tmp);
-                    apr_brigade_destroy(tmp);
-                    fctx->eos = 1;
+                    ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, r,
+                                  "h2_c2(%s): receiving eos", conn_ctx->id);
+                    if (!fctx->eos_chunk_added) {
+                        tmp = apr_brigade_split_ex(fctx->bbchunk, b, NULL);
+                        status = apr_brigade_puts(fctx->bbchunk, NULL, NULL, "0\r\n\r\n");
+                        APR_BRIGADE_CONCAT(fctx->bbchunk, tmp);
+                        apr_brigade_destroy(tmp);
+                    }
+                    fctx->eos_chunk_added = 0;
                 }
             }
             else if (b->length == 0) {
@@ -793,7 +788,7 @@ apr_status_t h2_c2_filter_request_in(ap_filter_t* f,
     }
 
     ap_log_rerror(APLOG_MARK, APLOG_TRACE2, 0, f->r,
-                  "h2_c2(%s): request filter, exp=%d", conn_ctx->id, r->expecting_100);
+                  "h2_c2(%s): request input, exp=%d", conn_ctx->id, r->expecting_100);
     if (!conn_ctx->request->chunked) {
         status = ap_get_brigade(f->next, bb, mode, block, readbytes);
         /* pipe data through, just take care of trailers */
@@ -866,7 +861,7 @@ apr_status_t h2_c2_filter_request_in(ap_filter_t* f,
         status = APR_ENOTIMPL;
     }
     
-    h2_util_bb_log(f->c, conn_ctx->stream_id, APLOG_TRACE2, "forwarding input", bb);
+    h2_util_bb_log(f->c, conn_ctx->stream_id, APLOG_TRACE2, "returning input", bb);
     return status;
 }
 

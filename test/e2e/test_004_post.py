@@ -114,7 +114,7 @@ class TestStore:
     @pytest.mark.parametrize("name", [
         "data-1k", "data-10k", "data-100k", "data-1m"
     ])
-    def test_004_22(self, env, name):
+    def test_004_22(self, env, name, repeat):
         self.nghttp_post_and_verify(env, name, ["--no-content-length"])
 
     # upload and GET again using nghttp, compare to original content
@@ -134,22 +134,23 @@ class TestStore:
             src = file.read()
         assert src == r2.response["body"]
 
-    def test_004_23(self, env):
-        self.nghttp_upload_and_verify(env, "data-1k", [])
-        self.nghttp_upload_and_verify(env, "data-10k", [])
-        self.nghttp_upload_and_verify(env, "data-100k", [])
-        self.nghttp_upload_and_verify(env, "data-1m", [])
+    @pytest.mark.parametrize("name", [
+        "data-1k", "data-10k", "data-100k", "data-1m"
+    ])
+    def test_004_23(self, env, name, repeat):
+        self.nghttp_upload_and_verify(env, name, [])
 
-    def test_004_24(self, env):
-        self.nghttp_upload_and_verify(env, "data-1k", ["--expect-continue"])
-        self.nghttp_upload_and_verify(env, "data-100k", ["--expect-continue"])
+    @pytest.mark.parametrize("name", [
+        "data-1k", "data-10k", "data-100k", "data-1m"
+    ])
+    def test_004_24(self, env, name, repeat):
+        self.nghttp_upload_and_verify(env, name, ["--expect-continue"])
 
-    @pytest.mark.skipif(True, reason="python3 regresses in chunked inputs to cgi")
-    def test_004_25(self, env):
-        self.nghttp_upload_and_verify(env, "data-1k", ["--no-content-length"])
-        self.nghttp_upload_and_verify(env, "data-10k", ["--no-content-length"])
-        self.nghttp_upload_and_verify(env, "data-100k", ["--no-content-length"])
-        self.nghttp_upload_and_verify(env, "data-1m", ["--no-content-length"])
+    @pytest.mark.parametrize("name", [
+        "data-1k", "data-10k", "data-100k", "data-1m"
+    ])
+    def test_004_25(self, env, name, repeat):
+        self.nghttp_upload_and_verify(env, name, ["--no-content-length"])
 
     def test_004_30(self, env):
         # issue: #203
