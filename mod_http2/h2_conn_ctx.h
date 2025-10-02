@@ -33,7 +33,6 @@ struct h2_bucket_beam;
 struct h2_conn_ctx_t {
     const char *id;                 /* c*: our identifier of this connection */
     server_rec *server;             /* c*: httpd server selected. */
-    apr_pool_t *pool;               /* c1: session pool, c2: request processing pool */
     const char *protocol;           /* c1: the protocol negotiated */
     struct h2_session *session;     /* c1: the h2 session established */
     struct h2_mplx *mplx;           /* c2: the multiplexer */
@@ -77,13 +76,11 @@ typedef struct h2_conn_ctx_t h2_conn_ctx_t;
  */
 h2_conn_ctx_t *h2_conn_ctx_create_for_c1(conn_rec *c, server_rec *s, const char *protocol);
 
-h2_conn_ctx_t *h2_conn_ctx_create_for_c2(conn_rec *c, struct h2_stream *stream);
+apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c,
+                                     struct h2_mplx *mplx, struct h2_stream *stream);
+
+void h2_conn_ctx_clear_for_c2(conn_rec *c2);
 
 void h2_conn_ctx_detach(conn_rec *c);
-
-/**
- * Distach from the connection and destroy all resources, e.g. the pool.
- */
-void h2_conn_ctx_destroy(h2_conn_ctx_t *conn_ctx);
 
 #endif /* defined(__mod_h2__h2_conn_ctx__) */

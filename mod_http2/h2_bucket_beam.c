@@ -553,12 +553,8 @@ apr_status_t h2_beam_create(h2_bucket_beam **pbeam, conn_rec *from,
     beam->pool = pool;
     beam->from = from;
     beam->id = id;
-    if (from->master) {
-        beam->name = apr_psprintf(pool, "%s-%s", conn_ctx->id, tag);
-    }
-    else {
-        beam->name = apr_psprintf(pool, "%s-%d-%s", conn_ctx->id, id, tag);
-    }
+    beam->name = apr_psprintf(pool, "%s-%d-%s",
+                              conn_ctx->id, id, tag);
     pool_register(beam, beam->pool, beam_send_cleanup);
 
     H2_BLIST_INIT(&beam->send_list);

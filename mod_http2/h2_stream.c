@@ -121,6 +121,7 @@ static int trans_on_event[][H2_SS_MAX] = {
 { S_ERR, S_ERR,  S_ERR,  S_CL_R, S_ERR,  S_CLS,  S_NOP,  S_NOP, },/* EV_CLOSED_R*/
 { S_CLS, S_CLS,  S_CLS,  S_CLS,  S_CLS,  S_CLS,  S_NOP,  S_NOP, },/* EV_CANCELLED*/
 { S_NOP, S_XXX,  S_XXX,  S_XXX,  S_XXX,  S_CLS,  S_CLN,  S_XXX, },/* EV_EOS_SENT*/
+{ S_NOP, S_XXX,  S_CLS,  S_XXX,  S_XXX,  S_CLS,  S_XXX,  S_XXX, },/* EV_IN_ERROR*/
 };
 
 static int on_map(h2_stream_state_t state, int map[H2_SS_MAX])
@@ -197,6 +198,8 @@ apr_status_t h2_stream_setup_input(h2_stream *stream)
                      && (!stream->in_buffer 
                          || APR_BRIGADE_EMPTY(stream->in_buffer)));
         if (!empty) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
+                          H2_STRM_MSG(stream, "setup input beam"));
             h2_beam_create(&stream->input, stream->session->c,
                            stream->pool, stream->id,
                            "input", 0, stream->session->s->timeout);
@@ -471,6 +474,8 @@ apr_status_t h2_stream_flush_input(h2_stream *stream)
 {
     apr_status_t status = APR_SUCCESS;
     
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
+                  H2_STRM_MSG(stream, "flush input"));
     if (stream->in_buffer && !APR_BRIGADE_EMPTY(stream->in_buffer)) {
         if (!stream->input) {
             h2_stream_setup_input(stream);
@@ -478,6 +483,11 @@ apr_status_t h2_stream_flush_input(h2_stream *stream)
         status = h2_beam_send(stream->input, stream->session->c,
                               stream->in_buffer, APR_BLOCK_READ);
         stream->in_last_write = apr_time_now();
+        if (APR_SUCCESS != status && stream->state == H2_SS_CLOSED_L) {
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, stream->session->c,
+                          H2_STRM_MSG(stream, "send input error"));
+            h2_stream_dispatch(stream, H2_SEV_IN_ERROR);
+        }
     }
     return status;
 }
@@ -1335,7 +1345,7 @@ apr_status_t h2_stream_read_output(h2_stream *stream)
         /* c2 has not assigned the output beam to the stream (yet). */
         ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, c1,
                       H2_STRM_MSG(stream, "read_output, no output beam registered"));
-        rv = APR_SUCCESS;
+        rv = APR_EAGAIN;
         goto cleanup;
     }
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c1,

@@ -335,15 +335,25 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
     h2_stream *stream;
     apr_status_t rv = APR_SUCCESS;
     
+    stream = frame->hd.stream_id? get_stream(session, frame->hd.stream_id) : NULL;
     if (APLOGcdebug(session->c)) {
         char buffer[256];
-        
+
         h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 
-                      H2_SSSN_LOG(APLOGNO(03066), session, 
-                      "recv FRAME[%s], frames=%ld/%ld (r/s)"),
-                      buffer, (long)session->frames_received,
-                     (long)session->frames_sent);
+        if (stream) {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                          H2_STRM_LOG(APLOGNO(), stream,
+                          "recv FRAME[%s], frames=%ld/%ld (r/s)"),
+                          buffer, (long)session->frames_received,
+                         (long)session->frames_sent);
+        }
+        else {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                          H2_SSSN_LOG(APLOGNO(03066), session,
+                          "recv FRAME[%s], frames=%ld/%ld (r/s)"),
+                          buffer, (long)session->frames_received,
+                         (long)session->frames_sent);
+        }
     }
 
     ++session->frames_received;
@@ -352,14 +362,12 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
             /* This can be HEADERS for a new stream, defining the request,
              * or HEADER may come after DATA at the end of a stream as in
              * trailers */
-            stream = get_stream(session, frame->hd.stream_id);
             if (stream) {
                 rv = h2_stream_recv_frame(stream, NGHTTP2_HEADERS, frame->hd.flags, 
                     frame->hd.length + H2_FRAME_HDR_LEN);
             }
             break;
         case NGHTTP2_DATA:
-            stream = get_stream(session, frame->hd.stream_id);
             if (stream) {
                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,  
                               H2_STRM_LOG(APLOGNO(02923), stream, 
@@ -390,7 +398,6 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
                           "h2_stream(%ld-%d): RST_STREAM by client, error=%d",
                           session->id, (int)frame->hd.stream_id,
                           (int)frame->rst_stream.error_code);
-            stream = get_stream(session, frame->hd.stream_id);
             if (stream && stream->initiated_on) {
                 /* A stream reset on a request we sent it. Normal, when the
                  * client does not want it. */
@@ -570,18 +577,27 @@ static int on_frame_send_cb(nghttp2_session *ngh2,
             break;
     }
     
+    stream = get_stream(session, stream_id);
     if (APLOGcdebug(session->c)) {
         char buffer[256];
         
         h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 
-                      H2_SSSN_LOG(APLOGNO(03068), session, 
-                      "sent FRAME[%s], frames=%ld/%ld (r/s)"),
-                      buffer, (long)session->frames_received,
-                     (long)session->frames_sent);
+        if (stream) {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                          H2_STRM_LOG(APLOGNO(), stream,
+                          "sent FRAME[%s], frames=%ld/%ld (r/s)"),
+                          buffer, (long)session->frames_received,
+                         (long)session->frames_sent);
+        }
+        else {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                          H2_SSSN_LOG(APLOGNO(03068), session,
+                          "sent FRAME[%s], frames=%ld/%ld (r/s)"),
+                          buffer, (long)session->frames_received,
+                         (long)session->frames_sent);
+        }
     }
     
-    stream = get_stream(session, stream_id);
     if (stream) {
         h2_stream_send_frame(stream, frame->hd.type, frame->hd.flags, 
             frame->hd.length + H2_FRAME_HDR_LEN);
@@ -770,7 +786,7 @@ static apr_status_t session_cleanup(h2_session *session, const char *trigger)
     nghttp2_session_del(session->ngh2);
     session->ngh2 = NULL;
     h2_conn_ctx_detach(c);
-    
+
     return APR_SUCCESS;
 }
 
@@ -1678,7 +1694,19 @@ static void on_stream_state_enter(void *ctx, h2_stream *stream)
         case H2_SS_RSVD_L:
             ev_stream_open(session, stream);
             break;
-        case H2_SS_CLOSED_L: /* stream output was closed */
+        case H2_SS_CLOSED_L: /* stream output was closed, but remote end is not */
+            /* If the stream is still being processed, it could still be reading
+             * its input (theoretically, http request hangling does not normally).
+             * But when processing is done, we need to cancel the stream as no
+             * one is consuming the input any longer.
+             * This happens, for example, on a large POST when the response
+             * is ready early due to the POST being denied. */
+            if (!h2_mplx_c1_stream_is_running(session->mplx, stream)) {
+                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                              H2_STRM_LOG(APLOGNO(), stream, "remote close missing"));
+                nghttp2_submit_rst_stream(session->ngh2, NGHTTP2_FLAG_NONE,
+                                          stream->id, H2_ERR_NO_ERROR);
+            }
             break;
         case H2_SS_CLOSED_R: /* stream input was closed */
             break;
@@ -1694,8 +1722,7 @@ static void on_stream_state_enter(void *ctx, h2_stream *stream)
     }
 }
 
-static void on_stream_event(void *ctx, h2_stream *stream, 
-                                  h2_stream_event_t ev)
+static void on_stream_event(void *ctx, h2_stream *stream, h2_stream_event_t ev)
 {
     h2_session *session = ctx;
     switch (ev) {

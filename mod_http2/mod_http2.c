@@ -302,7 +302,10 @@ static const char *val_H2_STREAM_TAG(apr_pool_t *p, server_rec *s,
 {
     if (c) {
         h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
-        if (conn_ctx) return conn_ctx->id;
+        if (conn_ctx) {
+            return conn_ctx->stream_id == 0? conn_ctx->id
+               : apr_psprintf(p, "%s-%d", conn_ctx->id, conn_ctx->stream_id);
+        }
     }
     return "";
 }
