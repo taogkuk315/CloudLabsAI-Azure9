@@ -115,6 +115,8 @@ int h2_mplx_c1_shutdown(h2_mplx *m);
  */
 apr_status_t h2_mplx_c1_stream_cleanup(h2_mplx *m, struct h2_stream *stream);
 
+int h2_mplx_c1_stream_is_running(h2_mplx *m, struct h2_stream *stream);
+
 /**
  * Process a stream request.
  * 

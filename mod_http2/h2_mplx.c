@@ -101,6 +101,16 @@ static int stream_is_running(h2_stream *stream)
     return conn_ctx && conn_ctx->started_at != 0 && !conn_ctx->done;
 }
 
+int h2_mplx_c1_stream_is_running(h2_mplx *m, h2_stream *stream)
+{
+    int rv;
+
+    H2_MPLX_ENTER(m);
+    rv = stream_is_running(stream);
+    H2_MPLX_LEAVE(m);
+    return rv;
+}
+
 static void ms_stream_joined(h2_mplx *m, h2_stream *stream)
 {
     ap_assert(!stream_is_running(stream));

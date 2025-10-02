@@ -1246,8 +1246,22 @@ static apr_status_t on_stream_input(void *ctx, h2_stream *stream)
     }
     else {
         ap_assert(stream->input);
+        if (stream->state == H2_SS_CLOSED_L
+            && !h2_mplx_c1_stream_is_running(session->mplx, stream)) {
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c,
+                          H2_STRM_LOG(APLOGNO(10026), stream, "remote close missing"));
+            nghttp2_submit_rst_stream(stream->session->ngh2, NGHTTP2_FLAG_NONE,
+                                      stream->id, NGHTTP2_NO_ERROR);
+            goto cleanup;
+        }
         h2_beam_report_consumption(stream->input);
+        if (stream->state == H2_SS_CLOSED_R) {
+            /* TODO: remove this stream from input polling */
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+                          H2_STRM_MSG(stream, "should not longer be input polled"));
+        }
     }
+cleanup:
     return rv;
 }
 
