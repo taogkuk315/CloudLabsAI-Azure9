@@ -360,9 +360,6 @@ static apr_status_t wait_not_full(h2_bucket_beam *beam, conn_rec *c,
             rv = APR_EAGAIN;
         }
         else {
-            if (beam->send_block_cb) {
-                beam->send_block_cb(beam->send_block_ctx, beam);
-            }
             if (beam->timeout > 0) {
                 H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_full, timeout");
                 rv = apr_thread_cond_timedwait(beam->change, beam->lock, beam->timeout);
@@ -502,8 +499,8 @@ static void recv_buffer_cleanup(h2_bucket_beam *beam)
         apr_thread_mutex_lock(beam->lock);
 
         apr_thread_cond_broadcast(beam->change);
-        if (beam->cons_ev_cb) { 
-            beam->cons_ev_cb(beam->cons_ctx, beam);
+        if (beam->recv_cb) {
+            beam->recv_cb(beam->recv_ctx, beam);
         }
     }
 }
@@ -618,7 +615,6 @@ void h2_beam_abort(h2_bucket_beam *beam, conn_rec *c)
             beam->was_empty_cb(beam->was_empty_ctx, beam);
         }
         /* no more consumption reporting to sender */
-        beam->cons_ev_cb = NULL;
         beam->cons_io_cb = NULL;
         beam->cons_ctx = NULL;
         r_purge_sent(beam);
@@ -948,8 +944,8 @@ transfer:
         }
     }
 
-    if (beam->cons_ev_cb && transferred_buckets > 0) {
-        beam->cons_ev_cb(beam->cons_ctx, beam);
+    if (beam->recv_cb && transferred_buckets > 0) {
+        beam->recv_cb(beam->recv_ctx, beam);
     }
 
     if (transferred) {
@@ -974,13 +970,20 @@ leave:
 }
 
 void h2_beam_on_consumed(h2_bucket_beam *beam, 
-                         h2_beam_ev_callback *ev_cb,
                          h2_beam_io_callback *io_cb, void *ctx)
 {
     apr_thread_mutex_lock(beam->lock);
-    beam->cons_ev_cb = ev_cb;
     beam->cons_io_cb = io_cb;
     beam->cons_ctx = ctx;
+    apr_thread_mutex_unlock(beam->lock);
+}
+
+void h2_beam_on_received(h2_bucket_beam *beam,
+                         h2_beam_ev_callback *recv_cb, void *ctx)
+{
+    apr_thread_mutex_lock(beam->lock);
+    beam->recv_cb = recv_cb;
+    beam->recv_ctx = ctx;
     apr_thread_mutex_unlock(beam->lock);
 }
 
@@ -993,15 +996,6 @@ void h2_beam_on_was_empty(h2_bucket_beam *beam,
     apr_thread_mutex_unlock(beam->lock);
 }
 
-
-void h2_beam_on_send_block(h2_bucket_beam *beam,
-                           h2_beam_ev_callback *send_block_cb, void *ctx)
-{
-    apr_thread_mutex_lock(beam->lock);
-    beam->send_block_cb = send_block_cb;
-    beam->send_block_ctx = ctx;
-    apr_thread_mutex_unlock(beam->lock);
-}
 
 static apr_off_t get_buffered_data_len(h2_bucket_beam *beam)
 {

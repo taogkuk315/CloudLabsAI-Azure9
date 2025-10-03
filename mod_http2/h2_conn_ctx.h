@@ -38,17 +38,19 @@ struct h2_conn_ctx_t {
     struct h2_mplx *mplx;           /* c2: the multiplexer */
 
     int stream_id;                  /* c1: 0, c2: stream id processed */
+    apr_pool_t *req_pool;            /* c2: a c2 child pool for a request */
     const struct h2_request *request; /* c2: the request to process */
+    struct h2_bucket_beam *beam_out; /* c2: data out, created from req_pool */
+    struct h2_bucket_beam *beam_in;  /* c2: data in or NULL, borrowed from request stream */
 
     apr_pool_t *mplx_pool;           /* c2: an mplx child use for safe use inside mplx lock */
-    struct h2_bucket_beam *beam_in;  /* c2: data in or NULL */
     apr_file_t *pin_send_write;      /* c2: send input write notifications or NULL */
     apr_file_t *pin_recv_write;      /* c2: reveive input write notifications or NULL */
+
     apr_file_t *pin_send_read;       /* c2: send input read notifications or NULL */
     apr_file_t *pin_recv_read;       /* c2: receive input read notifications or NULL */
     apr_pollfd_t *pfd_in_read;       /* poll input read notifications or NULL */
 
-    struct h2_bucket_beam *beam_out; /* c2: data out */
     apr_file_t *pout_send_write;     /* c2: send output write notifications */
     apr_file_t *pout_recv_write;     /* c2: receive output write notifications */
     apr_pollfd_t *pfd_out_write;     /* poll output write notifications */

@@ -89,14 +89,13 @@ struct h2_bucket_beam {
     struct apr_thread_cond_t *change;
     
     apr_off_t cons_bytes_reported;    /* amount of bytes reported as consumed */
-    h2_beam_ev_callback *cons_ev_cb;
     h2_beam_io_callback *cons_io_cb;
     void *cons_ctx;
+    h2_beam_ev_callback *recv_cb;
+    void *recv_ctx;
 
     h2_beam_ev_callback *was_empty_cb;
     void *was_empty_ctx;
-    h2_beam_ev_callback *send_block_cb;
-    void *send_block_ctx;
     apr_off_t prod_bytes_reported;    /* amount of bytes reported as produced */
     h2_beam_io_callback *prod_io_cb;
     void *prod_ctx;
@@ -203,7 +202,6 @@ apr_size_t h2_beam_buffer_size_get(h2_bucket_beam *beam);
  * amount of bytes that have been consumed by the receiver, since the
  * last callback invocation or reset.
  * @param beam the beam to set the callback on
- * @param ev_cb the callback or NULL, called when bytes are consumed
  * @param io_cb the callback or NULL, called on sender with bytes consumed
  * @param ctx  the context to use in callback invocation
  * 
@@ -211,19 +209,17 @@ apr_size_t h2_beam_buffer_size_get(h2_bucket_beam *beam);
  * from any side.
  */
 void h2_beam_on_consumed(h2_bucket_beam *beam, 
-                         h2_beam_ev_callback *ev_cb,
                          h2_beam_io_callback *io_cb, void *ctx);
 
 /**
- * Register a call back from the sender side to be invoked when send blocks
- * due to the beam being at full capacity. Unregister
- * by passing a NULL send_block_cb.
+ * Register a callback to be invoked on the receiver side whenever
+ * buckets have been transfered in a h2_beam_receive() call.
  * @param beam the beam to set the callback on
- * @param send_block_cb the callback to invoke on blocked send
+ * @param recv_cb the callback or NULL, called when buckets are received
  * @param ctx  the context to use in callback invocation
  */
-void h2_beam_on_send_block(h2_bucket_beam *beam,
-                           h2_beam_ev_callback *send_block_cb, void *ctx);
+void h2_beam_on_received(h2_bucket_beam *beam,
+                         h2_beam_ev_callback *recv_cb, void *ctx);
 
 /**
  * Register a call back from the sender side to be invoked when send

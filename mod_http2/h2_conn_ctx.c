@@ -56,13 +56,33 @@ h2_conn_ctx_t *h2_conn_ctx_create_for_c1(conn_rec *c, server_rec *s, const char 
     return ctx;
 }
 
-static void input_notify(void *ctx, h2_bucket_beam *beam)
+static void input_write_notify(void *ctx, h2_bucket_beam *beam)
 {
     h2_conn_ctx_t *conn_ctx = ctx;
 
     (void)beam;
     if (conn_ctx->pin_send_write) {
         apr_file_putc(1, conn_ctx->pin_send_write);
+    }
+}
+
+static void input_read_notify(void *ctx, h2_bucket_beam *beam)
+{
+    h2_conn_ctx_t *conn_ctx = ctx;
+
+    (void)beam;
+    if (conn_ctx->pin_send_read) {
+        apr_file_putc(1, conn_ctx->pin_send_read);
+    }
+}
+
+static void output_notify(void *ctx, h2_bucket_beam *beam)
+{
+    h2_conn_ctx_t *conn_ctx = ctx;
+
+    (void)beam;
+    if (conn_ctx && conn_ctx->pout_send_write) {
+        apr_file_putc(1, conn_ctx->pout_send_write);
     }
 }
 
@@ -87,10 +107,10 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
 
     conn_ctx->mplx = mplx;
     conn_ctx->stream_id = stream->id;
+    apr_pool_create(&conn_ctx->req_pool, c2->pool);
+    apr_pool_tag(conn_ctx->req_pool, "H2_C2_REQ");
     conn_ctx->request = stream->request;
     conn_ctx->started_at = apr_time_now();
-    conn_ctx->beam_out = NULL;
-    conn_ctx->beam_in = NULL;
     conn_ctx->done = 0;
     conn_ctx->done_at = 0;
 
@@ -114,6 +134,16 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
     else {
         h2_util_drain_pipe(conn_ctx->pout_recv_write);
     }
+
+    if (!conn_ctx->beam_out) {
+        rv = h2_beam_create(&conn_ctx->beam_out, c2, conn_ctx->req_pool,
+                            stream->id, "output", 0, c2->base_server->timeout);
+        if (APR_SUCCESS != rv) goto cleanup;
+
+        h2_beam_buffer_size_set(conn_ctx->beam_out, mplx->stream_max_mem);
+        h2_beam_on_was_empty(conn_ctx->beam_out, output_notify, conn_ctx);
+    }
+    stream->output = conn_ctx->beam_out;
 
     if (stream->input) {
         if (!conn_ctx->pin_recv_write) {
@@ -142,8 +172,12 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
             h2_util_drain_pipe(conn_ctx->pin_recv_read);
         }
 
-        h2_beam_on_was_empty(stream->input, input_notify, conn_ctx);
+        h2_beam_on_was_empty(stream->input, input_write_notify, conn_ctx);
+        h2_beam_on_received(stream->input, input_read_notify, conn_ctx);
         conn_ctx->beam_in = stream->input;
+    }
+    else {
+        conn_ctx->beam_in = NULL;
     }
 
 cleanup:
@@ -159,10 +193,11 @@ void h2_conn_ctx_clear_for_c2(conn_rec *c2)
     conn_ctx = h2_conn_ctx_get(c2);
     conn_ctx->stream_id = -1;
     conn_ctx->request = NULL;
-    conn_ctx->beam_in = NULL;
-    if (conn_ctx->beam_out) {
-        h2_beam_destroy(conn_ctx->beam_out, c2);
-        conn_ctx->beam_out = NULL;
+    if (conn_ctx->req_pool) {
+        apr_pool_destroy(conn_ctx->req_pool);
+        conn_ctx->req_pool = NULL;
     }
+    conn_ctx->beam_out = NULL;
+    conn_ctx->beam_in = NULL;
 }
 

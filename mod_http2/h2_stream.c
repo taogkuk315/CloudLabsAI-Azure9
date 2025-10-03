@@ -233,12 +233,13 @@ static apr_status_t close_input(h2_stream *stream)
     apr_status_t rv = APR_SUCCESS;
     apr_bucket *b;
 
-    if (stream->input_closed || stream->rst_error) goto cleanup;
+    if (stream->input_closed) goto cleanup;
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
                   H2_STRM_MSG(stream, "closing input"));
-
-    if (stream->trailers_in && !apr_is_empty_table(stream->trailers_in)) {
+    if (!stream->rst_error
+        && stream->trailers_in
+        && !apr_is_empty_table(stream->trailers_in)) {
         h2_headers *r;
         
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
@@ -251,10 +252,11 @@ static apr_status_t close_input(h2_stream *stream)
     }
 
     stream->input_closed = 1;
-    b = apr_bucket_eos_create(c->bucket_alloc);
-    input_append_bucket(stream, b);
-
-    h2_stream_dispatch(stream, H2_SEV_IN_DATA_PENDING);
+    if (stream->in_buffer || stream->input) {
+        b = apr_bucket_eos_create(c->bucket_alloc);
+        input_append_bucket(stream, b);
+        h2_stream_dispatch(stream, H2_SEV_IN_DATA_PENDING);
+    }
 cleanup:
     return rv;
 }

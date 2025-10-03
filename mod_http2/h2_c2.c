@@ -301,15 +301,12 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
         if (conn_ctx->beam_in) {
 receive:
             status = h2_beam_receive(conn_ctx->beam_in, f->c, fctx->bb, APR_NONBLOCK_READ,
-                                     128*1024);
-            apr_file_putc(1, conn_ctx->pin_send_read);
+                                     conn_ctx->mplx->stream_max_mem);
             if (APR_STATUS_IS_EAGAIN(status) && APR_BLOCK_READ == block) {
                 status = h2_util_wait_on_pipe(conn_ctx->pin_recv_write);
                 if (APR_SUCCESS == status) {
                     goto receive;
                 }
-            }
-            else if (APR_SUCCESS == status) {
             }
         }
         else {
@@ -411,17 +408,6 @@ receive:
     return status;
 }
 
-static void send_notify(void *ctx, h2_bucket_beam *beam)
-{
-    conn_rec *c2 = ctx;
-    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c2);
-
-    (void)beam;
-    if (conn_ctx && conn_ctx->pout_send_write) {
-        apr_file_putc(1, conn_ctx->pout_send_write);
-    }
-}
-
 static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_brigade* bb)
 {
     apr_off_t written, left;
@@ -442,8 +428,7 @@ static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_b
     return rv;
 }
 
-static apr_status_t h2_c2_filter_out(ap_filter_t* f,
-                                               apr_bucket_brigade* bb)
+static apr_status_t h2_c2_filter_out(ap_filter_t* f, apr_bucket_brigade* bb)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
     apr_status_t rv;
@@ -455,9 +440,6 @@ static apr_status_t h2_c2_filter_out(ap_filter_t* f,
                   "h2_c2(%s-%d): output leave",
                   conn_ctx->id, conn_ctx->stream_id);
     if (APR_SUCCESS != rv) {
-        if (conn_ctx->beam_in) {
-            h2_beam_abort(conn_ctx->beam_in, f->c);
-        }
         if (!conn_ctx->done) {
             h2_beam_abort(conn_ctx->beam_out, f->c);
         }
@@ -501,7 +483,6 @@ static apr_status_t c2_run_pre_connection(conn_rec *secondary, apr_socket_t *csd
 apr_status_t h2_c2_process(conn_rec *c2, apr_thread_t *thread, int worker_id)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c2);
-    apr_status_t rv;
 
     ap_assert(conn_ctx);
     ap_assert(conn_ctx->mplx);
@@ -536,20 +517,6 @@ apr_status_t h2_c2_process(conn_rec *c2, apr_thread_t *thread, int worker_id)
      * configurations by mod_h2 alone.
      */
     c2->id = (c2->master->id << 8)^worker_id;
-
-    rv = h2_beam_create(&conn_ctx->beam_out, c2, c2->pool, conn_ctx->stream_id, "output",
-                        0, c2->base_server->timeout);
-    if (APR_SUCCESS != rv) {
-        return rv;
-    }
-    rv = h2_mplx_c2_set_stream_output(conn_ctx->mplx, conn_ctx->stream_id,
-                                      conn_ctx->beam_out);
-    if (APR_SUCCESS != rv) {
-        return rv;
-    }
-
-    h2_beam_buffer_size_set(conn_ctx->beam_out, conn_ctx->mplx->stream_max_mem);
-    h2_beam_on_was_empty(conn_ctx->beam_out, send_notify, c2);
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
                   "h2_c2(%s-%d), adding filters",
