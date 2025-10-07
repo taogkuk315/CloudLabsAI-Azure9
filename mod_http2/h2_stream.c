@@ -180,8 +180,8 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
 
 static void H2_STREAM_OUT_LOG(int lvl, h2_stream *s, const char *tag)
 {
-    if (APLOG_C_IS_LEVEL(s->session->c, lvl)) {
-        conn_rec *c = s->session->c;
+    if (APLOG_C_IS_LEVEL(s->session->c1, lvl)) {
+        conn_rec *c = s->session->c1;
         char buffer[4 * 1024];
         apr_size_t len, bmax = sizeof(buffer)/sizeof(buffer[0]);
         
@@ -198,9 +198,9 @@ apr_status_t h2_stream_setup_input(h2_stream *stream)
                      && (!stream->in_buffer 
                          || APR_BRIGADE_EMPTY(stream->in_buffer)));
         if (!empty) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c1,
                           H2_STRM_MSG(stream, "setup input beam"));
-            h2_beam_create(&stream->input, stream->session->c,
+            h2_beam_create(&stream->input, stream->session->c1,
                            stream->pool, stream->id,
                            "input", 0, stream->session->s->timeout);
         }
@@ -212,7 +212,7 @@ static void input_append_bucket(h2_stream *stream, apr_bucket *b)
 {
     if (!stream->in_buffer) {
         stream->in_buffer = apr_brigade_create(
-            stream->pool, stream->session->c->bucket_alloc);
+            stream->pool, stream->session->c1->bucket_alloc);
     }
     APR_BRIGADE_INSERT_TAIL(stream->in_buffer, b);
 }
@@ -221,7 +221,7 @@ static void input_append_data(h2_stream *stream, const char *data, apr_size_t le
 {
     if (!stream->in_buffer) {
         stream->in_buffer = apr_brigade_create(
-            stream->pool, stream->session->c->bucket_alloc);
+            stream->pool, stream->session->c1->bucket_alloc);
     }
     apr_brigade_write(stream->in_buffer, NULL, NULL, data, len);
 }
@@ -229,20 +229,20 @@ static void input_append_data(h2_stream *stream, const char *data, apr_size_t le
 
 static apr_status_t close_input(h2_stream *stream)
 {
-    conn_rec *c = stream->session->c;
+    conn_rec *c = stream->session->c1;
     apr_status_t rv = APR_SUCCESS;
     apr_bucket *b;
 
     if (stream->input_closed) goto cleanup;
 
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c1,
                   H2_STRM_MSG(stream, "closing input"));
     if (!stream->rst_error
         && stream->trailers_in
         && !apr_is_empty_table(stream->trailers_in)) {
         h2_headers *r;
         
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c1,
                       H2_STRM_MSG(stream, "adding trailers"));
         r = h2_headers_create(HTTP_OK, stream->trailers_in, NULL,
             stream->in_trailer_octets, stream->pool);
@@ -281,7 +281,7 @@ static void on_state_invalid(h2_stream *stream)
         stream->monitor->on_state_invalid(stream->monitor->ctx, stream);
     }
     /* stream got an event/frame invalid in its state */
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c1,
                   H2_STRM_MSG(stream, "invalid state event")); 
     switch (stream->state) {
         case H2_SS_OPEN:
@@ -302,13 +302,13 @@ static apr_status_t transit(h2_stream *stream, int new_state)
         return APR_SUCCESS;
     }
     else if (new_state < 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, stream->session->c, 
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, stream->session->c1,
                       H2_STRM_LOG(APLOGNO(03081), stream, "invalid transition"));
         on_state_invalid(stream);
         return APR_EINVAL;
     }
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c, 
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c1,
                   H2_STRM_MSG(stream, "transit to [%s]"), h2_ss_str(new_state));
     stream->state = new_state;
     switch (new_state) {
@@ -348,11 +348,11 @@ void h2_stream_dispatch(h2_stream *stream, h2_stream_event_t ev)
 {
     int new_state;
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c1,
                   H2_STRM_MSG(stream, "dispatch event %d"), ev);
     new_state = on_event(stream, ev);
     if (new_state < 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, stream->session->c, 
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, stream->session->c1,
                       H2_STRM_LOG(APLOGNO(10002), stream, "invalid event %d"), ev);
         on_state_invalid(stream);
         AP_DEBUG_ASSERT(new_state > S_XXX);
@@ -360,7 +360,7 @@ void h2_stream_dispatch(h2_stream *stream, h2_stream_event_t ev)
     }
     else if (new_state == stream->state) {
         /* nop */
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c1,
                       H2_STRM_MSG(stream, "non-state event %d"), ev);
         return;
     }
@@ -383,7 +383,7 @@ apr_status_t h2_stream_send_frame(h2_stream *stream, int ftype, int flags, size_
 
     new_state = on_frame_send(stream->state, ftype);
     if (new_state < 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c, 
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c1,
                       H2_STRM_MSG(stream, "invalid frame %d send"), ftype);
         AP_DEBUG_ASSERT(new_state > S_XXX);
         return transit(stream, new_state);
@@ -426,7 +426,7 @@ apr_status_t h2_stream_recv_frame(h2_stream *stream, int ftype, int flags, size_
 
     new_state = on_frame_recv(stream->state, ftype);
     if (new_state < 0) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c, 
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c1,
                       H2_STRM_MSG(stream, "invalid frame %d recv"), ftype);
         AP_DEBUG_ASSERT(new_state > S_XXX);
         return transit(stream, new_state);
@@ -476,17 +476,17 @@ apr_status_t h2_stream_flush_input(h2_stream *stream)
 {
     apr_status_t status = APR_SUCCESS;
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c1,
                   H2_STRM_MSG(stream, "flush input"));
     if (stream->in_buffer && !APR_BRIGADE_EMPTY(stream->in_buffer)) {
         if (!stream->input) {
             h2_stream_setup_input(stream);
         }
-        status = h2_beam_send(stream->input, stream->session->c,
+        status = h2_beam_send(stream->input, stream->session->c1,
                               stream->in_buffer, APR_BLOCK_READ);
         stream->in_last_write = apr_time_now();
         if (APR_SUCCESS != status && stream->state == H2_SS_CLOSED_L) {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, stream->session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, stream->session->c1,
                           H2_STRM_MSG(stream, "send input error"));
             h2_stream_dispatch(stream, H2_SEV_IN_ERROR);
         }
@@ -502,14 +502,14 @@ apr_status_t h2_stream_recv_DATA(h2_stream *stream, uint8_t flags,
     
     stream->in_data_frames++;
     if (len > 0) {
-        if (APLOGctrace3(session->c)) {
+        if (APLOGctrace3(session->c1)) {
             const char *load = apr_pstrndup(stream->pool, (const char *)data, len);
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, session->c1,
                           H2_STRM_MSG(stream, "recv DATA, len=%d: -->%s<--"), 
                           (int)len, load);
         }
         else {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, session->c1,
                           H2_STRM_MSG(stream, "recv DATA, len=%d"), (int)len);
         }
         stream->in_data_octets += len;
@@ -538,7 +538,7 @@ h2_stream *h2_stream_create(int id, apr_pool_t *pool, h2_session *session,
                 stream->session->ngh2, stream->id);
     }
 
-    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c, 
+    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c1,
                   H2_STRM_LOG(APLOGNO(03082), stream, "created"));
     on_state_enter(stream);
     return stream;
@@ -555,17 +555,17 @@ void h2_stream_cleanup(h2_stream *stream)
         apr_brigade_cleanup(stream->out_buffer);
     }
     if (stream->input) {
-        h2_beam_abort(stream->input, stream->session->c);
+        h2_beam_abort(stream->input, stream->session->c1);
     }
     if (stream->output) {
-        h2_beam_abort(stream->output, stream->session->c);
+        h2_beam_abort(stream->output, stream->session->c1);
     }
 }
 
 void h2_stream_destroy(h2_stream *stream)
 {
     ap_assert(stream);
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, stream->session->c, 
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, stream->session->c1,
                   H2_STRM_MSG(stream, "destroy"));
     apr_pool_destroy(stream->pool);
 }
@@ -574,12 +574,12 @@ void h2_stream_rst(h2_stream *stream, int error_code)
 {
     stream->rst_error = error_code;
     if (stream->input) {
-        h2_beam_abort(stream->input, stream->session->c);
+        h2_beam_abort(stream->input, stream->session->c1);
     }
     if (stream->output) {
-        h2_beam_abort(stream->output, stream->session->c);
+        h2_beam_abort(stream->output, stream->session->c1);
     }
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c1,
                   H2_STRM_MSG(stream, "reset, error=%d"), error_code);
     h2_stream_dispatch(stream, H2_SEV_CANCELLED);
 }
@@ -628,7 +628,7 @@ static apr_status_t add_trailer(h2_stream *stream,
                                 const char *value, size_t vlen,
                                 size_t max_field_len, int *pwas_added)
 {
-    conn_rec *c = stream->session->c;
+    conn_rec *c = stream->session->c1;
     char *hname, *hvalue;
     const char *existing;
 
@@ -678,7 +678,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
         if ((vlen) > session->s->limit_req_line) {
             /* pseudo header: approximation of request line size check */
             if (!h2_stream_is_ready(stream)) {
-                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c1,
                               H2_STRM_LOG(APLOGNO(10178), stream,
                                           "Request pseudo header exceeds "
                                           "LimitRequestFieldSize: %s"), name);
@@ -716,7 +716,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
     if (APR_EINVAL == status) {
         /* header too long */
         if (!h2_stream_is_ready(stream)) {
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c1,
                           H2_STRM_LOG(APLOGNO(10180), stream,"Request header exceeds "
                                       "LimitRequestFieldSize: %.*s"),
                           (int)H2MIN(nlen, 80), name);
@@ -734,7 +734,7 @@ apr_status_t h2_stream_add_header(h2_stream *stream,
             return APR_ECONNRESET;
         }
         if (!h2_stream_is_ready(stream)) {
-            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, session->c1,
                           H2_STRM_LOG(APLOGNO(10181), stream, "Number of request headers "
                                       "exceeds LimitRequestFields"));
         }
@@ -748,7 +748,7 @@ cleanup:
         return APR_EINVAL; 
     }
     else if (status != APR_SUCCESS) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c1,
                       H2_STRM_MSG(stream, "header %s not accepted"), name);
         h2_stream_dispatch(stream, H2_SEV_CANCELLED);
     }
@@ -785,7 +785,7 @@ apr_status_t h2_stream_end_headers(h2_stream *stream, int eos, size_t raw_bytes)
         apr_table_do(table_check_val_len, &ctx, stream->request->headers, NULL);
         if (ctx.failed_key) {
             if (!h2_stream_is_ready(stream)) {
-                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, stream->session->c,
+                ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, stream->session->c1,
                               H2_STRM_LOG(APLOGNO(10230), stream,"Request header exceeds "
                                           "LimitRequestFieldSize: %.*s"),
                               (int)H2MIN(strlen(ctx.failed_key), 80), ctx.failed_key);
@@ -816,7 +816,7 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
 {
     apr_status_t rv = APR_EAGAIN;
     apr_off_t buf_len;
-    conn_rec *c1 = stream->session->c;
+    conn_rec *c1 = stream->session->c1;
     apr_bucket *b, *e;
 
     if (!stream->output) {
@@ -848,7 +848,7 @@ static apr_status_t buffer_output_receive(h2_stream *stream)
     }
 
     H2_STREAM_OUT_LOG(APLOG_TRACE2, stream, "pre");
-    rv = h2_beam_receive(stream->output, stream->session->c, stream->out_buffer,
+    rv = h2_beam_receive(stream->output, stream->session->c1, stream->out_buffer,
                          APR_NONBLOCK_READ, stream->session->max_stream_mem - buf_len);
     if (APR_SUCCESS != rv) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, rv, c1,
@@ -902,7 +902,7 @@ apr_status_t h2_stream_read_to(h2_stream *stream, apr_bucket_brigade *bb,
 
 static apr_status_t buffer_output_process_headers(h2_stream *stream)
 {
-    conn_rec *c1 = stream->session->c;
+    conn_rec *c1 = stream->session->c1;
     h2_headers *headers = NULL;
     apr_status_t rv = APR_SUCCESS;
     int ngrv = 0, is_empty;
@@ -1068,7 +1068,7 @@ apr_status_t h2_stream_submit_pushes(h2_stream *stream, h2_headers *response)
     
     pushes = h2_push_collect_update(stream, stream->request, response);
     if (pushes && !apr_is_empty_array(pushes)) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, stream->session->c1,
                       H2_STRM_MSG(stream, "found %d push candidates"),
                       pushes->nelts);
         for (i = 0; i < pushes->nelts; ++i) {
@@ -1095,7 +1095,7 @@ const h2_priority *h2_stream_get_priority(h2_stream *stream,
         const char *ctype = apr_table_get(response->headers, "content-type");
         if (ctype) {
             /* FIXME: Not good enough, config needs to come from request->server */
-            return h2_cconfig_get_priority(stream->session->c, ctype);
+            return h2_cconfig_get_priority(stream->session->c1, ctype);
         }
     }
     return NULL;
@@ -1173,7 +1173,7 @@ apr_status_t h2_stream_in_consumed(h2_stream *stream, apr_off_t amount)
                 nghttp2_session_set_local_window_size(session->ngh2, 
                         NGHTTP2_FLAG_NONE, stream->id, win);
             } 
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c1,
                           "h2_stream(%ld-%d): consumed %ld bytes, window now %d/%d",
                           session->id, stream->id, (long)amount, 
                           cur_size, stream->in_window_size);
@@ -1219,7 +1219,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
                               void *puser)
 {
     h2_session *session = (h2_session *)puser;
-    conn_rec *c1 = session->c;
+    conn_rec *c1 = session->c1;
     apr_off_t buf_len;
     int eos;
     apr_status_t rv;
@@ -1336,7 +1336,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
 
 apr_status_t h2_stream_read_output(h2_stream *stream)
 {
-    conn_rec *c1 = stream->session->c;
+    conn_rec *c1 = stream->session->c1;
     apr_status_t rv = APR_EAGAIN;
     apr_off_t buf_len;
     int eos;

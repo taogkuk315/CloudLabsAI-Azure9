@@ -425,7 +425,7 @@ static apr_status_t feed_bucket(h2_session *session,
     while (status == APR_SUCCESS && len > 0) {
         n = nghttp2_session_mem_recv(session->ngh2, (const uint8_t *)data, len);
 
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE4, 0, session->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE4, 0, session->c1,
                       H2_SSSN_MSG(session, "fed %ld bytes to nghttp2, %ld read"),
                       (long)len, (long)n);
         if (n < 0) {
@@ -477,7 +477,7 @@ h2_c1_io_in_ctx_t *h2_c1_io_in_ctx_create(h2_session *session)
         return NULL;
     }
     cin->session = session;
-    cin->bb = apr_brigade_create(cin->session->pool, cin->session->c->bucket_alloc);
+    cin->bb = apr_brigade_create(cin->session->pool, cin->session->c1->bucket_alloc);
     return cin;
 }
 

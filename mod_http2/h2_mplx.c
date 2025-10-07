@@ -163,9 +163,9 @@ h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent
     
     m = apr_pcalloc(parent, sizeof(h2_mplx));
     m->stream0 = stream0;
-    m->c = stream0->c2;
+    m->c1 = stream0->c2;
     m->s = s;
-    m->id = m->c->id;
+    m->id = m->c1->id;
 
     /* We create a pool with its own allocator to be used for
      * processing secondary connections. This is the only way to have the
@@ -252,7 +252,7 @@ static int c1_stream_purge_iter(void *ctx, void *val)
     ap_assert(stream->state == H2_SS_CLEANUP);
     
     if (stream->input) {
-        h2_beam_destroy(stream->input, m->c);
+        h2_beam_destroy(stream->input, m->c1);
         stream->input = NULL;
     }
 
@@ -263,7 +263,7 @@ static int c1_stream_purge_iter(void *ctx, void *val)
         if (!c2->aborted && m->spare_c2->nelts < 1
             && (m->s->keep_alive_max == 0 || c2->keepalives < m->s->keep_alive_max)) {
 
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c, APLOGNO(03385)
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c1, APLOGNO(03385)
                           "h2_c2(%ld), reuse c2", m->id);
             h2_conn_ctx_clear_for_c2(c2);
             APR_ARRAY_PUSH(m->spare_c2, conn_rec*) = c2;
@@ -306,14 +306,14 @@ static int m_report_stream_iter(void *ctx, void *val) {
     h2_mplx *m = ctx;
     h2_stream *stream = val;
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(stream->c2);
-    if (APLOGctrace1(m->c)) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+    if (APLOGctrace1(m->c1)) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1,
                       H2_STRM_MSG(stream, "started=%d, scheduled=%d, ready=%d, out_buffer=%ld"), 
                       !!stream->c2, stream->scheduled, h2_stream_is_ready(stream),
                       (long)h2_beam_get_buffered(stream->output));
     }
     if (conn_ctx) {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c, /* NO APLOGNO */
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c1, /* NO APLOGNO */
                       H2_STRM_MSG(stream, "->03198: %s %s %s"
                       "[started=%d/done=%d]"), 
                       conn_ctx->request->method, conn_ctx->request->authority,
@@ -321,7 +321,7 @@ static int m_report_stream_iter(void *ctx, void *val) {
                       conn_ctx->done);
     }
     else {
-        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c, /* NO APLOGNO */
+        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c1, /* NO APLOGNO */
                       H2_STRM_MSG(stream, "->03198: not started"));
     }
     return 1;
@@ -330,7 +330,7 @@ static int m_report_stream_iter(void *ctx, void *val) {
 static int m_unexpected_stream_iter(void *ctx, void *val) {
     h2_mplx *m = ctx;
     h2_stream *stream = val;
-    ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c, /* NO APLOGNO */
+    ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c1, /* NO APLOGNO */
                   H2_STRM_MSG(stream, "unexpected, started=%d, scheduled=%d, ready=%d"), 
                   !!stream->c2, stream->scheduled, h2_stream_is_ready(stream));
     return 1;
@@ -342,7 +342,7 @@ static int m_stream_cancel_iter(void *ctx, void *val) {
 
     /* disable input consumed reporting */
     if (stream->input) {
-        h2_beam_abort(stream->input, m->c);
+        h2_beam_abort(stream->input, m->c1);
     }
     /* take over event monitoring */
     h2_stream_set_monitor(stream, NULL);
@@ -359,7 +359,7 @@ void h2_mplx_c1_destroy(h2_mplx *m)
     apr_status_t status;
     int i, wait_secs = 60, old_aborted;
 
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                   "h2_mplx(%ld): start release", m->id);
     /* How to shut down a h2 connection:
      * 0. abort and tell the workers that no more work will come from us */
@@ -371,12 +371,12 @@ void h2_mplx_c1_destroy(h2_mplx *m)
     /* While really terminating any c2 connections, treat the master
      * connection as aborted. It's not as if we could send any more data
      * at this point. */
-    old_aborted = m->c->aborted;
-    m->c->aborted = 1;
+    old_aborted = m->c1->aborted;
+    m->c1->aborted = 1;
 
     /* How to shut down a h2 connection:
      * 1. cancel all streams still active */
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c, 
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1,
                   "h2_mplx(%ld): release, %d/%d/%d streams (total/hold/purge), %d streams",
                   m->id, (int)h2_ihash_count(m->streams),
                   (int)h2_ihash_count(m->shold), (int)h2_ihash_count(m->spurge), m->processing_count);
@@ -398,7 +398,7 @@ void h2_mplx_c1_destroy(h2_mplx *m)
         if (APR_STATUS_IS_TIMEUP(status)) {
             /* This can happen if we have very long running requests
              * that do not time out on IO. */
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c, APLOGNO(03198)
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c1, APLOGNO(03198)
                           "h2_mplx(%ld): waited %d sec for %d streams",
                           m->id, i*wait_secs, (int)h2_ihash_count(m->shold));
             h2_ihash_iter(m->shold, m_report_stream_iter, m);
@@ -409,23 +409,23 @@ void h2_mplx_c1_destroy(h2_mplx *m)
     /* 4. With all workers done, all streams should be in spurge */
     ap_assert(m->processing_count == 0);
     if (!h2_ihash_empty(m->shold)) {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c, APLOGNO(03516)
+        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, m->c1, APLOGNO(03516)
                       "h2_mplx(%ld): unexpected %d streams in hold", 
                       m->id, (int)h2_ihash_count(m->shold));
         h2_ihash_iter(m->shold, m_unexpected_stream_iter, m);
     }
     
-    m->c->aborted = old_aborted;
+    m->c1->aborted = old_aborted;
     H2_MPLX_LEAVE(m);
 
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c, "h2_mplx(%ld): released", m->id);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1, "h2_mplx(%ld): released", m->id);
 }
 
 apr_status_t h2_mplx_c1_stream_cleanup(h2_mplx *m, h2_stream *stream)
 {
     H2_MPLX_ENTER(m);
     
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c, 
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                   H2_STRM_MSG(stream, "cleanup"));
     m_stream_cleanup(m, stream);        
     
@@ -505,7 +505,7 @@ apr_status_t h2_mplx_c1_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
     }
     else {
         h2_iq_sort(m->q, cmp, session);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1,
                       "h2_mplx(%ld): reprioritize streams", m->id);
         status = APR_SUCCESS;
     }
@@ -522,7 +522,7 @@ static void ms_register_if_needed(h2_mplx *m, int from_master)
             m->is_registered = 1;
         }
         else if (from_master) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, m->c, APLOGNO(10021)
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, status, m->c1, APLOGNO(10021)
                           "h2_mplx(%ld): register at workers", m->id);
         }
     }
@@ -543,9 +543,9 @@ static apr_status_t c1_process_stream(h2_mplx *m,
         rv = APR_EINVAL;
         goto cleanup;
     }
-    if (APLOGctrace1(m->c)) {
+    if (APLOGctrace1(m->c1)) {
         const h2_request *r = stream->request;
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1,
                       H2_STRM_MSG(stream, "process %s %s://%s%s chunked=%d"),
                       r->method, r->scheme, r->authority, r->path, r->chunked);
     }
@@ -557,12 +557,12 @@ static apr_status_t c1_process_stream(h2_mplx *m,
     h2_ihash_add(m->streams, stream);
     if (h2_stream_is_ready(stream)) {
         /* already have a response */
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1,
                       H2_STRM_MSG(stream, "process, ready already"));
     }
     else {
         h2_iq_add(m->q, stream->id, cmp, session);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1,
                       H2_STRM_MSG(stream, "process, added to q"));
     }
 
@@ -591,7 +591,7 @@ apr_status_t h2_mplx_c1_process(h2_mplx *m,
             }
         }
         else {
-            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1,
                           "h2_stream(%ld-%d): not found to process", m->id, sid);
         }
     }
@@ -637,7 +637,7 @@ static conn_rec *s_next_c2(h2_mplx *m)
 
     if (!stream) {
         if (m->processing_count >= m->processing_limit && !h2_iq_empty(m->q)) {
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c,
+            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c1,
                           "h2_session(%ld): delaying request processing. "
                           "Current limit is %d and %d workers are in use.",
                           m->id, m->processing_limit, m->processing_count);
@@ -653,12 +653,12 @@ static conn_rec *s_next_c2(h2_mplx *m)
     if (pc2) {
         c2 = *pc2;
         c2->aborted = 0;
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c1,
                       H2_STRM_MSG(stream, "reusing spare c2"));
     }
     else {
-        c2 = h2_c2_create(m->c, m->pool);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c,
+        c2 = h2_c2_create(m->c1, m->pool);
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c1,
                       H2_STRM_MSG(stream, "created new c2"));
     }
 
@@ -824,7 +824,7 @@ static apr_status_t m_be_annoyed(h2_mplx *m)
         }
         m->last_mood_change = now;
         m->irritations_since = 0;
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1,
                       "h2_mplx(%ld): mood update, decreasing worker limit to %d",
                       m->id, m->processing_limit);
     }
@@ -873,7 +873,7 @@ apr_status_t h2_mplx_c1_client_rst(h2_mplx *m, int stream_id)
 
 static apr_status_t mplx_pollset_create(h2_mplx *m)
 {
-    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(m->c);
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(m->c1);
     apr_status_t rv;
     int max_pdfs;
 
@@ -908,7 +908,7 @@ static apr_status_t mplx_pollset_add(h2_mplx *m, h2_stream *stream, h2_conn_ctx_
     if (conn_ctx->stream_id == 0) {
         /* c1 connection */
         conn_ctx->pfd_out_write->desc_type = APR_POLL_SOCKET;
-        conn_ctx->pfd_out_write->desc.s = ap_get_conn_socket(m->c);
+        conn_ctx->pfd_out_write->desc.s = ap_get_conn_socket(m->c1);
         apr_socket_opt_set(conn_ctx->pfd_out_write->desc.s, APR_SO_NONBLOCK, 1);
     }
     else {
@@ -941,7 +941,7 @@ static apr_status_t mplx_pollset_add(h2_mplx *m, h2_stream *stream, h2_conn_ctx_
 
 cleanup:
     if (APR_SUCCESS != rv) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c1,
                       H2_STRM_LOG(APLOGNO(), stream,
                       "error while adding to pollset: %s"), name);
     }
@@ -967,7 +967,7 @@ static apr_status_t mplx_pollset_remove(h2_mplx *m, h2_stream *stream, h2_conn_c
     }
 cleanup:
     if (APR_SUCCESS != rv) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c1,
                       H2_STRM_LOG(APLOGNO(), stream,
                       "error removing from pollset %s"), name);
     }
@@ -989,7 +989,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
     ap_assert(!m->polling);
     m->polling = 1;
     do {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                       "h2_mplx(%ld): enter polling timeout=%d",
                       m->id, (int)apr_time_sec(timeout));
         H2_MPLX_LEAVE(m);
@@ -1000,12 +1000,12 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
 
         if (APR_SUCCESS != rv) {
             if (APR_STATUS_IS_TIMEUP(rv)) {
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                               "h2_mplx(%ld): polling timed out ",
                               m->id);
             }
             else {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c, APLOGNO()
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c1, APLOGNO()
                               "h2_mplx(%ld): polling failed", m->id);
             }
             goto cleanup;
@@ -1029,24 +1029,24 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
 
             if (conn_ctx->pfd_out_write && conn_ctx->pfd_out_write->desc.f == pfd->desc.f) {
                 /* output is available */
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                               "[%s-%d] poll output event %hx/%hx",
                               conn_ctx->id, conn_ctx->stream_id,
                               pfd->rtnevents, conn_ctx->pfd_out_write->reqevents);
                 if (conn_ctx->stream_id) {
                     h2_util_drain_pipe(conn_ctx->pout_recv_write);
                     if (pfd->rtnevents & APR_POLLHUP) {
-                        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                                       "[%s-%d] output closed",
                                       conn_ctx->id, conn_ctx->stream_id);
                     }
                     else if (pfd->rtnevents & APR_POLLIN) {
-                        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                                       "[%s-%d] output ready",
                                       conn_ctx->id, conn_ctx->stream_id);
                     }
                     else if (pfd->rtnevents & APR_POLLERR) {
-                        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                                       "[%s-%d] output error",
                                       conn_ctx->id, conn_ctx->stream_id);
                     }
@@ -1063,7 +1063,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
             }
             else if (conn_ctx->pfd_in_read && conn_ctx->pfd_in_read->desc.f == pfd->desc.f) {
                 /* input has been consumed */
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c,
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                               "[%s-%d] poll input event %hx/%hx",
                               conn_ctx->id, conn_ctx->stream_id,
                               pfd->rtnevents, conn_ctx->pfd_in_read->reqevents);

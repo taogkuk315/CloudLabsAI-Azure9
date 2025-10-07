@@ -48,14 +48,14 @@ typedef struct h2_mplx h2_mplx;
 
 struct h2_mplx {
     long id;
-    conn_rec *c;
+    conn_rec *c1;                   /* the main connection */
     apr_pool_t *pool;
-    struct h2_stream *stream0;      /* the main connection */
+    struct h2_stream *stream0;      /* HTTP/2's stream 0 */
     server_rec *s;                  /* server for master conn */
 
     int aborted;
-    int polling;           /* is waiting/processing pollset events */
-    int is_registered;     /* is registered at h2_workers */
+    int polling;                    /* is waiting/processing pollset events */
+    int is_registered;              /* is registered at h2_workers */
 
     struct h2_ihash_t *streams;     /* all streams active */
     struct h2_ihash_t *shold;       /* all streams done with c2 processing ongoing */

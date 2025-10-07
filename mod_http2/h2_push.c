@@ -651,13 +651,13 @@ apr_array_header_t *h2_push_diary_update(h2_session *session, apr_array_header_t
             idx = h2_push_diary_find(session->push_diary, e.hash);
             if (idx >= 0) {
                 /* Intentional no APLOGNO */
-                ap_log_cerror(APLOG_MARK, GCSLOG_LEVEL, 0, session->c,
+                ap_log_cerror(APLOG_MARK, GCSLOG_LEVEL, 0, session->c1,
                               "push_diary_update: already there PUSH %s", push->req->path);
                 move_to_last(session->push_diary, (apr_size_t)idx);
             }
             else {
                 /* Intentional no APLOGNO */
-                ap_log_cerror(APLOG_MARK, GCSLOG_LEVEL, 0, session->c,
+                ap_log_cerror(APLOG_MARK, GCSLOG_LEVEL, 0, session->c1,
                               "push_diary_update: adding PUSH %s", push->req->path);
                 if (!npushes) {
                     npushes = apr_array_make(pushes->pool, 5, sizeof(h2_push_diary_entry*));

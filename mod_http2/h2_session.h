@@ -65,7 +65,7 @@ typedef enum {
 typedef struct h2_session {
     long id;                        /* identifier of this session, unique
                                      * inside a httpd process */
-    conn_rec *c;                    /* the connection this session serves */
+    conn_rec *c1;                   /* the main connection this session serves */
     request_rec *r;                 /* the request that started this in case
                                      * of 'h2c', NULL otherwise */
     server_rec *s;                  /* server/vhost we're starting on */
