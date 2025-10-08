@@ -48,12 +48,6 @@ typedef struct {
 } h2_bproxy_list;
 
 /**
- * Will deny all transfer of apr_file_t across the beam and force
- * a data copy instead.
- */
-int h2_beam_no_files(void *ctx, h2_bucket_beam *beam, apr_file_t *file);
-
-/**
  * h2_blist can hold a list of buckets just like apr_bucket_brigade, but
  * does not to any allocations or related features.
  */

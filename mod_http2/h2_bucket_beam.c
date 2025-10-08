@@ -1052,12 +1052,6 @@ int h2_beam_empty(h2_bucket_beam *beam)
     return empty;
 }
 
-int h2_beam_no_files(void *ctx, h2_bucket_beam *beam, apr_file_t *file)
-{
-    (void)ctx; (void)beam; (void)file;
-    return 0;
-}
-
 int h2_beam_report_consumption(h2_bucket_beam *beam)
 {
     int rv = 0;
