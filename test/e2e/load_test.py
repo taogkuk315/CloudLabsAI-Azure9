@@ -379,8 +379,8 @@ class UrlsLoadTest(LoadTestCase):
             self._teardown()
 
     def format_result(self, summary: H2LoadLogSummary) -> Tuple[str, Optional[List[str]]]:
-        return "{0:.1f}".format(
-            summary.response_count / summary.duration.total_seconds()
+        return "{0:d}".format(
+            round(summary.response_count / summary.duration.total_seconds())
         ), summary.get_footnote()
 
 
