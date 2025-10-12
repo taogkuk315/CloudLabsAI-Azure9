@@ -43,6 +43,7 @@ static h2_conn_ctx_t *ctx_create(conn_rec *c, const char *id)
     conn_ctx->id = id;
     conn_ctx->server = c->base_server;
     conn_ctx->started_at = apr_time_now();
+
     ap_set_module_config(c->conn_config, &http2_module, conn_ctx);
     return conn_ctx;
 }
@@ -201,3 +202,19 @@ void h2_conn_ctx_clear_for_c2(conn_rec *c2)
     conn_ctx->beam_in = NULL;
 }
 
+void h2_conn_ctx_destroy(conn_rec *c)
+{
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+
+    if (conn_ctx) {
+        if (conn_ctx->req_pool) {
+            apr_pool_destroy(conn_ctx->req_pool);
+            conn_ctx->req_pool = NULL;
+        }
+        if (conn_ctx->mplx_pool) {
+            apr_pool_destroy(conn_ctx->mplx_pool);
+            conn_ctx->mplx_pool = NULL;
+        }
+        ap_set_module_config(c->conn_config, &http2_module, NULL);
+    }
+}

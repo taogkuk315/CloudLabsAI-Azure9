@@ -269,6 +269,7 @@ static int c1_stream_purge_iter(void *ctx, void *val)
             APR_ARRAY_PUSH(m->spare_c2, conn_rec*) = c2;
         }
         else {
+            h2_conn_ctx_destroy(c2);
             h2_c2_destroy(c2);
         }
     }

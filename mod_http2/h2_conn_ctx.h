@@ -85,4 +85,6 @@ void h2_conn_ctx_clear_for_c2(conn_rec *c2);
 
 void h2_conn_ctx_detach(conn_rec *c);
 
+void h2_conn_ctx_destroy(conn_rec *c);
+
 #endif /* defined(__mod_h2__h2_conn_ctx__) */
