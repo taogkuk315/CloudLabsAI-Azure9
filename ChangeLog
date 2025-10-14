@@ -11,6 +11,17 @@
    limit. This probably hurts the server more than it helps. Some
    setup, like proxied connections, can be slow to respond to the
    abort of a connection.
+ * With Apache httpd 2.4.49 or newer, h2 idle workers are terminated on a graceful
+   restar/shutdown immediately. This happens independant of any h2 connections being
+   processed or not.
+
+v1.15.23
+--------------------------------------------------------------------------------
+ * H2MinWorker is reduced automatically to 1 during graceful shutdown
+   of a child process (e.g. server reload). This lets all ongoing requests
+   continue, but shuts down unused threads early.
+   The H2MaxWorkerIdleSeconds is also reduced to 1, so that any workers
+   for ongoing tasks will close down fast.
 
 v1.15.22
 --------------------------------------------------------------------------------

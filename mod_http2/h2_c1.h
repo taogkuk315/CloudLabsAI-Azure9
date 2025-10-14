@@ -70,5 +70,9 @@ int h2_c1_can_upgrade(request_rec *r);
  */
 void h2_c1_register_hooks(void);
 
+/**
+ * Child is about to be stopped, release unused resources
+ */
+void h2_conn_child_stopping(apr_pool_t *pool, int graceful);
 
 #endif /* defined(__mod_h2__h2_c1__) */

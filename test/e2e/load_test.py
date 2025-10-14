@@ -3,6 +3,7 @@ import logging
 import multiprocessing
 import os
 import re
+import statistics
 import sys
 import time
 from datetime import timedelta, datetime
@@ -34,6 +35,7 @@ class H2LoadLogSummary:
     def from_lines(lines: Iterable[str], title: str, duration: timedelta) -> 'H2LoadLogSummary':
         stati = {}
         count = 0
+        durations = list()
         all_durations = timedelta(milliseconds=0)
         for line in lines:
             parts = re.split(r'\s+', line)  # start(us), status(int), duration(ms), tbd.
@@ -44,19 +46,24 @@ class H2LoadLogSummary:
                     stati[status] += 1
                 else:
                     stati[status] = 1
+                durations.append(int(parts[2]))
                 all_durations += timedelta(microseconds=int(parts[2]))
             else:
                 sys.stderr.write("unrecognize log line: {0}".format(line))
+        mean_duration = statistics.mean(durations)
         return H2LoadLogSummary(title=title, total=count, stati=stati,
-                                duration=duration, all_durations=all_durations)
+                                duration=duration, all_durations=all_durations,
+                                mean_duration=mean_duration)
 
     def __init__(self, title: str, total: int, stati: Dict[int, int],
-                 duration: timedelta, all_durations: timedelta):
+                 duration: timedelta, all_durations: timedelta,
+                 mean_duration: timedelta):
         self._title = title
         self._total = total
         self._stati = stati
         self._duration = duration
         self._all_durations = all_durations
+        self._mean_duration = mean_duration
         self._transfered_mb = 0.0
         self._exec_result = None
         self._expected_responses = 0
@@ -72,6 +79,10 @@ class H2LoadLogSummary:
     @property
     def duration(self) -> timedelta:
         return self._duration
+
+    @property
+    def mean_duration_ms(self) -> float:
+        return self._mean_duration / 1000.0
 
     @property
     def response_durations(self) -> timedelta:
@@ -269,14 +280,17 @@ class UrlsLoadTest(LoadTestCase):
     SETUP_DONE = False
 
     def __init__(self, env: H2TestEnv, location: str,
-                 clients: int, requests: int, file_count: int,
+                 clients: int, requests: int,
+                 file_count: int,
                  file_sizes: List[int],
+                 measure: str,
                  protocol: str = 'h2',
                  max_parallel: int = 1,
-                 threads: int = None, ):
+                 threads: int = None, warmup: bool = False):
         self.env = env
         self._location = location
         self._clients = clients
+        self._measure = measure
         self._requests = requests
         self._file_count = file_count
         self._file_sizes = file_sizes
@@ -285,6 +299,7 @@ class UrlsLoadTest(LoadTestCase):
         self._threads = threads if threads is not None else \
             min(multiprocessing.cpu_count()/2, self._clients)
         self._url_file = "{gen_dir}/h2load-urls.txt".format(gen_dir=self.env.gen_dir)
+        self._warmup = warmup
 
     @staticmethod
     def from_scenario(scenario: Dict, env: H2TestEnv) -> 'UrlsLoadTest':
@@ -293,7 +308,8 @@ class UrlsLoadTest(LoadTestCase):
             location=scenario['location'],
             clients=scenario['clients'], requests=scenario['requests'],
             file_sizes=scenario['file_sizes'], file_count=scenario['file_count'],
-            protocol=scenario['protocol'], max_parallel=scenario['max_parallel']
+            protocol=scenario['protocol'], max_parallel=scenario['max_parallel'],
+            warmup=scenario['warmup'], measure=scenario['measure']
         )
 
     def next_scenario(self, scenario: Dict) -> 'UrlsLoadTest':
@@ -302,7 +318,8 @@ class UrlsLoadTest(LoadTestCase):
             location=scenario['location'],
             clients=scenario['clients'], requests=scenario['requests'],
             file_sizes=scenario['file_sizes'], file_count=scenario['file_count'],
-            protocol=scenario['protocol'], max_parallel=scenario['max_parallel']
+            protocol=scenario['protocol'], max_parallel=scenario['max_parallel'],
+            warmup=scenario['warmup'], measure=scenario['measure']
         )
 
     def _setup(self, cls, extras: Dict = None):
@@ -373,15 +390,20 @@ class UrlsLoadTest(LoadTestCase):
     def run(self) -> H2LoadLogSummary:
         path = self._setup(self.__class__)
         try:
-            self.run_test(mode="warmup", path=path)
+            if self._warmup:
+                self.run_test(mode="warmup", path=path)
             return self.run_test(mode="measure", path=path)
         finally:
             self._teardown()
 
     def format_result(self, summary: H2LoadLogSummary) -> Tuple[str, Optional[List[str]]]:
-        return "{0:d}".format(
-            round(summary.response_count / summary.duration.total_seconds())
-        ), summary.get_footnote()
+        if self._measure == 'req/s':
+            r = "{0:d}".format(round(summary.response_count / summary.duration.total_seconds()))
+        elif self._measure == 'mean ms/req':
+            r = "{0:.1f}".format(summary.mean_duration_ms)
+        else:
+            raise Exception(f"measure '{self._measure}' not defined")
+        return r, summary.get_footnote()
 
 
 class StressTest(LoadTestCase):
@@ -561,12 +583,14 @@ class LoadTest:
 
         scenarios = {
             "1k-files": {
-                "title": "1k files, 1k-10MB, *conn, 10k req, (req/s)",
+                "title": "1k files, 1k-10MB, *conn, 10k req ({measure})",
                 "class": UrlsLoadTest,
                 "location": "/",
                 "file_count": 1024,
                 "file_sizes": [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 10000],
                 "requests": 10000,
+                "warmup": True,
+                "measure": "req/s",
                 "protocol": 'h2',
                 "max_parallel": 1,
                 "row0_title": "protocol  max",
@@ -587,6 +611,37 @@ class LoadTest:
                     {"clients": 8},
                     {"clients": 16},
                     {"clients": 32},
+                ],
+            },
+            "durations": {
+                "title": "1k files, 64k size, 10k req/conn ({measure})",
+                "class": UrlsLoadTest,
+                "location": "/",
+                "file_count": 1024,
+                "file_sizes": [64],
+                "requests": 10000,
+                "warmup": False,
+                "measure": "mean ms/req",
+                "protocol": 'h2',
+                "max_parallel": 1,
+                "row0_title": "protocol  max",
+                "row_title": "{protocol}   {max_parallel:3d}",
+                "rows": [
+                    {"protocol": 'h2', "max_parallel": 1},
+                    {"protocol": 'h2', "max_parallel": 2},
+                    {"protocol": 'h2', "max_parallel": 6},
+                    {"protocol": 'h2', "max_parallel": 20},
+                    {"protocol": 'h2', "max_parallel": 50},
+                    {"protocol": 'h1', "max_parallel": 1},
+                ],
+                "col_title": "{clients}c",
+                "clients": 1,
+                "columns": [
+                    {"clients": 1, "requests": 10000},
+                    {"clients": 4, "requests": 40000},
+                    {"clients": 8, "requests": 80000},
+                    {"clients": 16, "requests": 160000},
+                    {"clients": 32, "requests": 320000},
                 ],
             },
             "bursty": {
