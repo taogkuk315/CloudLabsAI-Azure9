@@ -81,6 +81,14 @@ apr_status_t h2_c1_child_init(apr_pool_t *pool, server_rec *s)
     return h2_mplx_c1_child_init(pool, s);
 }
 
+void h2_c1_child_stopping(apr_pool_t *pool, int graceful)
+{
+    if (workers && graceful) {
+        h2_workers_graceful_shutdown(workers);
+    }
+}
+
+
 apr_status_t h2_c1_setup(conn_rec *c, request_rec *r, server_rec *s)
 {
     h2_session *session;

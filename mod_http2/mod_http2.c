@@ -231,7 +231,7 @@ static void h2_hooks(apr_pool_t *pool)
      */
     ap_hook_child_init(h2_child_init, NULL, NULL, APR_HOOK_MIDDLE);
 #if AP_MODULE_MAGIC_AT_LEAST(20120211, 110)
-    ap_hook_child_stopping(h2_conn_child_stopping, NULL, NULL, APR_HOOK_MIDDLE);
+    ap_hook_child_stopping(h2_c1_child_stopping, NULL, NULL, APR_HOOK_MIDDLE);
 #endif
 
     h2_c1_register_hooks();
