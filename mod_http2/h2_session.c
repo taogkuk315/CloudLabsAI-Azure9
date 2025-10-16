@@ -1497,6 +1497,12 @@ static void h2_session_ev_input_eagain(h2_session *session, int arg, const char 
     switch (session->state) {
         case H2_SESSION_ST_BUSY:
             if (!h2_session_want_send(session)) {
+#if AP_MODULE_MAGIC_AT_LEAST(20160312, 0)
+                if (ap_run_input_pending(session->c1) == OK) {
+                    /* input buffers non-empty, can not switch to WAIT yet */
+                    break;
+                }
+#endif
                 transit(session, "input exhausted", H2_SESSION_ST_WAIT);
             }
             break;
@@ -1933,17 +1939,6 @@ apr_status_t h2_session_process(h2_session *session, int async)
             break;
 
         case H2_SESSION_ST_WAIT:
-#if AP_MODULE_MAGIC_AT_LEAST(20160312, 0)
-            if (ap_run_input_pending(session->c1) == OK) {
-                /* input buffers non-empty, can not poll with timeout */
-                transit(session, "c1 input pending", H2_SESSION_ST_BUSY);
-                break;
-            }
-#else
-            if (APR_SUCCESS == h2_session_read(session)) {
-                break;
-            }
-#endif
             if (session->open_streams == 0) {
                 /* without streams open, we should not be in WAIT state, but
                  * progress to IDLE or DONE. However, this may stall on the
