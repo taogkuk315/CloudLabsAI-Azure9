@@ -31,6 +31,7 @@
  */
 
 struct apr_pool_t;
+struct apr_array_header_t;
 struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 struct h2_bucket_beam;
@@ -59,7 +60,7 @@ struct h2_mplx {
 
     struct h2_ihash_t *streams;     /* all streams active */
     struct h2_ihash_t *shold;       /* all streams done with c2 processing ongoing */
-    struct h2_ihash_t *spurge;      /* all streams done, ready for destroy */
+    struct apr_array_header_t *spurge; /* all streams done, ready for destroy */
     
     struct h2_iqueue *q;            /* all stream ids that need to be started */
 
@@ -178,16 +179,6 @@ apr_status_t h2_mplx_c1_client_rst(h2_mplx *m, int stream_id);
  * Get readonly access to a stream for a secondary connection.
  */
 const struct h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id);
-
-/**
- * Register the output at the stream once it has been created.
- * @param m the mplx
- * @param stream_id id of the stream
- * @param output the bucket_beam where output will arrive
- * @return APR_SUCCESS when set, APR_EINVAL if stream is not known.
- */
-apr_status_t h2_mplx_c2_set_stream_output(
-    h2_mplx *m, int stream_id, struct h2_bucket_beam *output);
 
 /**
  * A h2 worker asks for a secondary connection to process.

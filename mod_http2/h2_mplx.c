@@ -116,7 +116,7 @@ static void c1c2_stream_joined(h2_mplx *m, h2_stream *stream)
     ap_assert(!stream_is_running(stream));
     
     h2_ihash_remove(m->shold, stream->id);
-    h2_ihash_add(m->spurge, stream);
+    APR_ARRAY_PUSH(m->spurge, h2_stream *) = stream;
 }
 
 static void m_stream_cleanup(h2_mplx *m, h2_stream *stream)
@@ -203,7 +203,7 @@ h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent
 
     m->streams = h2_ihash_create(m->pool, offsetof(h2_stream,id));
     m->shold = h2_ihash_create(m->pool, offsetof(h2_stream,id));
-    m->spurge = h2_ihash_create(m->pool, offsetof(h2_stream,id));
+    m->spurge = apr_array_make(m->pool, 10, sizeof(h2_stream*));
     m->q = h2_iq_create(m->pool, m->max_streams);
 
     m->workers = workers;
@@ -241,41 +241,6 @@ int h2_mplx_c1_shutdown(h2_mplx *m)
 
     H2_MPLX_LEAVE(m);
     return max_stream_id_started;
-}
-
-static int c1_stream_purge_iter(void *ctx, void *val)
-{   
-    h2_mplx *m = ctx;
-    h2_stream *stream = val;
-
-    h2_ihash_remove(m->spurge, stream->id);
-    ap_assert(stream->state == H2_SS_CLEANUP);
-    
-    if (stream->input) {
-        h2_beam_destroy(stream->input, m->c1);
-        stream->input = NULL;
-    }
-
-    if (stream->c2) {
-        conn_rec *c2 = stream->c2;
-
-        stream->c2 = NULL;
-        if (!c2->aborted && m->spare_c2->nelts < 1
-            && (m->s->keep_alive_max == 0 || c2->keepalives < m->s->keep_alive_max)) {
-
-            ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c1, APLOGNO(03385)
-                          "h2_c2(%ld), reuse c2", m->id);
-            h2_conn_ctx_clear_for_c2(c2);
-            APR_ARRAY_PUSH(m->spare_c2, conn_rec*) = c2;
-        }
-        else {
-            h2_conn_ctx_destroy(c2);
-            h2_c2_destroy(c2);
-        }
-    }
-
-    h2_stream_destroy(stream);
-    return 0;
 }
 
 typedef struct {
@@ -380,7 +345,7 @@ void h2_mplx_c1_destroy(h2_mplx *m)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1,
                   "h2_mplx(%ld): release, %d/%d/%d streams (total/hold/purge), %d streams",
                   m->id, (int)h2_ihash_count(m->streams),
-                  (int)h2_ihash_count(m->shold), (int)h2_ihash_count(m->spurge), m->processing_count);
+                  (int)h2_ihash_count(m->shold), m->spurge->nelts, m->processing_count);
     while (!h2_ihash_iter(m->streams, m_stream_cancel_iter, m)) {
         /* until empty */
     }
@@ -445,22 +410,38 @@ const h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id)
     return s;
 }
 
-apr_status_t h2_mplx_c2_set_stream_output(
-    h2_mplx *m, int stream_id, h2_bucket_beam *output)
+static void c1_purge_streams(h2_mplx *m)
 {
-    h2_stream *s = NULL;
-    apr_status_t rv = APR_EINVAL;
+    h2_stream *stream;
+    int i;
 
-    H2_MPLX_ENTER_ALWAYS(m);
-    s = h2_ihash_get(m->streams, stream_id);
-    if (s && !m->aborted) {
-        ap_assert(s->output == NULL);  /* should be called only once */
-        s->output = output;
-        rv = APR_SUCCESS;
+    for (i = 0; i < m->spurge->nelts; ++i) {
+        stream = APR_ARRAY_IDX(m->spurge, i, h2_stream*);
+        ap_assert(stream->state == H2_SS_CLEANUP);
+        if (stream->input) {
+            h2_beam_destroy(stream->input, m->c1);
+            stream->input = NULL;
+        }
+        if (stream->c2) {
+            conn_rec *c2 = stream->c2;
+
+            stream->c2 = NULL;
+            if (!c2->aborted && m->spare_c2->nelts < 2
+                && (m->s->keep_alive_max == 0 || c2->keepalives < m->s->keep_alive_max)) {
+
+                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c1, APLOGNO(03385)
+                              "h2_c2(%ld), reuse c2", m->id);
+                h2_conn_ctx_clear_for_c2(c2);
+                APR_ARRAY_PUSH(m->spare_c2, conn_rec*) = c2;
+            }
+            else {
+                h2_conn_ctx_destroy(c2);
+                h2_c2_destroy(c2);
+            }
+        }
+        h2_stream_destroy(stream);
     }
-    H2_MPLX_LEAVE(m);
-
-    return rv;
+    apr_array_clear(m->spurge);
 }
 
 apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
@@ -482,10 +463,8 @@ apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
      * of these registrations. So, if we destroy streams while
      * processing pollset events, we might access freed memory.
      */
-    if (!h2_ihash_empty(m->spurge)) {
-        while (!h2_ihash_iter(m->spurge, c1_stream_purge_iter, m)) {
-            /* repeat until empty */
-        }
+    if (m->spurge->nelts) {
+        c1_purge_streams(m);
     }
     rv = mplx_pollset_poll(m, timeout, on_stream_input, on_stream_output, on_ctx);
 
@@ -739,12 +718,18 @@ static void s_c2_done(h2_mplx *m, conn_rec *c2, h2_conn_ctx_t *conn_ctx)
                       H2_STRM_MSG(stream, "c2_done, in hold"));
         c1c2_stream_joined(m, stream);
     }
-    else if ((stream = h2_ihash_get(m->spurge, conn_ctx->stream_id)) != NULL) {
-        ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, c2,
-                      H2_STRM_LOG(APLOGNO(03517), stream, "already in spurge"));
-        ap_assert("stream should not be in spurge" == NULL);
-    }
     else {
+        int i;
+
+        for (i = 0; i < m->spurge->nelts; ++i) {
+            if (stream == APR_ARRAY_IDX(m->spurge, i, h2_stream*)) {
+                ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, c2,
+                              H2_STRM_LOG(APLOGNO(03517), stream, "already in spurge"));
+                ap_assert("stream should not be in spurge" == NULL);
+                return;
+            }
+        }
+
         ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, c2, APLOGNO(03518)
                       "h2_mplx(%s-%d): c2_done, stream not found",
                       conn_ctx->id, conn_ctx->stream_id);
@@ -1025,8 +1010,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                 continue;
             }
 
-            /* event is for a real h2 stream, must exist */
-            stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
+            h2_util_drain_pipe(pfd->desc.f);
 
             if (conn_ctx->pfd_out_write && conn_ctx->pfd_out_write->desc.f == pfd->desc.f) {
                 /* output is available */
@@ -1034,28 +1018,23 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                               "[%s-%d] poll output event %hx/%hx",
                               conn_ctx->id, conn_ctx->stream_id,
                               pfd->rtnevents, conn_ctx->pfd_out_write->reqevents);
-                if (conn_ctx->stream_id) {
-                    h2_util_drain_pipe(conn_ctx->pout_recv_write);
-                    if (pfd->rtnevents & APR_POLLHUP) {
-                        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
-                                      "[%s-%d] output closed",
-                                      conn_ctx->id, conn_ctx->stream_id);
-                    }
-                    else if (pfd->rtnevents & APR_POLLIN) {
-                        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
-                                      "[%s-%d] output ready",
-                                      conn_ctx->id, conn_ctx->stream_id);
-                    }
-                    else if (pfd->rtnevents & APR_POLLERR) {
-                        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
-                                      "[%s-%d] output error",
-                                      conn_ctx->id, conn_ctx->stream_id);
-                    }
+                if (pfd->rtnevents & APR_POLLHUP) {
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
+                                  "[%s-%d] output closed",
+                                  conn_ctx->id, conn_ctx->stream_id);
                 }
-                else {
-                    /* event on stream0, e.g. the primary connection socket */
+                else if (pfd->rtnevents & APR_POLLIN) {
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
+                                  "[%s-%d] output ready",
+                                  conn_ctx->id, conn_ctx->stream_id);
+                }
+                else if (pfd->rtnevents & APR_POLLERR) {
+                    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
+                                  "[%s-%d] output error",
+                                  conn_ctx->id, conn_ctx->stream_id);
                 }
 
+                stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
                 if (stream && on_stream_output) {
                     H2_MPLX_LEAVE(m);
                     on_stream_output(on_ctx, stream);
@@ -1068,7 +1047,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                               "[%s-%d] poll input event %hx/%hx",
                               conn_ctx->id, conn_ctx->stream_id,
                               pfd->rtnevents, conn_ctx->pfd_in_read->reqevents);
-                h2_util_drain_pipe(conn_ctx->pin_recv_read);
+                stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
                 if (stream && on_stream_input) {
                     H2_MPLX_LEAVE(m);
                     on_stream_input(on_ctx, stream);

@@ -296,8 +296,7 @@ class UrlsLoadTest(LoadTestCase):
         self._file_sizes = file_sizes
         self._protocol = protocol
         self._max_parallel = max_parallel
-        self._threads = threads if threads is not None else \
-            min(multiprocessing.cpu_count()/2, self._clients)
+        self._threads = threads if threads is not None else min(2, self._clients)
         self._url_file = "{gen_dir}/h2load-urls.txt".format(gen_dir=self.env.gen_dir)
         self._warmup = warmup
 
@@ -362,7 +361,7 @@ class UrlsLoadTest(LoadTestCase):
             args = [
                 'h2load',
                 '--clients={0}'.format(self._clients),
-                '--threads={0}'.format(min(self._clients, 2)),
+                '--threads={0}'.format(self._threads),
                 '--requests={0}'.format(self._requests),
                 '--input-file={0}'.format(self._url_file),
                 '--log-file={0}'.format(log_file),
@@ -426,8 +425,7 @@ class StressTest(LoadTestCase):
         self._protocol = protocol
         self._max_parallel = max_parallel
         self._cooldown = cooldown if cooldown else timedelta(seconds=0)
-        self._threads = threads if threads is not None else \
-            min(multiprocessing.cpu_count()/2, self._clients)
+        self._threads = threads if threads is not None else min(2, self._clients)
         self._url_file = "{gen_dir}/h2load-urls.txt".format(gen_dir=self.env.gen_dir)
         self._is_setup = False
 
@@ -611,6 +609,33 @@ class LoadTest:
                     {"clients": 8},
                     {"clients": 16},
                     {"clients": 32},
+                ],
+            },
+            "1k-files10": {
+                "title": "1k files, 10k size, *conn, 100k req, {protocol} ({measure})",
+                "class": UrlsLoadTest,
+                "location": "/",
+                "file_count": 1024,
+                "file_sizes": [10],
+                "requests": 100000,
+                "warmup": False,
+                "measure": "req/s",
+                "protocol": 'h2',
+                "max_parallel": 1,
+                "row0_title": "max requests",
+                "row_title": "{max_parallel:3d} {requests}",
+                "rows": [
+                    {"max_parallel": 1, "requests": 10000},
+                    {"max_parallel": 1, "requests": 10000},
+                    {"max_parallel": 1, "requests": 25000},
+                    {"max_parallel": 1, "requests": 50000},
+                    {"max_parallel": 1, "requests": 75000},
+                    {"max_parallel": 1, "requests": 100000},
+                ],
+                "col_title": "{clients}c",
+                "clients": 1,
+                "columns": [
+                    {"clients": 1},
                 ],
             },
             "durations": {

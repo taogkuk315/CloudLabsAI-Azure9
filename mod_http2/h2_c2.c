@@ -518,14 +518,17 @@ apr_status_t h2_c2_process(conn_rec *c2, apr_thread_t *thread, int worker_id)
      */
     c2->id = (c2->master->id << 8)^worker_id;
 
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
-                  "h2_c2(%s-%d), adding filters",
-                  conn_ctx->id, conn_ctx->stream_id);
-    ap_add_input_filter("H2_C2_NET_IN", NULL, NULL, c2);
-    ap_add_output_filter("H2_C2_NET_CATCH_H1", NULL, NULL, c2);
-    ap_add_output_filter("H2_C2_NET_OUT", NULL, NULL, c2);
+    if (!conn_ctx->pre_conn_done) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
+                      "h2_c2(%s-%d), adding filters",
+                      conn_ctx->id, conn_ctx->stream_id);
+        ap_add_input_filter("H2_C2_NET_IN", NULL, NULL, c2);
+        ap_add_output_filter("H2_C2_NET_CATCH_H1", NULL, NULL, c2);
+        ap_add_output_filter("H2_C2_NET_OUT", NULL, NULL, c2);
 
-    c2_run_pre_connection(c2, ap_get_conn_socket(c2));
+        c2_run_pre_connection(c2, ap_get_conn_socket(c2));
+        conn_ctx->pre_conn_done = 1;
+    }
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c2,
                   "h2_c2(%s-%d): process connection",
