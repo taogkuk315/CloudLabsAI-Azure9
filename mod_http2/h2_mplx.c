@@ -426,7 +426,7 @@ static void c1_purge_streams(h2_mplx *m)
             conn_rec *c2 = stream->c2;
 
             stream->c2 = NULL;
-            if (!c2->aborted && m->spare_c2->nelts < 2
+            if (!c2->aborted && m->spare_c2->nelts < 2 && /*disables code*/(0)
                 && (m->s->keep_alive_max == 0 || c2->keepalives < m->s->keep_alive_max)) {
 
                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c1, APLOGNO(03385)
@@ -576,6 +576,21 @@ apr_status_t h2_mplx_c1_process(h2_mplx *m,
         }
     }
     ms_register_if_needed(m, 1);
+
+#if APR_POOL_DEBUG
+    do {
+        apr_size_t mem_m, mem_s, mem_w, mem_c1;
+
+        mem_m = apr_pool_num_bytes(m->pool, 1);
+        mem_s = apr_pool_num_bytes(session->pool, 1);
+        mem_w = apr_pool_num_bytes(m->workers->pool, 1);
+        mem_c1 = apr_pool_num_bytes(m->c1->pool, 1);
+        ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, m->c1,
+                      "h2_mplx(%ld): mplx mem=%ld, session mem=%ld, workers=%ld, c1=%ld",
+                      m->id, (long)mem_m, (long)mem_s, (long)mem_w, (long)mem_c1);
+
+    } while (0);
+#endif
 
     H2_MPLX_LEAVE(m);
     return rv;

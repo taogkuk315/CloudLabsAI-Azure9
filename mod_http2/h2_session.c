@@ -815,8 +815,6 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
 {
     nghttp2_session_callbacks *callbacks = NULL;
     nghttp2_option *options = NULL;
-    apr_allocator_t *allocator;
-    apr_thread_mutex_t *mutex;
     uint32_t n;
     apr_pool_t *pool = NULL;
     h2_session *session;
@@ -825,25 +823,8 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     int rv;
 
     *psession = NULL;
-    status = apr_allocator_create(&allocator);
-    if (status != APR_SUCCESS) {
-        return status;
-    }
-    apr_allocator_max_free_set(allocator, ap_max_mem_free);
-    apr_pool_create_ex(&pool, c->pool, NULL, allocator);
-    if (!pool) {
-        apr_allocator_destroy(allocator);
-        return APR_ENOMEM;
-    }
+    apr_pool_create(&pool, c->pool);
     apr_pool_tag(pool, "h2_session");
-    apr_allocator_owner_set(allocator, pool);
-    status = apr_thread_mutex_create(&mutex, APR_THREAD_MUTEX_DEFAULT, pool);
-    if (status != APR_SUCCESS) {
-        apr_pool_destroy(pool);
-        return APR_ENOMEM;
-    }
-    apr_allocator_mutex_set(allocator, mutex);
-    
     session = apr_pcalloc(pool, sizeof(h2_session));
     if (!session) {
         return APR_ENOMEM;
@@ -910,7 +891,11 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     /* We need to handle window updates ourself, otherwise we
      * get flooded by nghttp2. */
     nghttp2_option_set_no_auto_window_update(options, 1);
-    
+    /* We do not want nghttp2 to keep information about closed streams as
+     * that accumulates memory on long connections. This makes PRIORITY
+     * setting in relation to older streams non-working. */
+    nghttp2_option_set_no_closed_streams(options, 1);
+
     rv = nghttp2_session_server_new2(&session->ngh2, callbacks,
                                      session, options);
     nghttp2_session_callbacks_del(callbacks);

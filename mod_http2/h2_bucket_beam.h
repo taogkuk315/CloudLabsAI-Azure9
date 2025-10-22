@@ -60,20 +60,15 @@ struct h2_bucket_beam {
     const char *name;
     conn_rec *from;
     apr_pool_t *pool;
-    h2_blist send_list;
-    h2_blist hold_list;
-    h2_blist purge_list;
+    h2_blist buckets_to_send;
+    h2_blist buckets_in_flight;
+    h2_blist buckets_consumed;
     apr_bucket_brigade *recv_buffer;
     h2_bproxy_list proxies;
     apr_pool_t *recv_pool;
     
     apr_size_t max_buf_size;
     apr_interval_time_t timeout;
-
-    apr_off_t sent_bytes;     /* amount of bytes send */
-    apr_off_t received_bytes; /* amount of bytes received */
-
-    apr_size_t buckets_sent;  /* # of beam buckets sent */
 
     int aborted;
     int tx_mem_limits; /* only memory size counts on transfers */
@@ -82,17 +77,15 @@ struct h2_bucket_beam {
     struct apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *change;
     
-    apr_off_t cons_bytes_reported;    /* amount of bytes reported as consumed */
-    h2_beam_io_callback *cons_io_cb;
-    void *cons_ctx;
-    h2_beam_ev_callback *recv_cb;
+    h2_beam_ev_callback *was_empty_cb; /* event: beam changed to non-empty in h2_beam_send() */
+    void *was_empty_ctx;
+    h2_beam_ev_callback *recv_cb;      /* event: buckets were transfered in h2_beam_receive() */
     void *recv_ctx;
 
-    h2_beam_ev_callback *was_empty_cb;
-    void *was_empty_ctx;
-    apr_off_t prod_bytes_reported;    /* amount of bytes reported as produced */
-    h2_beam_io_callback *prod_io_cb;
-    void *prod_ctx;
+    apr_off_t recv_bytes;             /* amount of bytes transferred in h2_beam_receive() */
+    apr_off_t recv_bytes_reported;    /* amount of bytes reported as received via callback */
+    h2_beam_io_callback *cons_io_cb;  /* report: recv_bytes deltas for sender */
+    void *cons_ctx;
 };
 
 /**

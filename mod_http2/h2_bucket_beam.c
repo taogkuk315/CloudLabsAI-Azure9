@@ -93,7 +93,6 @@ struct h2_beam_proxy {
     APR_RING_ENTRY(h2_beam_proxy) link;
     h2_bucket_beam *beam;
     apr_bucket *bsender;
-    apr_size_t n;
 };
 
 static const char Dummy = '\0';
@@ -135,7 +134,7 @@ static void beam_bucket_destroy(void *data)
 
 static apr_bucket * h2_beam_bucket_make(apr_bucket *b, 
                                         h2_bucket_beam *beam,
-                                        apr_bucket *bsender, apr_size_t n)
+                                        apr_bucket *bsender)
 {
     h2_beam_proxy *d;
 
@@ -143,8 +142,7 @@ static apr_bucket * h2_beam_bucket_make(apr_bucket *b,
     H2_BPROXY_LIST_INSERT_TAIL(&beam->proxies, d);
     d->beam = beam;
     d->bsender = bsender;
-    d->n = n;
-    
+
     b = apr_bucket_shared_make(b, d, 0, bsender? bsender->length : 0);
     b->type = &h2_bucket_type_beam;
 
@@ -153,15 +151,14 @@ static apr_bucket * h2_beam_bucket_make(apr_bucket *b,
 
 static apr_bucket *h2_beam_bucket_create(h2_bucket_beam *beam,
                                          apr_bucket *bsender,
-                                         apr_bucket_alloc_t *list,
-                                         apr_size_t n)
+                                         apr_bucket_alloc_t *list)
 {
     apr_bucket *b = apr_bucket_alloc(sizeof(*b), list);
 
     APR_BUCKET_INIT(b);
     b->free = apr_bucket_free;
     b->list = list;
-    return h2_beam_bucket_make(b, beam, bsender, n);
+    return h2_beam_bucket_make(b, beam, bsender);
 }
 
 static apr_off_t h2_beam_bucket_mem_used(apr_bucket *b)
@@ -259,7 +256,7 @@ static apr_off_t bucket_mem_used(apr_bucket *b)
 static int report_consumption(h2_bucket_beam *beam, int locked)
 {
     int rv = 0;
-    apr_off_t len = beam->received_bytes - beam->cons_bytes_reported;
+    apr_off_t len = beam->recv_bytes - beam->recv_bytes_reported;
     h2_beam_io_callback *cb = beam->cons_io_cb;
      
     if (len > 0) {
@@ -271,7 +268,7 @@ static int report_consumption(h2_bucket_beam *beam, int locked)
             if (locked) apr_thread_mutex_lock(beam->lock);
             rv = 1;
         }
-        beam->cons_bytes_reported += len;
+        beam->recv_bytes_reported += len;
     }
     return rv;
 }
@@ -280,8 +277,8 @@ static apr_size_t calc_buffered(h2_bucket_beam *beam)
 {
     apr_size_t len = 0;
     apr_bucket *b;
-    for (b = H2_BLIST_FIRST(&beam->send_list); 
-         b != H2_BLIST_SENTINEL(&beam->send_list);
+    for (b = H2_BLIST_FIRST(&beam->buckets_to_send);
+         b != H2_BLIST_SENTINEL(&beam->buckets_to_send);
          b = APR_BUCKET_NEXT(b)) {
         if (b->length == ((apr_size_t)-1)) {
             /* do not count */
@@ -296,13 +293,13 @@ static apr_size_t calc_buffered(h2_bucket_beam *beam)
     return len;
 }
 
-static void r_purge_sent(h2_bucket_beam *beam)
+static void purge_consumed_buckets(h2_bucket_beam *beam)
 {
     apr_bucket *b;
     /* delete all sender buckets in purge brigade, needs to be called
      * from sender thread only */
-    while (!H2_BLIST_EMPTY(&beam->purge_list)) {
-        b = H2_BLIST_FIRST(&beam->purge_list);
+    while (!H2_BLIST_EMPTY(&beam->buckets_consumed)) {
+        b = H2_BLIST_FIRST(&beam->buckets_consumed);
         apr_bucket_delete(b);
     }
 }
@@ -319,7 +316,7 @@ static apr_size_t calc_space_left(h2_bucket_beam *beam)
 static int buffer_is_empty(h2_bucket_beam *beam)
 {
     return ((!beam->recv_buffer || APR_BRIGADE_EMPTY(beam->recv_buffer))
-            && H2_BLIST_EMPTY(&beam->send_list));
+            && H2_BLIST_EMPTY(&beam->buckets_to_send));
 }
 
 static apr_status_t wait_not_empty(h2_bucket_beam *beam, conn_rec *c, apr_read_type_e block)
@@ -386,32 +383,32 @@ static void h2_beam_emitted(h2_bucket_beam *beam, h2_beam_proxy *proxy)
     if (proxy->bsender) {
         /* this bucket is a proxy for a sender's bucket, and that
          * should wait in the beam's hold. */
-        for (b = H2_BLIST_FIRST(&beam->hold_list);
-             b != H2_BLIST_SENTINEL(&beam->hold_list);
+        for (b = H2_BLIST_FIRST(&beam->buckets_in_flight);
+             b != H2_BLIST_SENTINEL(&beam->buckets_in_flight);
              b = APR_BUCKET_NEXT(b)) {
              if (b == proxy->bsender) {
                 break;
              }
         }
-        if (b != H2_BLIST_SENTINEL(&beam->hold_list)) {
+        if (b != H2_BLIST_SENTINEL(&beam->buckets_in_flight)) {
             /* found the sender bucket in hold that is no longer
              * needed. In addition, all hold buckets before this
              * one are also no longer needed.
              * Not all buckets in hold have a proxy, so we move
              * the hold from head up to the found sender onto
              * the beams purge list. */
-            for (b = H2_BLIST_FIRST(&beam->hold_list);
-                 b != H2_BLIST_SENTINEL(&beam->hold_list);
+            for (b = H2_BLIST_FIRST(&beam->buckets_in_flight);
+                 b != H2_BLIST_SENTINEL(&beam->buckets_in_flight);
                  b = next) {
                 next = APR_BUCKET_NEXT(b);
                 if (b == proxy->bsender) {
                     APR_BUCKET_REMOVE(b);
-                    H2_BLIST_INSERT_TAIL(&beam->purge_list, b);
+                    H2_BLIST_INSERT_TAIL(&beam->buckets_consumed, b);
                     break;
                 }
                 else if (APR_BUCKET_IS_METADATA(b)) {
                     APR_BUCKET_REMOVE(b);
-                    H2_BLIST_INSERT_TAIL(&beam->purge_list, b);
+                    H2_BLIST_INSERT_TAIL(&beam->buckets_consumed, b);
                 }
                 else {
                     /* another data bucket before this one in hold. this
@@ -426,8 +423,7 @@ static void h2_beam_emitted(h2_bucket_beam *beam, h2_beam_proxy *proxy)
             /* it should be there unless we screwed up */
             ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, beam->pool,
                           APLOGNO(03384) "h2_beam(%d-%s): emitted bucket not "
-                          "in hold, n=%d", beam->id, beam->name,
-                          (int)proxy->n);
+                          "in hold", beam->id, beam->name);
             ap_assert(!proxy->bsender);
         }
     }
@@ -445,43 +441,6 @@ static void h2_blist_cleanup(h2_blist *bl)
     }
 }
 
-static int pool_register(h2_bucket_beam *beam, apr_pool_t *pool,
-                         apr_status_t (*cleanup)(void *))
-{
-    if (pool && pool != beam->pool) {
-        apr_pool_pre_cleanup_register(pool, beam, cleanup);
-        return 1;
-    }
-    return 0;
-}
-
-static int pool_kill(h2_bucket_beam *beam, apr_pool_t *pool,
-                     apr_status_t (*cleanup)(void *)) {
-    if (pool && pool != beam->pool) {
-        apr_pool_cleanup_kill(pool, beam, cleanup);
-        return 1;
-    }
-    return 0;
-}
-
-static apr_status_t beam_send_cleanup(void *data)
-{
-    h2_bucket_beam *beam = data;
-    /* sender is going away, clear up all references to its memory */
-    r_purge_sent(beam);
-    h2_blist_cleanup(&beam->send_list);
-    report_consumption(beam, 0);
-    while (!H2_BPROXY_LIST_EMPTY(&beam->proxies)) {
-        h2_beam_proxy *proxy = H2_BPROXY_LIST_FIRST(&beam->proxies);
-        H2_BPROXY_REMOVE(proxy);
-        proxy->beam = NULL;
-        proxy->bsender = NULL;
-    }
-    h2_blist_cleanup(&beam->purge_list);
-    h2_blist_cleanup(&beam->hold_list);
-    return APR_SUCCESS;
-}
-
 static void recv_buffer_cleanup(h2_bucket_beam *beam)
 {
     if (beam->recv_buffer && !APR_BRIGADE_EMPTY(beam->recv_buffer)) {
@@ -490,7 +449,7 @@ static void recv_buffer_cleanup(h2_bucket_beam *beam)
         
         beam->recv_buffer = NULL;
         apr_brigade_length(bb, 0, &bblen);
-        beam->received_bytes += bblen;
+        beam->recv_bytes += bblen;
         
         /* need to do this unlocked since bucket destroy might 
          * call this beam again. */
@@ -507,22 +466,20 @@ static void recv_buffer_cleanup(h2_bucket_beam *beam)
 
 static apr_status_t beam_cleanup(h2_bucket_beam *beam, int from_pool)
 {
-    /*
-     * Owner of the beam is going away, depending on which side it owns,
-     * cleanup strategies will differ.
-     *
-     * In general, receiver holds references to memory from sender.
-     * Clean up receiver first, if safe, then cleanup sender, if safe.
-     */
+    beam->cons_io_cb = NULL;
+    beam->recv_cb = NULL;
 
-     /* When called from pool destroy, io callbacks are disabled */
-    if (from_pool) {
-        beam->cons_io_cb = NULL;
+    h2_blist_cleanup(&beam->buckets_to_send);
+    recv_buffer_cleanup(beam);
+    while (!H2_BPROXY_LIST_EMPTY(&beam->proxies)) {
+        h2_beam_proxy *proxy = H2_BPROXY_LIST_FIRST(&beam->proxies);
+        H2_BPROXY_REMOVE(proxy);
+        proxy->beam = NULL;
+        proxy->bsender = NULL;
     }
-    beam->recv_buffer = NULL;
-    beam->recv_pool = NULL;
-    pool_kill(beam, beam->pool, beam_send_cleanup);
-    return beam_send_cleanup(beam);
+    purge_consumed_buckets(beam);
+    h2_blist_cleanup(&beam->buckets_in_flight);
+    return APR_SUCCESS;
 }
 
 static apr_status_t beam_pool_cleanup(void *data)
@@ -552,11 +509,10 @@ apr_status_t h2_beam_create(h2_bucket_beam **pbeam, conn_rec *from,
     beam->id = id;
     beam->name = apr_psprintf(pool, "%s-%d-%s",
                               conn_ctx->id, id, tag);
-    pool_register(beam, beam->pool, beam_send_cleanup);
 
-    H2_BLIST_INIT(&beam->send_list);
-    H2_BLIST_INIT(&beam->hold_list);
-    H2_BLIST_INIT(&beam->purge_list);
+    H2_BLIST_INIT(&beam->buckets_to_send);
+    H2_BLIST_INIT(&beam->buckets_in_flight);
+    H2_BLIST_INIT(&beam->buckets_consumed);
     H2_BPROXY_LIST_INIT(&beam->proxies);
     beam->tx_mem_limits = 1;
     beam->max_buf_size = max_buf_size;
@@ -617,8 +573,8 @@ void h2_beam_abort(h2_bucket_beam *beam, conn_rec *c)
         /* no more consumption reporting to sender */
         beam->cons_io_cb = NULL;
         beam->cons_ctx = NULL;
-        r_purge_sent(beam);
-        h2_blist_cleanup(&beam->send_list);
+        purge_consumed_buckets(beam);
+        h2_blist_cleanup(&beam->buckets_to_send);
         report_consumption(beam, 1);
     }
     else {
@@ -629,18 +585,7 @@ void h2_beam_abort(h2_bucket_beam *beam, conn_rec *c)
     apr_thread_mutex_unlock(beam->lock);
 }
 
-static void move_to_hold(h2_bucket_beam *beam,
-                         apr_bucket_brigade *sender_bb)
-{
-    apr_bucket *b;
-    while (sender_bb && !APR_BRIGADE_EMPTY(sender_bb)) {
-        b = APR_BRIGADE_FIRST(sender_bb);
-        APR_BUCKET_REMOVE(b);
-        H2_BLIST_INSERT_TAIL(&beam->send_list, b);
-    }
-}
-
-static apr_status_t append_bucket(h2_bucket_beam *beam, 
+static apr_status_t append_bucket(h2_bucket_beam *beam,
                                   apr_bucket *b,
                                   apr_read_type_e block,
                                   apr_size_t *pspace_left)
@@ -658,7 +603,7 @@ static apr_status_t append_bucket(h2_bucket_beam *beam,
     if (APR_BUCKET_IS_METADATA(b)) {
         APR_BUCKET_REMOVE(b);
         apr_bucket_setaside(b, beam->pool);
-        H2_BLIST_INSERT_TAIL(&beam->send_list, b);
+        H2_BLIST_INSERT_TAIL(&beam->buckets_to_send, b);
         return APR_SUCCESS;
     }
     else if (APR_BUCKET_IS_FILE(b)) {
@@ -732,8 +677,7 @@ static apr_status_t append_bucket(h2_bucket_beam *beam,
     }
     
     APR_BUCKET_REMOVE(b);
-    H2_BLIST_INSERT_TAIL(&beam->send_list, b);
-    beam->sent_bytes += b->length;
+    H2_BLIST_INSERT_TAIL(&beam->buckets_to_send, b);
 
 cleanup:
     return status;
@@ -746,44 +690,42 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam, conn_rec *from,
     apr_bucket *b;
     apr_status_t rv = APR_SUCCESS;
     apr_size_t space_left = 0;
+    int was_empty;
 
     /* Called from the sender thread to add buckets to the beam */
     apr_thread_mutex_lock(beam->lock);
     ap_assert(beam->from == from);
+    ap_assert(sender_bb);
     H2_BEAM_LOG(beam, from, APLOG_TRACE2, rv, "start send");
-    r_purge_sent(beam);
+    purge_consumed_buckets(beam);
+    was_empty = buffer_is_empty(beam);
 
-    if (beam->aborted) {
-        move_to_hold(beam, sender_bb);
-        rv = APR_ECONNABORTED;
-    }
-    else if (sender_bb) {
-        int was_empty = buffer_is_empty(beam);
-
-        space_left = calc_space_left(beam);
-        while (!APR_BRIGADE_EMPTY(sender_bb) && APR_SUCCESS == rv) {
-            if (space_left <= 0) {
-                r_purge_sent(beam);
-                if (was_empty && beam->was_empty_cb) {
-                    beam->was_empty_cb(beam->was_empty_ctx, beam);
-                }
-                rv = wait_not_full(beam, from, block, &space_left);
-                if (APR_SUCCESS != rv) {
-                    break;
-                }
-                was_empty = buffer_is_empty(beam);
+    space_left = calc_space_left(beam);
+    while (!APR_BRIGADE_EMPTY(sender_bb) && APR_SUCCESS == rv) {
+        if (!beam->aborted && space_left <= 0) {
+            purge_consumed_buckets(beam);
+            if (was_empty && beam->was_empty_cb) {
+                beam->was_empty_cb(beam->was_empty_ctx, beam);
             }
-            b = APR_BRIGADE_FIRST(sender_bb);
-            rv = append_bucket(beam, b, block, &space_left);
+            rv = wait_not_full(beam, from, block, &space_left);
+            if (APR_SUCCESS != rv) {
+                break;
+            }
+            was_empty = buffer_is_empty(beam);
         }
-
-        if (was_empty && beam->was_empty_cb && !buffer_is_empty(beam)) {
-            beam->was_empty_cb(beam->was_empty_ctx, beam);
-        }
-        apr_thread_cond_broadcast(beam->change);
+        b = APR_BRIGADE_FIRST(sender_bb);
+        rv = append_bucket(beam, b, block, &space_left);
     }
+
+    if (was_empty && beam->was_empty_cb && !buffer_is_empty(beam)) {
+        beam->was_empty_cb(beam->was_empty_ctx, beam);
+    }
+    apr_thread_cond_broadcast(beam->change);
 
     report_consumption(beam, 1);
+    if (beam->aborted) {
+        rv = APR_ECONNABORTED;
+    }
     H2_BEAM_LOG(beam, from, APLOG_TRACE2, rv, "end send");
     apr_thread_mutex_unlock(beam->lock);
     return rv;
@@ -832,10 +774,10 @@ transfer:
 
     /* transfer from our sender brigade, transforming sender buckets to
      * receiver ones until we have enough */
-    while (remain >= 0 && !H2_BLIST_EMPTY(&beam->send_list)) {
+    while (remain >= 0 && !H2_BLIST_EMPTY(&beam->buckets_to_send)) {
 
         brecv = NULL;
-        bsender = H2_BLIST_FIRST(&beam->send_list);
+        bsender = H2_BLIST_FIRST(&beam->buckets_to_send);
         if (bsender->length > 0 && remain <= 0) {
             break;
         }
@@ -856,7 +798,7 @@ transfer:
         }
         else if (bsender->length == 0) {
             APR_BUCKET_REMOVE(bsender);
-            H2_BLIST_INSERT_TAIL(&beam->hold_list, bsender);
+            H2_BLIST_INSERT_TAIL(&beam->buckets_in_flight, bsender);
             continue;
         }
         else if (APR_BUCKET_IS_FILE(bsender)) {
@@ -882,10 +824,10 @@ transfer:
             apr_bucket_file_enable_mmap(ng, 0);
 #endif
             APR_BUCKET_REMOVE(bsender);
-            H2_BLIST_INSERT_TAIL(&beam->hold_list, bsender);
+            H2_BLIST_INSERT_TAIL(&beam->buckets_in_flight, bsender);
 
             remain -= bsender->length;
-            beam->received_bytes += bsender->length;
+            beam->recv_bytes += bsender->length;
             ++transferred;
             ++transferred_buckets;
             continue;
@@ -896,15 +838,14 @@ transfer:
              * the sender brigade.
              * the beam bucket will notify us on destruction that bsender is
              * no longer needed. */
-            brecv = h2_beam_bucket_create(beam, bsender, bb->bucket_alloc,
-                                           beam->buckets_sent++);
+            brecv = h2_beam_bucket_create(beam, bsender, bb->bucket_alloc);
         }
 
         /* Place the sender bucket into our hold, to be
          * cleaned up once the receiver destroys its brecv proxy. */
         APR_BUCKET_REMOVE(bsender);
-        H2_BLIST_INSERT_TAIL(&beam->hold_list, bsender);
-        beam->received_bytes += bsender->length;
+        H2_BLIST_INSERT_TAIL(&beam->buckets_in_flight, bsender);
+        beam->recv_bytes += bsender->length;
         ++transferred_buckets;
 
         if (brecv) {
@@ -1002,8 +943,8 @@ static apr_off_t get_buffered_data_len(h2_bucket_beam *beam)
     apr_bucket *b;
     apr_off_t l = 0;
 
-    for (b = H2_BLIST_FIRST(&beam->send_list);
-        b != H2_BLIST_SENTINEL(&beam->send_list);
+    for (b = H2_BLIST_FIRST(&beam->buckets_to_send);
+        b != H2_BLIST_SENTINEL(&beam->buckets_to_send);
         b = APR_BUCKET_NEXT(b)) {
         /* should all have determinate length */
         l += b->length;
@@ -1027,8 +968,8 @@ apr_off_t h2_beam_get_mem_used(h2_bucket_beam *beam)
     apr_off_t l = 0;
 
     apr_thread_mutex_lock(beam->lock);
-    for (b = H2_BLIST_FIRST(&beam->send_list);
-        b != H2_BLIST_SENTINEL(&beam->send_list);
+    for (b = H2_BLIST_FIRST(&beam->buckets_to_send);
+        b != H2_BLIST_SENTINEL(&beam->buckets_to_send);
         b = APR_BUCKET_NEXT(b)) {
         l += bucket_mem_used(b);
     }
@@ -1038,7 +979,7 @@ apr_off_t h2_beam_get_mem_used(h2_bucket_beam *beam)
 
 static int is_empty(h2_bucket_beam *beam)
 {
-    return (H2_BLIST_EMPTY(&beam->send_list)
+    return (H2_BLIST_EMPTY(&beam->buckets_to_send)
             && (!beam->recv_buffer || APR_BRIGADE_EMPTY(beam->recv_buffer)));
 }
 
