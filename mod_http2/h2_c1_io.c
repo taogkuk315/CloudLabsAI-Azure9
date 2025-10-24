@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <apr_strings.h>
 #include <ap_mpm.h>
+#include <mpm_common.h>
 
 #include <httpd.h>
 #include <http_core.h>
@@ -466,7 +467,7 @@ cleanup:
 static int c1_input_pending(h2_session *session)
 {
 #if AP_MODULE_MAGIC_AT_LEAST(20160312, 0)
-    return (ap_run_input_pending(session->c1) == OK):
+    return (ap_run_input_pending(session->c1) == OK);
 #else
     return 0;
 #endif
