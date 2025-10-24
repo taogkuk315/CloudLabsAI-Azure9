@@ -34,7 +34,6 @@ struct apr_thread_mutext_t;
 struct apr_thread_cond_t;
 struct h2_ctx;
 struct h2_config;
-struct h2_c1_filter_ctx_t;
 struct h2_ihash_t;
 struct h2_mplx;
 struct h2_priority;
@@ -90,7 +89,6 @@ typedef struct h2_session {
     struct h2_push_diary *push_diary; /* remember pushes, avoid duplicates */
     
     struct h2_stream_monitor *monitor;/* monitor callbacks for streams */
-    int stream_count;               /* number of existing streams */
     int open_streams;               /* number of streams processing */
 
     int responses_submitted;        /* number of http/2 responses submitted */
@@ -105,8 +103,6 @@ typedef struct h2_session {
     apr_size_t max_stream_count;    /* max number of open streams */
     apr_size_t max_stream_mem;      /* max buffer memory for a single stream */
     
-    apr_time_t idle_until;          /* Time we shut down due to sheer boredom */
-    apr_time_t idle_sync_until;     /* Time we sync wait until keepalive handling kicks in */
     apr_size_t idle_frames;         /* number of rcvd frames that kept session in idle state */
     apr_interval_time_t idle_delay; /* Time we delay processing rcvd frames in idle state */
     

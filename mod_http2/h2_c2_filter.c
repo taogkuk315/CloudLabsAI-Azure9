@@ -658,7 +658,7 @@ static void make_chunk(conn_rec *c, h2_chunk_filter_t *fctx, apr_bucket_brigade 
                                    "%"APR_UINT64_T_HEX_FMT"\r\n", (apr_uint64_t)chunk_len);
     b = apr_bucket_heap_create(buffer, len, NULL, bb->bucket_alloc);
     APR_BUCKET_INSERT_BEFORE(first, b);
-    b = apr_bucket_heap_create("\r\n", 2, NULL, bb->bucket_alloc);
+    b = apr_bucket_immortal_create("\r\n", 2, bb->bucket_alloc);
     if (tail) {
         APR_BUCKET_INSERT_BEFORE(tail, b);
     }

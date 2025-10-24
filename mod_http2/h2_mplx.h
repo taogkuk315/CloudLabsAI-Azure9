@@ -79,7 +79,6 @@ struct h2_mplx {
     apr_thread_mutex_t *lock;
     struct apr_thread_cond_t *join_wait;
     
-    apr_array_header_t *spare_c2;   /* spare secondary connections */
     apr_pollset_t *pollset;         /* pollset for c1/c2 IO events */
     struct h2_workers *workers;     /* h2 workers process wide instance */
 };
@@ -113,8 +112,10 @@ int h2_mplx_c1_shutdown(h2_mplx *m);
  * 
  * @param m the mplx itself
  * @param stream the stream ready for cleanup
+ * @param pstream_count return the number of streams active
  */
-apr_status_t h2_mplx_c1_stream_cleanup(h2_mplx *m, struct h2_stream *stream);
+apr_status_t h2_mplx_c1_stream_cleanup(h2_mplx *m, struct h2_stream *stream,
+                                       int *pstream_count);
 
 int h2_mplx_c1_stream_is_running(h2_mplx *m, struct h2_stream *stream);
 
@@ -125,12 +126,14 @@ int h2_mplx_c1_stream_is_running(h2_mplx *m, struct h2_stream *stream);
  * @param read_to_process
  * @param input_pending
  * @param cmp the stream priority compare function
+ * @param pstream_count on return the number of streams active in mplx
  */
 apr_status_t h2_mplx_c1_process(h2_mplx *m,
                                 struct h2_iqueue *read_to_process,
                                 h2_stream_get_fn *get_stream,
                                 h2_stream_pri_cmp_fn *cmp,
-                                struct h2_session *session);
+                                struct h2_session *session,
+                                int *pstream_count);
 
 apr_status_t h2_mplx_c1_fwd_input(h2_mplx *m, struct h2_iqueue *input_pending,
                                   h2_stream_get_fn *get_stream,

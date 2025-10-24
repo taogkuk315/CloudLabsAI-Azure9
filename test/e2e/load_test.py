@@ -253,6 +253,7 @@ class LoadTestCase:
                 'base': """
             LogLevel ssl:warn
             Protocols h2 http/1.1
+            EnableMMap off
                     """
             }
             extras['base'] += f"""
@@ -391,7 +392,9 @@ class UrlsLoadTest(LoadTestCase):
         try:
             if self._warmup:
                 self.run_test(mode="warmup", path=path)
-            return self.run_test(mode="measure", path=path)
+            r = self.run_test(mode="measure", path=path)
+            # time.sleep(300)
+            return r
         finally:
             self._teardown()
 
@@ -615,8 +618,8 @@ class LoadTest:
                 "title": "1k files, 10k size, *conn, 100k req, {protocol} ({measure})",
                 "class": UrlsLoadTest,
                 "location": "/",
-                "file_count": 1024,
-                "file_sizes": [10],
+                "file_count": 100,
+                "file_sizes": [1],
                 "requests": 100000,
                 "warmup": False,
                 "measure": "req/s",
@@ -625,12 +628,11 @@ class LoadTest:
                 "row0_title": "max requests",
                 "row_title": "{max_parallel:3d} {requests}",
                 "rows": [
-                    {"max_parallel": 6, "requests": 100000},
-                    {"max_parallel": 6, "requests": 100000},
-                    {"max_parallel": 6, "requests": 250000},
-                    {"max_parallel": 6, "requests": 500000},
-                    {"max_parallel": 6, "requests": 750000},
-                    {"max_parallel": 6, "requests": 1000000},
+                    {"max_parallel": 1,  "requests": 100000},
+                    {"max_parallel": 2,  "requests": 100000},
+                    #{"max_parallel": 6,  "requests": 250000},
+                    #{"max_parallel": 20, "requests": 500000},
+                    #{"max_parallel": 50, "requests": 750000},
                 ],
                 "col_title": "{clients}c",
                 "clients": 1,

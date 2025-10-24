@@ -230,7 +230,6 @@ void h2_c2_destroy(conn_rec *c2)
 {
     ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, c2,
                   "h2_c2(%s): destroy", c2->log_id);
-    c2->sbh = NULL;
     apr_pool_destroy(c2->pool);
 }
 
@@ -457,26 +456,26 @@ apr_status_t h2_c2_init(apr_pool_t *pool, server_rec *s)
     return APR_SUCCESS;
 }
 
-static apr_status_t c2_run_pre_connection(conn_rec *secondary, apr_socket_t *csd)
+static apr_status_t c2_run_pre_connection(conn_rec *c2, apr_socket_t *csd)
 {
-    if (secondary->keepalives == 0) {
+    if (c2->keepalives == 0) {
         /* Simulate that we had already a request on this connection. Some
          * hooks trigger special behaviour when keepalives is 0.
          * (Not necessarily in pre_connection, but later. Set it here, so it
          * is in place.) */
-        secondary->keepalives = 1;
+        c2->keepalives = 1;
         /* We signal that this connection will be closed after the request.
          * Which is true in that sense that we throw away all traffic data
-         * on this secondary connection after each requests. Although we might
+         * on this c2 connection after each requests. Although we might
          * reuse internal structures like memory pools.
          * The wanted effect of this is that httpd does not try to clean up
          * any dangling data on this connection when a request is done. Which
          * is unnecessary on a h2 stream.
          */
-        secondary->keepalive = AP_CONN_CLOSE;
-        return ap_run_pre_connection(secondary, csd);
+        c2->keepalive = AP_CONN_CLOSE;
+        return ap_run_pre_connection(c2, csd);
     }
-    ap_assert(secondary->output_filters);
+    ap_assert(c2->output_filters);
     return APR_SUCCESS;
 }
 
@@ -596,21 +595,15 @@ static apr_status_t c2_process(h2_conn_ctx_t *conn_ctx, conn_rec *c)
     }
 
     ap_process_request(r);
+    /* After the call to ap_process_request, the
+     * request pool may have been deleted. */
+    r = NULL;
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                   "h2_c2(%s-%d): process_request done",
                   conn_ctx->id, conn_ctx->stream_id);
-
-    /* After the call to ap_process_request, the
-     * request pool may have been deleted.  We set
-     * r=NULL here to ensure that any dereference
-     * of r that might be added later in this function
-     * will result in a segfault immediately instead
-     * of nondeterministic failures later.
-     */
     if (cs)
         cs->state = CONN_STATE_WRITE_COMPLETION;
-    r = NULL;
 
 cleanup:
     return APR_SUCCESS;

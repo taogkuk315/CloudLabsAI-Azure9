@@ -57,7 +57,7 @@
 #define BUF_REMAIN            ((apr_size_t)(bmax-off))
 
 static void h2_c1_io_bb_log(conn_rec *c, int stream_id, int level,
-                              const char *tag, apr_bucket_brigade *bb)
+                            const char *tag, apr_bucket_brigade *bb)
 {
     char buffer[16 * 1024];
     const char *line = "(null)";
@@ -130,6 +130,11 @@ static void h2_c1_io_bb_log(conn_rec *c, int stream_id, int level,
                   c->id, tag, line);
 
 }
+#define C1_IO_BB_LOG(c, stream_id, level, tag, bb) \
+    if (APLOG_C_IS_LEVEL(c, level)) { \
+        h2_c1_io_bb_log((c), (stream_id), (level), (tag), (bb)); \
+    }
+
 
 apr_status_t h2_c1_io_init(h2_c1_io *io, conn_rec *c, server_rec *s)
 {
@@ -272,20 +277,20 @@ static apr_status_t pass_output(h2_c1_io *io, int flush)
     ap_update_child_status(c->sbh, SERVER_BUSY_WRITE, NULL);
     io->unflushed = !APR_BUCKET_IS_FLUSH(APR_BRIGADE_LAST(io->output));
     apr_brigade_length(io->output, 0, &bblen);
-    h2_c1_io_bb_log(c, 0, APLOG_TRACE2, "out", io->output);
+    C1_IO_BB_LOG(c, 0, APLOG_TRACE2, "out", io->output);
     
     rv = ap_pass_brigade(c->output_filters, io->output);
     if (APR_SUCCESS == rv) {
         io->buffered_len = 0;
         io->bytes_written += (apr_size_t)bblen;
         io->last_write = apr_time_now();
-        apr_brigade_cleanup(io->output);
     }
     else {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, rv, c, APLOGNO(03044)
                       "h2_c1_io(%ld): pass_out brigade %ld bytes",
                       c->id, (long)bblen);
     }
+    apr_brigade_cleanup(io->output);
     return rv;
 }
 
@@ -402,27 +407,16 @@ cleanup:
     return rv;
 }
 
-struct h2_c1_io_in_ctx_t {
-    apr_pool_t *pool;
-    apr_socket_t *socket;
-    apr_interval_time_t timeout;
-    apr_bucket_brigade *bb;
-    struct h2_session *session;
-    apr_bucket *cur;
-};
-
-static apr_status_t feed_bucket(h2_session *session,
-                                apr_bucket *b, apr_read_type_e block,
-                                apr_ssize_t *inout_len)
+static apr_status_t c1_in_feed_bucket(h2_session *session,
+                                      apr_bucket *b, apr_ssize_t *inout_len)
 {
-    apr_status_t status = APR_SUCCESS;
+    apr_status_t rv = APR_SUCCESS;
     apr_size_t len;
     const char *data;
     ssize_t n;
 
-    status = apr_bucket_read(b, &data, &len, block);
-
-    while (status == APR_SUCCESS && len > 0) {
+    rv = apr_bucket_read(b, &data, &len, APR_BLOCK_READ);
+    while (APR_SUCCESS == rv && len > 0) {
         n = nghttp2_session_mem_recv(session->ngh2, (const uint8_t *)data, len);
 
         ap_log_cerror(APLOG_MARK, APLOG_TRACE4, 0, session->c1,
@@ -432,7 +426,7 @@ static apr_status_t feed_bucket(h2_session *session,
             if (nghttp2_is_fatal((int)n)) {
                 h2_session_event(session, H2_SESSION_EV_PROTO_ERROR,
                                  (int)n, nghttp2_strerror((int)n));
-                status = APR_EGENERAL;
+                rv = APR_EGENERAL;
             }
         }
         else {
@@ -445,101 +439,105 @@ static apr_status_t feed_bucket(h2_session *session,
         }
     }
 
-    return status;
+    return rv;
 }
 
-static apr_status_t feed_brigade(h2_session *session,
-                                 apr_bucket_brigade *bb,
-                                 apr_read_type_e block,
-                                 apr_ssize_t *inout_len)
+static apr_status_t c1_in_feed_brigade(h2_session *session,
+                                       apr_bucket_brigade *bb,
+                                       apr_ssize_t *inout_len)
 {
-    apr_status_t status = APR_SUCCESS;
+    apr_status_t rv = APR_SUCCESS;
     apr_bucket* b;
 
+    *inout_len = 0;
     while (!APR_BRIGADE_EMPTY(bb)) {
         b = APR_BRIGADE_FIRST(bb);
         if (!APR_BUCKET_IS_METADATA(b)) {
-            status = feed_bucket(session, b, block, inout_len);
-            if (APR_SUCCESS != status) goto cleanup;
+            rv = c1_in_feed_bucket(session, b, inout_len);
+            if (APR_SUCCESS != rv) goto cleanup;
         }
         apr_bucket_delete(b);
     }
 cleanup:
-    return status;
+    apr_brigade_cleanup(bb);
+    return rv;
 }
 
-h2_c1_io_in_ctx_t *h2_c1_io_in_ctx_create(h2_session *session)
+static int c1_input_pending(h2_session *session)
 {
-    h2_c1_io_in_ctx_t *cin;
-
-    cin = apr_pcalloc(session->pool, sizeof(*cin));
-    if (!cin) {
-        return NULL;
-    }
-    cin->session = session;
-    cin->bb = apr_brigade_create(cin->session->pool, cin->session->c1->bucket_alloc);
-    return cin;
+#if AP_MODULE_MAGIC_AT_LEAST(20160312, 0)
+    return (ap_run_input_pending(session->c1) == OK):
+#else
+    return 0;
+#endif
 }
 
-apr_status_t h2_c1_io_filter_in(ap_filter_t* f,
-                                apr_bucket_brigade* brigade,
-                                ap_input_mode_t mode,
-                                apr_read_type_e block,
-                                apr_off_t readbytes)
+apr_status_t h2_c1_read(h2_session *session)
 {
-    h2_c1_io_in_ctx_t *cin = f->ctx;
-    apr_status_t status = APR_SUCCESS;
+    apr_status_t rv;
+    conn_rec *c = session->c1;
+    apr_off_t read_start = session->io.bytes_read;
+    apr_size_t readlen = session->max_stream_mem * 4;
+    apr_ssize_t bytes_fed;
 
-    if (APLOGctrace1(f->c)) {
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                      "h2_session(%ld): read, %s, mode=%d, readbytes=%ld",
-                      (long)f->c->id, (block == APR_BLOCK_READ)?
-                      "BLOCK_READ" : "NONBLOCK_READ", mode, (long)readbytes);
-    }
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
+                  H2_SSSN_MSG(session, "session_read start"));
+    /* H2_IN filter handles all incoming data against the session.
+     * We just pull at the filter chain to make it happen */
+    rv = ap_get_brigade(c->input_filters,
+                        session->bbtmp, AP_MODE_READBYTES,
+                        APR_NONBLOCK_READ,
+                        H2MAX(APR_BUCKET_BUFF_SIZE, readlen));
 
-    if (mode == AP_MODE_INIT || mode == AP_MODE_SPECULATIVE) {
-        return ap_get_brigade(f->next, brigade, mode, block, readbytes);
-    }
-
-    if (mode != AP_MODE_READBYTES) {
-        return (block == APR_BLOCK_READ)? APR_SUCCESS : APR_EAGAIN;
-    }
-
-    while (APR_SUCCESS == status) {
-        apr_ssize_t bytes_fed = 0;
-
-        if (APR_BRIGADE_EMPTY(cin->bb)) {
-            status = ap_get_brigade(f->next, cin->bb, AP_MODE_READBYTES,
-                                    block, readbytes);
-        }
-
-        switch (status) {
-            case APR_SUCCESS:
-                h2_util_bb_log(f->c, cin-session->id, APLOG_TRACE2, "c1 in", cin->bb);
-                status = feed_brigade(cin->session, cin->bb, block, &bytes_fed);
-                break;
-            case APR_EOF:
-            case APR_EAGAIN:
-            case APR_TIMEUP:
-                if (APLOGctrace1(f->c)) {
-                    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, status, f->c,
-                                  "h2_session(%ld): read", f->c->id);
-                }
-                break;
-            default:
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, f->c, APLOGNO(03046)
-                              "h2_session(%ld): error reading", f->c->id);
-                break;
-        }
-        if (bytes_fed > 0) {
-            cin->session->io.bytes_read += bytes_fed;
-            break;
-        }
-        else if (status == APR_SUCCESS && block == APR_NONBLOCK_READ) {
-            status = APR_EAGAIN;
+    if (APR_SUCCESS == rv) {
+        h2_util_bb_log(session->c1, session->id, APLOG_TRACE2, "c1 in", session->bbtmp);
+        rv = c1_in_feed_brigade(session, session->bbtmp, &bytes_fed);
+        if (APR_SUCCESS == rv) {
+            session->io.bytes_read += bytes_fed;
+            if (session->io.bytes_read > read_start) {
+                h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_READ, 0, NULL);
+            }
+            else {
+                h2_util_bb_log(session->c1, session->id, APLOG_TRACE2, "c1 in empty", session->bbtmp);
+            }
         }
     }
 
-    return status;
+    if (APR_STATUS_IS_EAGAIN(rv)) {
+        if (c1_input_pending(session)) {
+            goto cleanup;
+        }
+        /* Signal that we have exhausted the input momentarily.
+         * This might switch to polling the socket */
+        h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_EAGAIN, 0, NULL);
+    }
+    else if (APR_SUCCESS != rv) {
+        if (session->io.bytes_read == read_start) {
+            /* first attempt failed */
+            if (APR_STATUS_IS_ETIMEDOUT(rv)
+                || APR_STATUS_IS_ECONNABORTED(rv)
+                || APR_STATUS_IS_ECONNRESET(rv)
+                || APR_STATUS_IS_EOF(rv)
+                || APR_STATUS_IS_EBADF(rv)) {
+                /* common status for a client that has left */
+                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
+                              H2_SSSN_MSG(session, "input gone"));
+            }
+            else {
+                /* uncommon status, log on INFO so that we see this */
+                ap_log_cerror( APLOG_MARK, APLOG_DEBUG, rv, c,
+                              H2_SSSN_LOG(APLOGNO(02950), session,
+                              "error reading, terminating"));
+            }
+        }
+        /* subsequent failure after success(es), return initial
+         * status. */
+        h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
+    }
+
+cleanup:
+    apr_brigade_cleanup(session->bbtmp);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
+                  H2_SSSN_MSG(session, "session_read done"));
+    return rv;
 }
-

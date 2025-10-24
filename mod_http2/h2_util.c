@@ -1653,7 +1653,7 @@ static apr_status_t ngheader_create(h2_ngheader **ph, apr_pool_t *p,
         return APR_ENOMEM;
     }
     
-    ctx.ngh->nv =  apr_pcalloc(p, n * sizeof(nghttp2_nv));
+    ctx.ngh->nv = apr_pcalloc(p, n * sizeof(nghttp2_nv));
     if (!ctx.ngh->nv) {
         return APR_ENOMEM;
     }

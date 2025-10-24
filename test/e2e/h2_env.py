@@ -45,6 +45,7 @@ class H2TestEnv:
         self._server_docs_dir = os.path.join(self._server_dir, "htdocs")
         self._server_logs_dir = os.path.join(self.server_dir, "logs")
         self._server_error_log = os.path.join(self._server_logs_dir, "error_log")
+        self._server_access_log = os.path.join(self._server_logs_dir, "access_log")
         self._curl = self.config.get('global', 'curl_bin')
         self._test_dir = self.config.get('global', 'test_dir')
         self._nghttp = self.config.get('global', 'nghttp')
@@ -305,6 +306,10 @@ class H2TestEnv:
 
     def apache_stop(self):
         return self.apachectl("stop", check_live=False)
+
+    def apache_access_log_clear(self):
+        if os.path.isfile(self._server_access_log):
+            os.remove(self._server_access_log)
 
     def apache_error_log_clear(self):
         if os.path.isfile(self._server_error_log):

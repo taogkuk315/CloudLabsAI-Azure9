@@ -89,14 +89,6 @@ int h2_c1_io_pending(h2_c1_io *io);
 
 struct h2_session;
 
-typedef struct h2_c1_io_in_ctx_t h2_c1_io_in_ctx_t;
-
-h2_c1_io_in_ctx_t *h2_c1_io_in_ctx_create(struct h2_session *session);
-
-apr_status_t h2_c1_io_filter_in(ap_filter_t* filter,
-                                apr_bucket_brigade* brigade,
-                                ap_input_mode_t mode,
-                                apr_read_type_e block,
-                                apr_off_t readbytes);
+apr_status_t h2_c1_read(struct h2_session *session);
 
 #endif /* defined(__mod_h2__h2_c1_io__) */

@@ -67,9 +67,11 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                             stream_ev_callback *on_stream_output,
                             void *on_ctx);
 
+static apr_pool_t *pchild;
 
 apr_status_t h2_mplx_c1_child_init(apr_pool_t *pool, server_rec *s)
 {
+    pchild = pool;
     return APR_SUCCESS;
 }
 
@@ -211,8 +213,6 @@ h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent
     m->processing_limit = 6; /* the original h1 max parallel connections */
     m->last_mood_change = apr_time_now();
     m->mood_update_interval = apr_time_from_msec(100);
-
-    m->spare_c2 = apr_array_make(m->pool, 10, sizeof(conn_rec*));
 
     status = mplx_pollset_create(m);
     if (APR_SUCCESS != status) goto failure;
@@ -387,14 +387,15 @@ void h2_mplx_c1_destroy(h2_mplx *m)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, m->c1, "h2_mplx(%ld): released", m->id);
 }
 
-apr_status_t h2_mplx_c1_stream_cleanup(h2_mplx *m, h2_stream *stream)
+apr_status_t h2_mplx_c1_stream_cleanup(h2_mplx *m, h2_stream *stream,
+                                       int *pstream_count)
 {
     H2_MPLX_ENTER(m);
     
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                   H2_STRM_MSG(stream, "cleanup"));
-    m_stream_cleanup(m, stream);        
-    
+    m_stream_cleanup(m, stream);
+    *pstream_count = (int)h2_ihash_count(m->streams);
     H2_MPLX_LEAVE(m);
     return APR_SUCCESS;
 }
@@ -426,18 +427,8 @@ static void c1_purge_streams(h2_mplx *m)
             conn_rec *c2 = stream->c2;
 
             stream->c2 = NULL;
-            if (!c2->aborted && m->spare_c2->nelts < 2 && /*disables code*/(0)
-                && (m->s->keep_alive_max == 0 || c2->keepalives < m->s->keep_alive_max)) {
-
-                ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, m->c1, APLOGNO(03385)
-                              "h2_c2(%ld), reuse c2", m->id);
-                h2_conn_ctx_clear_for_c2(c2);
-                APR_ARRAY_PUSH(m->spare_c2, conn_rec*) = c2;
-            }
-            else {
-                h2_conn_ctx_destroy(c2);
-                h2_c2_destroy(c2);
-            }
+            h2_conn_ctx_destroy(c2);
+            h2_c2_destroy(c2);
         }
         h2_stream_destroy(stream);
     }
@@ -554,7 +545,8 @@ apr_status_t h2_mplx_c1_process(h2_mplx *m,
                                 h2_iqueue *ready_to_process,
                                 h2_stream_get_fn *get_stream,
                                 h2_stream_pri_cmp_fn *stream_pri_cmp,
-                                h2_session *session)
+                                h2_session *session,
+                                int *pstream_count)
 {
     apr_status_t rv;
     int sid;
@@ -576,18 +568,19 @@ apr_status_t h2_mplx_c1_process(h2_mplx *m,
         }
     }
     ms_register_if_needed(m, 1);
-
+    *pstream_count = (int)h2_ihash_count(m->streams);
 #if APR_POOL_DEBUG
     do {
-        apr_size_t mem_m, mem_s, mem_w, mem_c1;
+        apr_size_t mem_g, mem_m, mem_s, mem_w, mem_c1;
 
+        mem_g = pchild? apr_pool_num_bytes(pchild, 1) : 0;
         mem_m = apr_pool_num_bytes(m->pool, 1);
         mem_s = apr_pool_num_bytes(session->pool, 1);
         mem_w = apr_pool_num_bytes(m->workers->pool, 1);
         mem_c1 = apr_pool_num_bytes(m->c1->pool, 1);
         ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, m->c1,
-                      "h2_mplx(%ld): mplx mem=%ld, session mem=%ld, workers=%ld, c1=%ld",
-                      m->id, (long)mem_m, (long)mem_s, (long)mem_w, (long)mem_c1);
+                      "h2_mplx(%ld): child mem=%ld, mplx mem=%ld, session mem=%ld, workers=%ld, c1=%ld",
+                      m->id, (long)mem_g, (long)mem_m, (long)mem_s, (long)mem_w, (long)mem_c1);
 
     } while (0);
 #endif
@@ -623,7 +616,7 @@ static conn_rec *s_next_c2(h2_mplx *m)
     h2_conn_ctx_t *conn_ctx;
     apr_status_t rv;
     int sid;
-    conn_rec *c2, **pc2;
+    conn_rec *c2;
 
     while (!m->aborted && !stream && (m->processing_count < m->processing_limit)
            && (sid = h2_iq_shift(m->q)) > 0) {
@@ -644,18 +637,9 @@ static conn_rec *s_next_c2(h2_mplx *m)
         m->max_stream_id_started = sid;
     }
 
-    pc2 = (conn_rec **)apr_array_pop(m->spare_c2);
-    if (pc2) {
-        c2 = *pc2;
-        c2->aborted = 0;
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c1,
-                      H2_STRM_MSG(stream, "reusing spare c2"));
-    }
-    else {
-        c2 = h2_c2_create(m->c1, m->pool);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c1,
-                      H2_STRM_MSG(stream, "created new c2"));
-    }
+    c2 = h2_c2_create(m->c1, m->pool);
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c1,
+                  H2_STRM_MSG(stream, "created new c2"));
 
     rv = h2_conn_ctx_init_for_c2(&conn_ctx, c2, m, stream);
     if (APR_SUCCESS != rv) {
@@ -898,7 +882,6 @@ static apr_status_t mplx_pollset_add(h2_mplx *m, h2_stream *stream, h2_conn_ctx_
     if (!conn_ctx->pfd_out_write) {
         conn_ctx->pfd_out_write = apr_pcalloc(pool, sizeof(*conn_ctx->pfd_out_write));
         conn_ctx->pfd_out_write->p = pool;
-        conn_ctx->pfd_out_write->client_data = conn_ctx;
     }
     else if (conn_ctx->pfd_out_write->reqevents) {
         name = "removing out";
@@ -906,6 +889,7 @@ static apr_status_t mplx_pollset_add(h2_mplx *m, h2_stream *stream, h2_conn_ctx_
         if (APR_SUCCESS != rv) goto cleanup;
     }
 
+    conn_ctx->pfd_out_write->client_data = (void*)((ptrdiff_t)stream->id);
     if (conn_ctx->stream_id == 0) {
         /* c1 connection */
         conn_ctx->pfd_out_write->desc_type = APR_POLL_SOCKET;
@@ -926,13 +910,13 @@ static apr_status_t mplx_pollset_add(h2_mplx *m, h2_stream *stream, h2_conn_ctx_
         if (!conn_ctx->pfd_in_read) {
             conn_ctx->pfd_in_read = apr_pcalloc(pool, sizeof(*conn_ctx->pfd_in_read));
             conn_ctx->pfd_in_read->p = pool;
-            conn_ctx->pfd_in_read->client_data = conn_ctx;
         }
         else if (conn_ctx->pfd_in_read->reqevents) {
             name = "removing in_read";
             rv = apr_pollset_remove(m->pollset, conn_ctx->pfd_in_read);
             if (APR_SUCCESS != rv) goto cleanup;
         }
+        conn_ctx->pfd_in_read->client_data = (void*)((ptrdiff_t)stream->id);
         conn_ctx->pfd_in_read->desc_type = APR_POLL_FILE;
         conn_ctx->pfd_in_read->desc.f = conn_ctx->pin_recv_read;
         conn_ctx->pfd_in_read->reqevents = APR_POLLIN | APR_POLLERR | APR_POLLHUP;
@@ -985,6 +969,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
     apr_int32_t nresults, i;
     h2_conn_ctx_t *conn_ctx;
     h2_stream *stream;
+    int stream_id;
 
     /* Make sure we are not called recursively. */
     ap_assert(!m->polling);
@@ -1014,9 +999,9 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
 
         for (i = 0; i < nresults; i++) {
             pfd = &results[i];
-            conn_ctx = pfd->client_data;
+            stream_id = (int)((ptrdiff_t)pfd->client_data);
 
-            if (conn_ctx->stream_id == 0) {
+            if (stream_id == 0) {
                 if (on_stream_input) {
                     H2_MPLX_LEAVE(m);
                     on_stream_input(on_ctx, m->stream0);
@@ -1026,6 +1011,26 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
             }
 
             h2_util_drain_pipe(pfd->desc.f);
+            stream = h2_ihash_get(m->streams, stream_id);
+            conn_ctx = (stream && stream->c2)? h2_conn_ctx_get(stream->c2) : NULL;
+            if (!conn_ctx) {
+                /* How can this be?
+                 * apr_pollset keeps a copy of 'pfd's we register and rightly so, as
+                 * we can modify the pollset while working on the events it produced.
+                 * However that means when registering 'pfd's for stream, they might get
+                 * removed on an event with other events for it still pending. When
+                 * those pending events are then delivered, the stream and any memory
+                 * used by it is gone. That is why we register the stream_id as client_data.
+                 */
+                ap_log_cerror(APLOG_MARK, APLOG_WARNING, rv, m->c1, APLOGNO()
+                              "h2_mplx(%ld-%d): stream no longer found for poll event %hx"
+                              ", stream is in %s, m->streams=%d",
+                               m->id, stream_id, pfd->rtnevents,
+                               h2_ihash_get(m->shold, stream_id)? "hold" : "void",
+                               (int)h2_ihash_count(m->streams));
+                h2_ihash_iter(m->streams, m_report_stream_iter, m);
+                continue;
+            }
 
             if (conn_ctx->pfd_out_write && conn_ctx->pfd_out_write->desc.f == pfd->desc.f) {
                 /* output is available */
@@ -1049,7 +1054,6 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                                   conn_ctx->id, conn_ctx->stream_id);
                 }
 
-                stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
                 if (stream && on_stream_output) {
                     H2_MPLX_LEAVE(m);
                     on_stream_output(on_ctx, stream);

@@ -208,7 +208,7 @@ apr_status_t h2_request_end_headers(h2_request *req, apr_pool_t *pool, int eos, 
         }
     }
     req->raw_bytes += raw_bytes;
-    
+
     return APR_SUCCESS;
 }
 

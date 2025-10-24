@@ -34,7 +34,6 @@ def env(pytestconfig) -> H2TestEnv:
     logging.getLogger('').addHandler(console)
     logging.getLogger('').setLevel(level=level)
     env = H2TestEnv(pytestconfig=pytestconfig)
-    env.apache_error_log_clear()
     cert_specs = [
         CertificateSpec(domains=env.domains, key_type='rsa4096'),
         CertificateSpec(domains=env.domains_noh2, key_type='rsa2048'),
@@ -43,6 +42,8 @@ def env(pytestconfig) -> H2TestEnv:
                               store_dir=os.path.join(env.server_dir, 'ca'), key_type="rsa4096")
     ca.issue_certs(cert_specs)
     env.set_ca(ca)
+    env.apache_access_log_clear()
+    env.apache_error_log_clear()
     return env
 
 
