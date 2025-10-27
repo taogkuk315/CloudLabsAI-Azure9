@@ -54,6 +54,9 @@ struct h2_conn_ctx_t {
     apr_file_t *output_write_in;     /* c2: send output write notifications */
     apr_file_t *output_write_out;    /* c2: receive output write notifications */
 
+    apr_pollfd_t pfd_in_read;
+    apr_pollfd_t pfd_out_write;
+
     volatile int done;               /* c2: processing has finished */
     apr_time_t started_at;           /* c2: when processing started */
     apr_time_t done_at;              /* c2: when processing was done */

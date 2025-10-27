@@ -80,6 +80,9 @@ struct h2_mplx {
     struct apr_thread_cond_t *join_wait;
     
     apr_pollset_t *pollset;         /* pollset for c1/c2 IO events */
+    apr_array_header_t *streams_ev_in;
+    apr_array_header_t *streams_ev_out;
+
     struct h2_workers *workers;     /* h2 workers process wide instance */
 };
 

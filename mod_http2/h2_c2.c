@@ -212,7 +212,7 @@ conn_rec *h2_c2_create(conn_rec *c1, apr_pool_t *parent)
      */
     ap_set_module_config(c2->conn_config, &core_module, dummy_socket);
     /* TODO: these should be unique to this thread */
-    c2->sbh = c1->sbh;
+    c2->sbh = NULL; /*c1->sbh;*/
     /* TODO: not all mpm modules have learned about secondary connections yet.
      * copy their config from master to secondary.
      */

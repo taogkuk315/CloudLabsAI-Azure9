@@ -48,12 +48,20 @@ static h2_conn_ctx_t *ctx_create(conn_rec *c, const char *id)
     return conn_ctx;
 }
 
-h2_conn_ctx_t *h2_conn_ctx_create_for_c1(conn_rec *c, server_rec *s, const char *protocol)
+h2_conn_ctx_t *h2_conn_ctx_create_for_c1(conn_rec *c1, server_rec *s, const char *protocol)
 {
     h2_conn_ctx_t *ctx;
-    ctx = ctx_create(c, apr_psprintf(c->pool, "%ld", c->id));
+
+    ctx = ctx_create(c1, apr_psprintf(c1->pool, "%ld", c1->id));
     ctx->server = s;
-    ctx->protocol = apr_pstrdup(c->pool, protocol);
+    ctx->protocol = apr_pstrdup(c1->pool, protocol);
+
+    ctx->pfd_out_write.desc_type = APR_POLL_SOCKET;
+    ctx->pfd_out_write.desc.s = ap_get_conn_socket(c1);
+    apr_socket_opt_set(ctx->pfd_out_write.desc.s, APR_SO_NONBLOCK, 1);
+    ctx->pfd_out_write.reqevents = APR_POLLIN | APR_POLLERR | APR_POLLHUP;
+    ctx->pfd_out_write.client_data = ctx;
+
     return ctx;
 }
 
@@ -120,21 +128,21 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
         apr_pool_tag(conn_ctx->mplx_pool, "H2_MPLX_C2");
     }
 
-    if (!conn_ctx->output_write_out) {
-        rv = apr_file_pipe_create_pools(&conn_ctx->output_write_out,
-                                        &conn_ctx->output_write_in,
-                                        APR_FULL_NONBLOCK,
-                                        conn_ctx->mplx_pool, c2->pool);
-        if (APR_SUCCESS != rv) {
-            ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, c2,
-                          H2_STRM_LOG(APLOGNO(), stream,
-                          "error creating output pipe"));
-            goto cleanup;
-        }
+    ap_assert(!conn_ctx->output_write_out);
+    rv = apr_file_pipe_create_pools(&conn_ctx->output_write_out,
+                                    &conn_ctx->output_write_in,
+                                    APR_FULL_NONBLOCK,
+                                    conn_ctx->mplx_pool, c2->pool);
+    if (APR_SUCCESS != rv) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, c2,
+                      H2_STRM_LOG(APLOGNO(), stream,
+                      "error creating output pipe"));
+        goto cleanup;
     }
-    else {
-        h2_util_drain_pipe(conn_ctx->output_write_out);
-    }
+    conn_ctx->pfd_out_write.desc_type = APR_POLL_FILE;
+    conn_ctx->pfd_out_write.desc.f = conn_ctx->output_write_out;
+    conn_ctx->pfd_out_write.reqevents = APR_POLLIN | APR_POLLERR | APR_POLLHUP;
+    conn_ctx->pfd_out_write.client_data = conn_ctx;
 
     if (!conn_ctx->beam_out) {
         rv = h2_beam_create(&conn_ctx->beam_out, c2, conn_ctx->req_pool,
@@ -147,33 +155,32 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
     stream->output = conn_ctx->beam_out;
 
     if (stream->input) {
-        if (!conn_ctx->input_write_out) {
-            rv = apr_file_pipe_create_pools(&conn_ctx->input_write_out,
-                                            &conn_ctx->input_write_in,
-                                            APR_READ_BLOCK,
-                                            c2->pool, conn_ctx->mplx_pool);
-            if (APR_SUCCESS != rv) {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, c2,
-                              H2_STRM_LOG(APLOGNO(), stream,
-                              "error creating input pipe"));
-                goto cleanup;
-            }
+        ap_assert(!conn_ctx->input_write_out);
+        rv = apr_file_pipe_create_pools(&conn_ctx->input_write_out,
+                                        &conn_ctx->input_write_in,
+                                        APR_READ_BLOCK,
+                                        c2->pool, conn_ctx->mplx_pool);
+        if (APR_SUCCESS != rv) {
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, c2,
+                          H2_STRM_LOG(APLOGNO(), stream,
+                          "error creating input pipe"));
+            goto cleanup;
         }
-        if (!conn_ctx->input_read_out) {
-            rv = apr_file_pipe_create_pools(&conn_ctx->input_read_out,
-                                            &conn_ctx->input_read_in,
-                                            APR_FULL_NONBLOCK,
-                                            c2->pool, conn_ctx->mplx_pool);
-            if (APR_SUCCESS != rv) {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, c2,
-                              H2_STRM_LOG(APLOGNO(), stream,
-                              "error creating input read pipe"));
-                goto cleanup;
-            }
+        ap_assert(!conn_ctx->input_read_out);
+        rv = apr_file_pipe_create_pools(&conn_ctx->input_read_out,
+                                        &conn_ctx->input_read_in,
+                                        APR_FULL_NONBLOCK,
+                                        c2->pool, conn_ctx->mplx_pool);
+        if (APR_SUCCESS != rv) {
+            ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, c2,
+                          H2_STRM_LOG(APLOGNO(), stream,
+                          "error creating input read pipe"));
+            goto cleanup;
         }
-        else {
-            h2_util_drain_pipe(conn_ctx->input_read_out);
-        }
+        conn_ctx->pfd_in_read.desc_type = APR_POLL_FILE;
+        conn_ctx->pfd_in_read.desc.f = conn_ctx->input_read_out;
+        conn_ctx->pfd_in_read.reqevents = APR_POLLIN | APR_POLLERR | APR_POLLHUP;
+        conn_ctx->pfd_in_read.client_data = conn_ctx;
 
         h2_beam_on_was_empty(stream->input, input_write_notify, conn_ctx);
         h2_beam_on_received(stream->input, input_read_notify, conn_ctx);
@@ -196,6 +203,28 @@ void h2_conn_ctx_clear_for_c2(conn_rec *c2)
     conn_ctx = h2_conn_ctx_get(c2);
     conn_ctx->stream_id = -1;
     conn_ctx->request = NULL;
+
+    if (conn_ctx->output_write_out) {
+        apr_file_close(conn_ctx->output_write_in);
+        apr_file_close(conn_ctx->output_write_out);
+        conn_ctx->output_write_out = NULL;
+        conn_ctx->output_write_in = NULL;
+    }
+    if (conn_ctx->input_write_out) {
+        apr_file_close(conn_ctx->input_write_in);
+        apr_file_close(conn_ctx->input_write_out);
+        conn_ctx->input_write_out = NULL;
+        conn_ctx->input_write_in = NULL;
+    }
+    if (conn_ctx->input_read_out) {
+        apr_file_close(conn_ctx->input_read_in);
+        apr_file_close(conn_ctx->input_read_out);
+        conn_ctx->input_read_in = NULL;
+        conn_ctx->input_read_out = NULL;
+    }
+    memset(&conn_ctx->pfd_in_read, 0, sizeof(conn_ctx->pfd_in_read));
+    memset(&conn_ctx->pfd_out_write, 0, sizeof(conn_ctx->pfd_out_write));
+
     if (conn_ctx->req_pool) {
         apr_pool_destroy(conn_ctx->req_pool);
         conn_ctx->req_pool = NULL;
@@ -209,9 +238,8 @@ void h2_conn_ctx_destroy(conn_rec *c)
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
 
     if (conn_ctx) {
-        if (conn_ctx->req_pool) {
-            apr_pool_destroy(conn_ctx->req_pool);
-            conn_ctx->req_pool = NULL;
+        if (c->master) {
+            h2_conn_ctx_clear_for_c2(c);
         }
         if (conn_ctx->mplx_pool) {
             apr_pool_destroy(conn_ctx->mplx_pool);
