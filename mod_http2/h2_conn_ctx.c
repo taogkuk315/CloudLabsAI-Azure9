@@ -62,8 +62,8 @@ static void input_write_notify(void *ctx, h2_bucket_beam *beam)
     h2_conn_ctx_t *conn_ctx = ctx;
 
     (void)beam;
-    if (conn_ctx->pin_send_write) {
-        apr_file_putc(1, conn_ctx->pin_send_write);
+    if (conn_ctx->input_write_in) {
+        apr_file_putc(1, conn_ctx->input_write_in);
     }
 }
 
@@ -72,8 +72,8 @@ static void input_read_notify(void *ctx, h2_bucket_beam *beam)
     h2_conn_ctx_t *conn_ctx = ctx;
 
     (void)beam;
-    if (conn_ctx->pin_send_read) {
-        apr_file_putc(1, conn_ctx->pin_send_read);
+    if (conn_ctx->input_read_in) {
+        apr_file_putc(1, conn_ctx->input_read_in);
     }
 }
 
@@ -82,8 +82,8 @@ static void output_notify(void *ctx, h2_bucket_beam *beam)
     h2_conn_ctx_t *conn_ctx = ctx;
 
     (void)beam;
-    if (conn_ctx && conn_ctx->pout_send_write) {
-        apr_file_putc(1, conn_ctx->pout_send_write);
+    if (conn_ctx && conn_ctx->output_write_in) {
+        apr_file_putc(1, conn_ctx->output_write_in);
     }
 }
 
@@ -120,9 +120,9 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
         apr_pool_tag(conn_ctx->mplx_pool, "H2_MPLX_C2");
     }
 
-    if (!conn_ctx->pout_recv_write) {
-        rv = apr_file_pipe_create_pools(&conn_ctx->pout_recv_write,
-                                        &conn_ctx->pout_send_write,
+    if (!conn_ctx->output_write_out) {
+        rv = apr_file_pipe_create_pools(&conn_ctx->output_write_out,
+                                        &conn_ctx->output_write_in,
                                         APR_FULL_NONBLOCK,
                                         conn_ctx->mplx_pool, c2->pool);
         if (APR_SUCCESS != rv) {
@@ -133,7 +133,7 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
         }
     }
     else {
-        h2_util_drain_pipe(conn_ctx->pout_recv_write);
+        h2_util_drain_pipe(conn_ctx->output_write_out);
     }
 
     if (!conn_ctx->beam_out) {
@@ -147,8 +147,9 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
     stream->output = conn_ctx->beam_out;
 
     if (stream->input) {
-        if (!conn_ctx->pin_recv_write) {
-            rv = apr_file_pipe_create_pools(&conn_ctx->pin_recv_write, &conn_ctx->pin_send_write,
+        if (!conn_ctx->input_write_out) {
+            rv = apr_file_pipe_create_pools(&conn_ctx->input_write_out,
+                                            &conn_ctx->input_write_in,
                                             APR_READ_BLOCK,
                                             c2->pool, conn_ctx->mplx_pool);
             if (APR_SUCCESS != rv) {
@@ -158,8 +159,9 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
                 goto cleanup;
             }
         }
-        if (!conn_ctx->pin_recv_read) {
-            rv = apr_file_pipe_create_pools(&conn_ctx->pin_recv_read, &conn_ctx->pin_send_read,
+        if (!conn_ctx->input_read_out) {
+            rv = apr_file_pipe_create_pools(&conn_ctx->input_read_out,
+                                            &conn_ctx->input_read_in,
                                             APR_FULL_NONBLOCK,
                                             c2->pool, conn_ctx->mplx_pool);
             if (APR_SUCCESS != rv) {
@@ -170,7 +172,7 @@ apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
             }
         }
         else {
-            h2_util_drain_pipe(conn_ctx->pin_recv_read);
+            h2_util_drain_pipe(conn_ctx->input_read_out);
         }
 
         h2_beam_on_was_empty(stream->input, input_write_notify, conn_ctx);

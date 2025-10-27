@@ -709,7 +709,7 @@ static void s_c2_done(h2_mplx *m, conn_rec *c2, h2_conn_ctx_t *conn_ctx)
          * since nothing more will happening here. */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
                       H2_STRM_MSG(stream, "c2_done, stream open"));
-        apr_file_putc(1, conn_ctx->pout_send_write);
+        apr_file_putc(1, conn_ctx->output_write_in);
     }
     else if ((stream = h2_ihash_get(m->shold, conn_ctx->stream_id)) != NULL) {
         /* stream is done, was just waiting for this. */
@@ -886,7 +886,7 @@ static void init_pfd_out(apr_pollfd_t *pfd, h2_mplx *m, h2_stream *stream, h2_co
     else {
         /* c2 connection */
         pfd->desc_type = APR_POLL_FILE;
-        pfd->desc.f = conn_ctx->pout_recv_write;
+        pfd->desc.f = conn_ctx->output_write_out;
     }
     pfd->reqevents = APR_POLLIN | APR_POLLERR | APR_POLLHUP;
 }
@@ -896,7 +896,7 @@ static void init_pfd_in_read(apr_pollfd_t *pfd, h2_mplx *m, h2_stream *stream, h
     memset(pfd, 9, sizeof(*pfd));
     pfd->client_data = (void*)((ptrdiff_t)stream->id);
     pfd->desc_type = APR_POLL_FILE;
-    pfd->desc.f = conn_ctx->pin_recv_read;
+    pfd->desc.f = conn_ctx->input_read_out;
     pfd->reqevents = APR_POLLIN | APR_POLLERR | APR_POLLHUP;
 }
 
@@ -911,7 +911,7 @@ static apr_status_t mplx_pollset_add(h2_mplx *m, h2_stream *stream, h2_conn_ctx_
     rv = apr_pollset_add(m->pollset, &pfd);
     if (APR_SUCCESS != rv) goto cleanup;
 
-    if (conn_ctx->pin_recv_read) {
+    if (conn_ctx->input_read_out) {
         name = "adding in_read";
         init_pfd_in_read(&pfd, m, stream, conn_ctx);
         rv = apr_pollset_add(m->pollset, &pfd);
@@ -937,7 +937,7 @@ static apr_status_t mplx_pollset_remove(h2_mplx *m, h2_stream *stream, h2_conn_c
     rv = apr_pollset_remove(m->pollset, &pfd);
     if (APR_SUCCESS != rv) goto cleanup;
 
-    if (conn_ctx->pin_recv_read) {
+    if (conn_ctx->input_read_out) {
         name = "in_read";
         init_pfd_in_read(&pfd, m, stream, conn_ctx);
         rv = apr_pollset_remove(m->pollset, &pfd);
@@ -1026,7 +1026,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                 continue;
             }
 
-            if (conn_ctx->pout_recv_write == pfd->desc.f) {
+            if (conn_ctx->output_write_out == pfd->desc.f) {
                 /* output is available */
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                               "[%s-%d] poll output event %hx",
@@ -1054,7 +1054,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                     H2_MPLX_ENTER(m);
                 }
             }
-            else if (conn_ctx->pin_recv_read == pfd->desc.f) {
+            else if (conn_ctx->input_read_out == pfd->desc.f) {
                 /* input has been consumed */
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                               "[%s-%d] poll input event %hx",

@@ -45,16 +45,14 @@ struct h2_conn_ctx_t {
     struct h2_bucket_beam *beam_in;  /* c2: data in or NULL, borrowed from request stream */
 
     apr_pool_t *mplx_pool;           /* c2: an mplx child use for safe use inside mplx lock */
-    apr_file_t *pin_send_write;      /* c2: send input write notifications or NULL */
-    apr_file_t *pin_recv_write;      /* c2: reveive input write notifications or NULL */
+    apr_file_t *input_write_in;      /* c2: send input write notifications or NULL */
+    apr_file_t *input_write_out;     /* c2: reveive input write notifications or NULL */
 
-    apr_file_t *pin_send_read;       /* c2: send input read notifications or NULL */
-    apr_file_t *pin_recv_read;       /* c2: receive input read notifications or NULL */
-    apr_pollfd_t *pfd_in_read;       /* poll input read notifications or NULL */
+    apr_file_t *input_read_in;       /* c2: send input read notifications or NULL */
+    apr_file_t *input_read_out;      /* c2: receive input read notifications or NULL */
 
-    apr_file_t *pout_send_write;     /* c2: send output write notifications */
-    apr_file_t *pout_recv_write;     /* c2: receive output write notifications */
-    apr_pollfd_t *pfd_out_write;     /* poll output write notifications */
+    apr_file_t *output_write_in;     /* c2: send output write notifications */
+    apr_file_t *output_write_out;    /* c2: receive output write notifications */
 
     volatile int done;               /* c2: processing has finished */
     apr_time_t started_at;           /* c2: when processing started */
