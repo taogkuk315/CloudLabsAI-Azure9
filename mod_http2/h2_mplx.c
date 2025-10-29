@@ -728,7 +728,7 @@ static void s_c2_done(h2_mplx *m, conn_rec *c2, h2_conn_ctx_t *conn_ctx)
          * since nothing more will happening here. */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
                       H2_STRM_MSG(stream, "c2_done, stream open"));
-        apr_file_putc(1, conn_ctx->output_write_in);
+        apr_file_putc(1, conn_ctx->pipe_out_prod[H2_PIPE_IN]);
     }
     else if ((stream = h2_ihash_get(m->shold, conn_ctx->stream_id)) != NULL) {
         /* stream is done, was just waiting for this. */
@@ -891,15 +891,15 @@ static apr_status_t mplx_pollset_add(h2_mplx *m, h2_conn_ctx_t *conn_ctx)
     apr_status_t rv;
     const char *name = "";
 
-    if (conn_ctx->pfd_out_write.reqevents) {
+    if (conn_ctx->pfd_out_prod.reqevents) {
         name = "adding out";
-        rv = apr_pollset_add(m->pollset, &conn_ctx->pfd_out_write);
+        rv = apr_pollset_add(m->pollset, &conn_ctx->pfd_out_prod);
         if (APR_SUCCESS != rv) goto cleanup;
     }
 
-    if (conn_ctx->pfd_in_read.reqevents) {
+    if (conn_ctx->pfd_in_drain.reqevents) {
         name = "adding in_read";
-        rv = apr_pollset_add(m->pollset, &conn_ctx->pfd_in_read);
+        rv = apr_pollset_add(m->pollset, &conn_ctx->pfd_in_drain);
     }
 
 cleanup:
@@ -916,16 +916,16 @@ static apr_status_t mplx_pollset_remove(h2_mplx *m, h2_conn_ctx_t *conn_ctx)
     apr_status_t rv = APR_SUCCESS;
     const char *name = "";
 
-    if (conn_ctx->pfd_out_write.reqevents) {
-        rv = apr_pollset_remove(m->pollset, &conn_ctx->pfd_out_write);
-        conn_ctx->pfd_out_write.reqevents = 0;
+    if (conn_ctx->pfd_out_prod.reqevents) {
+        rv = apr_pollset_remove(m->pollset, &conn_ctx->pfd_out_prod);
+        conn_ctx->pfd_out_prod.reqevents = 0;
         if (APR_SUCCESS != rv) goto cleanup;
     }
 
-    if (conn_ctx->pfd_in_read.reqevents) {
+    if (conn_ctx->pfd_in_drain.reqevents) {
         name = "in_read";
-        rv = apr_pollset_remove(m->pollset, &conn_ctx->pfd_in_read);
-        conn_ctx->pfd_in_read.reqevents = 0;
+        rv = apr_pollset_remove(m->pollset, &conn_ctx->pfd_in_drain);
+        conn_ctx->pfd_in_drain.reqevents = 0;
         if (APR_SUCCESS != rv) goto cleanup;
     }
 
@@ -1036,7 +1036,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                 continue;
             }
 
-            if (conn_ctx->pfd_out_write.desc.f == pfd->desc.f) {
+            if (conn_ctx->pfd_out_prod.desc.f == pfd->desc.f) {
                 /* output is available */
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                               "[%s-%d] poll output event %hx",
@@ -1047,7 +1047,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                     APR_ARRAY_PUSH(m->streams_ev_out, h2_stream*) = stream;
                 }
             }
-            else if (conn_ctx->pfd_in_read.desc.f == pfd->desc.f) {
+            else if (conn_ctx->pfd_in_drain.desc.f == pfd->desc.f) {
                 /* input has been consumed */
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                               "[%s-%d] poll input event %hx",

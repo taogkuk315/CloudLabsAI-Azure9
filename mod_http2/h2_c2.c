@@ -302,7 +302,7 @@ receive:
             status = h2_beam_receive(conn_ctx->beam_in, f->c, fctx->bb, APR_NONBLOCK_READ,
                                      conn_ctx->mplx->stream_max_mem);
             if (APR_STATUS_IS_EAGAIN(status) && APR_BLOCK_READ == block) {
-                status = h2_util_wait_on_pipe(conn_ctx->input_write_out);
+                status = h2_util_wait_on_pipe(conn_ctx->pipe_in_prod[H2_PIPE_OUT]);
                 if (APR_SUCCESS == status) {
                     goto receive;
                 }
