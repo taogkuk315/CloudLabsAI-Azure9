@@ -38,7 +38,7 @@ class TestStore:
 
     # retrieve a html file from the server and compare it to its source
     def test_003_02(self, env):
-        with open(env.e2e_src("htdocs/test1/index.html"), mode='rb') as file:
+        with open(env.test_src("htdocs/test1/index.html"), mode='rb') as file:
             src = file.read()
 
         url = env.mkurl("https", "test1", "/index.html")

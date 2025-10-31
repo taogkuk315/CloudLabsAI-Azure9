@@ -41,7 +41,7 @@ class TestStore:
         r2 = env.curl_get(re.sub(r'http:', 'https:', r.response["header"]["location"]))
         assert r2.exit_code == 0
         assert r2.response["status"] == 200
-        with open(env.e2e_src(fpath), mode='rb') as file:
+        with open(env.test_src(fpath), mode='rb') as file:
             src = file.read()
         assert src == r2.response["body"]
 
@@ -58,7 +58,7 @@ class TestStore:
         r = env.nghttp().upload(url, fpath, options=options)
         assert r.exit_code == 0
         assert 200 <= r.response["status"] < 300
-        with open(env.e2e_src(fpath), mode='rb') as file:
+        with open(env.test_src(fpath), mode='rb') as file:
             src = file.read()
         assert src == r.response["body"]
 
@@ -88,7 +88,7 @@ class TestStore:
         r2 = env.nghttp().get(re.sub(r'http:', 'https:', r.response["header"]["location"]))
         assert r2.exit_code == 0
         assert r2.response["status"] == 200
-        with open(env.e2e_src(fpath), mode='rb') as file:
+        with open(env.test_src(fpath), mode='rb') as file:
             src = file.read()
         assert src == r2.response["body"]
 

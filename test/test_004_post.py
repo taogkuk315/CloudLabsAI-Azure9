@@ -26,7 +26,7 @@ class TestStore:
         r2 = env.curl_get(r.response["header"]["location"])
         assert r2.exit_code == 0
         assert r2.response["status"] == 200
-        with open(env.e2e_src(fpath), mode='rb') as file:
+        with open(env.test_src(fpath), mode='rb') as file:
             src = file.read()
         assert src == r2.response["body"]
 
@@ -74,15 +74,15 @@ class TestStore:
 
     # verify that we parse nghttp output correctly
     def check_nghttp_body(self, env, ref_input, nghttp_output):
-        with open(env.e2e_src(os.path.join(env.gen_dir, ref_input)), mode='rb') as f:
+        with open(env.test_src(os.path.join(env.gen_dir, ref_input)), mode='rb') as f:
             refbody = f.read()
-        with open(env.e2e_src(nghttp_output), mode='rb') as f:
+        with open(env.test_src(nghttp_output), mode='rb') as f:
             text = f.read()
         o = env.nghttp().parse_output(text)
         assert "response" in o
         assert "body" in o["response"]
         if refbody != o["response"]["body"]:
-            with open(env.e2e_src(os.path.join(env.gen_dir, '%s.parsed' % ref_input)), mode='bw') as f:
+            with open(env.test_src(os.path.join(env.gen_dir, '%s.parsed' % ref_input)), mode='bw') as f:
                 f.write(o["response"]["body"])
         assert len(refbody) == len(o["response"]["body"])
         assert refbody == o["response"]["body"]
@@ -101,7 +101,7 @@ class TestStore:
         assert r.exit_code == 0
         assert r.response["status"] >= 200 and r.response["status"] < 300
 
-        with open(env.e2e_src(fpath), mode='rb') as file:
+        with open(env.test_src(fpath), mode='rb') as file:
             src = file.read()
         assert src == r.response["body"]
 
@@ -130,7 +130,7 @@ class TestStore:
         r2 = env.nghttp().get(r.response["header"]["location"])
         assert r2.exit_code == 0
         assert r2.response["status"] == 200
-        with open(env.e2e_src(fpath), mode='rb') as file:
+        with open(env.test_src(fpath), mode='rb') as file:
             src = file.read()
         assert src == r2.response["body"]
 
@@ -211,7 +211,7 @@ CustomLog logs/test_004_30 issue_203
                 if fname == part.get_filename():
                     filepart = part
             assert filepart
-            with open(env.e2e_src(fpath), mode='rb') as file:
+            with open(env.test_src(fpath), mode='rb') as file:
                 src = file.read()
             assert src == filepart.get_payload(decode=True)
         

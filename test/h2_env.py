@@ -1,21 +1,19 @@
-###################################################################
-# h2 end-to-end test environment class
-###################################################################
 import inspect
 import logging
 import re
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
-from typing import List, Optional
+from string import Template
+from typing import List
 
-import pytest
 import requests
 
-from configparser import ConfigParser
-from shutil import copyfile
+from configparser import ConfigParser, ExtendedInterpolation
 from urllib.parse import urlparse
 
 from h2_certs import Credentials
@@ -30,31 +28,150 @@ class Dummy:
     pass
 
 
+class H2TestSetup:
+
+    # the modules we want to load
+    MODULES = [
+        "log_config",
+        "logio",
+        "unixd",
+        "version",
+        "watchdog",
+        "authn_core",
+        "authz_host",
+        "authz_groupfile",
+        "authz_user",
+        "authz_core",
+        "access_compat",
+        "auth_basic",
+        "cache",
+        "cache_disk",
+        "cache_socache",
+        "socache_shmcb",
+        "dumpio",
+        "reqtimeout",
+        "filter",
+        "mime",
+        "env",
+        "headers",
+        "setenvif",
+        "slotmem_shm",
+        "ssl",
+        "status",
+        "autoindex",
+        "cgid",
+        "dir",
+        "alias",
+        "rewrite",
+        "deflate",
+        "proxy",
+        "proxy_http",
+        "proxy_balancer",
+        "proxy_hcheck",
+    ]
+
+    def __init__(self, env: 'H2TestEnv'):
+        self.env = env
+
+    def make(self):
+        self._make_dirs()
+        self._make_conf()
+        self._make_htdocs()
+        self._make_h2test()
+        self._make_modules_conf()
+
+    def _make_dirs(self):
+        if os.path.exists(self.env.gen_dir):
+            shutil.rmtree(self.env.gen_dir)
+        os.makedirs(self.env.gen_dir)
+        if not os.path.exists(self.env.server_logs_dir):
+            os.makedirs(self.env.server_logs_dir)
+
+    def _make_conf(self):
+        conf_src_dir = os.path.join(self.env.test_dir, 'conf')
+        conf_dest_dir = os.path.join(self.env.server_dir, 'conf')
+        if not os.path.exists(conf_dest_dir):
+            os.makedirs(conf_dest_dir)
+        for name in os.listdir(conf_src_dir):
+            src_path = os.path.join(conf_src_dir, name)
+            m = re.match(r'(.+).template', name)
+            if m:
+                self._make_template(src_path, os.path.join(conf_dest_dir, m.group(1)))
+            elif os.path.isfile(src_path):
+                shutil.copy(src_path, os.path.join(conf_dest_dir, name))
+
+    def _make_template(self, src, dest):
+        var_map = dict()
+        for name, value in self.env.__class__.__dict__.items():
+            if isinstance(value, property):
+                var_map[name] = value.fget(self.env)
+        t = Template(''.join(open(src).readlines()))
+        with open(dest, 'w') as fd:
+            fd.write(t.substitute(var_map))
+
+    def _make_htdocs(self):
+        if not os.path.exists(self.env.server_docs_dir):
+            os.makedirs(self.env.server_docs_dir)
+        shutil.copytree(os.path.join(self.env.test_dir, 'htdocs'),
+                        os.path.join(self.env.server_dir, 'htdocs'),
+                        dirs_exist_ok=True)
+        cgi_dir = os.path.join(self.env.server_dir, 'htdocs/cgi')
+        for name in os.listdir(cgi_dir):
+            if re.match(r'.+\.py', name):
+                cgi_file = os.path.join(cgi_dir, name)
+                st = os.stat(cgi_file)
+                os.chmod(cgi_file, st.st_mode | stat.S_IEXEC)
+
+    def _make_h2test(self):
+        subprocess.run([self.env.apxs, '-c', 'mod_h2test.c'],
+                       capture_output=True, check=True,
+                       cwd=os.path.join(self.env.test_dir, 'mod_h2test'))
+
+    def _make_modules_conf(self):
+        modules_conf = os.path.join(self.env.server_dir, 'conf/modules.conf')
+        with open(modules_conf, 'w') as fd:
+            # issue load directives for all modules we want that are shared
+            for m in self.MODULES:
+                mod_path = os.path.join(self.env.libexec_dir, f"mod_{m}.so")
+                if os.path.isfile(mod_path):
+                    fd.write(f"LoadModule {m}_module   \"{mod_path}\"\n")
+            for m in ["http2", "proxy_http2"]:
+                fd.write(f"LoadModule {m}_module   \"{self.env.libexec_dir}/mod_{m}.so\"\n")
+            # load our test module which is not installed
+            fd.write(f"LoadModule h2test_module   \"{self.env.test_dir}/mod_h2test/.libs/mod_h2test.so\"\n")
+
+
 class H2TestEnv:
 
     def __init__(self, pytestconfig=None):
         our_dir = os.path.dirname(inspect.getfile(Dummy))
-        self.config = ConfigParser()
+        self.config = ConfigParser(interpolation=ExtendedInterpolation())
         self.config.read(os.path.join(our_dir, 'config.ini'))
 
         self._apxs = self.config.get('global', 'apxs')
         self._prefix = self.config.get('global', 'prefix')
-        self._gen_dir = self.config.get('global', 'gen_dir')
-        self._server_dir = self.config.get('global', 'server_dir')
-        self._server_conf_dir = os.path.join(self._server_dir, "conf")
-        self._server_docs_dir = os.path.join(self._server_dir, "htdocs")
-        self._server_logs_dir = os.path.join(self.server_dir, "logs")
-        self._server_error_log = os.path.join(self._server_logs_dir, "error_log")
-        self._server_access_log = os.path.join(self._server_logs_dir, "access_log")
+        self._apachectl = self.config.get('global', 'apachectl')
+        self._libexec_dir = self.get_apxs_var('LIBEXECDIR')
+
         self._curl = self.config.get('global', 'curl_bin')
-        self._test_dir = self.config.get('global', 'test_dir')
         self._nghttp = self.config.get('global', 'nghttp')
         self._h2load = self.config.get('global', 'h2load')
         self._ca = None
 
-        self._http_port = int(self.config.get('httpd', 'http_port'))
-        self._https_port = int(self.config.get('httpd', 'https_port'))
-        self._http_tld = self.config.get('httpd', 'http_tld')
+        self._http_port = int(self.config.get('test', 'http_port'))
+        self._https_port = int(self.config.get('test', 'https_port'))
+        self._http_tld = self.config.get('test', 'http_tld')
+        self._test_dir = self.config.get('test', 'test_dir')
+        self._test_src_dir = self.config.get('test', 'test_src_dir')
+        self._gen_dir = self.config.get('test', 'gen_dir')
+        self._server_dir = os.path.join(self._gen_dir, 'apache')
+        self._server_conf_dir = os.path.join(self._server_dir, "conf")
+        self._server_docs_dir = os.path.join(self._server_dir, "htdocs")
+        self._server_logs_dir = os.path.join(self.server_dir, "logs")
+        self._server_access_log = os.path.join(self._server_logs_dir, "access_log")
+        self._server_error_log = os.path.join(self._server_logs_dir, "error_log")
+
+        self._dso_modules = self.config.get('global', 'dso_modules').split(' ')
         self._domains = [
             f"test1.{self._http_tld}",
             f"test2.{self._http_tld}",
@@ -73,15 +190,12 @@ class H2TestEnv:
             f"noh2.{self._http_tld}",
         ]
         self._mpm_type = os.environ['MPM'] if 'MPM' in os.environ else 'event'
-        self._apachectl = self.config.get('httpd', 'apachectl')
-        self._libexec_dir = self.get_apxs_var('LIBEXECDIR')
 
         self._httpd_addr = "127.0.0.1"
         self._http_base = f"http://{self._httpd_addr}:{self.http_port}"
         self._https_base = f"https://{self._httpd_addr}:{self.https_port}"
 
         self._test_conf = os.path.join(self._server_conf_dir, "test.conf")
-        self._e2e_dir = os.path.join(self._test_dir, "e2e")
         self._httpd_base_conf = f"""
         LoadModule mpm_{self.mpm_type}_module  \"{self.libexec_dir}/mod_mpm_{self.mpm_type}.so\"
         H2MinWorkers 1
@@ -91,17 +205,21 @@ class H2TestEnv:
         self._verbosity = pytestconfig.option.verbose if pytestconfig is not None else 0
         if self._verbosity >= 2:
             self._httpd_base_conf += f"""
-                LogLevel http2:trace2 h2test:trace2 proxy_http2:trace2 
+                LogLevel http2:trace2 proxy_http2:info 
                 LogLevel core:trace5 mpm_{self.mpm_type}:trace5
                 """
-        elif self._verbosity >= 2:
-            self._httpd_base_conf += "LogLevel http2:debug h2test:trace2 proxy_http2:trace2"
+        if self._verbosity >= 1:
+            self._httpd_base_conf += "LogLevel http2:debug proxy_http2:debug"
         else:
-            self._httpd_base_conf += "LogLevel http2:info h2test:trace2 proxy_http2:info"
+            self._httpd_base_conf += "LogLevel http2:info proxy_http2:info"
 
         self._verify_certs = False
-        if not os.path.exists(self.gen_dir):
-            os.makedirs(self.gen_dir)
+        self._setup = H2TestSetup(env=self)
+        self._setup.make()
+
+    @property
+    def apxs(self) -> str:
+        return self._apxs
 
     @property
     def verbosity(self) -> int:
@@ -152,6 +270,14 @@ class H2TestEnv:
         return self._gen_dir
 
     @property
+    def test_dir(self) -> str:
+        return self._test_dir
+
+    @property
+    def test_src_dir(self) -> str:
+        return self._test_src_dir
+
+    @property
     def server_dir(self) -> str:
         return self._server_dir
 
@@ -162,6 +288,10 @@ class H2TestEnv:
     @property
     def libexec_dir(self) -> str:
         return self._libexec_dir
+
+    @property
+    def dso_modules(self) -> List[str]:
+        return self._dso_modules
 
     @property
     def server_conf_dir(self) -> str:
@@ -221,8 +351,8 @@ class H2TestEnv:
         if not os.path.exists(path):
             return os.makedirs(path)
 
-    def e2e_src(self, path):
-        return os.path.join(self._e2e_dir, path)
+    def test_src(self, path):
+        return os.path.join(self._test_src_dir, path)
 
     def run(self, args) -> ExecResult:
         log.debug("execute: %s", " ".join(args))
