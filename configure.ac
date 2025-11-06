@@ -1,5 +1,3 @@
-# Copyright 2015 greenbytes GmbH (https://www.greenbytes.de)
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -14,7 +12,7 @@
 #
 
 AC_PREREQ([2.69])
-AC_INIT([mod_http2], [1.15.23], [stefan.eissing@greenbytes.de])
+AC_INIT([mod_http2], [1.15.23], [stefan@eissing.org])
 
 LT_PREREQ([2.2.6])
 LT_INIT()

@@ -1,6 +1,3 @@
-*.xcuserstate
-sandbox/httpd/packages/httpd-2.4.x.tar.gz
-sandbox/test/conf/sites/mod-h2.greenbytes.de.conf
 *.o
 *.slo
 *.lo
