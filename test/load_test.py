@@ -324,22 +324,20 @@ class UrlsLoadTest(LoadTestCase):
 
     def _setup(self, cls, extras: Dict = None):
         LoadTestCase.server_setup(env=self.env, extras=extras)
-        if not cls.SETUP_DONE:
-            with tqdm(desc="setup resources", total=self._file_count, unit="file", leave=False) as t:
-                docs_a = os.path.join(self.env.server_docs_dir, "test1")
-                uris = []
-                for i in range(self._file_count):
-                    fsize = self._file_sizes[i % len(self._file_sizes)]
-                    if fsize is None:
-                        raise Exception("file sizes?: {0} {1}".format(i, fsize))
-                    fname = "{0}-{1}k.txt".format(i, fsize)
-                    mk_text_file(os.path.join(docs_a, fname), 8 * fsize)
-                    uris.append(f"{self._location}{fname}")
-                    t.update()
-                with open(self._url_file, 'w') as fd:
-                    fd.write("\n".join(uris))
-                    fd.write("\n")
-            cls.SETUP_DONE = True
+        docs_a = os.path.join(self.env.server_docs_dir, "test1")
+        uris = []
+        for i in range(self._file_count):
+            fsize = self._file_sizes[i % len(self._file_sizes)]
+            if fsize is None:
+                raise Exception("file sizes?: {0} {1}".format(i, fsize))
+            fname = "{0}-{1}k.txt".format(i, fsize)
+            fpath = os.path.join(docs_a, fname)
+            if not os.path.isfile(fpath):
+                mk_text_file(os.path.join(docs_a, fname), 8 * fsize)
+            uris.append(f"{self._location}{fname}")
+        with open(self._url_file, 'w') as fd:
+            fd.write("\n".join(uris))
+            fd.write("\n")
         self.start_server(env=self.env)
 
     def _teardown(self):
@@ -403,6 +401,10 @@ class UrlsLoadTest(LoadTestCase):
             r = "{0:d}".format(round(summary.response_count / summary.duration.total_seconds()))
         elif self._measure == 'mean ms/req':
             r = "{0:.1f}".format(summary.mean_duration_ms)
+        elif self._measure == 'mb/s':
+            reqs = summary.response_count / summary.duration.total_seconds()
+            mean_size = statistics.mean(self._file_sizes)
+            r = "{0:d}".format(round(reqs * mean_size / 1024.0))
         else:
             raise Exception(f"measure '{self._measure}' not defined")
         return r, summary.get_footnote()
@@ -669,6 +671,43 @@ class LoadTest:
                     {"clients": 8, "requests": 80000},
                     {"clients": 16, "requests": 160000},
                     {"clients": 32, "requests": 320000},
+                ],
+            },
+            "transfers": {
+                "title": "net transfer speed, by KB body size, (MB/s)",
+                "class": UrlsLoadTest,
+                "location": "/",
+                "file_count": 1,
+                "file_sizes": [10, 100, 1000, 10000],
+                "requests": 10000,
+                "clients": 1,
+                "warmup": False,
+                "measure": "mb/s",
+                "protocol": 'h2',
+                "max_parallel": 1,
+                "row0_title": "protocol c/parallel",
+                "row_title": "{protocol}   {clients}/{max_parallel}",
+                "rows": [
+                    {"protocol": 'h1', "max_parallel": 1, "clients": 1},
+                    {"protocol": 'h1', "max_parallel": 1, "clients": 2},
+                    {"protocol": 'h1', "max_parallel": 1, "clients": 6},
+                    {"protocol": 'h2', "max_parallel": 1, "clients": 1},
+                    {"protocol": 'h2', "max_parallel": 2, "clients": 1},
+                    {"protocol": 'h2', "max_parallel": 6, "clients": 1},
+                    {"protocol": 'h2', "max_parallel": 1, "clients": 2},
+                    {"protocol": 'h2', "max_parallel": 2, "clients": 2},
+                    {"protocol": 'h2', "max_parallel": 6, "clients": 2},
+                    {"protocol": 'h2', "max_parallel": 1, "clients": 6},
+                    {"protocol": 'h2', "max_parallel": 2, "clients": 6},
+                    {"protocol": 'h2', "max_parallel": 6, "clients": 6},
+                ],
+                "col_title": "{file_sizes}",
+                "clients": 1,
+                "columns": [
+                    {"file_sizes": [10], "requests": 100000},
+                    {"file_sizes": [100], "requests": 50000},
+                    {"file_sizes": [1000], "requests": 20000},
+                    {"file_sizes": [10000], "requests": 5000},
                 ],
             },
             "bursty": {
