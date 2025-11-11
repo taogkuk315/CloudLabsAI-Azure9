@@ -40,8 +40,8 @@ class TestFiles:
         ).install()
         assert env.apache_restart() == 0
 
-    # check SSL environment variables from CGI script
     def test_005_01(self, env):
         url = env.mkurl("https", "cgi", self.URI_PATHS[3])
         r = env.curl_get(url)
+        assert r.response, r.stderr + r.stdout
         assert 200 == r.response["status"]

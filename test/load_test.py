@@ -616,7 +616,7 @@ class LoadTest:
                     {"clients": 32},
                 ],
             },
-            "1k-files10": {
+            "long": {
                 "title": "1k files, 10k size, *conn, 100k req, {protocol} ({measure})",
                 "class": UrlsLoadTest,
                 "location": "/",
@@ -689,14 +689,14 @@ class LoadTest:
                 "row_title": "{protocol}   {clients}/{max_parallel}",
                 "rows": [
                     {"protocol": 'h1', "max_parallel": 1, "clients": 1},
-                    {"protocol": 'h1', "max_parallel": 1, "clients": 2},
-                    {"protocol": 'h1', "max_parallel": 1, "clients": 6},
                     {"protocol": 'h2', "max_parallel": 1, "clients": 1},
                     {"protocol": 'h2', "max_parallel": 2, "clients": 1},
                     {"protocol": 'h2', "max_parallel": 6, "clients": 1},
+                    {"protocol": 'h1', "max_parallel": 1, "clients": 2},
                     {"protocol": 'h2', "max_parallel": 1, "clients": 2},
                     {"protocol": 'h2', "max_parallel": 2, "clients": 2},
                     {"protocol": 'h2', "max_parallel": 6, "clients": 2},
+                    {"protocol": 'h1', "max_parallel": 1, "clients": 6},
                     {"protocol": 'h2', "max_parallel": 1, "clients": 6},
                     {"protocol": 'h2', "max_parallel": 2, "clients": 6},
                     {"protocol": 'h2', "max_parallel": 6, "clients": 6},

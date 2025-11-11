@@ -17,7 +17,7 @@ test:
 	pytest
 
 loadtest:
-	python3 e2e/load_test.py
+	python3 load_test.py
 
 clean-local:
 	rm -rf *.pyc __pycache__

@@ -42,11 +42,6 @@ typedef void h2_beam_io_callback(void *ctx, h2_bucket_beam *beam,
                                  apr_off_t bytes);
 typedef void h2_beam_ev_callback(void *ctx, h2_bucket_beam *beam);
 
-typedef struct h2_beam_proxy h2_beam_proxy;
-typedef struct {
-    APR_RING_HEAD(h2_beam_proxy_list, h2_beam_proxy) list;
-} h2_bproxy_list;
-
 /**
  * h2_blist can hold a list of buckets just like apr_bucket_brigade, but
  * does not to any allocations or related features.
@@ -61,10 +56,8 @@ struct h2_bucket_beam {
     conn_rec *from;
     apr_pool_t *pool;
     h2_blist buckets_to_send;
-    h2_blist buckets_in_flight;
     h2_blist buckets_consumed;
     apr_bucket_brigade *recv_buffer;
-    h2_bproxy_list proxies;
     apr_pool_t *recv_pool;
     
     apr_size_t max_buf_size;

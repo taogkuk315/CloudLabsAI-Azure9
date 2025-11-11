@@ -506,7 +506,10 @@ class H2TestEnv:
         return args, headerfile
 
     def curl_raw(self, urls, timeout, options):
-        args, headerfile = self.curl_complete_args(urls, timeout, options)
+        xopt = ['-vvvv']
+        if options:
+            xopt.extend(options)
+        args, headerfile = self.curl_complete_args(urls, timeout, xopt)
         r = self.run(args)
         if r.exit_code == 0:
             lines = open(headerfile).readlines()
