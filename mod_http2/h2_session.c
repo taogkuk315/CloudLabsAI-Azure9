@@ -1802,7 +1802,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                 /* Give any new incoming request a short grace period to
                  * arrive while we are still hot and return to the mpm
                  * connection handling when nothing really happened. */
-                h2_mplx_c1_poll(session->mplx, apr_time_from_msec(500),
+                h2_mplx_c1_poll(session->mplx, apr_time_from_msec(100),
                                 on_stream_input, on_stream_output, session);
                 if (H2_SESSION_ST_IDLE == session->state) {
                     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,

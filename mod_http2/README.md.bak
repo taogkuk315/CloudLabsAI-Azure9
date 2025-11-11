@@ -1,6 +1,6 @@
 # mod_h2 internals
 
-A description of how the module's structure, the main terms used and how it overall works.
+A description of how the module's structure, the main terms used and how it overtall works.
 
 While the complete and accurate description will always be the source code, this document is intended
 to serve as an entrance to understand how the module works and what its main moving parts are.
@@ -24,7 +24,7 @@ Source files are all prefixed with `h2_` followed by the main topic they are abo
 
 HTTP/2 sessions can be in one of the following states:
 
- * `INIT`: state during initialization of the session. Sends initial SETTINGS to client and transits to `BUSY` on success.
+ * `INIT`: state during initialization of the session. Sends inital SETTINGS to client and transits to `BUSY` on success.
  * `BUSY`: reading `c1` input, writing frames on `c1` output and checking any `c2` for I/O events. Switches to `WAIT` when `c1` input is exhausted.
  * `WAIT`: collects `c1` socket and all `c2` pipes into a pollset and does a wait with connection timeout on events. Transits on `c1` input to `BUSY` again.
  * `IDLE`: there are no streams to process. The session waits on new `c1` input to arrive. If a stream has been processed already, this is like a HTTP/1 *keepalive*.
@@ -65,13 +65,13 @@ The fundamental restriction of `pools` is that they are not thread safe. Using t
 
 Closing a file will modify the pool it was opened with, for example. If 10 files are opened with the same pool, one is unable to use 5 of them in one thread and the rest in another. Everything that is based on the same pool needs to stay on the same thread.
 
-A `session` handling `c1` needs to run in parallel to request processing on `c2` connections. That means `session` and `c2`s have completely separate pools. 
+A `session` handling `c1` needs to run in parallel to request processing on `c2` connections. That means `session` and `c2`s have completely seprate pools. 
 
 When a session creates a stream, it creates a new *child* pool for it. Pool memory can only be freed by destroying the whole pool. To handle thousands of streams without leaking memory, they have to be placed in child pools that can be reclaimed when a stream is done.
 
 A `mplx` is used by the `session` *and* by `c2` connections. To manage its internal structures, it also needs its own, separate pool. This one is protects via its `mutex`. It creates new `c2` connections when needed also with separate pools as processing happens in separate `worker` threads.
 
-All these *separate* pools have their own APR `allocator` (the one that manages system memory) to be independent. However, there are still tied with a *parent/child* relationship to not lose track of them (leaking). So `c2` pools are children of `mplx` pool which is a child of the `session` pool.
+All these *separate* pools have their own APR `allocator` (the one that manages system memory) to be independant. However, there are still tied with a *parent/child* relationship to not lose track of them (leaking). So `c2` pools are children of `mplx` pool which is a child of the `session` pool.
 
 ### Teardown
 
@@ -109,7 +109,7 @@ So, mod_h2 needs something to juggle the data in between `t1` and `t2` doing the
 
 (*The name* "beam" is inspired by Start Trek beam technology, where people are transported from one place to another - but not instantly. They first become frozen and semi-transparent at both location, until the arrival is complete and then they disappear at the start. Same happens to buckets in a bucket beam.)
 
-A bucket beam has two APR `ring`s (rings are a doubly linked list that works **independent** from pools. Yay!).
+A bucket beam has two APR `ring`s (rings are a doubly linked list that works **independant** from pools. Yay!).
 
  * `buckets_to_send`: when `t1` calls `h2_beam_send(beam, b1)`, the beam takes buckets out of `b1` and appends them to this ring. 
  * `buckets_consumed`: when `t2` calls `h2_beam_receive(beam, brigade)`, buckets are taken from the to_send ring, converted to new buckets (which are appended to the receiver `brigage`) and the original ones are added to the 'consumed' ring.
@@ -139,13 +139,13 @@ The module `mplx` uses pipes and pollsets to monitor communications on `c1` and 
  * for `c2`s it polls `pipe_out_prod`, a pipe used for signalling the availability of new output.
  * for `c2`s it polls `pipe_in_drain`, a pipe used for signalling that input has been read by `c2` (if the stream processing on a `c2` has indeed input, e.g. a request body).
 
-The HTTP/2 protocol has in-built flow control on its streams. `c1` needs to be continuously monitored not only for new requests, but also for updates on flow control window sizes. 
+The HTTP/2 protocol has in-built flow control on its streams. `c1` needs to be continiously monitored not only for new requests, but also for updates on flow control window sizes. 
 
 Flow control also is in effect for clients sending data to the server, e.g. in a POST request. That is why the consumption of such input data is being monitored. When data is passed on to a `c2`'s input, the stream's window for the client is updated (and the update sent to the client on `c1`), so more POST data can be sent.
 
 In this way, a HTTP/2 connection is much more busy in both directions than HTTP/1 where there is a clear separation between sending and receiving phases for a request.
 
-For `c2`s expecting input, an additional pipe is being created: `pipe_in_prod` which signals when `c1` has written new data to the `c2` input. This pipe is read by a `c2` waiting for additional data.
+For `c2`s expecting input, an additional pipe is being created: `pipe_in_prod` which signals when `c1` has writting new data to the `c2` input. This pipe is read by a `c2` waiting for additional data.
 
 The bucket beams have callbacks for various events that are used to feed these pipes:
 
