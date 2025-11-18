@@ -89,6 +89,12 @@ int h2_c1_io_pending(h2_c1_io *io);
 
 struct h2_session;
 
+/**
+ * Read c1 input and pass it on to nghttp2.
+ * @param session the session
+ * @param when_pending != 0 if only pending input (sitting in filters)
+ *                     needs to be read
+ */
 apr_status_t h2_c1_read(struct h2_session *session);
 
 #endif /* defined(__mod_h2__h2_c1_io__) */

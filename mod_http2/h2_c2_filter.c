@@ -38,6 +38,19 @@
 #include "h2_util.h"
 
 
+#define H2_FILTER_LOG(name, c, level, rv, msg, bb) \
+    do { \
+        if (APLOG_C_IS_LEVEL((c),(level))) { \
+            char buffer[4 * 1024]; \
+            apr_size_t len, bmax = sizeof(buffer)/sizeof(buffer[0]); \
+            len = h2_util_bb_print(buffer, bmax, "", "", (bb)); \
+            ap_log_cerror(APLOG_MARK, (level), rv, (c), \
+                          "FILTER[%s]: %s %s", \
+                          (name), (msg), len? buffer : ""); \
+        } \
+    } while (0)
+
+
 /* This routine is called by apr_table_do and merges all instances of
  * the passed field values into a single array that will be further
  * processed by some later routine.  Originally intended to help split
@@ -507,6 +520,8 @@ apr_status_t h2_c2_filter_catch_h1_out(ap_filter_t* f, apr_bucket_brigade* bb)
     apr_status_t rv;
 
     ap_assert(conn_ctx);
+    H2_FILTER_LOG("c2_catch_h1_out", f->c, APLOG_TRACE2, 0, "check", bb);
+
     if (!parser) {
         parser = apr_pcalloc(f->c->pool, sizeof(*parser));
         parser->id = apr_psprintf(f->c->pool, "%s-%d", conn_ctx->id, conn_ctx->stream_id);
@@ -544,8 +559,7 @@ apr_status_t h2_c2_filter_response_out(ap_filter_t *f, apr_bucket_brigade *bb)
         return ap_pass_brigade(f->next, bb);
     }
 
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                  "h2_c2(%s): output_filter called", ctx->id);
+    H2_FILTER_LOG("c2_response_out", f->c, APLOG_TRACE1, 0, "called with", bb);
 
     if (!ctx->has_final_response) {
         /* check, if we need to send the response now. Until we actually

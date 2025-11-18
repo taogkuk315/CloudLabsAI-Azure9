@@ -1155,14 +1155,11 @@ apr_size_t h2_util_table_bytes(apr_table_t *t, apr_size_t pair_extra)
 
 static apr_status_t last_not_included(apr_bucket_brigade *bb, 
                                       apr_off_t maxlen, 
-                                      int same_alloc,
-                                      apr_size_t *pfile_buckets_allowed,
                                       apr_bucket **pend)
 {
     apr_bucket *b;
     apr_status_t status = APR_SUCCESS;
-    int files_allowed = pfile_buckets_allowed? (int)*pfile_buckets_allowed : 0;
-    
+
     if (maxlen >= 0) {
         /* Find the bucket, up to which we reach maxlen/mem bytes */
         for (b = APR_BRIGADE_FIRST(bb); 
@@ -1187,14 +1184,12 @@ static apr_status_t last_not_included(apr_bucket_brigade *bb,
                     return status;
                 }
                 
-                if (same_alloc && APR_BUCKET_IS_FILE(b)) {
-                    /* we like it move it, always */
-                }
-                else if (files_allowed > 0 && APR_BUCKET_IS_FILE(b)) {
-                    /* this has no memory footprint really unless
-                     * it is read, disregard it in length count,
-                     * unless we do not move the file buckets */
-                    --files_allowed;
+                if (APR_BUCKET_IS_FILE(b)
+#if APR_HAS_MMAP
+                 || APR_BUCKET_IS_MMAP(b)
+#endif
+                 ) {
+                    /* we like to move it, always */
                 }
                 else if (maxlen < (apr_off_t)b->length) {
                     apr_bucket_split(b, (apr_size_t)maxlen);
@@ -1306,7 +1301,7 @@ int h2_util_has_eos(apr_bucket_brigade *bb, apr_off_t len)
 {
     apr_bucket *b, *end;
     
-    apr_status_t status = last_not_included(bb, len, 0, 0, &end);
+    apr_status_t status = last_not_included(bb, len, &end);
     if (status != APR_SUCCESS) {
         return status;
     }
@@ -1341,7 +1336,7 @@ apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb,
     else {
         /* data in the brigade, limit the length returned. Check for EOS
          * bucket only if we indicate data. This is required since plen == 0
-         * means "the whole brigade" for h2_util_hash_eos()
+         * means "the whole brigade" for h2_util_has_eos()
          */
         if (blen < *plen || *plen < 0) {
             *plen = blen;
@@ -1351,82 +1346,7 @@ apr_status_t h2_util_bb_avail(apr_bucket_brigade *bb,
     return APR_SUCCESS;
 }
 
-apr_status_t h2_util_bb_readx(apr_bucket_brigade *bb, 
-                              h2_util_pass_cb *cb, void *ctx, 
-                              apr_off_t *plen, int *peos)
-{
-    apr_status_t status = APR_SUCCESS;
-    int consume = (cb != NULL);
-    apr_off_t written = 0;
-    apr_off_t avail = *plen;
-    apr_bucket *next, *b;
-    
-    /* Pass data in our brigade through the callback until the length
-     * is satisfied or we encounter an EOS.
-     */
-    *peos = 0;
-    for (b = APR_BRIGADE_FIRST(bb);
-         (status == APR_SUCCESS) && (b != APR_BRIGADE_SENTINEL(bb));
-         b = next) {
-        
-        if (APR_BUCKET_IS_METADATA(b)) {
-            if (APR_BUCKET_IS_EOS(b)) {
-                *peos = 1;
-            }
-            else {
-                /* ignore */
-            }
-        }
-        else if (avail <= 0) {
-            break;
-        } 
-        else {
-            const char *data = NULL;
-            apr_size_t data_len;
-            
-            if (b->length == ((apr_size_t)-1)) {
-                /* read to determine length */
-                status = apr_bucket_read(b, &data, &data_len, APR_NONBLOCK_READ);
-            }
-            else {
-                data_len = b->length;
-            }
-            
-            if (data_len > avail) {
-                apr_bucket_split(b, avail);
-                data_len = (apr_size_t)avail;
-            }
-            
-            if (consume) {
-                if (!data) {
-                    status = apr_bucket_read(b, &data, &data_len, 
-                                             APR_NONBLOCK_READ);
-                }
-                if (status == APR_SUCCESS) {
-                    status = cb(ctx, data, data_len);
-                }
-            }
-            else {
-                data_len = b->length;
-            }
-            avail -= data_len;
-            written += data_len;
-        }
-        
-        next = APR_BUCKET_NEXT(b);
-        if (consume) {
-            apr_bucket_delete(b);
-        }
-    }
-    
-    *plen = written;
-    if (status == APR_SUCCESS && !*peos && !*plen) {
-        return APR_EAGAIN;
-    }
-    return status;
-}
-
-apr_size_t h2_util_bucket_print(char *buffer, apr_size_t bmax, 
+apr_size_t h2_util_bucket_print(char *buffer, apr_size_t bmax,
                                 apr_bucket *b, const char *sep)
 {
     apr_size_t off = 0;

@@ -94,18 +94,33 @@ static apr_bucket *h2_beam_bucket(h2_bucket_beam *beam,
 static int is_empty(h2_bucket_beam *beam);
 static apr_off_t get_buffered_data_len(h2_bucket_beam *beam);
 
-#define H2_BEAM_LOG(beam, c, level, rv, msg) \
+static int h2_blist_count(h2_blist *blist)
+{
+    apr_bucket *b;
+    int count = 0;
+
+    for (b = H2_BLIST_FIRST(blist); b != H2_BLIST_SENTINEL(blist);
+         b = APR_BUCKET_NEXT(b)) {
+        ++count;
+    }
+    return count;
+}
+
+#define H2_BEAM_LOG(beam, c, level, rv, msg, bb) \
     do { \
         if (APLOG_C_IS_LEVEL((c),(level))) { \
-            h2_conn_ctx_t *bl_ctx = h2_conn_ctx_get(c); \
+            char buffer[4 * 1024]; \
+            apr_size_t len, bmax = sizeof(buffer)/sizeof(buffer[0]); \
+            len = bb? h2_util_bb_print(buffer, bmax, "", "", bb) : 0; \
             ap_log_cerror(APLOG_MARK, (level), rv, (c), \
-                          "BEAM[%s,%s%sdata=%ld] conn=%s: %s", \
+                          "BEAM[%s,%s%sdata=%ld,buckets(send/consumed)=%d/%d]: %s %s", \
                           (beam)->name, \
                           (beam)->aborted? "aborted," : "", \
                           is_empty(beam)? "empty," : "", \
                           (long)get_buffered_data_len(beam), \
-                          bl_ctx? bl_ctx->id : "???", \
-                          (msg)); \
+                          h2_blist_count(&(beam)->buckets_to_send), \
+                          h2_blist_count(&(beam)->buckets_consumed), \
+                          (msg), len? buffer : ""); \
         } \
     } while (0)
 
@@ -209,11 +224,11 @@ static apr_status_t wait_not_empty(h2_bucket_beam *beam, conn_rec *c, apr_read_t
             rv = APR_EAGAIN;
         }
         else if (beam->timeout > 0) {
-            H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_empty, timeout");
+            H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_empty, timeout", NULL);
             rv = apr_thread_cond_timedwait(beam->change, beam->lock, beam->timeout);
         }
         else {
-            H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_empty, forever");
+            H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_empty, forever", NULL);
             rv = apr_thread_cond_wait(beam->change, beam->lock);
         }
     }
@@ -236,11 +251,11 @@ static apr_status_t wait_not_full(h2_bucket_beam *beam, conn_rec *c,
         }
         else {
             if (beam->timeout > 0) {
-                H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_full, timeout");
+                H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_full, timeout", NULL);
                 rv = apr_thread_cond_timedwait(beam->change, beam->lock, beam->timeout);
             }
             else {
-                H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_full, forever");
+                H2_BEAM_LOG(beam, c, APLOG_TRACE2, rv, "wait_not_full, forever", NULL);
                 rv = apr_thread_cond_wait(beam->change, beam->lock);
             }
         }
@@ -301,7 +316,7 @@ static apr_status_t beam_pool_cleanup(void *data)
 apr_status_t h2_beam_destroy(h2_bucket_beam *beam, conn_rec *c)
 {
     apr_pool_cleanup_kill(beam->pool, beam, beam_pool_cleanup);
-    H2_BEAM_LOG(beam, c, APLOG_TRACE2, 0, "destroy");
+    H2_BEAM_LOG(beam, c, APLOG_TRACE2, 0, "destroy", NULL);
     return beam_cleanup(beam, 0);
 }
 
@@ -334,7 +349,7 @@ apr_status_t h2_beam_create(h2_bucket_beam **pbeam, conn_rec *from,
     apr_pool_pre_cleanup_register(pool, beam, beam_pool_cleanup);
 
 cleanup:
-    H2_BEAM_LOG(beam, from, APLOG_TRACE2, rv, "created");
+    H2_BEAM_LOG(beam, from, APLOG_TRACE2, rv, "created", NULL);
     *pbeam = (APR_SUCCESS == rv)? beam : NULL;
     return rv;
 }
@@ -505,7 +520,7 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam, conn_rec *from,
     apr_thread_mutex_lock(beam->lock);
     ap_assert(beam->from == from);
     ap_assert(sender_bb);
-    H2_BEAM_LOG(beam, from, APLOG_TRACE2, rv, "start send");
+    H2_BEAM_LOG(beam, from, APLOG_TRACE2, rv, "start send", sender_bb);
     purge_consumed_buckets(beam);
     was_empty = buffer_is_empty(beam);
 
@@ -535,7 +550,7 @@ apr_status_t h2_beam_send(h2_bucket_beam *beam, conn_rec *from,
     if (beam->aborted) {
         rv = APR_ECONNABORTED;
     }
-    H2_BEAM_LOG(beam, from, APLOG_TRACE2, rv, "end send");
+    H2_BEAM_LOG(beam, from, APLOG_TRACE2, rv, "end send", sender_bb);
     apr_thread_mutex_unlock(beam->lock);
     return rv;
 }
@@ -553,7 +568,7 @@ apr_status_t h2_beam_receive(h2_bucket_beam *beam,
     int consumed_buckets = 0;
 
     apr_thread_mutex_lock(beam->lock);
-    H2_BEAM_LOG(beam, to, APLOG_TRACE2, 0, "start receive");
+    H2_BEAM_LOG(beam, to, APLOG_TRACE2, 0, "start receive", bb);
     if (readbytes <= 0) {
         readbytes = (apr_off_t)APR_SIZE_MAX;
     }
@@ -716,7 +731,7 @@ transfer:
     }
 
 leave:
-    H2_BEAM_LOG(beam, to, APLOG_TRACE2, rv, "end receive");
+    H2_BEAM_LOG(beam, to, APLOG_TRACE2, rv, "end receive", bb);
     apr_thread_mutex_unlock(beam->lock);
     return rv;
 }

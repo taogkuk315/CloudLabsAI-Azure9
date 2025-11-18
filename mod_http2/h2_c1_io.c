@@ -150,8 +150,9 @@ apr_status_t h2_c1_io_init(h2_c1_io *io, conn_rec *c, server_rec *s)
          * see https://issues.apache.org/jira/browse/TS-2503 
          */
         io->warmup_size    = h2_config_sgeti64(s, H2_CONF_TLS_WARMUP_SIZE);
-        io->cooldown_usecs = (h2_config_sgeti(s, H2_CONF_TLS_COOLDOWN_SECS) 
+        io->cooldown_usecs = (h2_config_sgeti(s, H2_CONF_TLS_COOLDOWN_SECS)
                               * APR_USEC_PER_SEC);
+        io->cooldown_usecs = 0;
         io->write_size     = (io->cooldown_usecs > 0?
                               WRITE_SIZE_INITIAL : WRITE_SIZE_MAX); 
     }
@@ -218,9 +219,10 @@ static apr_status_t read_to_scratch(h2_c1_io *io, apr_bucket *b)
         apr_off_t offset = b->start;
         
         len = b->length;
-        /* file buckets will either mmap (which we do not want) or
-         * read 8000 byte chunks and split themself. However, we do
-         * know *exactly* how many bytes we need where.
+        /* file buckets will read 8000 byte chunks and split
+         * themselves. However, we do know *exactly* how many
+         * bytes we need where. So we read the file directly to
+         * where we need it.
          */
         status = apr_file_seek(fd, APR_SET, &offset);
         if (status != APR_SUCCESS) {
@@ -232,6 +234,16 @@ static apr_status_t read_to_scratch(h2_c1_io *io, apr_bucket *b)
         }
         io->slen += len;
     }
+    else if (APR_BUCKET_IS_MMAP(b)) {
+        ap_log_cerror(APLOG_MARK, APLOG_INFO, 0, io->c,
+                      "h2_c1_io(%ld): seeing mmap bucket of size %ld, scratch remain=%ld",
+                      io->c->id, (long)b->length, (long)(io->ssize - io->slen));
+        status = apr_bucket_read(b, &data, &len, APR_BLOCK_READ);
+        if (status == APR_SUCCESS) {
+            memcpy(io->scratch+io->slen, data, len);
+            io->slen += len;
+        }
+    }
     else {
         status = apr_bucket_read(b, &data, &len, APR_BLOCK_READ);
         if (status == APR_SUCCESS) {
@@ -240,22 +252,6 @@ static apr_status_t read_to_scratch(h2_c1_io *io, apr_bucket *b)
         }
     }
     return status;
-}
-
-static void check_write_size(h2_c1_io *io)
-{
-    if (io->write_size > WRITE_SIZE_INITIAL 
-        && (io->cooldown_usecs > 0)
-        && (apr_time_now() - io->last_write) >= io->cooldown_usecs) {
-        /* long time not written, reset write size */
-        io->write_size = WRITE_SIZE_INITIAL;
-        io->bytes_written = 0;
-    }
-    else if (io->write_size < WRITE_SIZE_MAX 
-             && io->bytes_written >= io->warmup_size) {
-        /* connection is hot, use max size */
-        io->write_size = WRITE_SIZE_MAX;
-    }
 }
 
 static apr_status_t pass_output(h2_c1_io *io, int flush)
@@ -281,12 +277,30 @@ static apr_status_t pass_output(h2_c1_io *io, int flush)
     C1_IO_BB_LOG(c, 0, APLOG_TRACE2, "out", io->output);
     
     rv = ap_pass_brigade(c->output_filters, io->output);
-    if (APR_SUCCESS == rv) {
-        io->buffered_len = 0;
-        io->bytes_written += (apr_size_t)bblen;
-        io->last_write = apr_time_now();
+    if (APR_SUCCESS != rv) goto cleanup;
+
+    io->buffered_len = 0;
+    io->bytes_written += (apr_size_t)bblen;
+    if (io->write_size < WRITE_SIZE_MAX
+         && io->bytes_written >= io->warmup_size) {
+        /* connection is hot, use max size */
+        io->write_size = WRITE_SIZE_MAX;
     }
-    else {
+    else if (io->cooldown_usecs > 0
+             && io->write_size > WRITE_SIZE_INITIAL) {
+        apr_time_t now = apr_time_now();
+        if ((now - io->last_write) >= io->cooldown_usecs) {
+            /* long time not written, reset write size */
+            io->write_size = WRITE_SIZE_INITIAL;
+            io->bytes_written = 0;
+        }
+        else {
+            io->last_write = now;
+        }
+    }
+
+cleanup:
+    if (APR_SUCCESS != rv) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, rv, c, APLOGNO(03044)
                       "h2_c1_io(%ld): pass_out brigade %ld bytes",
                       c->id, (long)bblen);
@@ -311,7 +325,6 @@ apr_status_t h2_c1_io_pass(h2_c1_io *io)
 
     if (h2_c1_io_pending(io)) {
         rv = pass_output(io, 0);
-        check_write_size(io);
     }
     return rv;
 }
@@ -323,7 +336,6 @@ apr_status_t h2_c1_io_assure_flushed(h2_c1_io *io)
     if (h2_c1_io_pending(io) || io->unflushed) {
         rv = pass_output(io, 1);
         if (APR_SUCCESS != rv) goto cleanup;
-        check_write_size(io);
     }
 cleanup:
     return rv;
@@ -367,7 +379,7 @@ apr_status_t h2_c1_io_append(h2_c1_io *io, apr_bucket_brigade *bb)
 
     while (!APR_BRIGADE_EMPTY(bb)) {
         b = APR_BRIGADE_FIRST(bb);
-        if (APR_BUCKET_IS_METADATA(b)) {
+        if (APR_BUCKET_IS_METADATA(b) || APR_BUCKET_IS_MMAP(b)) {
             /* need to finish any open scratch bucket, as meta data
              * needs to be forward "in order". */
             append_scratch(io);
@@ -396,9 +408,7 @@ apr_status_t h2_c1_io_append(h2_c1_io *io, apr_bucket_brigade *bb)
         }
         else {
             /* no buffering, forward buckets setaside on flush */
-            if (APR_BUCKET_IS_TRANSIENT(b)) {
-                apr_bucket_setaside(b, io->c->pool);
-            }
+            apr_bucket_setaside(b, io->c->pool);
             APR_BUCKET_REMOVE(b);
             APR_BRIGADE_INSERT_TAIL(io->output, b);
             io->buffered_len += b->length;
@@ -464,81 +474,63 @@ cleanup:
     return rv;
 }
 
-static int c1_input_pending(h2_session *session)
+static apr_status_t read_and_feed(h2_session *session)
 {
-#if AP_MODULE_MAGIC_AT_LEAST(20160312, 0)
-    return (ap_run_input_pending(session->c1) == OK);
-#else
-    return 0;
-#endif
+    apr_ssize_t bytes_fed, bytes_requested;
+    apr_status_t rv;
+
+    bytes_requested = H2MAX(APR_BUCKET_BUFF_SIZE, session->max_stream_mem * 4);
+    rv = ap_get_brigade(session->c1->input_filters,
+                        session->bbtmp, AP_MODE_READBYTES,
+                        APR_NONBLOCK_READ, bytes_requested);
+
+    if (APR_SUCCESS == rv) {
+        h2_util_bb_log(session->c1, session->id, APLOG_TRACE2, "c1 in", session->bbtmp);
+        rv = c1_in_feed_brigade(session, session->bbtmp, &bytes_fed);
+        session->io.bytes_read += bytes_fed;
+    }
+    return rv;
 }
 
 apr_status_t h2_c1_read(h2_session *session)
 {
     apr_status_t rv;
-    conn_rec *c = session->c1;
-    apr_off_t read_start = session->io.bytes_read;
-    apr_size_t readlen = session->max_stream_mem * 4;
-    apr_ssize_t bytes_fed;
 
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c,
-                  H2_SSSN_MSG(session, "session_read start"));
     /* H2_IN filter handles all incoming data against the session.
      * We just pull at the filter chain to make it happen */
-    rv = ap_get_brigade(c->input_filters,
-                        session->bbtmp, AP_MODE_READBYTES,
-                        APR_NONBLOCK_READ,
-                        H2MAX(APR_BUCKET_BUFF_SIZE, readlen));
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c1,
+                  H2_SSSN_MSG(session, "session_read start"));
+    rv = read_and_feed(session);
 
     if (APR_SUCCESS == rv) {
-        h2_util_bb_log(session->c1, session->id, APLOG_TRACE2, "c1 in", session->bbtmp);
-        rv = c1_in_feed_brigade(session, session->bbtmp, &bytes_fed);
-        if (APR_SUCCESS == rv) {
-            session->io.bytes_read += bytes_fed;
-            if (session->io.bytes_read > read_start) {
-                h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_READ, 0, NULL);
-            }
-            else {
-                h2_util_bb_log(session->c1, session->id, APLOG_TRACE2, "c1 in empty", session->bbtmp);
-            }
-        }
+        h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_PENDING, 0, NULL);
     }
-
-    if (APR_STATUS_IS_EAGAIN(rv)) {
-        if (c1_input_pending(session)) {
-            goto cleanup;
-        }
+    else if (APR_STATUS_IS_EAGAIN(rv)) {
         /* Signal that we have exhausted the input momentarily.
          * This might switch to polling the socket */
-        h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_EAGAIN, 0, NULL);
+        h2_session_dispatch_event(session, H2_SESSION_EV_INPUT_EXHAUSTED, 0, NULL);
     }
     else if (APR_SUCCESS != rv) {
-        if (session->io.bytes_read == read_start) {
-            /* first attempt failed */
-            if (APR_STATUS_IS_ETIMEDOUT(rv)
-                || APR_STATUS_IS_ECONNABORTED(rv)
-                || APR_STATUS_IS_ECONNRESET(rv)
-                || APR_STATUS_IS_EOF(rv)
-                || APR_STATUS_IS_EBADF(rv)) {
-                /* common status for a client that has left */
-                ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
-                              H2_SSSN_MSG(session, "input gone"));
-            }
-            else {
-                /* uncommon status, log on INFO so that we see this */
-                ap_log_cerror( APLOG_MARK, APLOG_DEBUG, rv, c,
-                              H2_SSSN_LOG(APLOGNO(02950), session,
-                              "error reading, terminating"));
-            }
+        if (APR_STATUS_IS_ETIMEDOUT(rv)
+            || APR_STATUS_IS_ECONNABORTED(rv)
+            || APR_STATUS_IS_ECONNRESET(rv)
+            || APR_STATUS_IS_EOF(rv)
+            || APR_STATUS_IS_EBADF(rv)) {
+            /* common status for a client that has left */
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, session->c1,
+                          H2_SSSN_MSG(session, "input gone"));
         }
-        /* subsequent failure after success(es), return initial
-         * status. */
+        else {
+            /* uncommon status, log on INFO so that we see this */
+            ap_log_cerror( APLOG_MARK, APLOG_DEBUG, rv, session->c1,
+                          H2_SSSN_LOG(APLOGNO(02950), session,
+                          "error reading, terminating"));
+        }
         h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
     }
 
-cleanup:
     apr_brigade_cleanup(session->bbtmp);
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c,
+    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, session->c1,
                   H2_SSSN_MSG(session, "session_read done"));
     return rv;
 }

@@ -1369,7 +1369,7 @@ static void h2_session_ev_init(h2_session *session, int arg, const char *msg)
     }
 }
 
-static void h2_session_ev_input_read(h2_session *session, int arg, const char *msg)
+static void h2_session_ev_input_pending(h2_session *session, int arg, const char *msg)
 {
     switch (session->state) {
         case H2_SESSION_ST_INIT:
@@ -1382,17 +1382,11 @@ static void h2_session_ev_input_read(h2_session *session, int arg, const char *m
     }
 }
 
-static void h2_session_ev_input_eagain(h2_session *session, int arg, const char *msg)
+static void h2_session_ev_input_exhausted(h2_session *session, int arg, const char *msg)
 {
     switch (session->state) {
         case H2_SESSION_ST_BUSY:
             if (!h2_session_want_send(session)) {
-#if AP_MODULE_MAGIC_AT_LEAST(20160312, 0)
-                if (ap_run_input_pending(session->c1) == OK) {
-                    /* input buffers non-empty, can not switch to WAIT yet */
-                    break;
-                }
-#endif
                 transit(session, "input exhausted", H2_SESSION_ST_WAIT);
             }
             break;
@@ -1652,11 +1646,11 @@ void h2_session_dispatch_event(h2_session *session, h2_session_event_t ev,
         case H2_SESSION_EV_INIT:
             h2_session_ev_init(session, arg, msg);
             break;            
-        case H2_SESSION_EV_INPUT_READ:
-            h2_session_ev_input_read(session, arg, msg);
+        case H2_SESSION_EV_INPUT_PENDING:
+            h2_session_ev_input_pending(session, arg, msg);
             break;
-        case H2_SESSION_EV_INPUT_EAGAIN:
-            h2_session_ev_input_eagain(session, arg, msg);
+        case H2_SESSION_EV_INPUT_EXHAUSTED:
+            h2_session_ev_input_exhausted(session, arg, msg);
             break;
         case H2_SESSION_EV_LOCAL_GOAWAY:
             h2_session_ev_local_goaway(session, arg, msg);
@@ -1749,8 +1743,6 @@ apr_status_t h2_session_process(h2_session *session, int async)
         }
         session->status[0] = '\0';
         
-        h2_c1_read(session);
-
         if (h2_session_want_send(session)) {
             h2_session_send(session);
         }
@@ -1793,6 +1785,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
         switch (session->state) {
         case H2_SESSION_ST_INIT:
             ap_assert(0);
+            h2_c1_read(session);
             break;
 
         case H2_SESSION_ST_IDLE:
@@ -1825,6 +1818,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                 h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
                 break;
             }
+            h2_c1_read(session);
             break;
 
         case H2_SESSION_ST_WAIT:
@@ -1849,6 +1843,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
             break;
 
         case H2_SESSION_ST_DONE:
+            h2_c1_read(session);
             break;
 
         default:

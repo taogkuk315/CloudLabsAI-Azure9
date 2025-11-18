@@ -459,22 +459,6 @@ typedef apr_status_t h2_util_pass_cb(void *ctx,
                                      const char *data, apr_off_t len);
 
 /**
- * Read at most *plen bytes from the brigade and pass them into the
- * given callback. If cb is NULL, just return the amount of data that
- * could have been read.
- * If an EOS was/would be encountered, set *peos != 0.
- * @param bb the brigade to read from
- * @param cb the callback to invoke for the read data
- * @param ctx optional data passed to callback
- * @param plen inout, as input gives the maximum number of bytes to read,
- *    on return specifies the actual/would be number of bytes
- * @param peos != 0 iff an EOS bucket was/would be encountered.
- */
-apr_status_t h2_util_bb_readx(apr_bucket_brigade *bb, 
-                              h2_util_pass_cb *cb, void *ctx, 
-                              apr_off_t *plen, int *peos);
-
-/**
  * Print a bucket's meta data (type and length) to the buffer.
  * @return number of characters printed
  */

@@ -48,8 +48,8 @@ struct nghttp2_session;
 
 typedef enum {
     H2_SESSION_EV_INIT,             /* session was initialized */
-    H2_SESSION_EV_INPUT_READ,       /* c1 input read */
-    H2_SESSION_EV_INPUT_EAGAIN,     /* c1 input exhausted */
+    H2_SESSION_EV_INPUT_PENDING,    /* c1 input may have data pending */
+    H2_SESSION_EV_INPUT_EXHAUSTED,  /* c1 input exhausted */
     H2_SESSION_EV_LOCAL_GOAWAY,     /* we send a GOAWAY */
     H2_SESSION_EV_REMOTE_GOAWAY,    /* remote send us a GOAWAY */
     H2_SESSION_EV_CONN_ERROR,       /* connection error */

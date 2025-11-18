@@ -420,10 +420,9 @@ static apr_status_t beam_out(conn_rec *c2, h2_conn_ctx_t *conn_ctx, apr_bucket_b
         written -= left;
         rv = APR_SUCCESS;
     }
-    h2_c2_logio_add_bytes_out(c2, written);
-    ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, c2,
-                  "h2_c2(%s-%d): beam_out, added %ld bytes",
-                  conn_ctx->id, conn_ctx->stream_id, (long)written);
+    if (written && h2_c2_logio_add_bytes_out) {
+        h2_c2_logio_add_bytes_out(c2, written);
+    }
     return rv;
 }
 
