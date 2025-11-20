@@ -253,7 +253,6 @@ class LoadTestCase:
                 'base': """
             LogLevel ssl:warn
             Protocols h2 http/1.1
-            EnableMMap off
             H2MinWorkers 32
             H2MaxWorkers 256
                     """

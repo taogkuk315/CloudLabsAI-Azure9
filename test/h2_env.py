@@ -208,7 +208,7 @@ class H2TestEnv:
                 LogLevel http2:trace2 proxy_http2:info 
                 LogLevel core:trace5 mpm_{self.mpm_type}:trace5
                 """
-        if self._verbosity >= 1:
+        elif self._verbosity >= 1:
             self._httpd_base_conf += "LogLevel http2:debug proxy_http2:debug"
         else:
             self._httpd_base_conf += "LogLevel http2:info proxy_http2:info"
