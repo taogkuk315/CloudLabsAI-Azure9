@@ -504,7 +504,7 @@ apr_status_t h2_mplx_c1_reprioritize(h2_mplx *m, h2_stream_pri_cmp_fn *cmp,
     return status;
 }
 
-static void ms_register_if_needed(h2_mplx *m, int from_master) 
+static void ms_register_if_needed(h2_mplx *m, int from_master)
 {
     if (!m->aborted && !m->is_registered && !h2_iq_empty(m->q)) {
         apr_status_t status = h2_workers_register(m->workers, m); 

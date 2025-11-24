@@ -15,11 +15,17 @@ DIST_SUBDIRS    = mod_http2
 
 ACLOCAL_AMFLAGS = -I m4
 
-EXTRA_DIST     = test/e2e test/unit test/Makefile.in test/Makefile.am \
-	test/mod_h2test/Makefile.in \
-	test/mod_h2test/Makefile.am \
+EXTRA_DIST     = \
+    test/unit \
+    test/Makefile.in \
+    test/Makefile.am \
 	test/mod_h2test/mod_h2test.c \
-	test/mod_h2test/mod_h2test.h
+	test/mod_h2test/mod_h2test.h \
+	test/conf \
+	test/data \
+	test/htdocs \
+	test/*.py \
+	test/*.ini.in
 
 
 dist_doc_DATA   = README README.md LICENSE
