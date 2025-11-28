@@ -41,6 +41,7 @@
 #include "h2_request.h"
 #include "h2_switch.h"
 #include "h2_version.h"
+#include "h2_bucket_beam.h"
 
 
 static void h2_hooks(apr_pool_t *pool);
@@ -373,6 +374,7 @@ static int h2_h2_fixups(request_rec *r)
     if (r->connection->master) {
         h2_conn_ctx_t *ctx = h2_conn_ctx_get(r->connection);
         int i;
+        apr_interval_time_t beam_timeout;
         
         for (i = 0; ctx && i < H2_ALEN(H2_VARS); ++i) {
             h2_var_def *vdef = &H2_VARS[i];
@@ -380,6 +382,13 @@ static int h2_h2_fixups(request_rec *r)
                 apr_table_setn(r->subprocess_env, vdef->name, 
                                vdef->lookup(r->pool, r->server, r->connection, 
                                             r, ctx));
+            }
+        }
+        beam_timeout = h2_config_geti64(r, r->server, H2_CONF_BEAM_TIMEOUT);
+        if (beam_timeout > 0) {
+            h2_beam_timeout_set(ctx->beam_out, beam_timeout);
+            if (ctx->beam_in) {
+                h2_beam_timeout_set(ctx->beam_in, beam_timeout);
             }
         }
     }
