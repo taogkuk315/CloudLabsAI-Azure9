@@ -936,8 +936,8 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "set payload padding"),
     AP_INIT_TAKE1("H2OutputBuffering", h2_conf_set_output_buffer, NULL,
                   RSRC_CONF, "set stream output buffer on/off"),
-    AP_INIT_TAKE1("H2BeamTimeout", h2_conf_set_beam_timeout, NULL,
-                  RSRC_CONF, "set beam timeout"),
+    AP_INIT_TAKE1("H2StreamTimeout", h2_conf_set_beam_timeout, NULL,
+                  RSRC_CONF, "set stream timeout"),
     AP_END_CMD
 };
 
