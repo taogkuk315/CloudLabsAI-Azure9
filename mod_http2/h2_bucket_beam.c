@@ -125,7 +125,7 @@ static int h2_blist_count(h2_blist *blist)
     } while (0)
 
 
-static bucket_is_mmap(apr_bucket *b)
+static int bucket_is_mmap(apr_bucket *b)
 {
 #if APR_HAS_MMAP
     return APR_BUCKET_IS_MMAP(b);
