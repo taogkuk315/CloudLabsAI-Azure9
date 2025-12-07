@@ -8,7 +8,7 @@ from h2_env import H2TestEnv
 
 
 def pytest_report_header(config, startdir):
-    env = H2TestEnv()
+    env = H2TestEnv(setup_dirs=False)
     return f"mod_h2 [apache: {env.get_httpd_version()}, mpm: {env.mpm_type}, {env.prefix}]"
 
 

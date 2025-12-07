@@ -74,7 +74,7 @@ typedef struct h2_config {
     int padding_bits;
     int padding_always;
     int output_buffered;
-    apr_interval_time_t beam_timeout;/* beam timeout */
+    apr_interval_time_t stream_timeout;/* beam timeout */
 } h2_config;
 
 typedef struct h2_dir_config {
@@ -83,7 +83,7 @@ typedef struct h2_dir_config {
     int h2_push;                     /* if HTTP/2 server push is enabled */
     apr_array_header_t *push_list;   /* list of h2_push_res configurations */
     int early_hints;                 /* support status code 103 */
-    apr_interval_time_t beam_timeout;/* beam timeout */
+    apr_interval_time_t stream_timeout;/* beam timeout */
 } h2_dir_config;
 
 
@@ -152,7 +152,7 @@ void *h2_config_create_svr(apr_pool_t *pool, server_rec *s)
     conf->padding_bits         = DEF_VAL;
     conf->padding_always       = DEF_VAL;
     conf->output_buffered      = DEF_VAL;
-    conf->beam_timeout         = DEF_VAL;
+    conf->stream_timeout         = DEF_VAL;
     return conf;
 }
 
@@ -194,7 +194,7 @@ static void *h2_config_merge(apr_pool_t *pool, void *basev, void *addv)
     n->early_hints          = H2_CONFIG_GET(add, base, early_hints);
     n->padding_bits         = H2_CONFIG_GET(add, base, padding_bits);
     n->padding_always       = H2_CONFIG_GET(add, base, padding_always);
-    n->beam_timeout         = H2_CONFIG_GET(add, base, beam_timeout);
+    n->stream_timeout         = H2_CONFIG_GET(add, base, stream_timeout);
     return n;
 }
 
@@ -213,7 +213,7 @@ void *h2_config_create_dir(apr_pool_t *pool, char *x)
     conf->h2_upgrade           = DEF_VAL;
     conf->h2_push              = DEF_VAL;
     conf->early_hints          = DEF_VAL;
-    conf->beam_timeout         = DEF_VAL;
+    conf->stream_timeout         = DEF_VAL;
     return conf;
 }
 
@@ -233,7 +233,7 @@ void *h2_config_merge_dir(apr_pool_t *pool, void *basev, void *addv)
         n->push_list        = add->push_list? add->push_list : base->push_list;
     }
     n->early_hints          = H2_CONFIG_GET(add, base, early_hints);
-    n->beam_timeout         = H2_CONFIG_GET(add, base, beam_timeout);
+    n->stream_timeout         = H2_CONFIG_GET(add, base, stream_timeout);
     return n;
 }
 
@@ -276,8 +276,8 @@ static apr_int64_t h2_srv_config_geti64(const h2_config *conf, h2_config_var_t v
             return H2_CONFIG_GET(conf, &defconf, padding_always);
         case H2_CONF_OUTPUT_BUFFER:
             return H2_CONFIG_GET(conf, &defconf, output_buffered);
-        case H2_CONF_BEAM_TIMEOUT:
-            return H2_CONFIG_GET(conf, &defconf, beam_timeout);
+        case H2_CONF_STREAM_TIMEOUT:
+            return H2_CONFIG_GET(conf, &defconf, stream_timeout);
         default:
             return DEF_VAL;
     }
@@ -351,8 +351,8 @@ static void h2_srv_config_seti64(h2_config *conf, h2_config_var_t var, apr_int64
         case H2_CONF_TLS_WARMUP_SIZE:
             H2_CONFIG_SET(conf, tls_warmup_size, val);
             break;
-        case H2_CONF_BEAM_TIMEOUT:
-            H2_CONFIG_SET(conf, beam_timeout, val);
+        case H2_CONF_STREAM_TIMEOUT:
+            H2_CONFIG_SET(conf, stream_timeout, val);
             break;
         default:
             h2_srv_config_seti(conf, var, (int)val);
@@ -385,8 +385,8 @@ static apr_int64_t h2_dir_config_geti64(const h2_dir_config *conf, h2_config_var
             return H2_CONFIG_GET(conf, &defdconf, h2_push);
         case H2_CONF_EARLY_HINTS:
             return H2_CONFIG_GET(conf, &defdconf, early_hints);
-        case H2_CONF_BEAM_TIMEOUT:
-            return H2_CONFIG_GET(conf, &defdconf, beam_timeout);
+        case H2_CONF_STREAM_TIMEOUT:
+            return H2_CONFIG_GET(conf, &defdconf, stream_timeout);
 
         default:
             return DEF_VAL;
@@ -424,8 +424,8 @@ static void h2_config_seti64(h2_dir_config *dconf, h2_config *conf, h2_config_va
     int set_srv = !dconf;
     if (dconf) {
         switch(var) {
-            case H2_CONF_BEAM_TIMEOUT:
-                H2_CONFIG_SET(dconf, beam_timeout, val);
+            case H2_CONF_STREAM_TIMEOUT:
+                H2_CONFIG_SET(dconf, stream_timeout, val);
                 break;
             default:
                 /* not handled in dir_conf */
@@ -854,7 +854,7 @@ static const char *h2_conf_set_output_buffer(cmd_parms *cmd,
     return "value must be On or Off";
 }
 
-static const char *h2_conf_set_beam_timeout(cmd_parms *cmd,
+static const char *h2_conf_set_stream_timeout(cmd_parms *cmd,
                                             void *dirconf, const char *value)
 {
     apr_status_t rv;
@@ -864,7 +864,7 @@ static const char *h2_conf_set_beam_timeout(cmd_parms *cmd,
     if (rv != APR_SUCCESS) {
         return "Invalid timeout value";
     }
-    CONFIG_CMD_SET64(cmd, dirconf, H2_CONF_BEAM_TIMEOUT, timeout);
+    CONFIG_CMD_SET64(cmd, dirconf, H2_CONF_STREAM_TIMEOUT, timeout);
     return NULL;
 }
 
@@ -936,7 +936,7 @@ const command_rec h2_cmds[] = {
                   RSRC_CONF, "set payload padding"),
     AP_INIT_TAKE1("H2OutputBuffering", h2_conf_set_output_buffer, NULL,
                   RSRC_CONF, "set stream output buffer on/off"),
-    AP_INIT_TAKE1("H2StreamTimeout", h2_conf_set_beam_timeout, NULL,
+    AP_INIT_TAKE1("H2StreamTimeout", h2_conf_set_stream_timeout, NULL,
                   RSRC_CONF, "set stream timeout"),
     AP_END_CMD
 };

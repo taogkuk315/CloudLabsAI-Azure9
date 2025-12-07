@@ -378,6 +378,16 @@ apr_size_t h2_beam_buffer_size_get(h2_bucket_beam *beam)
     return buffer_size;
 }
 
+apr_interval_time_t h2_beam_timeout_get(h2_bucket_beam *beam)
+{
+    apr_interval_time_t timeout;
+
+    apr_thread_mutex_lock(beam->lock);
+    timeout = beam->timeout;
+    apr_thread_mutex_unlock(beam->lock);
+    return timeout;
+}
+
 void h2_beam_timeout_set(h2_bucket_beam *beam, apr_interval_time_t timeout)
 {
     apr_thread_mutex_lock(beam->lock);

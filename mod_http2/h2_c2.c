@@ -328,6 +328,7 @@ receive:
             break;
         }
         else if (status != APR_SUCCESS) {
+            conn_ctx->last_err = status;
             return status;
         }
 
@@ -569,8 +570,11 @@ static apr_status_t c2_process(h2_conn_ctx_t *conn_ctx, conn_rec *c)
 
     /* the request_rec->server carries the timeout value that applies */
     h2_beam_timeout_set(conn_ctx->beam_out, r->server->timeout);
+    apr_file_pipe_timeout_set(conn_ctx->pipe_out_prod[H2_PIPE_OUT], r->server->timeout);
+
     if (conn_ctx->beam_in) {
         h2_beam_timeout_set(conn_ctx->beam_in, r->server->timeout);
+        apr_file_pipe_timeout_set(conn_ctx->pipe_in_prod[H2_PIPE_OUT], r->server->timeout);
     }
     if (h2_config_sgeti(conn_ctx->server, H2_CONF_COPY_FILES)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
@@ -662,7 +666,6 @@ static int h2_c2_hook_post_read_request(request_rec *r)
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(r->connection);
 
     if (conn_ctx && conn_ctx->stream_id) {
-        h2_c2_fctx_out_t *out_ctx;
 
         ap_log_rerror(APLOG_MARK, APLOG_TRACE3, 0, r,
                       "h2_c2(%s-%d): adding request filters",
@@ -675,9 +678,8 @@ static int h2_c2_hook_post_read_request(request_rec *r)
          * in HTTP/1 with our own that collects status and headers */
         ap_remove_output_filter_byhandle(r->output_filters, "HTTP_HEADER");
 
-        out_ctx = apr_pcalloc(r->pool, sizeof(*out_ctx));
-        ap_add_output_filter("H2_C2_RESPONSE_OUT", out_ctx, r, r->connection);
-        ap_add_output_filter("H2_C2_TRAILERS_OUT", out_ctx, r, r->connection);
+        ap_add_output_filter("H2_C2_RESPONSE_OUT", NULL, r, r->connection);
+        ap_add_output_filter("H2_C2_TRAILERS_OUT", NULL, r, r->connection);
     }
     return DECLINED;
 }

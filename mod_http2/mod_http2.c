@@ -374,7 +374,7 @@ static int h2_h2_fixups(request_rec *r)
     if (r->connection->master) {
         h2_conn_ctx_t *ctx = h2_conn_ctx_get(r->connection);
         int i;
-        apr_interval_time_t beam_timeout;
+        apr_interval_time_t stream_timeout;
         
         for (i = 0; ctx && i < H2_ALEN(H2_VARS); ++i) {
             h2_var_def *vdef = &H2_VARS[i];
@@ -384,11 +384,13 @@ static int h2_h2_fixups(request_rec *r)
                                             r, ctx));
             }
         }
-        beam_timeout = h2_config_geti64(r, r->server, H2_CONF_BEAM_TIMEOUT);
-        if (beam_timeout > 0) {
-            h2_beam_timeout_set(ctx->beam_out, beam_timeout);
+        stream_timeout = h2_config_geti64(r, r->server, H2_CONF_STREAM_TIMEOUT);
+        if (stream_timeout > 0) {
+            h2_beam_timeout_set(ctx->beam_out, stream_timeout);
+            apr_file_pipe_timeout_set(ctx->pipe_out_prod[H2_PIPE_OUT], stream_timeout);
             if (ctx->beam_in) {
-                h2_beam_timeout_set(ctx->beam_in, beam_timeout);
+                h2_beam_timeout_set(ctx->beam_in, stream_timeout);
+                apr_file_pipe_timeout_set(ctx->pipe_in_prod[H2_PIPE_OUT], stream_timeout);
             }
         }
     }

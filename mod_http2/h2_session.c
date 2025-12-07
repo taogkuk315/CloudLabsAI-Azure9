@@ -1387,10 +1387,18 @@ static void h2_session_ev_input_exhausted(h2_session *session, int arg, const ch
     switch (session->state) {
         case H2_SESSION_ST_BUSY:
             if (!h2_session_want_send(session)) {
-                transit(session, "input exhausted", H2_SESSION_ST_WAIT);
+                if (session->open_streams == 0) {
+                    transit(session, "input exhausted, no streams", H2_SESSION_ST_IDLE);
+                }
+                else {
+                    transit(session, "input exhausted", H2_SESSION_ST_WAIT);
+                }
             }
             break;
         case H2_SESSION_ST_WAIT:
+            if (session->open_streams == 0) {
+                transit(session, "input exhausted, no streams", H2_SESSION_ST_IDLE);
+            }
             break;
         default:
             break;
@@ -1492,8 +1500,6 @@ static void h2_session_ev_no_more_streams(h2_session *session)
                   H2_SSSN_LOG(APLOGNO(), session, "no more streams"));
     switch (session->state) {
         case H2_SESSION_ST_BUSY:
-            transit(session, "no more streams", H2_SESSION_ST_WAIT);
-            break;
         case H2_SESSION_ST_WAIT:
             if (!h2_session_want_send(session)) {
                 if (session->local.accepting) {
@@ -1506,6 +1512,9 @@ static void h2_session_ev_no_more_streams(h2_session *session)
                     h2_session_shutdown(session, 0, "done", 0);
                     transit(session, "c1 done after goaway", H2_SESSION_ST_DONE);
                 }
+            }
+            else {
+                transit(session, "no more streams", H2_SESSION_ST_WAIT);
             }
             break;
         default:
@@ -1833,11 +1842,11 @@ apr_status_t h2_session_process(h2_session *session, int async)
             status = h2_mplx_c1_poll(session->mplx, session->s->timeout,
                                      on_stream_input, on_stream_output, session);
             if (APR_STATUS_IS_TIMEUP(status)) {
-                h2_session_dispatch_event(session, H2_SESSION_EV_CONN_TIMEOUT, 0, NULL);
+                h2_session_dispatch_event(session, H2_SESSION_EV_CONN_TIMEOUT, 0, "timeout");
                 break;
             }
             else if (APR_SUCCESS != status) {
-                h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
+                h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, "error");
                 break;
             }
             break;

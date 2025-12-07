@@ -21,6 +21,7 @@ struct h2_session;
 struct h2_stream;
 struct h2_mplx;
 struct h2_bucket_beam;
+struct h2_response_parser;
 
 #define H2_PIPE_OUT     0
 #define H2_PIPE_IN      1
@@ -54,6 +55,10 @@ struct h2_conn_ctx_t {
 
     apr_pollfd_t pfd_in_drain;       /* c2: poll pipe_in_drain output */
     apr_pollfd_t pfd_out_prod;       /* c2: poll pipe_out_prod output */
+
+    int has_final_response;          /* final HTTP response passed on out */
+    apr_status_t last_err;           /* APR_SUCCES or last error encountered in filters */
+    struct h2_response_parser *parser; /* optional parser to catch H1 responses */
 
     volatile int done;               /* c2: processing has finished */
     apr_time_t started_at;           /* c2: when processing started */

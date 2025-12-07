@@ -123,9 +123,13 @@ class H2TestSetup:
                 os.chmod(cgi_file, st.st_mode | stat.S_IEXEC)
 
     def _make_h2test(self):
-        subprocess.run([self.env.apxs, '-c', 'mod_h2test.c'],
-                       capture_output=True, check=True,
-                       cwd=os.path.join(self.env.test_dir, 'mod_h2test'))
+        p = subprocess.run([self.env.apxs, '-c', 'mod_h2test.c'],
+                           capture_output=True,
+                           cwd=os.path.join(self.env.test_dir, 'mod_h2test'))
+        rv = p.returncode
+        if rv != 0:
+            log.error(f"compiling md_h2test failed: {p.stderr}")
+            raise Exception(f"compiling md_h2test failed: {p.stderr}")
 
     def _make_modules_conf(self):
         modules_conf = os.path.join(self.env.server_dir, 'conf/modules.conf')
@@ -143,7 +147,7 @@ class H2TestSetup:
 
 class H2TestEnv:
 
-    def __init__(self, pytestconfig=None):
+    def __init__(self, pytestconfig=None, setup_dirs=True):
         our_dir = os.path.dirname(inspect.getfile(Dummy))
         self.config = ConfigParser(interpolation=ExtendedInterpolation())
         self.config.read(os.path.join(our_dir, 'config.ini'))
@@ -205,17 +209,18 @@ class H2TestEnv:
         self._verbosity = pytestconfig.option.verbose if pytestconfig is not None else 0
         if self._verbosity >= 2:
             self._httpd_base_conf += f"""
-                LogLevel http2:trace2 proxy_http2:info 
+                LogLevel http2:trace2 proxy_http2:info h2test:trace2 
                 LogLevel core:trace5 mpm_{self.mpm_type}:trace5
                 """
         elif self._verbosity >= 1:
-            self._httpd_base_conf += "LogLevel http2:debug proxy_http2:debug"
+            self._httpd_base_conf += "LogLevel http2:debug proxy_http2:debug h2test:debug"
         else:
             self._httpd_base_conf += "LogLevel http2:info proxy_http2:info"
 
         self._verify_certs = False
-        self._setup = H2TestSetup(env=self)
-        self._setup.make()
+        if setup_dirs:
+            self._setup = H2TestSetup(env=self)
+            self._setup.make()
 
     @property
     def apxs(self) -> str:
@@ -402,7 +407,7 @@ class H2TestEnv:
                 req = requests.Request('HEAD', url).prepare()
                 s.send(req, verify=self._verify_certs, timeout=int(timeout.total_seconds()))
                 time.sleep(.2)
-            except IOError as ex:
+            except IOError:
                 return True
         log.debug("Server still responding after %d sec", timeout)
         return False
@@ -427,7 +432,7 @@ class H2TestEnv:
         return rv
 
     def apache_restart(self):
-        rv = self.apache_stop()
+        self.apache_stop()
         rv = self._run_apachectl("start")
         if rv == 0:
             timeout = timedelta(seconds=10)
@@ -510,6 +515,35 @@ class H2TestEnv:
         args += urls
         return args, headerfile
 
+    def curl_parse_headerfile(self, headerfile: str, r: ExecResult = None) -> ExecResult:
+        lines = open(headerfile).readlines()
+        exp_stat = True
+        if r is None:
+            r = ExecResult(exit_code=0, stdout=b'', stderr=b'')
+        header = {}
+        for line in lines:
+            if exp_stat:
+                log.debug("reading 1st response line: %s", line)
+                m = re.match(r'^(\S+) (\d+) (.*)$', line)
+                assert m
+                r.add_response({
+                    "protocol": m.group(1),
+                    "status": int(m.group(2)),
+                    "description": m.group(3),
+                    "body": r.outraw
+                })
+                exp_stat = False
+                header = {}
+            elif re.match(r'^$', line):
+                exp_stat = True
+            else:
+                log.debug("reading header line: %s", line)
+                m = re.match(r'^([^:]+):\s*(.*)$', line)
+                assert m
+                header[m.group(1).lower()] = m.group(2)
+        r.response["header"] = header
+        return r
+
     def curl_raw(self, urls, timeout, options):
         xopt = ['-vvvv']
         if options:
@@ -517,30 +551,7 @@ class H2TestEnv:
         args, headerfile = self.curl_complete_args(urls, timeout, xopt)
         r = self.run(args)
         if r.exit_code == 0:
-            lines = open(headerfile).readlines()
-            exp_stat = True
-            header = {}
-            for line in lines:
-                if exp_stat:
-                    log.debug("reading 1st response line: %s", line)
-                    m = re.match(r'^(\S+) (\d+) (.*)$', line)
-                    assert m
-                    r.add_response({
-                        "protocol": m.group(1),
-                        "status": int(m.group(2)),
-                        "description": m.group(3),
-                        "body": r.outraw
-                    })
-                    exp_stat = False
-                    header = {}
-                elif re.match(r'^$', line):
-                    exp_stat = True
-                else:
-                    log.debug("reading header line: %s", line)
-                    m = re.match(r'^([^:]+):\s*(.*)$', line)
-                    assert m
-                    header[m.group(1).lower()] = m.group(2)
-            r.response["header"] = header
+            self.curl_parse_headerfile(headerfile, r=r)
             if r.json:
                 r.response["json"] = r.json
         return r

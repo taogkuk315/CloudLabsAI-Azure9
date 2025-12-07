@@ -35,6 +35,7 @@
 #include "h2_c2_filter.h"
 #include "h2_c2.h"
 #include "h2_mplx.h"
+#include "h2_request.h"
 #include "h2_util.h"
 
 
@@ -276,7 +277,6 @@ struct h2_response_parser {
     apr_array_header_t *hlines;
     apr_bucket_brigade *tmp;
     apr_bucket_brigade *saveto;
-    int has_final_response;
 };
 
 static apr_status_t parse_header(h2_response_parser *parser, char *line) {
@@ -414,7 +414,7 @@ static apr_table_t *make_table(h2_response_parser *parser)
     }
 }
 
-static apr_status_t pass_response(ap_filter_t *f,
+static apr_status_t pass_response(h2_conn_ctx_t *conn_ctx, ap_filter_t *f,
                                   h2_response_parser *parser)
 {
     apr_bucket *b;
@@ -436,7 +436,7 @@ static apr_status_t pass_response(ap_filter_t *f,
     apr_array_clear(parser->hlines);
 
     if (response->status >= 200) {
-        parser->has_final_response = 1;
+        conn_ctx->has_final_response = 1;
     }
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, parser->c,
                   APLOGNO(03197) "h2_c2(%s): passed response %d",
@@ -472,6 +472,7 @@ static apr_status_t parse_status(h2_response_parser *parser, char *line)
 }
 
 static apr_status_t parse_response(h2_response_parser *parser,
+                                   h2_conn_ctx_t *conn_ctx,
                                    ap_filter_t* f, apr_bucket_brigade *bb)
 {
     char line[HUGE_STRING_LEN];
@@ -497,7 +498,7 @@ static apr_status_t parse_response(h2_response_parser *parser,
                     /* end of headers, pass response onward */
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, parser->c,
                                   "h2_c2(%s): end of response", parser->id);
-                    return pass_response(f, parser);
+                    return pass_response(conn_ctx, f, parser);
                 }
                 else {
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, parser->c,
@@ -522,23 +523,41 @@ apr_status_t h2_c2_filter_catch_h1_out(ap_filter_t* f, apr_bucket_brigade* bb)
     ap_assert(conn_ctx);
     H2_FILTER_LOG("c2_catch_h1_out", f->c, APLOG_TRACE2, 0, "check", bb);
 
-    if (!parser) {
-        parser = apr_pcalloc(f->c->pool, sizeof(*parser));
-        parser->id = apr_psprintf(f->c->pool, "%s-%d", conn_ctx->id, conn_ctx->stream_id);
-        parser->pool = f->c->pool;
-        parser->c = f->c;
-        parser->state = H2_RP_STATUS_LINE;
-        parser->hlines = apr_array_make(parser->pool, 10, sizeof(char *));
-        f->ctx = parser;
-    }
-    /* There are cases where we need to parse a serialized http/1.1 response.
-     * One example is a 100-continue answer via a mod_proxy setup. */
-    while (bb && !f->c->aborted && !parser->has_final_response) {
-        rv = parse_response(parser, f, bb);
-        ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, f->c,
-                      "h2_c2(%s): parsed response", parser->id);
-        if (APR_BRIGADE_EMPTY(bb) || APR_SUCCESS != rv) {
-            return rv;
+    if (!conn_ctx->has_final_response) {
+        if (!parser) {
+            parser = apr_pcalloc(f->c->pool, sizeof(*parser));
+            parser->id = apr_psprintf(f->c->pool, "%s-%d", conn_ctx->id, conn_ctx->stream_id);
+            parser->pool = f->c->pool;
+            parser->c = f->c;
+            parser->state = H2_RP_STATUS_LINE;
+            parser->hlines = apr_array_make(parser->pool, 10, sizeof(char *));
+            f->ctx = parser;
+        }
+
+        if (!APR_BRIGADE_EMPTY(bb)) {
+            apr_bucket *b = APR_BRIGADE_FIRST(bb);
+            if (AP_BUCKET_IS_EOR(b)) {
+                /* TODO: Yikes, this happens when errors are encountered on input
+                 * before anything from the repsonse has been processed. The
+                 * ap_die_r() call will do nothing in certain conditions.
+                 */
+                int result = ap_map_http_request_error(conn_ctx->last_err,
+                                                       HTTP_INTERNAL_SERVER_ERROR);
+                request_rec *r = h2_create_request_rec(conn_ctx->request, f->c);
+                ap_die((result >= 400)? result : HTTP_INTERNAL_SERVER_ERROR, r);
+                b = ap_bucket_eor_create(f->c->bucket_alloc, r);
+                APR_BRIGADE_INSERT_TAIL(bb, b);
+            }
+        }
+        /* There are cases where we need to parse a serialized http/1.1 response.
+         * One example is a 100-continue answer via a mod_proxy setup. */
+        while (bb && !f->c->aborted && !conn_ctx->has_final_response) {
+            rv = parse_response(parser, conn_ctx, f, bb);
+            ap_log_cerror(APLOG_MARK, APLOG_TRACE2, rv, f->c,
+                          "h2_c2(%s): parsed response", parser->id);
+            if (APR_BRIGADE_EMPTY(bb) || APR_SUCCESS != rv) {
+                return rv;
+            }
         }
     }
 
@@ -548,20 +567,19 @@ apr_status_t h2_c2_filter_catch_h1_out(ap_filter_t* f, apr_bucket_brigade* bb)
 apr_status_t h2_c2_filter_response_out(ap_filter_t *f, apr_bucket_brigade *bb)
 {
     h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(f->c);
-    h2_c2_fctx_out_t *ctx = f->ctx;
     request_rec *r = f->r;
     apr_bucket *b, *bresp, *body_bucket = NULL, *next;
     ap_bucket_error *eb = NULL;
     h2_headers *response = NULL;
     int headers_passing = 0;
 
-    if (f->c->aborted || !conn_ctx) {
+    H2_FILTER_LOG("c2_response_out", f->c, APLOG_TRACE1, 0, "called with", bb);
+
+    if (f->c->aborted || !conn_ctx || conn_ctx->has_final_response) {
         return ap_pass_brigade(f->next, bb);
     }
 
-    H2_FILTER_LOG("c2_response_out", f->c, APLOG_TRACE1, 0, "called with", bb);
-
-    if (!ctx->has_final_response) {
+    if (!conn_ctx->has_final_response) {
         /* check, if we need to send the response now. Until we actually
          * see a DATA bucket or some EOS/EOR, we do not do so. */
         for (b = APR_BRIGADE_FIRST(bb);
@@ -577,40 +595,40 @@ apr_status_t h2_c2_filter_response_out(ap_filter_t *f, apr_bucket_brigade *bb)
                  */
                 ap_remove_output_filter(f);
                 ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, f->c,
-                              "h2_c2(%s): eoc bucket passed", ctx->id);
+                              "h2_c2(%s): eoc bucket passed", conn_ctx->id);
                 return ap_pass_brigade(f->next, bb);
             }
             else if (H2_BUCKET_IS_HEADERS(b)) {
                 headers_passing = 1;
             }
-            else if (!APR_BUCKET_IS_FLUSH(b)) { 
+            else if (!APR_BUCKET_IS_FLUSH(b)) {
                 body_bucket = b;
                 break;
             }
         }
-        
+
         if (eb) {
             int st = eb->status;
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, f->c, APLOGNO(03047)
                           "h2_c2(%s): err bucket status=%d",
-                          ctx->id, st);
+                          conn_ctx->id, st);
             /* throw everything away and replace it with the error response
              * generated by ap_die() */
             apr_brigade_cleanup(bb);
             ap_die(st, r);
             return AP_FILTER_ERROR;
         }
-        
+
         if (body_bucket || !headers_passing) {
             /* time to insert the response bucket before the body or if
              * no h2_headers is passed, e.g. the response is empty */
             response = create_response(r);
             if (response == NULL) {
                 ap_log_cerror(APLOG_MARK, APLOG_NOTICE, 0, f->c, APLOGNO(03048)
-                              "h2_c2(%s): unable to create response", ctx->id);
+                              "h2_c2(%s): unable to create response", conn_ctx->id);
                 return APR_ENOMEM;
             }
-            
+
             bresp = h2_bucket_headers_create(f->c->bucket_alloc, response);
             if (body_bucket) {
                 APR_BUCKET_INSERT_BEFORE(body_bucket, bresp);
@@ -618,15 +636,15 @@ apr_status_t h2_c2_filter_response_out(ap_filter_t *f, apr_bucket_brigade *bb)
             else {
                 APR_BRIGADE_INSERT_HEAD(bb, bresp);
             }
-            ctx->has_final_response = 1;
+            conn_ctx->has_final_response = 1;
             r->sent_bodyct = 1;
             ap_remove_output_filter_byhandle(f->r->output_filters, "H2_C2_NET_CATCH_H1");
         }
     }
-    
+
     if (r->header_only || AP_STATUS_IS_HEADER_ONLY(r->status)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, f->c,
-                      "h2_c2(%s): headers only, cleanup output brigade", ctx->id);
+                      "h2_c2(%s): headers only, cleanup output brigade", conn_ctx->id);
         b = body_bucket? body_bucket : APR_BRIGADE_FIRST(bb);
         while (b != APR_BRIGADE_SENTINEL(bb)) {
             next = APR_BUCKET_NEXT(b);
@@ -640,7 +658,7 @@ apr_status_t h2_c2_filter_response_out(ap_filter_t *f, apr_bucket_brigade *bb)
             b = next;
         }
     }
-    if (ctx->has_final_response) {
+    if (conn_ctx->has_final_response) {
         /* lets get out of the way, our task is done */
         ap_remove_output_filter(f);
     }

@@ -1,3 +1,5 @@
+ * Added directove 'H2StreamTimeout' to configure a separate value for HTTP/2
+   streams, overriding server's 'Timeout' configuration. [rpluem]
  * Removed work-arounds for older versions of libnghttp2 and checking
    during configure that at least version 1.15.0 is present. Which, due
    to its age, should not make a difference to anyone.

@@ -34,12 +34,6 @@
 struct h2_headers;
 struct h2_response_parser;
 
-typedef struct {
-    const char *id;
-    int has_final_response;
-    struct h2_response_parser *parser;
-} h2_c2_fctx_out_t;
-
 apr_status_t h2_c2_filter_catch_h1_out(ap_filter_t* f, apr_bucket_brigade* bb);
 
 apr_status_t h2_c2_filter_response_out(ap_filter_t *f, apr_bucket_brigade *bb);

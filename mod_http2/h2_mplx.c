@@ -713,12 +713,19 @@ static void s_c2_done(h2_mplx *m, conn_rec *c2, h2_conn_ctx_t *conn_ctx)
     conn_ctx->done = 1;
     conn_ctx->done_at = apr_time_now();
     ++c2->keepalives;
+
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
                   "h2_mplx(%s-%d): request done, %f ms elapsed",
                   conn_ctx->id, conn_ctx->stream_id,
                   (conn_ctx->done_at - conn_ctx->started_at) / 1000.0);
     
-    if (!c2->aborted && conn_ctx->started_at > m->last_mood_change) {
+    if (!conn_ctx->has_final_response) {
+        ap_log_cerror(APLOG_MARK, APLOG_TRACE1, conn_ctx->last_err, c2,
+                      "h2_c2(%s-%d): processing finished without final response",
+                      conn_ctx->id, conn_ctx->stream_id);
+        c2->aborted = 1;
+    }
+    else if (!c2->aborted && conn_ctx->started_at > m->last_mood_change) {
         s_mplx_be_happy(m, c2, conn_ctx);
     }
     

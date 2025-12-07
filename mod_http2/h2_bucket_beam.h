@@ -164,11 +164,12 @@ int h2_beam_empty(h2_bucket_beam *beam);
 void h2_beam_abort(h2_bucket_beam *beam, conn_rec *c);
 
 /**
- * Set/get the timeout for blocking read/write operations. Only works
- * if a mutex has been set for the beam.
+ * Set/get the timeout for blocking sebd/receive operations.
  */
 void h2_beam_timeout_set(h2_bucket_beam *beam, 
                          apr_interval_time_t timeout);
+
+apr_interval_time_t h2_beam_timeout_get(h2_bucket_beam *beam);
 
 /**
  * Set/get the maximum buffer size for beam data (memory footprint).
