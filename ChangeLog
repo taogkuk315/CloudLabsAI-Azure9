@@ -1,3 +1,7 @@
+ * HTTP/2 connections now use pollsets to monitor the status of the
+   ongoing streams and their main connection.
+ * Fixed a bug where, without 'H2SerializeHeaders' some errors, such
+   as a input timeout, did not produce the correct response.
  * Added directove 'H2StreamTimeout' to configure a separate value for HTTP/2
    streams, overriding server's 'Timeout' configuration. [rpluem]
  * Removed work-arounds for older versions of libnghttp2 and checking
@@ -17,7 +21,7 @@
 v1.15.24
 --------------------------------------------------------------------------------
  * With Apache httpd 2.4.49 or newer, h2 idle workers are terminated on a graceful
-   restar/shutdown immediately. This happens independant of any h2 connections being
+   restart/shutdown immediately. This happens independant of any h2 connections being
    processed or not.
  * Switch to using OpenSSL EVP_* API to avoid deprecation warnings with
    OpenSSL 3.0. [@notroj]
