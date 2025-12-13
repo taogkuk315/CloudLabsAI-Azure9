@@ -857,7 +857,11 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     stream0 = h2_stream_create(0, session->pool, session, NULL, 0);
     stream0->c2 = session->c1;  /* stream0's connection is the main connection */
     session->mplx = h2_mplx_c1_create(stream0, s, session->pool, workers);
-    
+    if (!session->mplx) {
+        apr_pool_destroy(pool);
+        return APR_ENOTIMPL;
+    }
+
     h2_c1_io_init(&session->io, c, s);
     session->padding_max = h2_config_sgeti(s, H2_CONF_PADDING_BITS);
     if (session->padding_max) {

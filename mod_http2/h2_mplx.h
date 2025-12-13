@@ -31,7 +31,6 @@
  */
 
 struct apr_pool_t;
-struct apr_array_header_t;
 struct apr_thread_mutex_t;
 struct apr_thread_cond_t;
 struct h2_bucket_beam;
@@ -60,7 +59,7 @@ struct h2_mplx {
 
     struct h2_ihash_t *streams;     /* all streams active */
     struct h2_ihash_t *shold;       /* all streams done with c2 processing ongoing */
-    struct apr_array_header_t *spurge; /* all streams done, ready for destroy */
+    apr_array_header_t *spurge;     /* all streams done, ready for destroy */
     
     struct h2_iqueue *q;            /* all stream ids that need to be started */
 
@@ -80,6 +79,7 @@ struct h2_mplx {
     struct apr_thread_cond_t *join_wait;
     
     apr_pollset_t *pollset;         /* pollset for c1/c2 IO events */
+    apr_array_header_t *streams_to_poll; /* streams to add to the pollset */
     apr_array_header_t *streams_ev_in;
     apr_array_header_t *streams_ev_out;
 

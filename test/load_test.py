@@ -750,7 +750,38 @@ class LoadTest:
                     {"run": 19},
                     {"run": 20},
                 ],
-            }
+            },
+            "m6": {
+                "title": "1k files, 1k-10MB, *conn, 10k req ({measure})",
+                "class": UrlsLoadTest,
+                "location": "/",
+                "file_count": 1024,
+                "file_sizes": [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 10000],
+                "requests": 5000,
+                "warmup": True,
+                "measure": "req/s",
+                "protocol": 'h2',
+                "max_parallel": 6,
+                "row0_title": "protocol  max",
+                "row_title": "{protocol}   {max_parallel:3d}",
+                "rows": [
+                    {"protocol": 'h2', "max_parallel": 6},
+                    {"protocol": 'h2', "max_parallel": 6},
+                    {"protocol": 'h2', "max_parallel": 6},
+                    {"protocol": 'h2', "max_parallel": 6},
+                    {"protocol": 'h2', "max_parallel": 6},
+                    {"protocol": 'h2', "max_parallel": 6},
+                ],
+                "col_title": "{clients}c",
+                "clients": 1,
+                "columns": [
+                    {"clients": 1, "requests": 1000},
+                    {"clients": 32, "requests": 16000},
+                    {"clients": 64, "requests": 32000},
+                    {"clients": 128, "requests": 64000},
+                    {"clients": 192, "requests": 96000},
+                ],
+            },
         }
 
         env = H2TestEnv()

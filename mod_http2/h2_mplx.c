@@ -222,7 +222,12 @@ h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent
     m->mood_update_interval = apr_time_from_msec(100);
 
     status = mplx_pollset_create(m);
-    if (APR_SUCCESS != status) goto failure;
+    if (APR_SUCCESS != status) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, m->c1, APLOGNO()
+                      "nghttp2: could not create pollset");
+        goto failure;
+    }
+    m->streams_to_poll = apr_array_make(m->pool, 10, sizeof(h2_stream*));
     m->streams_ev_in = apr_array_make(m->pool, 10, sizeof(h2_stream*));
     m->streams_ev_out = apr_array_make(m->pool, 10, sizeof(h2_stream*));
 
@@ -671,7 +676,9 @@ static conn_rec *s_next_c2(h2_mplx *m)
 
     stream->c2 = c2;
     ++m->processing_count;
-    mplx_pollset_add(m, conn_ctx);
+    APR_ARRAY_PUSH(m->streams_to_poll, h2_stream *) = stream;
+    apr_pollset_wakeup(m->pollset);
+
     return c2;
 }
 
@@ -890,7 +897,7 @@ static apr_status_t mplx_pollset_create(h2_mplx *m)
     /* stream0 output, pdf_out+pfd_in_consume per active streams */
     max_pdfs = 1 + 2 * H2MIN(m->processing_max, m->max_streams);
     return apr_pollset_create(&m->pollset, max_pdfs, m->pool,
-                              APR_POLLSET_THREADSAFE);
+                              APR_POLLSET_WAKEABLE);
 }
 
 static apr_status_t mplx_pollset_add(h2_mplx *m, h2_conn_ctx_t *conn_ctx)
@@ -963,11 +970,22 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                       "h2_mplx(%ld): enter polling timeout=%d",
                       m->id, (int)apr_time_sec(timeout));
-        H2_MPLX_LEAVE(m);
         do {
+            /* add streams we started processing in the meantime */
+            if (m->streams_to_poll->nelts) {
+                for (i = 0; i < m->streams_to_poll->nelts; ++i) {
+                    stream = APR_ARRAY_IDX(m->streams_to_poll, i, h2_stream*);
+                    if (stream->c2 && (conn_ctx = h2_conn_ctx_get(stream->c2))) {
+                        mplx_pollset_add(m, conn_ctx);
+                    }
+                }
+                apr_array_clear(m->streams_to_poll);
+            }
+
+            H2_MPLX_LEAVE(m);
             rv = apr_pollset_poll(m->pollset, timeout >= 0? timeout : -1, &nresults, &results);
+            H2_MPLX_ENTER(m);
         } while (APR_STATUS_IS_EINTR(rv));
-        H2_MPLX_ENTER(m);
 
         if (APR_SUCCESS != rv) {
             if (APR_STATUS_IS_TIMEUP(rv)) {
@@ -1062,9 +1080,6 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                               pfd->rtnevents);
                 if (on_stream_input) {
                     APR_ARRAY_PUSH(m->streams_ev_in, h2_stream*) = stream;
-                    H2_MPLX_LEAVE(m);
-                    on_stream_input(on_ctx, stream);
-                    H2_MPLX_ENTER(m);
                 }
             }
         }

@@ -1,3 +1,9 @@
+v2.0.0-rc2
+--------------------------------------------------------------------------------
+ * Switching from a thread-safe apr pollset (not supported under Windows) to
+   a wakeable pollset implementation.
+ * Adding a clear error in the logs if the pollset could not be created.
+
 v2.0.0-rc1
 --------------------------------------------------------------------------------
  * HTTP/2 connections now use pollsets to monitor the status of the
