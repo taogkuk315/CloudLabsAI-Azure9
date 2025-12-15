@@ -753,7 +753,6 @@ static void s_c2_done(h2_mplx *m, conn_rec *c2, h2_conn_ctx_t *conn_ctx)
     else {
         int i;
 
-        mplx_pollset_remove(m, conn_ctx);
         for (i = 0; i < m->spurge->nelts; ++i) {
             if (stream == APR_ARRAY_IDX(m->spurge, i, h2_stream*)) {
                 ap_log_cerror(APLOG_MARK, APLOG_WARNING, 0, c2,
