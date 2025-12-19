@@ -92,4 +92,6 @@ void h2_conn_ctx_detach(conn_rec *c);
 
 void h2_conn_ctx_destroy(conn_rec *c);
 
+void h2_conn_ctx_set_timeout(h2_conn_ctx_t *conn_ctx, apr_interval_time_t timeout);
+
 #endif /* defined(__mod_h2__h2_conn_ctx__) */

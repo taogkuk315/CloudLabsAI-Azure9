@@ -20,6 +20,12 @@
 struct h2_session;
 struct h2_stream;
 
+/*
+ * When working, should be this:
+#define H2_CAN_POLL_FILES           APR_FILES_AS_SOCKETS
+*/
+#define H2_CAN_POLL_FILES           1
+
 /**
  * The magic PRIamble of RFC 7540 that is always sent when starting
  * a h2 communication.

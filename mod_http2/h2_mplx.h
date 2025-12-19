@@ -83,6 +83,10 @@ struct h2_mplx {
     apr_array_header_t *streams_ev_in;
     apr_array_header_t *streams_ev_out;
 
+#if !H2_CAN_POLL_FILES
+    struct h2_iqueue *streams_input_read;  /* streams whose input has been read from */
+    struct h2_iqueue *streams_output_written; /* streams whose output has been written to */
+#endif
     struct h2_workers *workers;     /* h2 workers process wide instance */
 };
 
@@ -163,6 +167,9 @@ apr_status_t h2_mplx_c1_poll(h2_mplx *m, apr_interval_time_t timeout,
                             stream_ev_callback *on_stream_input,
                             stream_ev_callback *on_stream_output,
                             void *on_ctx);
+
+void h2_mplx_c2_input_read(h2_mplx *m, conn_rec *c2);
+void h2_mplx_c2_output_written(h2_mplx *m, conn_rec *c2);
 
 typedef int h2_mplx_stream_cb(struct h2_stream *s, void *userdata);
 

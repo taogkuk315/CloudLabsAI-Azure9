@@ -386,12 +386,7 @@ static int h2_h2_fixups(request_rec *r)
         }
         stream_timeout = h2_config_geti64(r, r->server, H2_CONF_STREAM_TIMEOUT);
         if (stream_timeout > 0) {
-            h2_beam_timeout_set(ctx->beam_out, stream_timeout);
-            apr_file_pipe_timeout_set(ctx->pipe_out_prod[H2_PIPE_OUT], stream_timeout);
-            if (ctx->beam_in) {
-                h2_beam_timeout_set(ctx->beam_in, stream_timeout);
-                apr_file_pipe_timeout_set(ctx->pipe_in_prod[H2_PIPE_OUT], stream_timeout);
-            }
+            h2_conn_ctx_set_timeout(ctx, stream_timeout);
         }
     }
     return DECLINED;

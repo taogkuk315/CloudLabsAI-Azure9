@@ -231,6 +231,11 @@ h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent
     m->streams_ev_in = apr_array_make(m->pool, 10, sizeof(h2_stream*));
     m->streams_ev_out = apr_array_make(m->pool, 10, sizeof(h2_stream*));
 
+#if !H2_CAN_POLL_FILES
+    m->streams_input_read = h2_iq_create(m->pool, 10);
+    m->streams_output_written = h2_iq_create(m->pool, 10);
+#endif
+
     conn_ctx = h2_conn_ctx_get(m->c1);
     mplx_pollset_add(m, conn_ctx);
 
@@ -634,10 +639,146 @@ apr_status_t h2_mplx_c1_fwd_input(h2_mplx *m, struct h2_iqueue *input_pending,
     return APR_SUCCESS;
 }
 
+static void c2_io_input_write_notify(void *ctx, h2_bucket_beam *beam)
+{
+    conn_rec *c = ctx;
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+
+    (void)beam;
+    if (conn_ctx && conn_ctx->stream_id && conn_ctx->pipe_in_prod[H2_PIPE_IN]) {
+        apr_file_putc(1, conn_ctx->pipe_in_prod[H2_PIPE_IN]);
+    }
+}
+
+static void c2_io_input_read_notify(void *ctx, h2_bucket_beam *beam)
+{
+    conn_rec *c = ctx;
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+
+    if (conn_ctx && conn_ctx->stream_id) {
+        if (conn_ctx->pipe_in_drain[H2_PIPE_IN]) {
+            apr_file_putc(1, conn_ctx->pipe_in_drain[H2_PIPE_IN]);
+        }
+#if !H2_CAN_POLL_FILES
+        else {
+            H2_MPLX_ENTER_ALWAYS(conn_ctx->mplx);
+            h2_iq_append(conn_ctx->mplx->streams_input_read, conn_ctx->stream_id);
+            apr_pollset_wakeup(conn_ctx->mplx->pollset);
+            H2_MPLX_LEAVE(conn_ctx->mplx);
+        }
+#endif
+    }
+}
+
+static void c2_io_output_write_notify(void *ctx, h2_bucket_beam *beam)
+{
+    conn_rec *c = ctx;
+    h2_conn_ctx_t *conn_ctx = h2_conn_ctx_get(c);
+
+    if (conn_ctx && conn_ctx->stream_id) {
+        if (conn_ctx->pipe_out_prod[H2_PIPE_IN]) {
+            apr_file_putc(1, conn_ctx->pipe_out_prod[H2_PIPE_IN]);
+        }
+#if !H2_CAN_POLL_FILES
+        else {
+            H2_MPLX_ENTER_ALWAYS(conn_ctx->mplx);
+            h2_iq_append(conn_ctx->mplx->streams_output_written, conn_ctx->stream_id);
+            apr_pollset_wakeup(conn_ctx->mplx->pollset);
+            H2_MPLX_LEAVE(conn_ctx->mplx);
+        }
+#endif
+    }
+}
+
+static apr_status_t c2_setup_io(h2_mplx *m, conn_rec *c2, h2_stream *stream)
+{
+    h2_conn_ctx_t *conn_ctx;
+    apr_status_t rv = APR_SUCCESS;
+    const char *action = "init";
+
+    rv = h2_conn_ctx_init_for_c2(&conn_ctx, c2, m, stream);
+    if (APR_SUCCESS != rv) goto cleanup;
+
+    if (!conn_ctx->beam_out) {
+        action = "create output beam";
+        rv = h2_beam_create(&conn_ctx->beam_out, c2, conn_ctx->req_pool,
+                            stream->id, "output", 0, c2->base_server->timeout);
+        if (APR_SUCCESS != rv) goto cleanup;
+
+        h2_beam_buffer_size_set(conn_ctx->beam_out, m->stream_max_mem);
+        h2_beam_on_was_empty(conn_ctx->beam_out, c2_io_output_write_notify, c2);
+    }
+
+    if (stream->input) {
+        conn_ctx->beam_in = stream->input;
+        h2_beam_on_was_empty(stream->input, c2_io_input_write_notify, c2);
+        h2_beam_on_received(stream->input, c2_io_input_read_notify, c2);
+        h2_beam_on_consumed(stream->input, c1_input_consumed, stream);
+    }
+    else {
+        memset(&conn_ctx->pfd_in_drain, 0, sizeof(conn_ctx->pfd_in_drain));
+    }
+
+#if H2_CAN_POLL_FILES
+    if (!conn_ctx->mplx_pool) {
+        apr_pool_create(&conn_ctx->mplx_pool, m->pool);
+        apr_pool_tag(conn_ctx->mplx_pool, "H2_MPLX_C2");
+    }
+
+    if (!conn_ctx->pipe_out_prod[H2_PIPE_OUT]) {
+        action = "create output pipe";
+        rv = apr_file_pipe_create_pools(&conn_ctx->pipe_out_prod[H2_PIPE_OUT],
+                                        &conn_ctx->pipe_out_prod[H2_PIPE_IN],
+                                        APR_FULL_NONBLOCK,
+                                        conn_ctx->mplx_pool, c2->pool);
+        if (APR_SUCCESS != rv) goto cleanup;
+    }
+    conn_ctx->pfd_out_prod.desc_type = APR_POLL_FILE;
+    conn_ctx->pfd_out_prod.desc.f = conn_ctx->pipe_out_prod[H2_PIPE_OUT];
+    conn_ctx->pfd_out_prod.reqevents = APR_POLLIN | APR_POLLERR | APR_POLLHUP;
+    conn_ctx->pfd_out_prod.client_data = conn_ctx;
+
+    if (stream->input) {
+        if (!conn_ctx->pipe_in_prod[H2_PIPE_OUT]) {
+            action = "create input write pipe";
+            rv = apr_file_pipe_create_pools(&conn_ctx->pipe_in_prod[H2_PIPE_OUT],
+                                            &conn_ctx->pipe_in_prod[H2_PIPE_IN],
+                                            APR_READ_BLOCK,
+                                            c2->pool, conn_ctx->mplx_pool);
+            if (APR_SUCCESS != rv) goto cleanup;
+        }
+        if (!conn_ctx->pipe_in_drain[H2_PIPE_OUT]) {
+            action = "create input read pipe";
+            rv = apr_file_pipe_create_pools(&conn_ctx->pipe_in_drain[H2_PIPE_OUT],
+                                            &conn_ctx->pipe_in_drain[H2_PIPE_IN],
+                                            APR_FULL_NONBLOCK,
+                                            c2->pool, conn_ctx->mplx_pool);
+            if (APR_SUCCESS != rv) goto cleanup;
+        }
+        conn_ctx->pfd_in_drain.desc_type = APR_POLL_FILE;
+        conn_ctx->pfd_in_drain.desc.f = conn_ctx->pipe_in_drain[H2_PIPE_OUT];
+        conn_ctx->pfd_in_drain.reqevents = APR_POLLIN | APR_POLLERR | APR_POLLHUP;
+        conn_ctx->pfd_in_drain.client_data = conn_ctx;
+    }
+#else
+    memset(&conn_ctx->pfd_out_prod, 0, sizeof(conn_ctx->pfd_out_prod));
+    memset(&conn_ctx->pipe_in_prod, 0, sizeof(conn_ctx->pipe_in_prod));
+    memset(&conn_ctx->pipe_in_drain, 0, sizeof(conn_ctx->pipe_in_drain));
+#endif
+
+cleanup:
+    stream->output = (APR_SUCCESS == rv)? conn_ctx->beam_out : NULL;
+    if (APR_SUCCESS != rv) {
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, c2,
+                      H2_STRM_LOG(APLOGNO(), stream,
+                      "error %s"), action);
+    }
+    return rv;
+}
+
 static conn_rec *s_next_c2(h2_mplx *m)
 {
     h2_stream *stream = NULL;
-    h2_conn_ctx_t *conn_ctx;
     apr_status_t rv;
     int sid;
     conn_rec *c2;
@@ -665,13 +806,9 @@ static conn_rec *s_next_c2(h2_mplx *m)
     ap_log_cerror(APLOG_MARK, APLOG_TRACE3, 0, m->c1,
                   H2_STRM_MSG(stream, "created new c2"));
 
-    rv = h2_conn_ctx_init_for_c2(&conn_ctx, c2, m, stream);
+    rv = c2_setup_io(m, c2, stream);
     if (APR_SUCCESS != rv) {
         return NULL;
-    }
-
-    if (stream->input) {
-        h2_beam_on_consumed(stream->input, c1_input_consumed, stream);
     }
 
     stream->c2 = c2;
@@ -742,7 +879,9 @@ static void s_c2_done(h2_mplx *m, conn_rec *c2, h2_conn_ctx_t *conn_ctx)
          * since nothing more will happening here. */
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
                       H2_STRM_MSG(stream, "c2_done, stream open"));
-        apr_file_putc(1, conn_ctx->pipe_out_prod[H2_PIPE_IN]);
+        H2_MPLX_LEAVE(m);
+        c2_io_output_write_notify(c2, NULL);
+        H2_MPLX_ENTER_ALWAYS(m);
     }
     else if ((stream = h2_ihash_get(m->shold, conn_ctx->stream_id)) != NULL) {
         /* stream is done, was just waiting for this. */
@@ -969,6 +1108,9 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, m->c1,
                       "h2_mplx(%ld): enter polling timeout=%d",
                       m->id, (int)apr_time_sec(timeout));
+        apr_array_clear(m->streams_ev_in);
+        apr_array_clear(m->streams_ev_out);
+
         do {
             /* add streams we started processing in the meantime */
             if (m->streams_to_poll->nelts) {
@@ -983,7 +1125,28 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
 
             H2_MPLX_LEAVE(m);
             rv = apr_pollset_poll(m->pollset, timeout >= 0? timeout : -1, &nresults, &results);
-            H2_MPLX_ENTER(m);
+            H2_MPLX_ENTER_ALWAYS(m);
+
+#if !H2_CAN_POLL_FILES
+            if (APR_STATUS_IS_EINTR(rv)
+                && (!h2_iq_empty(m->streams_input_read)
+                     || !h2_iq_empty(m->streams_output_written))) {
+                while ((i = h2_iq_shift(m->streams_input_read))) {
+                    stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
+                    if (stream) {
+                        APR_ARRAY_PUSH(m->streams_ev_in, h2_stream*) = stream;
+                    }
+                }
+                while ((i = h2_iq_shift(m->streams_output_written))) {
+                    stream = h2_ihash_get(m->streams, conn_ctx->stream_id);
+                    if (stream) {
+                        APR_ARRAY_PUSH(m->streams_ev_out, h2_stream*) = stream;
+                    }
+                }
+                nresults = 0;
+                rv = APR_SUCCESS;
+            }
+#endif
         } while (APR_STATUS_IS_EINTR(rv));
 
         if (APR_SUCCESS != rv) {
@@ -998,9 +1161,6 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
             }
             goto cleanup;
         }
-
-        apr_array_clear(m->streams_ev_in);
-        apr_array_clear(m->streams_ev_out);
 
         for (i = 0; i < nresults; i++) {
             pfd = &results[i];
@@ -1066,10 +1226,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                               "[%s-%d] poll output event %hx",
                               conn_ctx->id, conn_ctx->stream_id,
                               pfd->rtnevents);
-
-                if (on_stream_output) {
-                    APR_ARRAY_PUSH(m->streams_ev_out, h2_stream*) = stream;
-                }
+                APR_ARRAY_PUSH(m->streams_ev_out, h2_stream*) = stream;
             }
             else if (conn_ctx->pfd_in_drain.desc.f == pfd->desc.f) {
                 /* input has been consumed */
@@ -1077,9 +1234,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                               "[%s-%d] poll input event %hx",
                               conn_ctx->id, conn_ctx->stream_id,
                               pfd->rtnevents);
-                if (on_stream_input) {
-                    APR_ARRAY_PUSH(m->streams_ev_in, h2_stream*) = stream;
-                }
+                APR_ARRAY_PUSH(m->streams_ev_in, h2_stream*) = stream;
             }
         }
 
@@ -1088,14 +1243,14 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
             for (i = 0; i < m->streams_ev_in->nelts; ++i) {
                 on_stream_input(on_ctx, APR_ARRAY_IDX(m->streams_ev_in, i, h2_stream*));
             }
-            H2_MPLX_ENTER(m);
+            H2_MPLX_ENTER_ALWAYS(m);
         }
         if (on_stream_output && m->streams_ev_out->nelts) {
             H2_MPLX_LEAVE(m);
             for (i = 0; i < m->streams_ev_out->nelts; ++i) {
                 on_stream_output(on_ctx, APR_ARRAY_IDX(m->streams_ev_out, i, h2_stream*));
             }
-            H2_MPLX_ENTER(m);
+            H2_MPLX_ENTER_ALWAYS(m);
         }
         break;
     } while(1);
@@ -1104,3 +1259,4 @@ cleanup:
     m->polling = 0;
     return rv;
 }
+

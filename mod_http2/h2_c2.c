@@ -298,14 +298,20 @@ static apr_status_t h2_c2_filter_in(ap_filter_t* f,
                           conn_ctx->id, conn_ctx->stream_id, block, (long)readbytes);
         }
         if (conn_ctx->beam_in) {
+            if (conn_ctx->pipe_in_prod[H2_PIPE_OUT]) {
 receive:
-            status = h2_beam_receive(conn_ctx->beam_in, f->c, fctx->bb, APR_NONBLOCK_READ,
-                                     conn_ctx->mplx->stream_max_mem);
-            if (APR_STATUS_IS_EAGAIN(status) && APR_BLOCK_READ == block) {
-                status = h2_util_wait_on_pipe(conn_ctx->pipe_in_prod[H2_PIPE_OUT]);
-                if (APR_SUCCESS == status) {
-                    goto receive;
+                status = h2_beam_receive(conn_ctx->beam_in, f->c, fctx->bb, APR_NONBLOCK_READ,
+                                         conn_ctx->mplx->stream_max_mem);
+                if (APR_STATUS_IS_EAGAIN(status) && APR_BLOCK_READ == block) {
+                    status = h2_util_wait_on_pipe(conn_ctx->pipe_in_prod[H2_PIPE_OUT]);
+                    if (APR_SUCCESS == status) {
+                        goto receive;
+                    }
                 }
+            }
+            else {
+                status = h2_beam_receive(conn_ctx->beam_in, f->c, fctx->bb, block,
+                                         conn_ctx->mplx->stream_max_mem);
             }
         }
         else {
@@ -569,13 +575,8 @@ static apr_status_t c2_process(h2_conn_ctx_t *conn_ctx, conn_rec *c)
     conn_ctx->server = r->server;
 
     /* the request_rec->server carries the timeout value that applies */
-    h2_beam_timeout_set(conn_ctx->beam_out, r->server->timeout);
-    apr_file_pipe_timeout_set(conn_ctx->pipe_out_prod[H2_PIPE_OUT], r->server->timeout);
+    h2_conn_ctx_set_timeout(conn_ctx, r->server->timeout);
 
-    if (conn_ctx->beam_in) {
-        h2_beam_timeout_set(conn_ctx->beam_in, r->server->timeout);
-        apr_file_pipe_timeout_set(conn_ctx->pipe_in_prod[H2_PIPE_OUT], r->server->timeout);
-    }
     if (h2_config_sgeti(conn_ctx->server, H2_CONF_COPY_FILES)) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c,
                       "h2_mplx(%s-%d): copy_files in output",
