@@ -554,12 +554,6 @@ void h2_stream_cleanup(h2_stream *stream)
     if (stream->out_buffer) {
         apr_brigade_cleanup(stream->out_buffer);
     }
-    if (stream->input) {
-        h2_beam_abort(stream->input, stream->session->c1);
-    }
-    if (stream->output) {
-        h2_beam_abort(stream->output, stream->session->c1);
-    }
 }
 
 void h2_stream_destroy(h2_stream *stream)

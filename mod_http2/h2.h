@@ -21,10 +21,14 @@ struct h2_session;
 struct h2_stream;
 
 /*
- * When working, should be this:
-#define H2_CAN_POLL_FILES           APR_FILES_AS_SOCKETS
-*/
-#define H2_CAN_POLL_FILES           1
+ * When apr pollsets can poll file descriptors (e.g. pipes),
+ * we use it for polling stream input/output.
+ */
+#ifdef H2_NO_POLL_STREAMS
+#define H2_POLL_STREAMS           0
+#else
+#define H2_POLL_STREAMS           APR_FILES_AS_SOCKETS
+#endif
 
 /**
  * The magic PRIamble of RFC 7540 that is always sent when starting

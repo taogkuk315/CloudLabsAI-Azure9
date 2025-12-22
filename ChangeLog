@@ -1,3 +1,11 @@
+v2.0.0-rc3
+--------------------------------------------------------------------------------
+ * Added an alternate implementation when polling of file descriptors is
+   not supported by the OS. This is automatically detected via the APR
+   header files, but can be enforces by adding '--disable-poll-streams'
+   to the './configure' when building the module.
+   This should allow the module to work on Windows again.
+
 v2.0.0-rc2
 --------------------------------------------------------------------------------
  * Switching from a thread-safe apr pollset (not supported under Windows) to

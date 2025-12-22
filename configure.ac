@@ -52,6 +52,10 @@ AC_ARG_WITH([apxs], [AS_HELP_STRING([--with-apxs],
     [Use APXS executable [default=check]])],
     [request_apxs=$withval], [request_apxs=check])
 
+AC_ARG_ENABLE([poll-streams],
+    [AS_HELP_STRING([--disable-poll-streams],
+                    [Disable polling of h2 streams, even if available.])],
+    [poll_streams=$enableval], [poll_streams=yes])
 
 # Checks for programs.
 AC_PROG_CC
@@ -119,7 +123,6 @@ AC_SUBST(LOAD_WATCHDOG)
 
 export BUILD_SUBDIRS="mod_http2"
 AC_SUBST(BUILD_SUBDIRS)
-
 
 # We need nghttp2 to be in our link path, check for it.
 #
@@ -286,6 +289,12 @@ fi
 # Do we have a pkg-config?
 AC_ARG_VAR([PKGCONFIG], [pkg-config executable])
 AC_PATH_PROG([PKGCONFIG], [pkg-config])
+
+
+# do we poll streams, when available, or disable this (e.g. for test runs)
+if test "$poll_streams" = "no"; then
+CPPFLAGS="$CPPFLAGS -DH2_NO_POLL_STREAMS"
+fi
 
 
 AC_CONFIG_FILES([
