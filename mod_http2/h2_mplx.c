@@ -1064,7 +1064,7 @@ static apr_status_t mplx_pollset_create(h2_mplx *m)
 
 static apr_status_t mplx_pollset_add(h2_mplx *m, h2_conn_ctx_t *conn_ctx)
 {
-    apr_status_t rv;
+    apr_status_t rv = APR_SUCCESS;
     const char *name = "";
 
     if (conn_ctx->pfd_out_prod.reqevents) {

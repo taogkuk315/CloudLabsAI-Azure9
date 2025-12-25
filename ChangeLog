@@ -1,3 +1,7 @@
+v2.0.0-rc4
+--------------------------------------------------------------------------------
+ * fixing an uninitialized status code when pollsets are not used for streams.
+
 v2.0.0-rc3
 --------------------------------------------------------------------------------
  * Added an alternate implementation when polling of file descriptors is
