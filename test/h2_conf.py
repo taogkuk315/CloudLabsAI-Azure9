@@ -49,9 +49,14 @@ class HttpdConf(object):
         self.add("</VirtualHost>")
         return self
 
-    def add_proxies(self, host, proxy_self=False, h2proxy_self=False):
+    def add_proxies(self, host, proxy_self=False, h2proxy_self=False, overwrite_server_header=False):
         if proxy_self or h2proxy_self:
             self.add("      ProxyPreserveHost on")
+        if overwrite_server_header:
+            self.add(f"""
+                Header unset Server
+                Header always set Server '{host}'
+            """)
         if proxy_self:
             self.add(f"""
                 ProxyPass /proxy/ http://127.0.0.1:{self.env.http_port}/
@@ -106,7 +111,8 @@ class HttpdConf(object):
         self.end_vhost()
         return self
 
-    def add_vhost_cgi(self, proxy_self=False, h2proxy_self=False, extras=None):
+    def add_vhost_cgi(self, proxy_self=False, h2proxy_self=False, extras=None,
+                      overwrite_server_header=False):
         domain = f"cgi.{self.env.http_tld}"
         if extras and 'base' in extras:
             self.add(extras['base'])
@@ -123,7 +129,8 @@ class HttpdConf(object):
             <Location \"/.well-known/h2/state\">
                 SetHandler http2-status
             </Location>""")
-        self.add_proxies("cgi", proxy_self=proxy_self, h2proxy_self=h2proxy_self)
+        self.add_proxies("cgi", proxy_self=proxy_self, h2proxy_self=h2proxy_self,
+                         overwrite_server_header=overwrite_server_header)
         self.add("      <Location \"/h2test/echo\">")
         self.add("          SetHandler h2test-echo")
         self.add("      </Location>")

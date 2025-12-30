@@ -1,3 +1,6 @@
+ * Fixed an issue since 1.15.24 that "Server" headers in proxied requests
+   were overwritten instead of preserved. [PR by @daum3ns]
+
 v2.0.0-rc4
 --------------------------------------------------------------------------------
  * fixing an uninitialized status code when pollsets are not used for streams.
