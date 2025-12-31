@@ -246,7 +246,7 @@ h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent
 
     status = mplx_pollset_create(m);
     if (APR_SUCCESS != status) {
-        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, m->c1, APLOGNO()
+        ap_log_cerror(APLOG_MARK, APLOG_ERR, status, m->c1, APLOGNO(10308)
                       "nghttp2: could not create pollset");
         goto failure;
     }
@@ -796,7 +796,7 @@ cleanup:
     stream->output = (APR_SUCCESS == rv)? conn_ctx->beam_out : NULL;
     if (APR_SUCCESS != rv) {
         ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, c2,
-                      H2_STRM_LOG(APLOGNO(), stream,
+                      H2_STRM_LOG(APLOGNO(10309), stream,
                       "error %s"), action);
     }
     return rv;
@@ -1184,7 +1184,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                               m->id);
             }
             else {
-                ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c1, APLOGNO()
+                ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, m->c1, APLOGNO(10310)
                               "h2_mplx(%ld): polling failed", m->id);
             }
             goto cleanup;
@@ -1228,7 +1228,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                     if (stream) {
                         /* This is normal and means that stream processing on c1 has
                          * already finished to CLEANUP and c2 is not done yet */
-                        ap_log_cerror(APLOG_MARK, APLOG_INFO, rv, m->c1, APLOGNO()
+                        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, rv, m->c1, APLOGNO(10311)
                                       "h2_mplx(%ld-%d): stream already in purge for poll event %hx",
                                        m->id, conn_ctx->stream_id, pfd->rtnevents);
                     }
@@ -1236,7 +1236,7 @@ static apr_status_t mplx_pollset_poll(h2_mplx *m, apr_interval_time_t timeout,
                         /* This should not happen. When a stream has been purged,
                          * it MUST no longer appear in the pollset. Puring is done
                          * outside the poll result processing. */
-                        ap_log_cerror(APLOG_MARK, APLOG_WARNING, rv, m->c1, APLOGNO()
+                        ap_log_cerror(APLOG_MARK, APLOG_WARNING, rv, m->c1, APLOGNO(10312)
                                       "h2_mplx(%ld-%d): stream no longer known for poll event %hx"
                                       ", m->streams=%d, conn_ctx=%lx, fd=%lx",
                                        m->id, conn_ctx->stream_id, pfd->rtnevents,

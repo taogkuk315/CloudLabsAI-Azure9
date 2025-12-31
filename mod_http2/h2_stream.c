@@ -1239,7 +1239,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
     }
     if (!stream->response) {
         ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, c1,
-                      APLOGNO()
+                      APLOGNO(10299)
                       "h2_stream(%ld-%d): data_cb, no response seen yet",
                       session->id, (int)stream_id);
         return NGHTTP2_ERR_DEFERRED;
@@ -1284,7 +1284,7 @@ static ssize_t stream_data_cb(nghttp2_session *ng2s,
             rv = buffer_output_process_headers(stream);
             if (APR_SUCCESS != rv) {
                 ap_log_cerror(APLOG_MARK, APLOG_ERR, rv, c1,
-                              H2_STRM_LOG(APLOGNO(), stream,
+                              H2_STRM_LOG(APLOGNO(10300), stream,
                               "data_cb, error processing headers"));
                 return NGHTTP2_ERR_CALLBACK_FAILURE;
             }
@@ -1349,7 +1349,7 @@ apr_status_t h2_stream_read_output(h2_stream *stream)
 
     if (h2_stream_was_closed(stream)) {
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, rv, c1,
-                      H2_STRM_LOG(APLOGNO(), stream, "already closed"));
+                      H2_STRM_LOG(APLOGNO(10301), stream, "already closed"));
         rv = APR_EOF;
         goto cleanup;
     }

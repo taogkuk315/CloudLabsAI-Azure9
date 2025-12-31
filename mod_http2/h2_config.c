@@ -594,7 +594,7 @@ static const char *h2_conf_set_serialize_headers(cmd_parms *parms,
                                                  void *dirconf, const char *value)
 {
     if (!strcasecmp(value, "On")) {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, parms->server, APLOGNO()
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, parms->server, APLOGNO(10307)
                      "%s: this feature has been disabled and the directive "
                      "to enable it is ignored.", parms->cmd->name);
     }

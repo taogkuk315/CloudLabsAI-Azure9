@@ -341,7 +341,7 @@ static int on_frame_recv_cb(nghttp2_session *ng2s,
         h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
         if (stream) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c1,
-                          H2_STRM_LOG(APLOGNO(), stream,
+                          H2_STRM_LOG(APLOGNO(10302), stream,
                           "recv FRAME[%s], frames=%ld/%ld (r/s)"),
                           buffer, (long)session->frames_received,
                          (long)session->frames_sent);
@@ -581,7 +581,7 @@ static int on_frame_send_cb(nghttp2_session *ngh2,
         h2_util_frame_print(frame, buffer, sizeof(buffer)/sizeof(buffer[0]));
         if (stream) {
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c1,
-                          H2_STRM_LOG(APLOGNO(), stream,
+                          H2_STRM_LOG(APLOGNO(10303), stream,
                           "sent FRAME[%s], frames=%ld/%ld (r/s)"),
                           buffer, (long)session->frames_received,
                          (long)session->frames_sent);
@@ -1501,7 +1501,7 @@ static void h2_session_ev_pre_close(h2_session *session, int arg, const char *ms
 static void h2_session_ev_no_more_streams(h2_session *session)
 {
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c1,
-                  H2_SSSN_LOG(APLOGNO(), session, "no more streams"));
+                  H2_SSSN_LOG(APLOGNO(10304), session, "no more streams"));
     switch (session->state) {
         case H2_SESSION_ST_BUSY:
         case H2_SESSION_ST_WAIT:
@@ -1596,7 +1596,7 @@ static void on_stream_state_enter(void *ctx, h2_stream *stream)
              * is ready early due to the POST being denied. */
             if (!h2_mplx_c1_stream_is_running(session->mplx, stream)) {
                 ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c1,
-                              H2_STRM_LOG(APLOGNO(), stream, "remote close missing"));
+                              H2_STRM_LOG(APLOGNO(10305), stream, "remote close missing"));
                 nghttp2_submit_rst_stream(session->ngh2, NGHTTP2_FLAG_NONE,
                                           stream->id, H2_ERR_NO_ERROR);
             }
@@ -1812,7 +1812,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                                 on_stream_input, on_stream_output, session);
                 if (H2_SESSION_ST_IDLE == session->state) {
                     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
-                                  H2_SSSN_LOG(APLOGNO(), session,
+                                  H2_SSSN_LOG(APLOGNO(10306), session,
                                   "returning to mpm c1 monitoring"));
                     goto leaving;
                 }
