@@ -475,7 +475,8 @@ leave:
 apr_status_t h2_stream_flush_input(h2_stream *stream)
 {
     apr_status_t status = APR_SUCCESS;
-    
+    apr_off_t written;
+
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, stream->session->c1,
                   H2_STRM_MSG(stream, "flush input"));
     if (stream->in_buffer && !APR_BRIGADE_EMPTY(stream->in_buffer)) {
@@ -483,7 +484,7 @@ apr_status_t h2_stream_flush_input(h2_stream *stream)
             h2_stream_setup_input(stream);
         }
         status = h2_beam_send(stream->input, stream->session->c1,
-                              stream->in_buffer, APR_BLOCK_READ);
+                              stream->in_buffer, APR_BLOCK_READ, &written);
         stream->in_last_write = apr_time_now();
         if (APR_SUCCESS != status && stream->state == H2_SS_CLOSED_L) {
             ap_log_cerror(APLOG_MARK, APLOG_TRACE2, status, stream->session->c1,
@@ -532,12 +533,13 @@ h2_stream *h2_stream_create(int id, apr_pool_t *pool, h2_session *session,
     stream->session      = session;
     stream->monitor      = monitor;
 
+#ifdef H2_NG2_LOCAL_WIN_SIZE
     if (id) {
         stream->in_window_size =
             nghttp2_session_get_stream_local_window_size(
                 stream->session->ngh2, stream->id);
     }
-
+#endif
     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c1,
                   H2_STRM_LOG(APLOGNO(03082), stream, "created"));
     on_state_enter(stream);
@@ -1130,6 +1132,7 @@ apr_status_t h2_stream_in_consumed(h2_stream *stream, apr_off_t amount)
             consumed -= len;
         }
 
+#ifdef H2_NG2_LOCAL_WIN_SIZE
         if (1) {
             int cur_size = nghttp2_session_get_stream_local_window_size(
                 session->ngh2, stream->id);
@@ -1172,6 +1175,7 @@ apr_status_t h2_stream_in_consumed(h2_stream *stream, apr_off_t amount)
                           session->id, stream->id, (long)amount, 
                           cur_size, stream->in_window_size);
         }
+#endif /* #ifdef H2_NG2_LOCAL_WIN_SIZE */
     }
     return APR_SUCCESS;   
 }
@@ -1358,7 +1362,7 @@ apr_status_t h2_stream_read_output(h2_stream *stream)
          * by the client. This could be a POST with body that we negate
          * and we need to RST_STREAM to end if. */
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, c1,
-                      H2_STRM_LOG(APLOGNO(10026), stream, "remote close missing"));
+                      H2_STRM_LOG(APLOGNO(10313), stream, "remote close missing"));
         nghttp2_submit_rst_stream(stream->session->ngh2, NGHTTP2_FLAG_NONE,
                                   stream->id, NGHTTP2_NO_ERROR);
         rv = APR_EOF;

@@ -362,7 +362,7 @@ class H2TestEnv:
     def run(self, args) -> ExecResult:
         log.debug("execute: %s", " ".join(args))
         start = datetime.now()
-        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        p = subprocess.run(args, capture_output=True)
         return ExecResult(exit_code=p.returncode, stdout=p.stdout, stderr=p.stderr,
                           duration=datetime.now() - start)
 

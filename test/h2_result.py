@@ -20,6 +20,9 @@ class ExecResult:
         except:
             self._json_out = None
 
+    def __repr__(self):
+        return f"ExecResult[exit_code={self._exit_code}, response={self._response}, stdout={self.stdout}]"
+
     @property
     def exit_code(self) -> int:
         return self._exit_code

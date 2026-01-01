@@ -890,11 +890,12 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
     /* We need to handle window updates ourself, otherwise we
      * get flooded by nghttp2. */
     nghttp2_option_set_no_auto_window_update(options, 1);
+#ifdef H2_NG2_NO_CLOSED_STREAMS
     /* We do not want nghttp2 to keep information about closed streams as
      * that accumulates memory on long connections. This makes PRIORITY
      * setting in relation to older streams non-working. */
     nghttp2_option_set_no_closed_streams(options, 1);
-
+#endif
     rv = nghttp2_session_server_new2(&session->ngh2, callbacks,
                                      session, options);
     nghttp2_session_callbacks_del(callbacks);
@@ -1314,17 +1315,12 @@ static void update_child_status(h2_session *session, int status, const char *msg
 
 static void transit(h2_session *session, const char *action, h2_session_state nstate)
 {
-    int ostate, loglvl;
+    int ostate;
 
     if (session->state != nstate) {
         ostate = session->state;
         session->state = nstate;
         
-        loglvl = APLOG_DEBUG;
-        if ((ostate == H2_SESSION_ST_BUSY && nstate == H2_SESSION_ST_WAIT)
-            || (ostate == H2_SESSION_ST_WAIT && nstate == H2_SESSION_ST_BUSY)){
-            loglvl = APLOG_TRACE1;
-        }
         ap_log_cerror(APLOG_MARK, APLOG_DEBUG, 0, session->c1,
                       H2_SSSN_LOG(APLOGNO(03078), session, 
                       "transit [%s] -- %s --> [%s]"), 
@@ -1712,7 +1708,6 @@ apr_status_t h2_session_process(h2_session *session, int async)
     apr_status_t status = APR_SUCCESS;
     conn_rec *c = session->c1;
     int rv, mpm_state, trace = APLOGctrace3(c);
-    apr_time_t now;
 
     if (trace) {
         ap_log_cerror( APLOG_MARK, APLOG_TRACE3, status, c,
@@ -1746,7 +1741,6 @@ apr_status_t h2_session_process(h2_session *session, int async)
     }
 
     while (session->state != H2_SESSION_ST_DONE) {
-        now = apr_time_now();
 
         if (session->local.accepting 
             && !ap_mpm_query(AP_MPMQ_MPM_STATE, &mpm_state)) {

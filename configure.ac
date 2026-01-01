@@ -133,6 +133,11 @@ AC_CHECK_HEADERS([nghttp2/nghttp2.h])
 dnl # nghttp2 >= 1.15.0: get/set stream window sizes
 AC_CHECK_FUNCS([nghttp2_session_get_stream_local_window_size],
         [], [AC_MSG_ERROR("nghttp2 version >= 1.15.0 required")])
+dnl # nghttp2 >= 1.15.0: get/set stream window sizes
+AC_CHECK_FUNCS([nghttp2_session_get_stream_local_window_size],
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_LOCAL_WIN_SIZE"], [])
+AC_CHECK_FUNCS([nghttp2_option_set_no_closed_streams],
+        [CPPFLAGS="$CPPFLAGS -DH2_NG2_NO_CLOSED_STREAMS"], [])
 
 AC_PATH_PROG([NGHTTP], [nghttp])
 if test "x${NGHTTP}" = "x"; then

@@ -182,7 +182,7 @@ class Nghttp:
         main_stream = 99999999999
         for sid in streams:
             s = streams[sid]
-            if ":status" in s["response"]["header"]:
+            if "header" in s["response"] and ":status" in s["response"]["header"]:
                 s["response"]["status"] = int(s["response"]["header"][":status"])
             if (sid % 2) == 1 and sid < main_stream:
                 main_stream = sid
@@ -283,6 +283,6 @@ Content-Transfer-Encoding: binary
     def _run(self, args) -> ExecResult:
         print(("execute: %s" % " ".join(args)))
         start = datetime.now()
-        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        p = subprocess.run(args, capture_output=True)
         return ExecResult(exit_code=p.returncode, stdout=p.stdout, stderr=p.stderr,
                           duration=datetime.now() - start)
