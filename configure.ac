@@ -307,7 +307,7 @@ AC_CONFIG_FILES([
     mod_http2/Makefile
     mod_http2/h2_version.h
     test/Makefile
-    test/config.ini
+    test/pyhttpd/config.ini
 ])
 
 AC_OUTPUT
