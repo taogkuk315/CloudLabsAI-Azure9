@@ -284,5 +284,6 @@ Content-Transfer-Encoding: binary
         print(("execute: %s" % " ".join(args)))
         start = datetime.now()
         p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        return ExecResult(exit_code=p.returncode, stdout=p.stdout, stderr=p.stderr,
+        return ExecResult(args=args, exit_code=p.returncode,
+                          stdout=p.stdout, stderr=p.stderr,
                           duration=datetime.now() - start)

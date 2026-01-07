@@ -38,6 +38,25 @@ services:
       - "42001"
       - "42002"
 
+  ubuntu-focal:
+    # build and run tests in a ubuntu-focal container
+    image: ${DOCKER_REGISTRY}/mod-h2-ubuntu-focal:0.0.1
+    container_name: mod-h2-ubuntu-focal
+    build:
+      context: .
+      dockerfile: docker/ubuntu-focal/Dockerfile
+      labels:
+        - "description=mod_h2 ubuntu-focal server"
+        - "maintainer=stefan@eissing.org"
+    expose:
+      - "42001"
+      - "42002"
+    volumes:
+      - mod-h2-ubuntu-focal-data:/apache-httpd/data
+    ports:
+      - "42001"
+      - "42002"
+
 volumes:
   mod-h2-debian-sid-data:
     name: mod-h2-debian-sid-data
@@ -49,6 +68,12 @@ volumes:
     name: mod-h2-archlinux-data
     labels:
       - "description=archlinux data for mod_h2"
+      - "maintainer=stefan@eissing.org"
+
+  mod-h2-ubuntu-focal-data:
+    name: mod-h2-ubuntu-focal-data
+    labels:
+      - "description=ubuntu-focal data for mod_h2"
       - "maintainer=stefan@eissing.org"
 
 

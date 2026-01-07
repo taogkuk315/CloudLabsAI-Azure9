@@ -9,9 +9,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 from string import Template
-from typing import List
-
-import requests
+from typing import List, Optional
 
 from configparser import ConfigParser, ExtendedInterpolation
 from urllib.parse import urlparse
@@ -56,7 +54,6 @@ class HttpdTestSetup:
         "headers",
         "setenvif",
         "slotmem_shm",
-        "ssl",
         "status",
         "autoindex",
         "cgid",
@@ -79,6 +76,10 @@ class HttpdTestSetup:
         mod_names = modules.copy() if modules else self.MODULES.copy()
         if add_modules:
             mod_names.extend(add_modules)
+        if self.env.mpm_module is not None and self.env.mpm_module not in mod_names:
+            mod_names.append(self.env.mpm_module)
+        if self.env.ssl_module is not None and self.env.ssl_module not in mod_names:
+            mod_names.append(self.env.ssl_module)
         self._make_modules_conf(modules=mod_names)
         self._make_htdocs()
 
@@ -116,10 +117,18 @@ class HttpdTestSetup:
         modules_conf = os.path.join(self.env.server_dir, 'conf/modules.conf')
         with open(modules_conf, 'w') as fd:
             # issue load directives for all modules we want that are shared
+            missing_mods = list()
             for m in modules:
                 mod_path = os.path.join(self.env.libexec_dir, f"mod_{m}.so")
                 if os.path.isfile(mod_path):
                     fd.write(f"LoadModule {m}_module   \"{mod_path}\"\n")
+                elif m in self.env.static_modules:
+                    fd.write(f"#built static: LoadModule {m}_module   \"{mod_path}\"\n")
+                else:
+                    missing_mods.append(m)
+        if len(missing_mods) > 0:
+            raise Exception(f"Unable to find modules: {missing_mods} "\
+                            f"DSOs: {self.env.dso_modules}")
 
     def _make_htdocs(self):
         our_dir = os.path.dirname(inspect.getfile(Dummy))
@@ -138,14 +147,19 @@ class HttpdTestSetup:
 
 class HttpdTestEnv:
 
+    @classmethod
+    def get_ssl_module(cls):
+        return os.environ['SSL'] if 'SSL' in os.environ else 'ssl'
+
     def __init__(self, pytestconfig=None,
-                 local_dir=None, add_base_conf: str = None,
+                 local_dir=None, add_base_conf: List[str] = None,
                  interesting_modules: List[str] = None):
         self._our_dir = os.path.dirname(inspect.getfile(Dummy))
         self._local_dir = local_dir if local_dir else self._our_dir
         self.config = ConfigParser(interpolation=ExtendedInterpolation())
         self.config.read(os.path.join(self._our_dir, 'config.ini'))
 
+        self._bin_dir = self.config.get('global', 'bindir')
         self._apxs = self.config.get('global', 'apxs')
         self._prefix = self.config.get('global', 'prefix')
         self._apachectl = self.config.get('global', 'apachectl')
@@ -157,6 +171,7 @@ class HttpdTestEnv:
 
         self._http_port = int(self.config.get('test', 'http_port'))
         self._https_port = int(self.config.get('test', 'https_port'))
+        self._proxy_port = int(self.config.get('test', 'proxy_port'))
         self._http_tld = self.config.get('test', 'http_tld')
         self._test_dir = self.config.get('test', 'test_dir')
         self._gen_dir = self.config.get('test', 'gen_dir')
@@ -166,39 +181,37 @@ class HttpdTestEnv:
         self._server_logs_dir = os.path.join(self.server_dir, "logs")
         self._server_access_log = os.path.join(self._server_logs_dir, "access_log")
         self._server_error_log = os.path.join(self._server_logs_dir, "error_log")
+        self._apachectl_stderr = None
 
-        self._dso_modules = self.config.get('global', 'dso_modules').split(' ')
-        self._mpm_type = os.environ['MPM'] if 'MPM' in os.environ else 'event'
+        self._dso_modules = self.config.get('httpd', 'dso_modules').split(' ')
+        self._static_modules = self.config.get('httpd', 'static_modules').split(' ')
+        self._mpm_module = f"mpm_{os.environ['MPM']}" if 'MPM' in os.environ else 'mpm_event'
+        self._ssl_module = self.get_ssl_module()
+        if len(self._ssl_module.strip()) == 0:
+            self._ssl_module = None
 
         self._httpd_addr = "127.0.0.1"
         self._http_base = f"http://{self._httpd_addr}:{self.http_port}"
         self._https_base = f"https://{self._httpd_addr}:{self.https_port}"
 
         self._test_conf = os.path.join(self._server_conf_dir, "test.conf")
-        self._httpd_base_conf = f"""
-        LoadModule mpm_{self.mpm_type}_module  \"{self.libexec_dir}/mod_mpm_{self.mpm_type}.so\"
-        <IfModule mod_ssl.c>
-            SSLSessionCache "shmcb:ssl_gcache_data(32000)"
-        </IfModule>
-        """
+        self._httpd_base_conf = []
         if add_base_conf:
-            self._httpd_base_conf += f"\n{add_base_conf}"
+            self._httpd_base_conf.extend(add_base_conf)
 
         self._verbosity = pytestconfig.option.verbose if pytestconfig is not None else 0
         if self._verbosity >= 2:
             log_level = "trace2"
-            self._httpd_base_conf += f"""
-                LogLevel core:trace5 mpm_{self.mpm_type}:trace5
-                """
+            self._httpd_base_conf .append(f"LogLevel core:trace5 {self.mpm_module}:trace5")
         elif self._verbosity >= 1:
             log_level = "debug"
         else:
             log_level = "info"
         if interesting_modules:
-            self._httpd_base_conf += "\nLogLevel"
+            l = "LogLevel"
             for name in interesting_modules:
-                self._httpd_base_conf += f" {name}:{log_level}"
-            self._httpd_base_conf += "\n"
+                l += f" {name}:{log_level}"
+            self._httpd_base_conf.append(l)
 
         self._ca = None
         self._cert_specs = [CertificateSpec(domains=[
@@ -223,8 +236,16 @@ class HttpdTestEnv:
         return self._prefix
 
     @property
-    def mpm_type(self) -> str:
-        return self._mpm_type
+    def mpm_module(self) -> str:
+        return self._mpm_module
+
+    @property
+    def ssl_module(self) -> str:
+        return self._ssl_module
+
+    @property
+    def http_addr(self) -> int:
+        return self._httpd_addr
 
     @property
     def http_port(self) -> int:
@@ -233,6 +254,10 @@ class HttpdTestEnv:
     @property
     def https_port(self) -> int:
         return self._https_port
+
+    @property
+    def proxy_port(self) -> int:
+        return self._proxy_port
 
     @property
     def http_tld(self) -> str:
@@ -245,6 +270,10 @@ class HttpdTestEnv:
     @property
     def https_base_url(self) -> str:
         return self._https_base
+
+    @property
+    def bin_dir(self) -> str:
+        return self._bin_dir
 
     @property
     def gen_dir(self) -> str:
@@ -275,6 +304,10 @@ class HttpdTestEnv:
         return self._dso_modules
 
     @property
+    def static_modules(self) -> List[str]:
+        return self._static_modules
+
+    @property
     def server_conf_dir(self) -> str:
         return self._server_conf_dir
 
@@ -283,7 +316,7 @@ class HttpdTestEnv:
         return self._server_docs_dir
 
     @property
-    def httpd_base_conf(self) -> str:
+    def httpd_base_conf(self) -> List[str]:
         return self._httpd_base_conf
 
     def local_src(self, path):
@@ -300,13 +333,18 @@ class HttpdTestEnv:
     def ca(self) -> Credentials:
         return self._ca
 
+    @property
+    def apachectl_stderr(self):
+        return self._apachectl_stderr
+
     def add_cert_specs(self, specs: List[CertificateSpec]):
         self._cert_specs.extend(specs)
 
     def issue_certs(self):
         if self._ca is None:
             self._ca = HttpdTestCA.create_root(name=self.http_tld,
-                                               store_dir=os.path.join(self.server_dir, 'ca'), key_type="rsa4096")
+                                               store_dir=os.path.join(self.server_dir, 'ca'),
+                                               key_type="rsa4096")
         self._ca.issue_certs(self._cert_specs)
 
     def get_credentials_for_name(self, dns_name) -> List['Credentials']:
@@ -314,6 +352,19 @@ class HttpdTestEnv:
             if dns_name in spec.domains:
                 return self.ca.get_credentials_for_name(spec.domains[0])
         return []
+
+    def get_httpd_version(self):
+        p = subprocess.run([self.apxs, "-q", "HTTPD_VERSION"], capture_output=True, text=True)
+        if p.returncode != 0:
+            return "unknown"
+        return p.stdout.strip()
+
+    def _versiontuple(self, v):
+        return tuple(map(int, v.split('.')))
+
+    def httpd_is_at_least(self, minv):
+        hv = self._versiontuple(self.get_httpd_version())
+        return hv >= self._versiontuple(minv)
 
     def has_h2load(self):
         return self._h2load != ""
@@ -344,57 +395,77 @@ class HttpdTestEnv:
         if not os.path.exists(path):
             return os.makedirs(path)
 
-    def run(self, args) -> ExecResult:
-        log.debug("execute: %s", " ".join(args))
+    def run(self, args, input=None, debug_log=True):
+        if debug_log:
+            log.debug(f"run: {args}")
         start = datetime.now()
-        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        return ExecResult(exit_code=p.returncode, stdout=p.stdout, stderr=p.stderr,
+        p = subprocess.run(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE,
+                           input=input.encode() if input else None)
+        return ExecResult(args=args, exit_code=p.returncode,
+                          stdout=p.stdout, stderr=p.stderr,
                           duration=datetime.now() - start)
 
     def mkurl(self, scheme, hostname, path='/'):
         port = self.https_port if scheme == 'https' else self.http_port
-        return "%s://%s.%s:%s%s" % (scheme, hostname, self.http_tld, port, path)
+        return f"{scheme}://{hostname}.{self.http_tld}:{port}{path}"
 
     def install_test_conf(self, conf: List[str]):
         with open(self._test_conf, 'w') as fd:
-            fd.write(f"{self.httpd_base_conf}\n")
+            for line in self.httpd_base_conf:
+                fd.write(f"{line}\n")
             for line in conf:
                 fd.write(f"{line}\n")
 
-    def is_live(self, url, timeout: timedelta = None):
-        s = requests.Session()
-        if not timeout:
-            timeout = timedelta(seconds=10)
+    def is_live(self, url: str = None, timeout: timedelta = None):
+        if url is None:
+            url = self._http_base
+        server = urlparse(url)
+        if timeout is None:
+            timeout = timedelta(seconds=5)
         try_until = datetime.now() + timeout
-        log.debug("checking reachability of %s", url)
+        last_err = ""
         while datetime.now() < try_until:
+            # noinspection PyBroadException
             try:
-                req = requests.Request('HEAD', url).prepare()
-                s.send(req, verify=self._verify_certs, timeout=timeout.total_seconds())
-                return True
-            except IOError:
-                log.debug("connect error: %s", sys.exc_info()[0])
-                time.sleep(.2)
+                r = self.curl_get(url, insecure=True, debug_log=False)
+                if r.exit_code == 0:
+                    return True
+                time.sleep(.1)
+            except ConnectionRefusedError:
+                log.debug("connection refused")
+                time.sleep(.1)
             except:
-                log.warning("Unexpected error: %s", sys.exc_info()[0])
-                time.sleep(.2)
-        log.debug(f"Unable to contact '{url}' after {timeout} sec")
+                if last_err != str(sys.exc_info()[0]):
+                    last_err = str(sys.exc_info()[0])
+                    log.debug("Unexpected error: %s", last_err)
+                time.sleep(.1)
+        log.debug(f"Unable to contact server after {timeout}")
         return False
 
-    def is_dead(self, url, timeout: timedelta = None):
-        s = requests.Session()
-        if not timeout:
-            timeout = timedelta(seconds=10)
+    def is_dead(self, url: str = None, timeout: timedelta = None):
+        if url is None:
+            url = self._http_base
+        server = urlparse(url)
+        if timeout is None:
+            timeout = timedelta(seconds=5)
         try_until = datetime.now() + timeout
-        log.debug("checking reachability of %s", url)
+        last_err = None
         while datetime.now() < try_until:
+            # noinspection PyBroadException
             try:
-                req = requests.Request('HEAD', url).prepare()
-                s.send(req, verify=self._verify_certs, timeout=int(timeout.total_seconds()))
-                time.sleep(.2)
-            except IOError:
+                r = self.curl_get(url, debug_log=False)
+                if r.exit_code != 0:
+                    return True
+                time.sleep(.1)
+            except ConnectionRefusedError:
+                log.debug("connection refused")
                 return True
-        log.debug("Server still responding after %d sec", timeout)
+            except:
+                if last_err != str(sys.exc_info()[0]):
+                    last_err = str(sys.exc_info()[0])
+                    log.debug("Unexpected error: %s", last_err)
+                time.sleep(.1)
+        log.debug(f"Server still responding after {timeout}")
         return False
 
     def _run_apachectl(self, cmd):
@@ -404,6 +475,7 @@ class HttpdTestEnv:
                 "-k", cmd]
         log.debug("execute: %s", " ".join(args))
         p = subprocess.run(args, capture_output=True, text=True)
+        self._apachectl_stderr = p.stderr
         rv = p.returncode
         if rv != 0:
             log.warning(f"exit {rv}, stdout: {p.stdout}, stderr: {p.stderr}")
@@ -430,6 +502,21 @@ class HttpdTestEnv:
             timeout = timedelta(seconds=10)
             rv = 0 if self.is_dead(self._http_base, timeout=timeout) else -1
             log.debug("waited for a apache.is_dead, rv=%d", rv)
+        return rv
+
+    def apache_graceful_stop(self):
+        log.debug("stop apache")
+        self._run_apachectl("graceful-stop")
+        return 0 if self.is_dead() else -1
+
+    def apache_fail(self):
+        log.debug("expect apache fail")
+        self._run_apachectl("stop")
+        rv = self._run_apachectl("start")
+        if rv == 0:
+            rv = 0 if self.is_dead() else -1
+        else:
+            rv = 0
         return rv
 
     def apache_access_log_clear(self):
@@ -478,24 +565,43 @@ class HttpdTestEnv:
                     continue
         return errors, warnings
 
-    def curl_complete_args(self, urls, timeout, options):
+    def get_ca_pem_file(self, hostname: str) -> Optional[str]:
+        if len(self.get_credentials_for_name(hostname)) > 0:
+            return self.ca.cert_file
+            #args.extend(["--cacert", self.acme_ca_pemfile])
+        return None
+
+    def curl_complete_args(self, urls, timeout=None, options=None,
+                           insecure=False, force_resolve=True):
         if not isinstance(urls, list):
             urls = [urls]
         u = urlparse(urls[0])
         assert u.hostname, f"hostname not in url: {urls[0]}"
-        assert u.port, f"port not in url: {urls[0]}"
         headerfile = ("%s/curl.headers" % self.gen_dir)
         if os.path.isfile(headerfile):
             os.remove(headerfile)
-
-        args = [ 
+        args = [
             self._curl,
-            "--cacert", self.ca.cert_file,
             "-s", "-D", headerfile,
-            "--resolve", ("%s:%s:%s" % (u.hostname, u.port, self._httpd_addr)),
-            "--connect-timeout", ("%d" % timeout),
-            "--path-as-is"
         ]
+        if u.scheme == 'http':
+            pass
+        elif insecure:
+            args.append('--insecure')
+        elif options and "--cacert" in options:
+            pass
+        else:
+            ca_pem = self.get_ca_pem_file(u.hostname)
+            if ca_pem:
+                args.extend(["--cacert", ca_pem])
+
+        if force_resolve and u.hostname != 'localhost' \
+                and u.hostname != self._httpd_addr \
+                and not re.match(r'^(\d+|\[|:).*', u.hostname):
+            assert u.port, f"port not in url: {urls[0]}"
+            args.extend(["--resolve", f"{u.hostname}:{u.port}:{self._httpd_addr}"])
+        if timeout is not None and int(timeout) > 0:
+            args.extend(["--connect-timeout", str(int(timeout))])
         if options:
             args.extend(options)
         args += urls
@@ -505,7 +611,7 @@ class HttpdTestEnv:
         lines = open(headerfile).readlines()
         exp_stat = True
         if r is None:
-            r = ExecResult(exit_code=0, stdout=b'', stderr=b'')
+            r = ExecResult(args=[], exit_code=0, stdout=b'', stderr=b'')
         header = {}
         for line in lines:
             if exp_stat:
@@ -530,11 +636,14 @@ class HttpdTestEnv:
         r.response["header"] = header
         return r
 
-    def curl_raw(self, urls, timeout, options):
+    def curl_raw(self, urls, timeout=10, options=None, insecure=False,
+                 debug_log=True, force_resolve=True):
         xopt = ['-vvvv']
         if options:
             xopt.extend(options)
-        args, headerfile = self.curl_complete_args(urls, timeout, xopt)
+        args, headerfile = self.curl_complete_args(
+            urls=urls, timeout=timeout, options=options, insecure=insecure,
+            force_resolve=force_resolve)
         r = self.run(args)
         if r.exit_code == 0:
             self.curl_parse_headerfile(headerfile, r=r)
@@ -542,8 +651,9 @@ class HttpdTestEnv:
                 r.response["json"] = r.json
         return r
 
-    def curl_get(self, url, timeout=5, options=None):
-        return self.curl_raw([url], timeout=timeout, options=options)
+    def curl_get(self, url, insecure=False, debug_log=True, options=None):
+        return self.curl_raw([url], insecure=insecure,
+                             options=options, debug_log=debug_log)
 
     def curl_upload(self, url, fpath, timeout=5, options=None):
         if not options:
@@ -551,7 +661,7 @@ class HttpdTestEnv:
         options.extend([
             "--form", ("file=@%s" % fpath)
         ])
-        return self.curl_raw([url], timeout, options)
+        return self.curl_raw(urls=[url], timeout=timeout, options=options)
 
     def curl_post_data(self, url, data="", timeout=5, options=None):
         if not options:

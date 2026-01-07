@@ -11,6 +11,8 @@ from typing import Dict, Tuple, Optional, List, Iterable
 
 from tqdm import tqdm
 
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+
 from .env import H2TestEnv, H2Conf
 from pyhttpd.result import ExecResult
 
@@ -265,7 +267,7 @@ class LoadTestCase:
                 SSLProxyEngine on
             </Proxy>
             """
-            extras[env.domain_test1] = f"""
+            extras[f"test1.{env.http_tld}"] = f"""
             Protocols h2 http/1.1
             ProxyPass /proxy-h1/ https://127.0.0.1:{env.https_port}/
             ProxyPass /proxy-h2/ h2://127.0.0.1:{env.https_port}/
@@ -362,7 +364,7 @@ class UrlsLoadTest(LoadTestCase):
                 '--requests={0}'.format(self._requests),
                 '--input-file={0}'.format(self._url_file),
                 '--log-file={0}'.format(log_file),
-                '--connect-to=localhost:{0}'.format(self.env.https_port)
+                f'--connect-to=localhost:{self.env.https_port}',
             ]
             if self._protocol == 'h1' or self._protocol == 'http/1.1':
                 args.append('--h1')
@@ -371,7 +373,7 @@ class UrlsLoadTest(LoadTestCase):
             else:
                 raise Exception(f"unknown protocol: {self._protocol}")
             r = self.env.run(args + [
-                f'--base-uri=https://{self.env.domain_test1}:{self.env.https_port}{self._location}'
+                f'--base-uri=https://test1{self.env.http_tld}:{self.env.https_port}{self._location}'
             ])
             if r.exit_code != 0:
                 raise LoadTestException("h2load returned {0}: {1}".format(r.exit_code, r.stderr))

@@ -32,7 +32,7 @@ class TestShutdown:
                     "-F", f"text={text}",
                     "-F", f"wait2={wait2}",
                     ]
-            self.r = env.curl_get(url, 5, args)
+            self.r = env.curl_get(url, 5, options=args)
 
         t = Thread(target=long_request)
         t.start()

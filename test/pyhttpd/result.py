@@ -5,7 +5,9 @@ from typing import Optional, Dict, List
 
 class ExecResult:
 
-    def __init__(self, exit_code: int, stdout: bytes, stderr: bytes = None, duration: timedelta = None):
+    def __init__(self, args: List[str], exit_code: int,
+                 stdout: bytes, stderr: bytes = None, duration: timedelta = None):
+        self._args = args
         self._exit_code = exit_code
         self._raw = stdout if stdout else b''
         self._stdout = stdout.decode() if stdout is not None else ""
@@ -19,6 +21,9 @@ class ExecResult:
             self._json_out = json.loads(self._stdout)
         except:
             self._json_out = None
+
+    def __repr__(self):
+        return f"ExecResult[code={self.exit_code}, args={self._args}, stdout={self.stdout}, stderr={self.stderr}]"
 
     @property
     def exit_code(self) -> int:
