@@ -812,7 +812,7 @@ class LoadTest:
                         t.update(row)
                         t.update(col)
                         test = test.next_scenario(t)
-                        env.apache_error_log_clear()
+                        env.httpd_error_log.clear_log()
                         summary = test.run()
                         result, fnote = test.format_result(summary)
                         if fnote:

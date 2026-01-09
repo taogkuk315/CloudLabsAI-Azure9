@@ -1,6 +1,7 @@
 import inspect
 import logging
 import os
+import re
 import subprocess
 from typing import Dict, Any
 
@@ -59,6 +60,18 @@ class H2TestEnv(HttpdTestEnv):
             ]),
             CertificateSpec(domains=[f"noh2.{self.http_tld}"], key_type='rsa2048'),
         ])
+
+        self.httpd_error_log.set_ignored_lognos([
+            'AH02032',
+            'AH01276',
+            'AH01630',
+            'AH00135',
+            'AH02261',  # Re-negotiation handshake failed (our test_101)
+        ])
+        self.httpd_error_log.set_ignored_patterns([
+            re.compile(r'.*malformed header from script \'hecho.py\': Bad header: x.*'),
+        ])
+
         if setup_dirs:
             self._setup = H2TestSetup(env=self)
             self._setup.make()

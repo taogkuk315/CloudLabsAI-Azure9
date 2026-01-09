@@ -18,6 +18,10 @@ class HttpdConf(object):
         if 'base' in self._extras:
             self.add(self._extras['base'])
 
+    def __repr__(self):
+        s = '\n'.join(self._lines)
+        return f"HttpdConf[{s}]"
+
     def install(self):
         self.env.install_test_conf(self._lines)
 

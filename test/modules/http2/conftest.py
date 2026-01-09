@@ -37,7 +37,7 @@ def env(pytestconfig) -> H2TestEnv:
     logging.getLogger('').setLevel(level=level)
     env = H2TestEnv(pytestconfig=pytestconfig)
     env.apache_access_log_clear()
-    env.apache_error_log_clear()
+    env.httpd_error_log.clear_log()
     return env
 
 
@@ -45,7 +45,7 @@ def env(pytestconfig) -> H2TestEnv:
 def _session_scope(env):
     yield
     assert env.apache_stop() == 0
-    errors, warnings = env.apache_errors_and_warnings()
+    errors, warnings = env.httpd_error_log.get_missed()
     assert (len(errors), len(warnings)) == (0, 0),\
             f"apache logged {len(errors)} errors and {len(warnings)} warnings: \n"\
             "{0}\n{1}\n".format("\n".join(errors), "\n".join(warnings))

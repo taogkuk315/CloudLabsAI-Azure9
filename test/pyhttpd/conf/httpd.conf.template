@@ -39,9 +39,11 @@ RequestReadTimeout header=10 body=10
 </IfModule>
 
 <VirtualHost *:${http_port}>
-    ServerName not-forbidden.org
-    ServerAlias www.not-forbidden.org
-
+    ServerName ${http_tld}
+    ServerAlias www.${http_tld}
+    <IfModule ssl_module>
+      SSLEngine off
+    </IfModule>
     DocumentRoot "${server_dir}/htdocs"
 </VirtualHost>
 

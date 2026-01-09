@@ -15,6 +15,7 @@ from configparser import ConfigParser, ExtendedInterpolation
 from urllib.parse import urlparse
 
 from .certs import Credentials, HttpdTestCA, CertificateSpec
+from .log import HttpdErrorLog
 from .nghttp import Nghttp
 from .result import ExecResult
 
@@ -180,7 +181,7 @@ class HttpdTestEnv:
         self._server_docs_dir = os.path.join(self._server_dir, "htdocs")
         self._server_logs_dir = os.path.join(self.server_dir, "logs")
         self._server_access_log = os.path.join(self._server_logs_dir, "access_log")
-        self._server_error_log = os.path.join(self._server_logs_dir, "error_log")
+        self._error_log = HttpdErrorLog(os.path.join(self._server_logs_dir, "error_log"))
         self._apachectl_stderr = None
 
         self._dso_modules = self.config.get('httpd', 'dso_modules').split(' ')
@@ -319,6 +320,10 @@ class HttpdTestEnv:
     def httpd_base_conf(self) -> List[str]:
         return self._httpd_base_conf
 
+    @property
+    def httpd_error_log(self) -> HttpdErrorLog:
+        return self._error_log
+
     def local_src(self, path):
         return os.path.join(self.local_dir, path)
 
@@ -409,12 +414,12 @@ class HttpdTestEnv:
         port = self.https_port if scheme == 'https' else self.http_port
         return f"{scheme}://{hostname}.{self.http_tld}:{port}{path}"
 
-    def install_test_conf(self, conf: List[str]):
+    def install_test_conf(self, lines: List[str]):
         with open(self._test_conf, 'w') as fd:
-            for line in self.httpd_base_conf:
-                fd.write(f"{line}\n")
-            for line in conf:
-                fd.write(f"{line}\n")
+            fd.write('\n'.join(self._httpd_base_conf))
+            fd.write('\n')
+            fd.write('\n'.join(lines))
+            fd.write('\n')
 
     def is_live(self, url: str = None, timeout: timedelta = None):
         if url is None:
@@ -468,41 +473,38 @@ class HttpdTestEnv:
         log.debug(f"Server still responding after {timeout}")
         return False
 
-    def _run_apachectl(self, cmd):
+    def _run_apachectl(self, cmd) -> ExecResult:
         args = [self._apachectl,
                 "-d", self.server_dir,
                 "-f", os.path.join(self._server_dir, 'conf/httpd.conf'),
                 "-k", cmd]
-        log.debug("execute: %s", " ".join(args))
-        p = subprocess.run(args, capture_output=True, text=True)
-        self._apachectl_stderr = p.stderr
-        rv = p.returncode
-        if rv != 0:
-            log.warning(f"exit {rv}, stdout: {p.stdout}, stderr: {p.stderr}")
-        return rv
+        r = self.run(args)
+        self._apachectl_stderr = r.stderr
+        if r.exit_code != 0:
+            log.warning(f"failed: {r}")
+        return r
 
     def apache_reload(self):
-        rv = self._run_apachectl("graceful")
-        if rv == 0:
+        r = self._run_apachectl("graceful")
+        if r.exit_code == 0:
             timeout = timedelta(seconds=10)
-            rv = 0 if self.is_live(self._http_base, timeout=timeout) else -1
-        return rv
+            return 0 if self.is_live(self._http_base, timeout=timeout) else -1
+        return r.exit_code
 
     def apache_restart(self):
         self.apache_stop()
-        rv = self._run_apachectl("start")
-        if rv == 0:
+        r = self._run_apachectl("start")
+        if r.exit_code == 0:
             timeout = timedelta(seconds=10)
-            rv = 0 if self.is_live(self._http_base, timeout=timeout) else -1
-        return rv
+            return 0 if self.is_live(self._http_base, timeout=timeout) else -1
+        return r.exit_code
         
     def apache_stop(self):
-        rv = self._run_apachectl("stop")
-        if rv == 0:
+        r = self._run_apachectl("stop")
+        if r.exit_code == 0:
             timeout = timedelta(seconds=10)
-            rv = 0 if self.is_dead(self._http_base, timeout=timeout) else -1
-            log.debug("waited for a apache.is_dead, rv=%d", rv)
-        return rv
+            return 0 if self.is_dead(self._http_base, timeout=timeout) else -1
+        return r
 
     def apache_graceful_stop(self):
         log.debug("stop apache")
@@ -523,52 +525,9 @@ class HttpdTestEnv:
         if os.path.isfile(self._server_access_log):
             os.remove(self._server_access_log)
 
-    def apache_error_log_clear(self):
-        if os.path.isfile(self._server_error_log):
-            os.remove(self._server_error_log)
-
-    RE_APLOGNO = re.compile(r'.*\[(?P<module>[^:]+):(error|warn)].* (?P<aplogno>AH\d+): .+')
-    RE_SSL_LIB_ERR = re.compile(r'.*\[ssl:error].* SSL Library Error: error:(?P<errno>\S+):.+')
-    RE_ERRLOG_ERROR = re.compile(r'.*\[(?P<module>[^:]+):error].*')
-    RE_ERRLOG_WARN = re.compile(r'.*\[(?P<module>[^:]+):warn].*')
-
-    def apache_errors_and_warnings(self):
-        errors = []
-        warnings = []
-
-        if os.path.isfile(self._server_error_log):
-            for line in open(self._server_error_log):
-                m = self.RE_APLOGNO.match(line)
-                if m and m.group('aplogno') in [
-                    'AH02032',
-                    'AH01276',
-                    'AH01630',
-                    'AH00135',
-                    'AH02261',  # Re-negotiation handshake failed (our test_101
-                ]:
-                    # we know these happen normally in our tests
-                    continue
-                m = self.RE_SSL_LIB_ERR.match(line)
-                if m and m.group('errno') in [
-                    '1417A0C1',  # cipher suite mismatch, test_101
-                    '1417C0C7',  # client cert not accepted, test_101
-                ]:
-                    # we know these happen normally in our tests
-                    continue
-                m = self.RE_ERRLOG_ERROR.match(line)
-                if m and m.group('module') not in ['cgid']:
-                    errors.append(line)
-                    continue
-                m = self.RE_ERRLOG_WARN.match(line)
-                if m:
-                    warnings.append(line)
-                    continue
-        return errors, warnings
-
     def get_ca_pem_file(self, hostname: str) -> Optional[str]:
         if len(self.get_credentials_for_name(hostname)) > 0:
             return self.ca.cert_file
-            #args.extend(["--cacert", self.acme_ca_pemfile])
         return None
 
     def curl_complete_args(self, urls, timeout=None, options=None,
