@@ -1,7 +1,9 @@
 import os
 import re
+import time
+from datetime import datetime, timedelta
 from io import SEEK_END
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
 
 class HttpdErrorLog:
@@ -17,7 +19,7 @@ class HttpdErrorLog:
     def __init__(self, path: str):
         self._path = path
         self._ignored_modules = []
-        self._ignored_lognos = []
+        self._ignored_lognos = set()
         self._ignored_patterns = []
         # remember the file position we started with
         self._start_pos = 0
@@ -52,10 +54,12 @@ class HttpdErrorLog:
         self._ignored_modules = modules.copy() if modules else []
 
     def set_ignored_lognos(self, lognos: List[str]):
-        self._ignored_lognos = lognos.copy() if lognos else []
+        if lognos:
+            for l in lognos:
+                self._ignored_lognos.add(l)
 
-    def set_ignored_patterns(self, patterns: List[str]):
-        self._ignored_patterns = patterns.copy() if patterns else []
+    def add_ignored_patterns(self, patterns: List[Any]):
+        self._ignored_patterns.extend(patterns)
 
     def _is_ignored(self, line: str) -> bool:
         for p in self._ignored_patterns:
@@ -143,12 +147,17 @@ class HttpdErrorLog:
                             continue
         return errors, warnings
 
-    def scan_recent(self, pattern: re):
+    def scan_recent(self, pattern: re, timeout=10):
         if not os.path.isfile(self.path):
             return False
         with open(self.path) as fd:
-            fd.seek(self._last_pos, os.SEEK_SET)
-            for line in fd:
-                if pattern.match(line):
-                    return True
+            end = datetime.now() + timedelta(seconds=timeout)
+            while True:
+                fd.seek(self._last_pos, os.SEEK_SET)
+                for line in fd:
+                    if pattern.match(line):
+                        return True
+                if datetime.now() > end:
+                    raise TimeoutError(f"pattern not found in error log after {timeout} seconds")
+                time.sleep(.1)
         return False
