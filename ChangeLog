@@ -1,3 +1,7 @@
+ * A regression in v1.15.24 was fixed that could lead to httpd child
+   processes not being terminated on a graceful reload or when reaching
+   MaxConnectionsPerChild. When unprocessed h2 requests were queued at
+   the time, these could stall. See #212.
  * Fixed an issue since 1.15.24 that "Server" headers in proxied requests
    were overwritten instead of preserved. [PR by @daum3ns]
 
