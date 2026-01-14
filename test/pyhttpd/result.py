@@ -30,6 +30,10 @@ class ExecResult:
         return self._exit_code
 
     @property
+    def args(self) -> List[str]:
+        return self._args
+
+    @property
     def outraw(self) -> bytes:
         return self._raw
 

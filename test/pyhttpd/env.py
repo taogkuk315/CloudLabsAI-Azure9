@@ -83,6 +83,7 @@ class HttpdTestSetup:
             mod_names.append(self.env.ssl_module)
         self._make_modules_conf(modules=mod_names)
         self._make_htdocs()
+        self.env.clear_curl_headerfiles()
 
     def _make_dirs(self):
         if os.path.exists(self.env.gen_dir):
@@ -128,7 +129,7 @@ class HttpdTestSetup:
                 else:
                     missing_mods.append(m)
         if len(missing_mods) > 0:
-            raise Exception(f"Unable to find modules: {missing_mods} "\
+            raise Exception(f"Unable to find modules: {missing_mods} "
                             f"DSOs: {self.env.dso_modules}")
 
     def _make_htdocs(self):
@@ -223,6 +224,7 @@ class HttpdTestEnv:
         ], key_type='rsa4096')]
 
         self._verify_certs = False
+        self._curl_headerfiles_n = 0
 
     @property
     def apxs(self) -> str:
@@ -245,7 +247,7 @@ class HttpdTestEnv:
         return self._ssl_module
 
     @property
-    def http_addr(self) -> int:
+    def http_addr(self) -> str:
         return self._httpd_addr
 
     @property
@@ -358,12 +360,6 @@ class HttpdTestEnv:
                 return self.ca.get_credentials_for_name(spec.domains[0])
         return []
 
-    def get_httpd_version(self):
-        p = subprocess.run([self.apxs, "-q", "HTTPD_VERSION"], capture_output=True, text=True)
-        if p.returncode != 0:
-            return "unknown"
-        return p.stdout.strip()
-
     def _versiontuple(self, v):
         return tuple(map(int, v.split('.')))
 
@@ -424,7 +420,6 @@ class HttpdTestEnv:
     def is_live(self, url: str = None, timeout: timedelta = None):
         if url is None:
             url = self._http_base
-        server = urlparse(url)
         if timeout is None:
             timeout = timedelta(seconds=5)
         try_until = datetime.now() + timeout
@@ -450,7 +445,6 @@ class HttpdTestEnv:
     def is_dead(self, url: str = None, timeout: timedelta = None):
         if url is None:
             url = self._http_base
-        server = urlparse(url)
         if timeout is None:
             timeout = timedelta(seconds=5)
         try_until = datetime.now() + timeout
@@ -530,18 +524,23 @@ class HttpdTestEnv:
             return self.ca.cert_file
         return None
 
+    def clear_curl_headerfiles(self):
+        for fname in os.listdir(path=self.gen_dir):
+            if re.match(r'curl\.headers\.\d+', fname):
+                os.remove(os.path.join(self.gen_dir, fname))
+        self._curl_headerfiles_n = 0
+
     def curl_complete_args(self, urls, timeout=None, options=None,
                            insecure=False, force_resolve=True):
         if not isinstance(urls, list):
             urls = [urls]
         u = urlparse(urls[0])
         assert u.hostname, f"hostname not in url: {urls[0]}"
-        headerfile = ("%s/curl.headers" % self.gen_dir)
-        if os.path.isfile(headerfile):
-            os.remove(headerfile)
+        headerfile = f"{self.gen_dir}/curl.headers.{self._curl_headerfiles_n}"
+        self._curl_headerfiles_n += 1
+
         args = [
-            self._curl,
-            "-s", "-D", headerfile,
+            self._curl, "-s", "--path-as-is", "-D", headerfile,
         ]
         if u.scheme == 'http':
             pass
@@ -592,7 +591,8 @@ class HttpdTestEnv:
                 m = re.match(r'^([^:]+):\s*(.*)$', line)
                 assert m
                 header[m.group(1).lower()] = m.group(2)
-        r.response["header"] = header
+        if r.response:
+            r.response["header"] = header
         return r
 
     def curl_raw(self, urls, timeout=10, options=None, insecure=False,
@@ -608,6 +608,7 @@ class HttpdTestEnv:
             self.curl_parse_headerfile(headerfile, r=r)
             if r.json:
                 r.response["json"] = r.json
+        os.remove(headerfile)
         return r
 
     def curl_get(self, url, insecure=False, debug_log=True, options=None):
