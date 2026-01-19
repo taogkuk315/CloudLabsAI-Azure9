@@ -1,3 +1,5 @@
+v2.0.0
+--------------------------------------------------------------------------------
  * Fixed input handling for requests without body that nevertheless try
    to read one (e.g. mod_cgid handling) to deliver at least an EOS bucket
    before signalling an EOF.
