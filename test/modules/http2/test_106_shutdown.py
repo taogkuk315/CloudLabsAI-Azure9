@@ -40,6 +40,9 @@ class TestShutdown:
         assert env.apache_reload() == 0
         t.join()
         # noinspection PyTypeChecker
+        time.sleep(1)
         r: ExecResult = self.r
-        assert r.response["status"] == 200
-        assert len(r.response["body"]) == (lines * (len(text)+1))
+        assert r.exit_code == 0
+        assert r.response, f"no response via {r.args} in {r.stderr}\nstdout: {len(r.stdout)} bytes"
+        assert r.response["status"] == 200, f"{r}"
+        assert len(r.response["body"]) == (lines * (len(text)+1)), f"{r}"

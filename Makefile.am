@@ -19,13 +19,8 @@ EXTRA_DIST     = \
     test/unit \
     test/Makefile.in \
     test/Makefile.am \
-	test/mod_h2test/mod_h2test.c \
-	test/mod_h2test/mod_h2test.h \
-	test/conf \
-	test/data \
-	test/htdocs \
-	test/*.py \
-	test/*.ini.in
+	test/modules \
+	test/pyhttpd
 
 
 dist_doc_DATA   = README README.md LICENSE
