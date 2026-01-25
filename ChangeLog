@@ -1,3 +1,6 @@
+ * Fixing NULL dereference if server variable SSL_PROTOCOL is unset.
+ * Setting DefaultRuntimeDir and PidFile in test configuration to override
+   any platform defaults.
  * Disabling pollset use when compiling with APR version < 1.6.0
 
 v2.0.0
