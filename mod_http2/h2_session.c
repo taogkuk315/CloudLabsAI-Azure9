@@ -866,7 +866,7 @@ apr_status_t h2_session_create(h2_session **psession, conn_rec *c, request_rec *
         return APR_ENOTIMPL;
     }
 
-    h2_c1_io_init(&session->io, c, s);
+    h2_c1_io_init(&session->io, session);
     session->padding_max = h2_config_sgeti(s, H2_CONF_PADDING_BITS);
     if (session->padding_max) {
         session->padding_max = (0x01 << session->padding_max) - 1; 
@@ -1203,7 +1203,6 @@ static apr_status_t h2_session_send(h2_session *session)
     int ngrv;
     apr_status_t rv = APR_SUCCESS;
 
-    ap_update_child_status(session->c1->sbh, SERVER_BUSY_WRITE, NULL);
     while (nghttp2_session_want_write(session->ngh2)) {
         ngrv = nghttp2_session_send(session->ngh2);
         ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, session->c1,
