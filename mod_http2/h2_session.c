@@ -1313,6 +1313,8 @@ static void update_child_status(h2_session *session, int status, const char *msg
                      (int)session->pushes_submitted,
                      (int)session->pushes_reset + session->streams_reset);
         ap_update_child_status_descr(session->c1->sbh, status, session->status);
+        ap_update_child_status_from_server(session->c1->sbh, status,
+                                           session->c1, session->s);
     }
 }
 
@@ -1339,13 +1341,11 @@ static void transit(h2_session *session, const char *action, h2_session_state ns
                      * If we return to mpm right away, this connection has the
                      * same chance of being cleaned up by the mpm as connections
                      * that already served requests - not fair. */
-                    update_child_status(session, SERVER_BUSY_READ, "idle");
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c1,
                                   H2_SSSN_LOG("", session, "enter idle"));
                 }
                 else {
                     /* normal keepalive setup */
-                    update_child_status(session, SERVER_BUSY_KEEPALIVE, "keepalive");
                     ap_log_cerror(APLOG_MARK, APLOG_TRACE1, 0, session->c1,
                                   H2_SSSN_LOG("", session, "enter keepalive"));
                 }
@@ -1549,6 +1549,7 @@ static void ev_stream_open(h2_session *session, h2_stream *stream)
     /* Stream state OPEN means we have received all request headers
      * and can start processing the stream. */
     h2_iq_append(session->ready_to_process, stream->id);
+    update_child_status(session, SERVER_BUSY_READ, "stream opened");
 }
 
 static void ev_stream_closed(h2_session *session, h2_stream *stream)
@@ -1570,6 +1571,7 @@ static void ev_stream_closed(h2_session *session, h2_stream *stream)
     APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
     h2_c1_io_append(&session->io, session->bbtmp);
     apr_brigade_cleanup(session->bbtmp);
+    update_child_status(session, SERVER_BUSY_WRITE, "stream closed");
 }
 
 static void on_stream_state_enter(void *ctx, h2_stream *stream)
@@ -1718,7 +1720,6 @@ apr_status_t h2_session_process(h2_session *session, int async)
     }
 
     if (H2_SESSION_ST_INIT == session->state) {
-        ap_update_child_status_from_conn(c->sbh, SERVER_BUSY_READ, c);
         if (!h2_protocol_is_acceptable_c1(c, session->r, 1)) {
             update_child_status(session, SERVER_BUSY_READ,
                                 "inadequate security");
@@ -1811,6 +1812,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
                     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
                                   H2_SSSN_LOG(APLOGNO(10306), session,
                                   "returning to mpm c1 monitoring"));
+                    update_child_status(session, SERVER_BUSY_KEEPALIVE, "keepalive");
                     goto leaving;
                 }
             }
