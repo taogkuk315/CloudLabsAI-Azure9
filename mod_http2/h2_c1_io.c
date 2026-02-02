@@ -273,7 +273,6 @@ static apr_status_t pass_output(h2_c1_io *io, int flush)
         return APR_SUCCESS;
     }
     
-    ap_update_child_status_from_server(c->sbh, SERVER_BUSY_WRITE, io->session->c1, io->session->s);
     io->unflushed = !APR_BUCKET_IS_FLUSH(APR_BRIGADE_LAST(io->output));
     apr_brigade_length(io->output, 0, &bblen);
     C1_IO_BB_LOG(c, 0, APLOG_TRACE2, "out", io->output);
@@ -478,11 +477,9 @@ cleanup:
 
 static apr_status_t read_and_feed(h2_session *session)
 {
-    conn_rec *c = session->c1;
     apr_ssize_t bytes_fed, bytes_requested;
     apr_status_t rv;
 
-    ap_update_child_status_from_server(c->sbh, SERVER_BUSY_READ, c, session->s);
     bytes_requested = H2MAX(APR_BUCKET_BUFF_SIZE, session->max_stream_mem * 4);
     rv = ap_get_brigade(session->c1->input_filters,
                         session->bbtmp, AP_MODE_READBYTES,
