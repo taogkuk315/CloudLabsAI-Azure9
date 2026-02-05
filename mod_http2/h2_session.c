@@ -1551,7 +1551,7 @@ static void ev_stream_open(h2_session *session, h2_stream *stream)
     /* Stream state OPEN means we have received all request headers
      * and can start processing the stream. */
     h2_iq_append(session->ready_to_process, stream->id);
-    update_child_status(session, SERVER_BUSY_READ, "stream opened");
+    update_child_status(session, SERVER_BUSY_READ, "process");
 }
 
 static void ev_stream_closed(h2_session *session, h2_stream *stream)
@@ -1573,7 +1573,6 @@ static void ev_stream_closed(h2_session *session, h2_stream *stream)
     APR_BRIGADE_INSERT_TAIL(session->bbtmp, b);
     h2_c1_io_append(&session->io, session->bbtmp);
     apr_brigade_cleanup(session->bbtmp);
-    update_child_status(session, SERVER_BUSY_WRITE, "stream closed");
 }
 
 static void on_stream_state_enter(void *ctx, h2_stream *stream)
