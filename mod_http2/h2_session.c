@@ -685,6 +685,26 @@ static apr_status_t init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
     return APR_SUCCESS;
 }
 
+static void update_child_status(h2_session *session, int status, const char *msg)
+{
+    /* Assume that we also change code/msg when something really happened and
+     * avoid updating the scoreboard in between */
+    if (session->last_status_code != status
+        || session->last_status_msg != msg) {
+        apr_snprintf(session->status, sizeof(session->status),
+                     "%s, streams: %d/%d/%d/%d/%d (open/recv/resp/push/rst)",
+                     msg? msg : "-",
+                     (int)session->open_streams,
+                     (int)session->remote.emitted_count,
+                     (int)session->responses_submitted,
+                     (int)session->pushes_submitted,
+                     (int)session->pushes_reset + session->streams_reset);
+        ap_update_child_status_from_server(session->c1->sbh, status,
+                                           session->c1, session->s);
+        ap_update_child_status_descr(session->c1->sbh, status, session->status);
+    }
+}
+
 static apr_status_t h2_session_shutdown_notice(h2_session *session)
 {
     apr_status_t status;
@@ -775,6 +795,7 @@ static apr_status_t session_cleanup(h2_session *session, const char *trigger)
                       "goodbye, clients will be confused, should not happen"));
     }
 
+    update_child_status(session, SERVER_CLOSING, "closed");
     transit(session, trigger, H2_SESSION_ST_CLEANUP);
     h2_mplx_c1_destroy(session->mplx);
     session->mplx = NULL;
@@ -1196,26 +1217,6 @@ static int h2_session_want_send(h2_session *session)
 {
     return nghttp2_session_want_write(session->ngh2)
         || h2_c1_io_pending(&session->io);
-}
-
-static void update_child_status(h2_session *session, int status, const char *msg)
-{
-    /* Assume that we also change code/msg when something really happened and
-     * avoid updating the scoreboard in between */
-    if (session->last_status_code != status
-        || session->last_status_msg != msg) {
-        apr_snprintf(session->status, sizeof(session->status),
-                     "%s, streams: %d/%d/%d/%d/%d (open/recv/resp/push/rst)",
-                     msg? msg : "-",
-                     (int)session->open_streams,
-                     (int)session->remote.emitted_count,
-                     (int)session->responses_submitted,
-                     (int)session->pushes_submitted,
-                     (int)session->pushes_reset + session->streams_reset);
-        ap_update_child_status_from_server(session->c1->sbh, status,
-                                           session->c1, session->s);
-        ap_update_child_status_descr(session->c1->sbh, status, session->status);
-    }
 }
 
 static apr_status_t h2_session_send(h2_session *session)
