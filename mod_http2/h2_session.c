@@ -1814,7 +1814,6 @@ apr_status_t h2_session_process(h2_session *session, int async)
                     ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
                                   H2_SSSN_LOG(APLOGNO(10306), session,
                                   "returning to mpm c1 monitoring"));
-                    update_child_status(session, SERVER_BUSY_KEEPALIVE, "keepalive");
                     goto leaving;
                 }
             }
@@ -1875,11 +1874,17 @@ leaving:
                       H2_SSSN_MSG(session, "process returns")); 
     }
     
-    if ((session->state != H2_SESSION_ST_DONE)
-        && (APR_STATUS_IS_EOF(status)
+    if (session->state == H2_SESSION_ST_DONE) {
+        update_child_status(session, SERVER_CLOSING, "closing");
+    }
+    else if (APR_STATUS_IS_EOF(status)
             || APR_STATUS_IS_ECONNRESET(status) 
-            || APR_STATUS_IS_ECONNABORTED(status))) {
+            || APR_STATUS_IS_ECONNABORTED(status)) {
         h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
+        update_child_status(session, SERVER_CLOSING, "error");
+    }
+    else {
+        update_child_status(session, SERVER_BUSY_KEEPALIVE, "keepalive");
     }
 
     return (session->state == H2_SESSION_ST_DONE)? APR_EOF : APR_SUCCESS;
