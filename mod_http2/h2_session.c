@@ -795,7 +795,6 @@ static apr_status_t session_cleanup(h2_session *session, const char *trigger)
                       "goodbye, clients will be confused, should not happen"));
     }
 
-    update_child_status(session, SERVER_CLOSING, "closed");
     transit(session, trigger, H2_SESSION_ST_CLEANUP);
     h2_mplx_c1_destroy(session->mplx);
     session->mplx = NULL;
@@ -1354,7 +1353,6 @@ static void transit(h2_session *session, const char *action, h2_session_state ns
                 }
                 break;
             case H2_SESSION_ST_DONE:
-                update_child_status(session, SERVER_CLOSING, "done");
                 break;
             default:
                 /* nop */
@@ -1414,9 +1412,6 @@ static void h2_session_ev_input_exhausted(h2_session *session, int arg, const ch
 static void h2_session_ev_local_goaway(h2_session *session, int arg, const char *msg)
 {
     cleanup_unprocessed_streams(session);
-    if (!session->remote.shutdown) {
-        update_child_status(session, SERVER_CLOSING, "local goaway");
-    }
     transit(session, "local goaway", H2_SESSION_ST_DONE);
 }
 
@@ -1427,7 +1422,6 @@ static void h2_session_ev_remote_goaway(h2_session *session, int arg, const char
         session->remote.accepting = 0;
         session->remote.shutdown = 1;
         cleanup_unprocessed_streams(session);
-        update_child_status(session, SERVER_CLOSING, "remote goaway");
         transit(session, "remote goaway", H2_SESSION_ST_DONE);
     }
 }
@@ -1875,7 +1869,7 @@ leaving:
     }
     
     if (session->state == H2_SESSION_ST_DONE) {
-        update_child_status(session, SERVER_CLOSING, "closing");
+        ap_update_child_status(session->c1->sbh, SERVER_CLOSING, NULL);
     }
     else if (APR_STATUS_IS_EOF(status)
             || APR_STATUS_IS_ECONNRESET(status) 
@@ -1884,7 +1878,7 @@ leaving:
         update_child_status(session, SERVER_CLOSING, "error");
     }
     else {
-        update_child_status(session, SERVER_BUSY_KEEPALIVE, "keepalive");
+        ap_update_child_status(session->c1->sbh, SERVER_BUSY_KEEPALIVE, NULL);
     }
 
     return (session->state == H2_SESSION_ST_DONE)? APR_EOF : APR_SUCCESS;
