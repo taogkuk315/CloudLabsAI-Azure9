@@ -136,9 +136,11 @@ apr_status_t h2_c1_run(conn_rec *c)
                           H2_SSSN_LOG(APLOGNO(03045), conn_ctx->session,
                           "process, closing conn"));
             c->keepalive = AP_CONN_CLOSE;
+            ap_update_child_status(c->sbh, SERVER_CLOSING, NULL);
         }
         else {
             c->keepalive = AP_CONN_KEEPALIVE;
+            ap_update_child_status(c->sbh, SERVER_BUSY_KEEPALIVE, NULL);
         }
         
         if (ap_mpm_query(AP_MPMQ_MPM_STATE, &mpm_state)) {

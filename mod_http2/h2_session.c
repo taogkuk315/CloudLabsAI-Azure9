@@ -1869,16 +1869,13 @@ leaving:
     }
     
     if (session->state == H2_SESSION_ST_DONE) {
-        ap_update_child_status(session->c1->sbh, SERVER_CLOSING, NULL);
+        /* nop */
     }
     else if (APR_STATUS_IS_EOF(status)
             || APR_STATUS_IS_ECONNRESET(status) 
             || APR_STATUS_IS_ECONNABORTED(status)) {
         h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
         update_child_status(session, SERVER_CLOSING, "error");
-    }
-    else {
-        ap_update_child_status(session->c1->sbh, SERVER_BUSY_KEEPALIVE, NULL);
     }
 
     return (session->state == H2_SESSION_ST_DONE)? APR_EOF : APR_SUCCESS;
