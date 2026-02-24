@@ -685,20 +685,24 @@ static apr_status_t init_callbacks(conn_rec *c, nghttp2_session_callbacks **pcb)
     return APR_SUCCESS;
 }
 
-static void update_child_status(h2_session *session, int status, const char *msg)
+static void update_child_status(h2_session *session, int status,
+                                const char *msg, const h2_stream *stream)
 {
     /* Assume that we also change code/msg when something really happened and
      * avoid updating the scoreboard in between */
     if (session->last_status_code != status
         || session->last_status_msg != msg) {
         apr_snprintf(session->status, sizeof(session->status),
-                     "%s, streams: %d/%d/%d/%d/%d (open/recv/resp/push/rst)",
-                     msg? msg : "-",
-                     (int)session->open_streams,
+                     "[%d/%d/%d/%d] %s%s%s %s",
                      (int)session->remote.emitted_count,
                      (int)session->responses_submitted,
                      (int)session->pushes_submitted,
-                     (int)session->pushes_reset + session->streams_reset);
+                     (int)session->pushes_reset + session->streams_reset,
+                     msg? msg : "-",
+                     stream? ": " : "",
+                     stream? stream->request->method : "",
+                     stream && stream->request->path? stream->request->path : ""
+                     );
         ap_update_child_status_from_server(session->c1->sbh, status,
                                            session->c1, session->s);
         ap_update_child_status_descr(session->c1->sbh, status, session->status);
@@ -1236,7 +1240,7 @@ static apr_status_t h2_session_send(h2_session *session)
                 goto cleanup;
             }
         }
-        update_child_status(session, SERVER_BUSY_WRITE, "write");
+        update_child_status(session, SERVER_BUSY_WRITE, "write", NULL);
         rv = h2_c1_io_pass(&session->io);
     }
 cleanup:
@@ -1261,7 +1265,7 @@ static apr_status_t on_stream_input(void *ctx, h2_stream *stream)
 
     if (stream->id == 0) {
         /* input on primary connection available? read */
-        update_child_status(session, SERVER_BUSY_READ, "read");
+        update_child_status(session, SERVER_BUSY_READ, "read", NULL);
         rv = h2_c1_read(session);
     }
     else {
@@ -1546,7 +1550,7 @@ static void ev_stream_open(h2_session *session, h2_stream *stream)
     /* Stream state OPEN means we have received all request headers
      * and can start processing the stream. */
     h2_iq_append(session->ready_to_process, stream->id);
-    update_child_status(session, SERVER_BUSY_READ, "process");
+    update_child_status(session, SERVER_BUSY_READ, "process", stream);
 }
 
 static void ev_stream_closed(h2_session *session, h2_stream *stream)
@@ -1718,12 +1722,12 @@ apr_status_t h2_session_process(h2_session *session, int async)
     if (H2_SESSION_ST_INIT == session->state) {
         if (!h2_protocol_is_acceptable_c1(c, session->r, 1)) {
             update_child_status(session, SERVER_BUSY_READ,
-                                "inadequate security");
+                                "inadequate security", NULL);
             h2_session_shutdown(session,
                                 NGHTTP2_INADEQUATE_SECURITY, NULL, 1);
         }
         else {
-            update_child_status(session, SERVER_BUSY_READ, "init");
+            update_child_status(session, SERVER_BUSY_READ, "init", NULL);
             status = h2_session_start(session, &rv);
             ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
                           H2_SSSN_LOG(APLOGNO(03079), session,
@@ -1875,7 +1879,7 @@ leaving:
             || APR_STATUS_IS_ECONNRESET(status) 
             || APR_STATUS_IS_ECONNABORTED(status)) {
         h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, NULL);
-        update_child_status(session, SERVER_CLOSING, "error");
+        update_child_status(session, SERVER_CLOSING, "error", NULL);
     }
 
     return (session->state == H2_SESSION_ST_DONE)? APR_EOF : APR_SUCCESS;
