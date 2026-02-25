@@ -1240,7 +1240,6 @@ static apr_status_t h2_session_send(h2_session *session)
                 goto cleanup;
             }
         }
-        update_child_status(session, SERVER_BUSY_WRITE, "write", NULL);
         rv = h2_c1_io_pass(&session->io);
     }
 cleanup:
@@ -1303,6 +1302,7 @@ static apr_status_t on_stream_output(void *ctx, h2_stream *stream)
         /* we dont poll output of stream 0, this should not be called */
         return APR_SUCCESS;
     }
+    update_child_status(session, SERVER_BUSY_WRITE, "write", stream);
     return h2_stream_read_output(stream);
 }
 
@@ -1608,6 +1608,7 @@ static void on_stream_state_enter(void *ctx, h2_stream *stream)
             ev_stream_closed(session, stream);
             break;
         case H2_SS_CLEANUP:
+            update_child_status(session, SERVER_BUSY_WRITE, "done", stream);
             nghttp2_session_set_stream_user_data(session->ngh2, stream->id, NULL);
             h2_mplx_c1_stream_cleanup(session->mplx, stream, &session->open_streams);
             if (session->open_streams == 0) {
