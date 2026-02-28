@@ -1608,7 +1608,6 @@ static void on_stream_state_enter(void *ctx, h2_stream *stream)
             ev_stream_closed(session, stream);
             break;
         case H2_SS_CLEANUP:
-            update_child_status(session, SERVER_BUSY_WRITE, "done", stream);
             nghttp2_session_set_stream_user_data(session->ngh2, stream->id, NULL);
             h2_mplx_c1_stream_cleanup(session->mplx, stream, &session->open_streams);
             if (session->open_streams == 0) {
