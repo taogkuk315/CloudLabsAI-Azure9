@@ -482,6 +482,11 @@ static void c1_purge_streams(h2_mplx *m)
                               "h2_mplx(%ld-%d): pollset_remove %d on purge",
                               m->id, stream->id, c2_ctx->stream_id);
             }
+            /* destruction of c2 will trigger destruction of any EOR
+             * bucket and that will report on the scoreboard handle.
+             * Since we operate from c1, it is safe to give it the c1
+             * handle. */
+            c2->sbh = m->c1->sbh;
             h2_conn_ctx_destroy(c2);
             h2_c2_destroy(c2);
         }
