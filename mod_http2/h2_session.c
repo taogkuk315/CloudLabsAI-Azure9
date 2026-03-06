@@ -1803,16 +1803,32 @@ apr_status_t h2_session_process(h2_session *session, int async)
             ap_assert(session->open_streams == 0);
             ap_assert(nghttp2_session_want_read(session->ngh2));
             if (!h2_session_want_send(session)) {
-                /* Give any new incoming request a short grace period to
-                 * arrive while we are still hot and return to the mpm
-                 * connection handling when nothing really happened. */
-                h2_mplx_c1_poll(session->mplx, apr_time_from_msec(100),
-                                on_stream_input, on_stream_output, session);
-                if (H2_SESSION_ST_IDLE == session->state) {
-                    ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
-                                  H2_SSSN_LOG(APLOGNO(10306), session,
-                                  "returning to mpm c1 monitoring"));
-                    goto leaving;
+                if (/*disables code*/(0) && async) {
+                    /* Give any new incoming request a short grace period to
+                     * arrive while we are still hot and return to the mpm
+                     * connection handling when nothing really happened. */
+                    h2_mplx_c1_poll(session->mplx, apr_time_from_msec(100),
+                                    on_stream_input, on_stream_output, session);
+                    if (H2_SESSION_ST_IDLE == session->state) {
+                        ap_log_cerror(APLOG_MARK, APLOG_DEBUG, status, c,
+                                      H2_SSSN_LOG(APLOGNO(10306), session,
+                                      "returning to mpm c1 monitoring"));
+                        goto leaving;
+                    }
+                }
+                else {
+                    /* non-async mpm, wait for new things in a keepalive
+                     * timeout. */
+                    status = h2_mplx_c1_poll(session->mplx, session->s->keep_alive_timeout,
+                                             on_stream_input, on_stream_output, session);
+                    if (APR_STATUS_IS_TIMEUP(status)) {
+                        h2_session_dispatch_event(session, H2_SESSION_EV_CONN_TIMEOUT, 0, "timeout");
+                        break;
+                    }
+                    else if (APR_SUCCESS != status) {
+                        h2_session_dispatch_event(session, H2_SESSION_EV_CONN_ERROR, 0, "error");
+                        break;
+                    }
                 }
             }
             else {
