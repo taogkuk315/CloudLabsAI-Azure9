@@ -265,6 +265,8 @@ h2_mplx *h2_mplx_c1_create(h2_stream *stream0, server_rec *s, apr_pool_t *parent
     conn_ctx = h2_conn_ctx_get(m->c1);
     mplx_pollset_add(m, conn_ctx);
 
+    m->scratch_r = apr_pcalloc(m->pool, sizeof(*m->scratch_r));
+
     return m;
 
 failure:
@@ -465,6 +467,8 @@ static void c1_purge_streams(h2_mplx *m)
     for (i = 0; i < m->spurge->nelts; ++i) {
         stream = APR_ARRAY_IDX(m->spurge, i, h2_stream*);
         ap_assert(stream->state == H2_SS_CLEANUP);
+
+
         if (stream->input) {
             h2_beam_destroy(stream->input, m->c1);
             stream->input = NULL;
@@ -482,6 +486,12 @@ static void c1_purge_streams(h2_mplx *m)
                               "h2_mplx(%ld-%d): pollset_remove %d on purge",
                               m->id, stream->id, c2_ctx->stream_id);
             }
+
+            m->scratch_r->connection = c2;
+            m->scratch_r->bytes_sent = stream->out_frame_octets;
+            ap_increment_counts(m->c1->sbh, m->scratch_r);
+            m->scratch_r->connection = NULL;
+
             h2_conn_ctx_destroy(c2);
             h2_c2_destroy(c2);
         }
@@ -883,11 +893,6 @@ static void s_c2_done(h2_mplx *m, conn_rec *c2, h2_conn_ctx_t *conn_ctx)
     conn_ctx->done = 1;
     conn_ctx->done_at = apr_time_now();
     ++c2->keepalives;
-    /* destruction of c2 will trigger destruction of any EOR
-     * bucket and that will report on the scoreboard handle.
-     * Since we operate this from c1 only, it is safe to give it the c1
-     * handle. */
-    c2->sbh = m->c1->sbh;
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
                   "h2_mplx(%s-%d): request done, %f ms elapsed",
