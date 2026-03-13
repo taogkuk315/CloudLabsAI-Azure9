@@ -459,6 +459,17 @@ const h2_stream *h2_mplx_c2_stream_get(h2_mplx *m, int stream_id)
     return s;
 }
 
+
+static void c1_update_scoreboard(h2_mplx *m, h2_stream *stream)
+{
+    if (stream->c2) {
+        m->scratch_r->connection = stream->c2;
+        m->scratch_r->bytes_sent = stream->out_frame_octets;
+        ap_increment_counts(m->c1->sbh, m->scratch_r);
+        m->scratch_r->connection = NULL;
+    }
+}
+
 static void c1_purge_streams(h2_mplx *m)
 {
     h2_stream *stream;
@@ -468,6 +479,7 @@ static void c1_purge_streams(h2_mplx *m)
         stream = APR_ARRAY_IDX(m->spurge, i, h2_stream*);
         ap_assert(stream->state == H2_SS_CLEANUP);
 
+        c1_update_scoreboard(m, stream);
 
         if (stream->input) {
             h2_beam_destroy(stream->input, m->c1);
@@ -486,11 +498,6 @@ static void c1_purge_streams(h2_mplx *m)
                               "h2_mplx(%ld-%d): pollset_remove %d on purge",
                               m->id, stream->id, c2_ctx->stream_id);
             }
-
-            m->scratch_r->connection = c2;
-            m->scratch_r->bytes_sent = stream->out_frame_octets;
-            ap_increment_counts(m->c1->sbh, m->scratch_r);
-            m->scratch_r->connection = NULL;
 
             h2_conn_ctx_destroy(c2);
             h2_c2_destroy(c2);
