@@ -1803,7 +1803,7 @@ apr_status_t h2_session_process(h2_session *session, int async)
             ap_assert(session->open_streams == 0);
             ap_assert(nghttp2_session_want_read(session->ngh2));
             if (!h2_session_want_send(session)) {
-                if (/*disables code*/(0) && async) {
+                if (async) {
                     /* Give any new incoming request a short grace period to
                      * arrive while we are still hot and return to the mpm
                      * connection handling when nothing really happened. */
