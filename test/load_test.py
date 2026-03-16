@@ -11,9 +11,9 @@ from typing import Dict, Tuple, Optional, List, Iterable
 
 from tqdm import tqdm
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), ''))
 
-from .env import H2TestEnv, H2Conf
+from modules.http2.env import H2TestEnv, H2Conf, H2TestSetup
 from pyhttpd.result import ExecResult
 
 log = logging.getLogger(__name__)
@@ -215,8 +215,8 @@ class LoadTestCase:
         raise NotImplemented
 
     @staticmethod
-    def setup_base_conf(env: H2TestEnv, worker_count: int = 5000) -> H2Conf:
-        conf = H2Conf(env=env)
+    def setup_base_conf(env: H2TestEnv, worker_count: int = 5000, extras=None) -> H2Conf:
+        conf = H2Conf(env=env, extras=extras)
         # ylavic's formula
         process_count = int(max(10, min(100, int(worker_count / 100))))
         thread_count = int(max(25, int(worker_count / process_count)))
@@ -246,7 +246,6 @@ class LoadTestCase:
 
     @staticmethod
     def server_setup(env: H2TestEnv, extras: Dict = None):
-        conf = LoadTestCase.setup_base_conf(env=env)
         if not extras:
             extras = {
                 'base': """
@@ -272,7 +271,8 @@ class LoadTestCase:
             ProxyPass /proxy-h1/ https://127.0.0.1:{env.https_port}/
             ProxyPass /proxy-h2/ h2://127.0.0.1:{env.https_port}/
             """
-        conf.add_vhost_test1(extras=extras)
+        conf = LoadTestCase.setup_base_conf(env=env, extras=extras)
+        conf.add_vhost_test1()
         conf.install()
 
 
@@ -784,6 +784,9 @@ class LoadTest:
         }
 
         env = H2TestEnv()
+        setup = H2TestSetup(env=env)
+        env.setup_httpd(setup=setup)
+
         rv = 0
         try:
             log.debug("starting tests")
