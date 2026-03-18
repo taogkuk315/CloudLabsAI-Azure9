@@ -1,3 +1,8 @@
+ * Improved information displayed in 'server-status' for H2 connections when
+   Extended Status is enabled. Now one can see the last request that IO
+   operations happened on and transferred IO stats are updated as well.
+ * Fixed a bug that let to an infinite loop in v2.0.0 when the client closed
+   the connection.
  * Fixing NULL dereference if server variable SSL_PROTOCOL is unset.
  * Setting DefaultRuntimeDir and PidFile in test configuration to override
    any platform defaults.

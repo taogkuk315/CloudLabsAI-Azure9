@@ -900,6 +900,9 @@ static void s_c2_done(h2_mplx *m, conn_rec *c2, h2_conn_ctx_t *conn_ctx)
     conn_ctx->done = 1;
     conn_ctx->done_at = apr_time_now();
     ++c2->keepalives;
+    /* From here on, the final handling of c2 is done by c1 processing.
+     * Which means we can give it c1's scoreboard handle for updates. */
+    c2->sbh = m->c1->sbh;
 
     ap_log_cerror(APLOG_MARK, APLOG_TRACE2, 0, c2,
                   "h2_mplx(%s-%d): request done, %f ms elapsed",

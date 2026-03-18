@@ -30,6 +30,7 @@
 #include "h2_private.h"
 #include "h2_bucket_eos.h"
 #include "h2_config.h"
+#include "h2_c1.h"
 #include "h2_c1_io.h"
 #include "h2_protocol.h"
 #include "h2_session.h"
@@ -282,6 +283,7 @@ static apr_status_t pass_output(h2_c1_io *io, int flush)
 
     io->buffered_len = 0;
     io->bytes_written += (apr_size_t)bblen;
+
     if (io->write_size < WRITE_SIZE_MAX
          && io->bytes_written >= io->warmup_size) {
         /* connection is hot, use max size */
