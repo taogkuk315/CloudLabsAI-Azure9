@@ -1,3 +1,5 @@
+v2.0.1
+--------------------------------------------------------------------------------
  * Improved information displayed in 'server-status' for H2 connections when
    Extended Status is enabled. Now one can see the last request that IO
    operations happened on and transferred IO stats are updated as well.
