@@ -1,3 +1,13 @@
+v2.0.2
+--------------------------------------------------------------------------------
+ * When reaching server limits, such as MaxRequestsPerChild, the HTTP/2 connection
+   send a GOAWAY frame much too early on new connections, leading to invalid
+   protocol state and a client failing the request. See PR65731 at
+   <https://bz.apache.org/bugzilla/show_bug.cgi?id=65731>.
+   The module now initializes the HTTP/2 protocol correctly and allows the
+   client to submit one request before the shutdown via a GOAWAY frame
+   is being announced.
+
 v2.0.1
 --------------------------------------------------------------------------------
  * Improved information displayed in 'server-status' for H2 connections when
